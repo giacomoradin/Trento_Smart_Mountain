@@ -1,0 +1,84 @@
+,,,,,Estimated Effort Remaining,,,,,,STATUS
+ID,Product Backlog Item,Sprint Task,Volunteer,Initial Estimate of Effort,1,2,3,4,5,6,
+1,poter effettuare login con le mie recenziali (o tramite Google/Facebook) cosi da accedere alle funzionalita del sistema in al mo account,1. Configurazione provider OAuth (Google/Facebook).,,2,,,,,,,TO DO
+,,2. Sviluppo UI form di login.,,3,,,,,,,TO DO
+,,3. Implementazione gestione token JWT in Local Storage/Keychain.,,2,,,,,,,TO DO
+,,4. E2E Testing del flusso di login.,,1,,,,,,,TO DO
+3,"Come utente voglio poter creare un account inserendo i miei dati, cosi da accedere alla piattaforma usufruire dei suoi servizi.",1. Sviluppo UI registrazione utente con validazione input.,,2,,,,,,,TO DO
+,,2. Setup endpoint API per registrazione e hashing password.,,2,,,,,,,TO DO
+,,3. Implementazione invio email di verifica.,,1,,,,,,,TO DO
+,,4. Integrazione DB per persistenza dati utente.,,1,,,,,,,TO DO
+42,sistema voglio mantenere attivo tracciamento GPS e beacon BLE tramite Foreground Services cosi da evitare che Android interrompa i processi (Doze Mode),1. Implementazione Android Foreground Service con notifica persistente.,,4,,,,,,,TO DO
+,,2. Richiesta permessi a runtime (Location/Bluetooth).,,2,,,,,,,TO DO
+,,3. Configurazione WakeLock e ottimizzazione Doze Mode.,,3,,,,,,,TO DO
+,,4. Test del ciclo di vita del servizio in background.,,3,,,,,,,TO DO
+18,"Come Capogruppo, voglio poter creare nuova sessione di escursione, parametri del percorso e coordinare il gruppo avviare tracciamento","1. Progettazione schema DB (Tabella Sessioni, Route, Partecipanti).",,3,,,,,,,TO DO
+,,2. UI form per configurazione parametri escursione.,,3,,,,,,,TO DO
+,,3. Sviluppo endpoint REST per inizializzazione sessione.,,2,,,,,,,TO DO
+,,4. Logica di associazione Capogruppo-Sessione.,,2,,,,,,,TO DO
+7,"Come escursionista voglio ricevere una checklist dell'equipaggiamento necessaria basata sull'itinerario e sulle condizioni meteo (durante i giorni precedenti alla partenza), cosi da prepararmi adeguatamente",1. Integrazione API meteo (es. OpenWeatherMap).,,2,,,,,,,TO DO
+,,2. Sviluppo algoritmo di mappatura meteo/altitudine -> equipaggiamento.,,4,,,,,,,TO DO
+,,3. Sviluppo UI per visualizzazione e spunta checklist.,,2,,,,,,,TO DO
+10,"voglio che la mia posizione GPS venga tracciata automaticamente in background durante l'escursione, cosi da garantire la mia sicurezza e quella del gruppo",1. Integrazione FusedLocationProviderClient.,,4,,,,,,,TO DO
+,,2. Sviluppo logica di caching locale offline (Room/SQLite).,,3,,,,,,,TO DO
+,,3. Worker periodico per invio batch coordinate al server.,,3,,,,,,,TO DO
+13,"escursionista, voglio che il tracciamento GPS si riduca automaticamente quando sono fermo, cosi da risparmiare la batteria del dispositivo",1. Integrazione Activity Recognition API.,,3,,,,,,,TO DO
+,,2. Logica adattiva per polling rate GPS basata su accelerometro/movimento.,,3,,,,,,,TO DO
+,,3. Profilazione consumo batteria (Android Profiler).,,2,,,,,,,TO DO
+11,Come escursionista in difficoltà voglio poter inviare un segnale SOS con le mie coordinate GPS cosi da ricevere soccorso il prima possibile.,"1. UI pulsante SOS (con logica anti-misclick, es. long-press).",,2,,,,,,,TO DO
+,,2. Sviluppo logica di invio payload BLE e HTTP/MQTT.,,3,,,,,,,TO DO
+,,3. Gestione accodamento invio in assenza di rete.,,1,,,,,,,TO DO
+22,"Come Capogruppo, voglio ricevere segnali SOS da parte dei partecipanti poterli valutare tramite la mia dashboard, cosi da attivare soccorsi attivi in caso di reale necessita",1. Sviluppo UI dashboard allarmi attivi.,,4,,,,,,,TO DO
+,,2. Implementazione WebSocket/Notifiche Push (FCM) per ricezione real-time.,,4,,,,,,,TO DO
+,,3. Gestione stato allarme (Acknowledge/Dismiss).,,2,,,,,,,TO DO
+33,"Come Amministratore, voglio poter gestire le registrazioni degli utenti (assegnare/modificare ruoli), cosi da controllare i privilegi di accesso al sistema",1. Implementazione middleware RBAC (Role-Based Access Control).,,4,,,,,,,TO DO
+,,2. UI pannello admin web.,,4,,,,,,,TO DO
+,,3. Endpoint CRUD per gestione profili e ruoli.,,4,,,,,,,TO DO
+36,"Come sistema, voglio che tutti i payload in della chat siano cifrati con AES-256 prima del broadcast BLE, cosi da garantire la riservatezza delle comunicazioni",1. Scrittura classe utilità crittografica (AES-GCM-256).,,4,,,,,,,TO DO
+,,2. Implementazione meccanismo scambio chiavi simmetriche per gruppo.,,6,,,,,,,TO DO
+,,3. Integrazione logica di cifratura/decifratura nel worker BLE.,,4,,,,,,,TO DO
+39,"Come sistema voglio scaricare preventivamente la branca BoundingBox e le Map Tiles OSM con padding di X km, cosi da garantire la navigazione offline in zona di no-spot",1. Logica calcolo Bounding Box su coordinate rotta.,,4,,,,,,,TO DO
+,,2. Fetching asincrono Map Tiles (OSM API).,,8,,,,,,,TO DO
+,,3. Archiviazione binaria locale su file system dispositivo.,,4,,,,,,,TO DO
+2,"Come utente già autenticato, voglio poter accedere all'app anche senza connessione internet, cosi da usare le funzionalità anche in montagna.",1. Caching stato autenticazione e token validi in EncryptedSharedPreferences.,,3,,,,,,,TO DO
+,,2. Interceptor HTTP per modalità offline-first.,,3,,,,,,,TO DO
+,,3. Gestione state-machine dell'app offline/online.,,2,,,,,,,TO DO
+19,"Come Capogruppo, voglio poter generare un codice invito alfanumerico e un QR Code per gruppo, cosi da permettere ai partecipanti di unirsi facilmente",1. Endpoint generazione hash invito univoco.,,2,,,,,,,TO DO
+,,2. Integrazione libreria generazione QR Code a schermo.,,2,,,,,,,TO DO
+,,3. Sviluppo logica per lettura QR tramite fotocamera.,,2,,,,,,,TO DO
+20,"Come Capogruppo, voglio poter visualizzare la posizione GPS di tutti i partecipanti in tempo reale sulla mappa cosi da monitorare la coesione del gruppo tutto deve avere un'interfaccia pulita e intuitiva",1. Sviluppo layer mappa con marker multipli dinamici.,,5,,,,,,,TO DO
+,,2. Sincronizzazione stato overlay posizione tramite WebSocket.,,4,,,,,,,TO DO
+,,3. UI/UX restyling cluster posizioni vicine.,,3,,,,,,,TO DO
+9,"Come escursionista, voglio poter unirmi a un'escursione di gruppo inserendo il codice invito fornito dal Capogruppo, cosi da partecipare all'escursione in modo coordinato",1. UI input codice invito.,,2,,,,,,,TO DO
+,,2. Validazione codice lato server e join logico tabella Partecipanti.,,2,,,,,,,TO DO
+,,3. Download configurazione e mappa sessione escursione.,,2,,,,,,,TO DO
+12,"Come escursionista, voglio poter consultare una mappa offline con la mia posizione e una bussola cosi da orientarmi anche senza copertura internet",1. Integrazione Mapbox/OSMDroid per rendering vettoriale offline.,,5,,,,,,,TO DO
+,,2. Lettura SensorManager (Magnetometro/Accelerometro) per bussola.,,4,,,,,,,TO DO
+,,3. Binding sensori-UI per rotazione mappa.,,3,,,,,,,TO DO
+34,"Come sistema voglio che le query geospaziali vengano elaborate in meno di 500 ms al 95 percentile (condizioni 4G), cosi da garantire un'esperienza utente fluida",1. Creazione indici PostGIS (es. GIST) o indici spaziali MongoDB.,,3,,,,,,,TO DO
+,,2. Ottimizzazione query di prossimità.,,4,,,,,,,TO DO
+,,3. Load testing e profiling DB (es. Apache JMeter).,,3,,,,,,,TO DO
+40,"Come sistema voglio che i segnali SOS nella rete BLE siano accettati solo se hanno firma ECC valida e hopCount <= 10, cosi da prevenire loop e spoofing",1. Generazione coppie chiavi ECC (Elliptic Curve Cryptography) per device.,,4,,,,,,,TO DO
+,,2. Logica di firma payload SOS e verifica firma sui nodi riceventi.,,6,,,,,,,TO DO
+,,3. Implementazione decremento e filtro su TTL/hopCount BLE.,,4,,,,,,,TO DO
+21,"Come Capogruppo, voglio poter inviare un allarme in broadcast a tutto il gruppo (beacon BLE) cosi da gestire le emergenze coordinare la risposta",1. Strutturazione pacchetto BLE Advertising custom per alert.,,3,,,,,,,TO DO
+,,"2. Notifica push ad alta priorità per override ""Non Disturbare"".",,2,,,,,,,TO DO
+,,3. UI pannello Capogruppo per dispatch alert.,,3,,,,,,,TO DO
+23,"Come Capogruppo, voglio poter inviare un segnale SOS validato alle autorità (CNSAS/112) tramite reti satellitari o cellulari in modo sicuro",1. Setup integrazione API gateway emergenze istituzionali (se applicabile) o SMS gateway.,,6,,,,,,,TO DO
+,,"2. Formattazione standard payload (Coordinate, Dati gruppo, Info mediche).",,4,,,,,,,TO DO
+,,3. Test bridge failover Rete Cellulare/Satellite.,,6,,,,,,,TO DO
+24,"Come partecipante, voglio che in caso di indisponibilità del Capogruppo per 10 min venga eletto automaticamente un nuovo leader garantendo la continuità della gestione delle emergenze",1. Implementazione heartbeat e timeout listener (10 min).,,4,,,,,,,TO DO
+,,2. Algoritmo di consenso distribuito (es. Bully Algorithm adattato a mesh BLE) per elezione leader.,,8,,,,,,,TO DO
+,,3. Sincronizzazione di stato post-elezione.,,4,,,,,,,TO DO
+14,"Come escursionista, voglio vedere la posizione degli altri membri del gruppo sulla mappa cosi da sapere dove si trovano rispetto a me",1. Query fetch coordinate compagni (online/offline mesh).,,3,,,,,,,TO DO
+,,2. Rendering custom marker sulla mappa offline.,,3,,,,,,,TO DO
+,,3. Ricalcolo periodico distanza relativa.,,2,,,,,,,TO DO
+37,"Come sistema voglio sincronizzare gli eventi di gamification accumulati offline tramite Event Sourcing in batch, cosi da garantire la consistenza dei Crediti Sociali",1. Architettura store append-only sul device (SQLite).,,4,,,,,,,TO DO
+,,2. Cron job/WorkManager per push batch eventi verso il server.,,4,,,,,,,TO DO
+,,3. Logica BE per ricostruzione stato crediti da stream eventi.,,6,,,,,,,TO DO
+26,Come escursionista che ha premuto SOS voglio poter annullare l'invio (grace period) prima che venga inviato alle autorità,1. Implementazione timer delay locale (es. 10-15 secondi).,,2,,,,,,,TO DO
+,,2. UI overlay bloccante con indicatore visivo conto alla rovescia e tasto cancel.,,1,,,,,,,TO DO
+,,3. Interrupt/Flush del thread di invio in caso di annullamento.,,1,,,,,,,TO DO
+38,Come sistema voglio garantire che ogni evento di gamification sia processato una sola volta (idempotenza) cosi da prevenire il double-spending dei Crediti Sociali,1. Generazione UUID/Correlation ID univoco lato client per evento.,,2,,,,,,,TO DO
+,,2. Storage ID elaborati su Redis/Memcached.,,3,,,,,,,TO DO
+,,3. Middleware BE per scarto pacchetti duplicati.,,3,,,,,,,TO DO

@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "fwcd.kotlin",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-azuretools.vscode-docker",
+    "mongodb.mongodb-vscode",
+    "vsciot-vscode.vscode-mqtt"
+  ]
+}

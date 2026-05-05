@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # Database NoSQL per il Backend
+  mongodb:
+    image: mongo:latest
+    container_name: tsm-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - tsm-db-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: trento_smart_mountain
+
+  # Broker MQTT per la telemetria IoT e Edge Computing
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: tsm-mqtt-broker
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./iot/mosquitto/config:/mosquitto/config
+      - ./iot/mosquitto/data:/mosquitto/data
+      - ./iot/mosquitto/log:/mosquitto/log
+
+volumes:
+  tsm-db-data:

@@ -1,0 +1,26 @@
+{
+  "name": "tsm-backend",
+  "version": "1.0.0",
+  "description": "Trento Smart Mountain Backend - Modular Monolith",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Giacomo Radin",
+  "license": "SEE LICENSE IN ROOT",
+  "dependencies": {
+    "express": "^4.19.0",
+    "mongoose": "^8.0.0",
+    "mqtt": "^5.0.0",
+    "socket.io": "^4.7.0",
+    "dotenv": "^16.4.0",
+    "jsonwebtoken": "^9.0.0",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

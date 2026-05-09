@@ -1,48 +1,26 @@
-const path = require("path");
-require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
-const express = require("express");
-const mongoose = require("mongoose");
+import "dotenv/config";
+import express from "express";
+import mongoose from "mongoose";
+import userRoutes from "./userRoutes.js";
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/trento_smart_mountain";
 
-// Middleware
+// Middleware — parses incoming JSON request bodies
 app.use(express.json());
 
-// MongoDB Connection
-const connectDB = async () => {
-  try {
-    console.log("🔄 Tentativo di connessione a MongoDB...");
+// Routes
+app.use("/users", userRoutes);
 
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
-    console.log("✅ GRANDE! Connessione a MongoDB riuscita correttamente.");
-  } catch (err) {
-    console.error("❌ ERRORE DI CONNESSIONE:");
-    console.error(err.message);
-
-    if (err.message.includes("IP not whitelisted")) {
-      console.log(
-        "\n👉 Suggerimento: Controlla il 'Network Access' su Atlas e aggiungi 0.0.0.0/0",
-      );
-    }
-
+// Connect to MongoDB, then start the server
+mongoose
+  .connect(MONGO_URI)
+  .then(() => {
+    console.log("Connected to MongoDB");
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  })
+  .catch((error) => {
+    console.error("MongoDB connection error:", error);
     process.exit(1);
-  }
-};
-
-// Connect to MongoDB
-connectDB();
-
-// Routes (placeholder)
-app.get("/", (req, res) => {
-  res.json({ message: "Trento Smart Mountain API" });
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server avviato su http://localhost:${PORT}`);
-});
+  });

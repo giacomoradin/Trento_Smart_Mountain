@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Trento Smart Mountain Backend - Modular Monolith",
   "main": "src/server.js",
+  "type": "module",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
@@ -12,6 +13,7 @@
   "author": "Giacomo Radin",
   "license": "SEE LICENSE IN ROOT",
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",

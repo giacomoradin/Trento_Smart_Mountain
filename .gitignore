@@ -140,6 +140,9 @@ project.freetime
 *.out
 *.log
 
+# Excel (backlog, fogli locali)
+*.xlsx
+
 # System Files
 .DS_Store
 Thumbs.db

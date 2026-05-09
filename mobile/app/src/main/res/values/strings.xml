@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">Trento Smart Mountain</string>
+  <string name="login_title">Accedi</string>
+  <string name="login_subtitle">Usa email e password del tuo account.</string>
+  <string name="login_email_label">Email</string>
+  <string name="login_password_label">Password</string>
+  <string name="login_button">Entra</string>
+  <string name="login_show_password">Mostra password</string>
+  <string name="login_hide_password">Nascondi password</string>
+</resources>

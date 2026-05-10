@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** Stato UI del form login: campi, messaggi di errore per campo, errore generico, caricamento. */
 data class LoginUiState(
   val email: String = "",
   val password: String = "",
@@ -22,14 +23,19 @@ data class LoginUiState(
 )
 
 /**
- * Login email/password: validazione locale e passaggio alla home dopo “successo”.
- * Chiamata REST reale: da collegare quando il backend del team sarà disponibile (POST /auth/login o simile).
+ * Presentazione del flusso login (MVVM).
+ *
+ * - Validazione client-side prima di qualsiasi rete (email non vuota e formato plausibile, password minima).
+ * - Dopo login riuscito la navigazione verso la home è segnalata tramite [navigateHomeEventsFlow] (evento singolo, non va ripetuto al recomposer).
+ *
+ * La chiamata HTTP reale al backend (`POST /auth/login`) andrà integrata al posto del delay provvisorio.
  */
 class LoginViewModel : ViewModel() {
 
   private val _uiState = MutableStateFlow(LoginUiState())
   val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
+  /** Evento “vai alla home”: CONFLATED evita code di eventi se l’utente tocca più volte il pulsante. */
   private val navigateHomeEvents = Channel<Unit>(Channel.CONFLATED)
   val navigateHomeEventsFlow = navigateHomeEvents.receiveAsFlow()
 
@@ -49,6 +55,7 @@ class LoginViewModel : ViewModel() {
     val email = _uiState.value.email.trim()
     val password = _uiState.value.password
 
+    // Errori di validazione locale: nessuna chiamata di rete se i campi non sono accettabili.
     val emailError =
       when {
         email.isEmpty() -> "Inserisci l’email"
@@ -83,7 +90,7 @@ class LoginViewModel : ViewModel() {
           generalError = null,
         )
       }
-      // TODO: sostituire con AuthRepository / TsmApiService.login(email, password)
+      // TODO: sostituire con AuthRepository che chiama TsmApiService (POST /auth/login) e gestisce token/errori HTTP.
       delay(450)
       _uiState.update { it.copy(isLoading = false) }
       navigateHomeEvents.trySend(Unit)

@@ -7,6 +7,10 @@ import androidx.activity.enableEdgeToEdge
 import it.trentosmartmountain.app.ui.navigation.TsmNavHost
 import it.trentosmartmountain.app.ui.theme.TsmTheme
 
+/**
+ * Activity principale dichiarata nel manifest; ospita tutta la UI Jetpack Compose.
+ * Il grafo di navigazione parte da [TsmNavHost] (schermata iniziale: login).
+ */
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)

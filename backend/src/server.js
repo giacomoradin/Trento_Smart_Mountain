@@ -6,6 +6,7 @@ import swaggerFile from "../swagger-output.json" with { type: "json" };
 import userRoutes from "./userRoutes.js";
 import authRoutes from "./authRoutes.js";
 
+import userRoutes from "./userRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +16,13 @@ app.use(express.json());
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 app.use("/users", userRoutes);
 app.use("/auth", authRoutes);
+// Middleware — parses incoming JSON request bodies
+app.use(express.json());
+
+// Routes
+app.use("/users", userRoutes);
+
+// Connect to MongoDB, then start the server
 mongoose
   .connect(MONGO_URI)
   .then(() => {

@@ -6,5 +6,11 @@
   "files.eol": "\n",
   "[kotlin]": {
     "editor.defaultFormatter": "fwcd.kotlin"
-  }
+  },
+  "mdb.presetConnections": [
+    {
+      "name": "Preset Connection",
+      "connectionString": "mongodb://localhost:27017"
+    }
+  ]
 }

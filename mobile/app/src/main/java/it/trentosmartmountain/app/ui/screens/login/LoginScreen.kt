@@ -41,6 +41,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.viewmodel.LoginViewModel
 
+/**
+ * Schermata di accesso con email e password (Material 3).
+ *
+ * - Legge lo stato da [LoginViewModel] e riflette errori di validazione sui campi.
+ * - [LaunchedEffect] resta in ascolto del flusso di navigazione: un solo evento dopo login riuscito evita navigazioni duplicate.
+ */
 @Composable
 fun LoginScreen(
   onLoggedIn: () -> Unit,
@@ -50,6 +56,7 @@ fun LoginScreen(
   val keyboard = LocalSoftwareKeyboardController.current
   var passwordVisible by remember { mutableStateOf(false) }
 
+  // Collect infinito è voluto: il Channel emette al massimo un evento logico per login; il recomposer non reinizializza grazie a Unit key.
   LaunchedEffect(Unit) {
     viewModel.navigateHomeEventsFlow.collect {
       onLoggedIn()

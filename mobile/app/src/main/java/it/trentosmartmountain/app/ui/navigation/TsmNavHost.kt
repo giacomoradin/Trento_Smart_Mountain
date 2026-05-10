@@ -7,6 +7,10 @@ import androidx.navigation.compose.rememberNavController
 import it.trentosmartmountain.app.ui.screens.HomePlaceholderScreen
 import it.trentosmartmountain.app.ui.screens.login.LoginScreen
 
+/**
+ * Grafo di navigazione Compose: login → home dopo autenticazione.
+ * Dopo il login si usa [popUpTo] sulla route login così l’utente non torna indietro alla schermata credenziali col tasto sistema.
+ */
 @Composable
 fun TsmNavHost() {
   val navController = rememberNavController()

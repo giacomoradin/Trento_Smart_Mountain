@@ -10,14 +10,19 @@ export const createUser = async (req, res) => {
     const user = new User({ username, email, passwordHash, role });
     const savedUser = await user.save();
     // exclude passwordHash from response
-    //passwordHsh renamend to _ and ... rest operator to get the rest of the user fields without passwordHash 
-    const {passwordHash: _,__v: __, ...userWithoutPassword} = savedUser.toObject(); 
-    
+    //passwordHsh renamend to _ and ... rest operator to get the rest of the user fields without passwordHash
+    const {
+      passwordHash: _,
+      __v: __,
+      ...userWithoutPassword
+    } = savedUser.toObject();
 
     res.status(201).json(userWithoutPassword);
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(409).json({ message: "Username or email already in use." });
+      return res
+        .status(409)
+        .json({ message: "Username or email already in use." });
     }
     res.status(500).json({ message: error.message });
   }
@@ -40,7 +45,9 @@ export const getUserById = async (req, res) => {
   try {
     //https://mongoosejs.com/docs/api/query.html#Query.prototype.select()
     //exclude not wanted fields
-    const user = await User.findById(req.params.id).select("-passwordHash -__v");
+    const user = await User.findById(req.params.id).select(
+      "-passwordHash -__v",
+    );
 
     if (!user) {
       return res.status(404).json({ message: "User not found." });
@@ -59,7 +66,13 @@ export const getUserById = async (req, res) => {
 // PUT /users/:id — Update a user by ID
 export const updateUser = async (req, res) => {
   try {
-    const allowedUpdates = ["username", "email", "passwordHash", "role", "sessionRoles"];
+    const allowedUpdates = [
+      "username",
+      "email",
+      "passwordHash",
+      "role",
+      "sessionRoles",
+    ];
     const updates = {};
 
     // Only pick fields that are actually allowed to be updated
@@ -69,14 +82,10 @@ export const updateUser = async (req, res) => {
       }
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
-      req.params.id,
-      updates,
-      {
-        new: true,           // return the updated document
-        runValidators: true, // enforce schema rules on update
-      }
-    ).select("-passwordHash -__v");
+    const updatedUser = await User.findByIdAndUpdate(req.params.id, updates, {
+      new: true, // return the updated document
+      runValidators: true, // enforce schema rules on update
+    }).select("-passwordHash -__v");
 
     if (!updatedUser) {
       return res.status(404).json({ message: "User not found." });
@@ -88,7 +97,9 @@ export const updateUser = async (req, res) => {
       return res.status(400).json({ message: "Invalid user ID format." });
     }
     if (error.code === 11000) {
-      return res.status(409).json({ message: "Username or email already in use." });
+      return res
+        .status(409)
+        .json({ message: "Username or email already in use." });
     }
     res.status(500).json({ message: error.message });
   }

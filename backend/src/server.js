@@ -1,17 +1,19 @@
 import "dotenv/config";
 import express from "express";
 import mongoose from "mongoose";
+import swaggerUi from "swagger-ui-express";
+import swaggerFile from "../swagger-output.json" with { type: "json" };
 import userRoutes from "./userRoutes.js";
+import authRoutes from "./authRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/trento_smart_mountain";
 
-// Middleware — parses incoming JSON request bodies
 app.use(express.json());
-
-// Routes
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 app.use("/users", userRoutes);
+app.use("/auth", authRoutes);
 
 // Connect to MongoDB, then start the server
 mongoose

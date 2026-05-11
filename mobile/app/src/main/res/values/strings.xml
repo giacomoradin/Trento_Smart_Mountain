@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">Trento Smart Mountain</string>
+  <string name="login_title">Accedi</string>
+  <string name="login_subtitle">Usa email e password del tuo account.</string>
+  <string name="login_email_label">Email</string>
+  <string name="login_password_label">Password</string>
+  <string name="login_button">Entra</string>
+  <string name="login_show_password">Mostra password</string>
+  <string name="login_hide_password">Nascondi password</string>
+  <string name="auth_entry_title">Trento Smart Mountain</string>
+  <string name="auth_entry_subtitle">Accedi al tuo account o creane uno nuovo.</string>
+  <string name="auth_entry_login_button">Accedi</string>
+  <string name="auth_entry_register_button">Registrati</string>
+  <string name="register_title">Registrati</string>
+  <string name="register_subtitle">Crea un account con username, email e password.</string>
+  <string name="register_username_label">Username</string>
+  <string name="register_email_label">Email</string>
+  <string name="register_password_label">Password</string>
+  <string name="register_confirm_password_label">Conferma password</string>
+  <string name="register_button">Crea account</string>
+  <string name="register_back">Indietro</string>
+  <string name="register_show_password">Mostra password</string>
+  <string name="register_hide_password">Nascondi password</string>
+</resources>

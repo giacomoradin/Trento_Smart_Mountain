@@ -14,11 +14,6 @@ app.use(express.json());
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
 app.use("/users", userRoutes);
 app.use("/auth", authRoutes);
-// Middleware — parses incoming JSON request bodies
-app.use(express.json());
-
-// Routes
-app.use("/users", userRoutes);
 
 // Connect to MongoDB, then start the server
 mongoose

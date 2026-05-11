@@ -1,12 +1,12 @@
 import express from "express";
-import { authenticate } from "./authMiddleware.js";
+import { authenticate } from "./services/authMiddleware.js";
 import {
   createSession,
   getSessionById,
   getSessionsByUser,
   updateSessionStatus,
   deleteSession,
-} from "./hikeSessionService.js";
+} from "../services/hikeSessionService.js";
 
 const router = express.Router();
 

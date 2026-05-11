@@ -1,21 +1,16 @@
 import "dotenv/config";
-import express from "express";
 import mongoose from "mongoose";
 import swaggerUi from "swagger-ui-express";
 import swaggerFile from "../swagger-output.json" with { type: "json" };
-import userRoutes from "./userRoutes.js";
-import authRoutes from "./authRoutes.js";
+import app from "./app.js"; // ← importa app.js invece di ricreare Express
 
-const app = express();
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/trento_smart_mountain";
+const MONGO_URI =
+  process.env.MONGO_URI || "mongodb://localhost:27017/trento_smart_mountain";
 
-app.use(express.json());
+// Swagger (aggiunto qui perché serve swaggerFile che è un import statico)
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerFile));
-app.use("/users", userRoutes);
-app.use("/auth", authRoutes);
 
-// Connect to MongoDB, then start the server
 mongoose
   .connect(MONGO_URI)
   .then(() => {

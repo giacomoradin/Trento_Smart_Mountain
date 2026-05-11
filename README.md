@@ -47,7 +47,8 @@ Seguiamo la metodologia Agile SCRUM con cicli di sviluppo settimanali.
 ---
 
 ## Setup Locale
-*(Istruzioni in fase di aggiornamento)*
+*Variabili d'ambiente backend:*
+- Prelevare dal documento su google docs il file ***.env*** aggiornato e sostituire il contenuto dello stesso file in locale se presenti modifiche.
 
 ### Backend
 ```bash

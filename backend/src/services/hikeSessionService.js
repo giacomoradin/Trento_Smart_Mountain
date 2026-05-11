@@ -1,4 +1,4 @@
-import HikeSession from "./models/hikeSession.js";
+import HikeSession from "../models/hikeSession.js";
 import crypto from "crypto";
 
 // Genera un codice invito alfanumerico univoco di 8 caratteri

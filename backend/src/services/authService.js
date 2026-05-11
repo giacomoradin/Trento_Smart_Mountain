@@ -1,4 +1,4 @@
-import User from './models/user.js';
+import User from '../models/user.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
@@ -10,14 +10,14 @@ export const loginUser = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(401).json({ message: "Invalid email or password." });
+      return res.status(401).json({ message: "Invalid email" });
     }
 
     //compare provided password with stored hash
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid email or password." });
+      return res.status(401).json({ message: "password" });
     }
 
     //generate JWT token

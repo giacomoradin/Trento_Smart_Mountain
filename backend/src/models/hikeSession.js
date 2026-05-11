@@ -33,6 +33,7 @@ const hikSessionSchema = new Schema({
     type: String,
     required: true,
     unique: true,
+    uppercase: true,
   },
 
   // Lista partecipanti che hanno accettato l'invito

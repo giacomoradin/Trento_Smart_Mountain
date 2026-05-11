@@ -1,10 +1,15 @@
 package it.trentosmartmountain.app.viewmodel
 
+import android.app.Application
 import android.util.Patterns
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
+import it.trentosmartmountain.app.data.local.TokenStorage
+import it.trentosmartmountain.app.data.remote.TsmApiClient
+import it.trentosmartmountain.app.repository.AuthRepositoryImpl
+import it.trentosmartmountain.app.repository.LoginResult
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,14 +28,16 @@ data class LoginUiState(
 )
 
 /**
- * Presentazione del flusso login (MVVM).
- *
- * - Validazione client-side prima di qualsiasi rete (email non vuota e formato plausibile, password minima).
- * - Dopo login riuscito la navigazione verso la home è segnalata tramite [navigateHomeEventsFlow] (evento singolo, non va ripetuto al recomposer).
- *
- * La chiamata HTTP reale al backend (`POST /auth/login`) andrà integrata al posto del delay provvisorio.
+ * Presentazione del flusso login (MVVM): validazione locale + [AuthRepositoryImpl] verso `POST /auth/login`.
  */
-class LoginViewModel : ViewModel() {
+class LoginViewModel(application: Application) : AndroidViewModel(application) {
+
+  private val authRepository =
+    AuthRepositoryImpl(
+      TsmApiClient.service(),
+      Gson(),
+      TokenStorage(application.applicationContext),
+    )
 
   private val _uiState = MutableStateFlow(LoginUiState())
   val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
@@ -90,10 +97,17 @@ class LoginViewModel : ViewModel() {
           generalError = null,
         )
       }
-      // TODO: sostituire con AuthRepository che chiama TsmApiService (POST /auth/login) e gestisce token/errori HTTP.
-      delay(450)
-      _uiState.update { it.copy(isLoading = false) }
-      navigateHomeEvents.trySend(Unit)
+      when (val result = authRepository.login(email, password)) {
+        is LoginResult.Success -> {
+          _uiState.update { it.copy(isLoading = false) }
+          navigateHomeEvents.trySend(Unit)
+        }
+        is LoginResult.Failure -> {
+          _uiState.update {
+            it.copy(isLoading = false, generalError = result.message)
+          }
+        }
+      }
     }
   }
 }

@@ -1,5 +1,6 @@
 package it.trentosmartmountain.app.ui.screens.login
 
+import android.app.Application
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,7 +36,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
@@ -50,7 +53,13 @@ import it.trentosmartmountain.app.viewmodel.LoginViewModel
 @Composable
 fun LoginScreen(
   onLoggedIn: () -> Unit,
-  viewModel: LoginViewModel = viewModel(),
+  viewModel: LoginViewModel =
+    viewModel(
+      factory =
+        ViewModelProvider.AndroidViewModelFactory.getInstance(
+          LocalContext.current.applicationContext as Application,
+        ),
+    ),
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   val keyboard = LocalSoftwareKeyboardController.current

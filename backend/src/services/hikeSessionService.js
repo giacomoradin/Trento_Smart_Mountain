@@ -32,7 +32,7 @@ export async function createSession(creatorId, routeDetails) {
 
 
 
-// Diamo i gradi di "groupLeader" a chi ha creato la sessione.
+// Diamo i ruoli di "groupLeader" a chi ha creato la sessione.
   // Usiamo $push per non rimuovere i ruoli che l'utente ha già in altre sessioni.
   await User.findByIdAndUpdate(creatorId, {
     $push: {

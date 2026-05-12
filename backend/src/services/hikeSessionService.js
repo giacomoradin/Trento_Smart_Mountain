@@ -1,4 +1,5 @@
 import HikeSession from "../models/hikeSession.js";
+import User from "../models/user.js";
 import crypto from "crypto";
 
 // Genera un codice invito alfanumerico univoco di 8 caratteri
@@ -28,9 +29,63 @@ export async function createSession(creatorId, routeDetails) {
   });
 
   await session.save();
+
+
+
+// Diamo i ruoli di "groupLeader" a chi ha creato la sessione.
+  // Usiamo $push per non rimuovere i ruoli che l'utente ha già in altre sessioni.
+  await User.findByIdAndUpdate(creatorId, {
+    $push: {
+      sessionRoles: {
+        groupId: session._id,
+        role: "groupLeader",
+        createdBy: creatorId, 
+      },
+    },
+  });
+
   return session;
 }
 
+// Logica per l'ingresso in sessione tramite inviteCode
+export async function joinSession(userId, inviteCode) {
+  // Recuperiamo la sessione dal codice; se il codice è farlocco, usciamo subito.
+  const session = await HikeSession.findOne({ inviteCode });
+  if (!session) {
+    throw new Error("SESSION_NOT_FOUND");
+  }
+
+  // Si può entrare solo se la camminata è ancora in fase di pianificazione.
+  if (session.status !== "PLANNED") {
+    throw new Error("SESSION_NOT_JOINABLE");
+  }
+
+  // Evitiamo duplicati: controlliamo se l'utente è già dei nostri.
+  const alreadyIn = session.participants.some(
+    (p) => p.userId.toString() === userId.toString()
+  );
+  if (alreadyIn) {
+    throw new Error("ALREADY_IN_SESSION");
+  }
+
+  // Tutto ok, aggiungiamo l'utente ai partecipanti e salviamo su DB.
+  session.participants.push({ userId });
+  await session.save();
+
+  // Infine, aggiorniamo il profilo dell'utente segnando che ora partecipa come "hiker".
+  // Teniamo traccia del creatorId come riferimento per chi ha generato l'invito.
+  await User.findByIdAndUpdate(userId, {
+    $push: {
+      sessionRoles: {
+        groupId: session._id,
+        role: "hiker",
+        createdBy: session.creatorId,
+      },
+    },
+  });
+
+  return session;
+}
 // Recupera una sessione per ID
 export async function getSessionById(sessionId) {
   return HikeSession.findById(sessionId)

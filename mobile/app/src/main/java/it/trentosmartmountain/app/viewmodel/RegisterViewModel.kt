@@ -41,6 +41,7 @@ class RegisterViewModel : ViewModel() {
   private val _uiState = MutableStateFlow(RegisterUiState())
   val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
 
+  /** Evento “torna al login”: CONFLATED evita navigazioni duplicate se l’utente tocca più volte Invio. */
   private val navigateLoginEvents = Channel<Unit>(Channel.CONFLATED)
   val navigateLoginEventsFlow = navigateLoginEvents.receiveAsFlow()
 
@@ -74,6 +75,7 @@ class RegisterViewModel : ViewModel() {
     val password = _uiState.value.password
     val confirmPassword = _uiState.value.confirmPassword
 
+    // Validazione locale: nessuna chiamata di rete se i campi non sono accettabili.
     val usernameError =
       when {
         username.isEmpty() -> "Inserisci lo username"

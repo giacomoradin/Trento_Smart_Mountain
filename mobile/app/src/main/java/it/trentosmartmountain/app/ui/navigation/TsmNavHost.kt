@@ -4,13 +4,13 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import it.trentosmartmountain.app.ui.screens.HomePlaceholderScreen
 import it.trentosmartmountain.app.ui.screens.auth.AuthEntryScreen
 import it.trentosmartmountain.app.ui.screens.login.LoginScreen
+import it.trentosmartmountain.app.ui.screens.main.MainScreen
 import it.trentosmartmountain.app.ui.screens.register.RegisterScreen
 
 /**
- * Grafo di navigazione Compose: scelta accesso/registrazione → login o registrazione → home dopo autenticazione.
+ * Grafo di navigazione Compose: scelta accesso/registrazione → login o registrazione → area principale.
  * Dopo il login si usa [popUpTo] sulla route auth così l’utente non torna alle schermate credenziali col tasto sistema.
  */
 @Composable
@@ -26,7 +26,8 @@ fun TsmNavHost() {
     composable(Routes.LOGIN) {
       LoginScreen(
         onLoggedIn = {
-          navController.navigate(Routes.HOME) {
+          // Rimuove tutto lo stack auth: dopo il login non si torna indietro alle credenziali.
+          navController.navigate(Routes.MAIN) {
             popUpTo(Routes.AUTH_ENTRY) { inclusive = true }
           }
         },
@@ -35,6 +36,7 @@ fun TsmNavHost() {
     composable(Routes.REGISTER) {
       RegisterScreen(
         onRegistered = {
+          // Dopo la registrazione si torna al login (il backend non restituisce il JWT su POST /users).
           navController.navigate(Routes.LOGIN) {
             popUpTo(Routes.REGISTER) { inclusive = true }
           }
@@ -42,8 +44,8 @@ fun TsmNavHost() {
         onBack = { navController.popBackStack() },
       )
     }
-    composable(Routes.HOME) {
-      HomePlaceholderScreen()
+    composable(Routes.MAIN) {
+      MainScreen()
     }
   }
 }

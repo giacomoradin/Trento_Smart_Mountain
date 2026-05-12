@@ -51,7 +51,9 @@ import it.trentosmartmountain.app.viewmodel.RegisterViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
+  /** Invocato dopo `POST /users` riuscito (di solito ritorno al login). */
   onRegistered: () -> Unit,
+  /** Torna alla schermata di scelta auth. */
   onBack: () -> Unit,
   viewModel: RegisterViewModel = viewModel(),
 ) {
@@ -60,6 +62,7 @@ fun RegisterScreen(
   var passwordVisible by remember { mutableStateOf(false) }
   var confirmPasswordVisible by remember { mutableStateOf(false) }
 
+  // Un solo evento di navigazione verso il login dopo registrazione riuscita.
   LaunchedEffect(Unit) {
     viewModel.navigateLoginEventsFlow.collect {
       onRegistered()

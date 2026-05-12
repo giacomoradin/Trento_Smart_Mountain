@@ -21,7 +21,9 @@ import it.trentosmartmountain.app.R
 /** Schermata iniziale: scelta tra accesso e registrazione. */
 @Composable
 fun AuthEntryScreen(
+  /** Navigazione verso [Routes.LOGIN]. */
   onLoginClick: () -> Unit,
+  /** Navigazione verso [Routes.REGISTER]. */
   onRegisterClick: () -> Unit,
 ) {
   Column(

@@ -22,4 +22,15 @@
   <string name="register_back">Indietro</string>
   <string name="register_show_password">Mostra password</string>
   <string name="register_hide_password">Nascondi password</string>
+  <string name="main_tab_session">Sessione</string>
+  <string name="main_tab_map">Mappa</string>
+  <string name="main_tab_profile">Profilo</string>
+  <string name="session_title">Sessione</string>
+  <string name="session_placeholder_body">Qui potrai avviare una nuova escursione o consultare i dettagli della sessione attiva.</string>
+  <string name="map_title">Mappa</string>
+  <string name="map_placeholder_body">Qui verrà mostrata la mappa aggiornata con la posizione del gruppo e altre informazioni utili.</string>
+  <string name="profile_title">Profilo</string>
+  <string name="profile_username_label">Username</string>
+  <string name="profile_placeholder_body">Statistiche, progressi e attività saranno disponibili nelle prossime versioni.</string>
+  <string name="profile_load_error">Impossibile caricare il profilo.</string>
 </resources>

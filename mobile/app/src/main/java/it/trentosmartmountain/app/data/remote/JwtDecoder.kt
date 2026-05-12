@@ -15,7 +15,7 @@ object JwtDecoder {
   fun userIdFrom(token: String): String? {
     val payloadSegment = token.split(".").getOrNull(1) ?: return null
     return runCatching {
-      // Payload JWT: seconda parte del token, codificata in Base64 URL-safe.
+      /** Payload JWT: seconda parte del token, codificata in Base64 URL-safe.*/
       val decoded =
         String(
           Base64.decode(

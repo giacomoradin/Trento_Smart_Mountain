@@ -2,7 +2,10 @@ package it.trentosmartmountain.app.repository
 
 /** Esito registrazione verso `POST /users`. */
 sealed interface RegisterResult {
-  data object Success : RegisterResult
+  data class Success(
+    val email: String,
+    val serverMessage: String?,
+  ) : RegisterResult
 
   data class Failure(val message: String) : RegisterResult
 }

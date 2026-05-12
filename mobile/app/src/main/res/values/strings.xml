@@ -24,6 +24,10 @@
   <string name="register_back">Indietro</string>
   <string name="register_show_password">Mostra password</string>
   <string name="register_hide_password">Nascondi password</string>
+  <string name="email_verification_title">Verifica email</string>
+  <string name="email_verification_body">Abbiamo inviato un’email di conferma a %1$s.</string>
+  <string name="email_verification_steps">Apri il link ricevuto per attivare l’account, poi torna qui e accedi con email e password.</string>
+  <string name="email_verification_continue_login">Vai al login</string>
   <string name="main_tab_session">Sessione</string>
   <string name="main_tab_map">Mappa</string>
   <string name="main_tab_profile">Profilo</string>

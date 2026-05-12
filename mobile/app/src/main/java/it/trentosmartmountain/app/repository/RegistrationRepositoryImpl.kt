@@ -27,7 +27,16 @@ class RegistrationRepositoryImpl(
           ),
         )
       if (response.isSuccessful) {
-        RegisterResult.Success
+        val body = response.body()
+        val email = body?.user?.email?.trim().orEmpty()
+        if (email.isEmpty()) {
+          RegisterResult.Failure("Risposta senza email utente.")
+        } else {
+          RegisterResult.Success(
+            email = email,
+            serverMessage = body?.message?.trim()?.takeIf { it.isNotEmpty() },
+          )
+        }
       } else {
         val raw = response.errorBody()?.string()
         val parsed =

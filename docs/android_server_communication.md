@@ -116,14 +116,15 @@ Contratto in `TsmApiService.kt` (path relativi a `BASE_URL`):
 1. L’utente invia email e password; il ViewModel valida i campi.
 2. `AuthRepositoryImpl` chiama `api.login(LoginRequest)`.
 3. Se la risposta è 2xx e il body contiene `token`, il JWT viene salvato con `TokenStorage.saveToken`.
-4. In caso di errore, il repository prova a leggere `message` dal JSON (`ApiMessageBody`); altrimenti mostra un messaggio generico con codice HTTP.
+4. In caso di **403** (email non verificata), il repository espone `LoginResult.EmailNotVerified` e la UI mostra un avviso dedicato; altri errori HTTP leggono `message` da `ApiMessageBody` se presente.
 5. `IOException` → messaggio di server irraggiungibile (backend spento o URL errato).
+6. Dal flusso post-registrazione, `Routes.loginRoute(pendingEmail)` può precompilare l’email e mostrare un promemoria di verifica.
 
 ### Registrazione
 
 1. `RegistrationRepositoryImpl` invia `RegisterRequest` a `POST /users`.
-2. Successo → torna al login; conflitto (es. 409) o `message` dal server → errore in UI.
-3. La password viaggia nel body come definito dal backend (hash lato server).
+2. Successo (201) → parsing di `{ message, user }`; navigazione a **Verifica email** con l’indirizzo dell’utente creato; conflitto (es. 409) o `message` dal server → errore in UI.
+3. La password viaggia nel body come definito dal backend (hash lato server). Il login resta bloccato finché l’utente non apre il link **`GET /auth/verify/:token`** (di solito dal client email / browser).
 
 ### Profilo (username)
 
@@ -152,10 +153,11 @@ I ViewModel espongono stati (caricamento, errore, successo) alla UI senza esporr
 
 - **Nessun segreto del server** nell’APK: solo URL base e chiamate pubbliche/protette come da API.
 - **Nessuna verifica crittografica del JWT** in app: il token serve a identificare l’utente e a chiamare endpoint protetti; la validità è demandata al backend.
-- **Nessun refresh token** automatico né skip del login all’avvio se il JWT è ancora presente (evoluzioni possibili in step successivi).
+- **Nessun refresh token** automatico né skip del login all’avvio se il JWT è ancora presente (evoluzione legata alla persistenza auth, user story **#2**).
 - **Token in `SharedPreferences`**, non ancora cifrato (EncryptedSharedPreferences / DataStore in futuro).
+- **Nessun deep link** dall’email di verifica verso l’app; la conferma passa dal link HTTP del backend.
 
-Variabili come `JWT_SECRET` e SMTP restano nel **`backend/.env`** (copia locale dal documento conmotionato dal team). Senza backend configurato, login e registrazione possono fallire per motivi lato server anche se l’URL dell’app è corretto.
+Variabili come `JWT_SECRET` e SMTP restano nel **`backend/.env`** (copia locale dal documento condiviso dal team). Senza backend configurato, login e registrazione possono fallire per motivi lato server anche se l’URL dell’app è corretto.
 
 ---
 

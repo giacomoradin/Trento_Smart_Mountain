@@ -4,6 +4,9 @@ package it.trentosmartmountain.app.repository
 sealed interface LoginResult {
   data object Success : LoginResult
 
+  /** Account esistente ma email non ancora verificata (`403` da `POST /auth/login`). */
+  data class EmailNotVerified(val message: String) : LoginResult
+
   data class Failure(val message: String) : LoginResult
 }
 

@@ -24,6 +24,7 @@ data class LoginUiState(
   val emailError: String? = null,
   val passwordError: String? = null,
   val generalError: String? = null,
+  val verificationNotice: String? = null,
   val isLoading: Boolean = false,
 )
 
@@ -48,13 +49,25 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
   fun onEmailChange(value: String) {
     _uiState.update {
-      it.copy(email = value, emailError = null, generalError = null)
+      it.copy(email = value, emailError = null, generalError = null, verificationNotice = null)
     }
   }
 
   fun onPasswordChange(value: String) {
     _uiState.update {
-      it.copy(password = value, passwordError = null, generalError = null)
+      it.copy(password = value, passwordError = null, generalError = null, verificationNotice = null)
+    }
+  }
+
+  fun onPendingVerificationEmail(email: String) {
+    val trimmed = email.trim()
+    if (trimmed.isEmpty()) return
+    _uiState.update {
+      it.copy(
+        email = trimmed,
+        generalError = null,
+        verificationNotice = "Controlla l’email inviata a $trimmed e apri il link di verifica prima di accedere.",
+      )
     }
   }
 
@@ -95,6 +108,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
           emailError = null,
           passwordError = null,
           generalError = null,
+          verificationNotice = null,
         )
       }
       when (val result = authRepository.login(email, password)) {
@@ -102,9 +116,22 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
           _uiState.update { it.copy(isLoading = false) }
           navigateHomeEvents.trySend(Unit)
         }
+        is LoginResult.EmailNotVerified -> {
+          _uiState.update {
+            it.copy(
+              isLoading = false,
+              verificationNotice = result.message,
+              generalError = null,
+            )
+          }
+        }
         is LoginResult.Failure -> {
           _uiState.update {
-            it.copy(isLoading = false, generalError = result.message)
+            it.copy(
+              isLoading = false,
+              generalError = result.message,
+              verificationNotice = null,
+            )
           }
         }
       }

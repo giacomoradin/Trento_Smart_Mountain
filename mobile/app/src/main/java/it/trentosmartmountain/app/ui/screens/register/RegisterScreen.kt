@@ -51,8 +51,8 @@ import it.trentosmartmountain.app.viewmodel.RegisterViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
-  /** Invocato dopo `POST /users` riuscito (di solito ritorno al login). */
-  onRegistered: () -> Unit,
+  /** Invocato dopo `POST /users` riuscito, prima del login. */
+  onRegistrationPendingVerification: (email: String, serverMessage: String?) -> Unit,
   /** Torna alla schermata di scelta auth. */
   onBack: () -> Unit,
   viewModel: RegisterViewModel = viewModel(),
@@ -62,10 +62,10 @@ fun RegisterScreen(
   var passwordVisible by remember { mutableStateOf(false) }
   var confirmPasswordVisible by remember { mutableStateOf(false) }
 
-  // Un solo evento di navigazione verso il login dopo registrazione riuscita.
+  // Un solo evento di navigazione verso le istruzioni di verifica email dopo registrazione riuscita.
   LaunchedEffect(Unit) {
-    viewModel.navigateLoginEventsFlow.collect {
-      onRegistered()
+    viewModel.navigateVerificationEventsFlow.collect { result ->
+      onRegistrationPendingVerification(result.email, result.serverMessage)
     }
   }
 

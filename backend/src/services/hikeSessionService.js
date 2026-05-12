@@ -6,9 +6,20 @@ import crypto from "crypto";
 function generateInviteCode() {
   return crypto.randomBytes(4).toString("hex").toUpperCase(); // es. "A3F7C12B"
 }
+// Controlla se l'utente è già in una sessione attiva o pianificata
+async function checkUserAlreadyInActiveSession(userId) {
+  const conflict = await HikeSession.findOne({
+    "participants.userId": userId,
+    status: { $in: ["PLANNED", "ACTIVE"] },
+  });
 
+  if (conflict) {
+    throw new Error("USER_ALREADY_IN_SESSION");
+  }
+}
 // Crea una nuova sessione — il creator diventa automaticamente Capogruppo
 export async function createSession(creatorId, routeDetails) {
+  await checkUserAlreadyInActiveSession(creatorId);
   let inviteCode;
   let isUnique = false;
 
@@ -49,6 +60,7 @@ export async function createSession(creatorId, routeDetails) {
 
 // Logica per l'ingresso in sessione tramite inviteCode
 export async function joinSession(userId, inviteCode) {
+  await checkUserAlreadyInActiveSession(userId);
   // Recuperiamo la sessione dal codice; se il codice è farlocco, usciamo subito.
   const session = await HikeSession.findOne({ inviteCode });
   if (!session) {

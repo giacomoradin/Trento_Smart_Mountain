@@ -6,7 +6,7 @@ import {
   getSessionsByUser,
   updateSessionStatus,
   deleteSession,
-  joinSession, // ← aggiungi questo
+  joinSession,
 } from "../services/hikeSessionService.js";
 
 const router = express.Router();

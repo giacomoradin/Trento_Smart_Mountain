@@ -1,27 +1,29 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-const userSchema = new Schema({
-  username: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true },
-  passwordHash: { type: String, required: true },
+const userSchema = new Schema(
+  {
+    username: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true },
+    passwordHash: { type: String, required: true },
+    role: { type: String, enum: ["user", "admin"], default: "user" },
+    isVerified: { type: Boolean, default: false },
+    verificationToken: { type: String },
+    createdAt: { type: Date, default: Date.now },
+  },
+  {
+    // Abilita l'inclusione dei virtuals quando converti in JSON/Object
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
 
-  role: { type: String, enum: ["user", "admin", "HIKER"], default: "user" },
-
-  // --- INIEZIONE MODULO SMTP VERIFICATION ---
-  isVerified: { type: Boolean, default: false },
-  verificationToken: { type: String },
-
-  sessionRoles: [
-    {
-      groupId: { type: Schema.Types.ObjectId, required: true },
-      role: { type: String, enum: ["hiker", "groupLeader"], required: true }, // or "hiker"
-      assignedAt: { type: Date, default: Date.now },
-      createdBy: { type: Schema.Types.ObjectId, ref: "User" }, // who assigned this role
-    },
-  ],
-  createdAt: { type: Date, default: Date.now },
+// VIRTUAL POPULATE: Permette di fare User.find().populate('mySessions')
+// Senza salvare nulla fisicamente nel documento User.
+userSchema.virtual("mySessions", {
+  ref: "HikeSession", // Modello target
+  localField: "_id", // Campo in User
+  foreignField: "participants.userId", // Campo in HikeSession
 });
 
-const User = mongoose.model("User", userSchema);
-export default User;
+export default mongoose.model("User", userSchema);

@@ -1,5 +1,7 @@
 import User from "../models/user.js";
 import bcrypt from "bcrypt";
+import crypto from "crypto"; //SMTP/mail verification token generation
+import { sendVerificationEmail } from "./emailService.js"; //SMTP/mail verification
 
 export const createUser = async (req, res) => {
   try {
@@ -7,23 +9,44 @@ export const createUser = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10); // server hashes it
 
-    const user = new User({ username, email, passwordHash, role });
+    // --- INIEZIONE MODULO SMTP VERIFICATION ---
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const user = new User({
+      username,
+      email,
+      passwordHash,
+      role,
+      isVerified: false,
+      verificationToken,
+    });
+
     const savedUser = await user.save();
-    // exclude passwordHash from response
-    //passwordHsh renamend to _ and ... rest operator to get the rest of the user fields without passwordHash
+
+    try {
+      await sendVerificationEmail(email, verificationToken);
+    } catch (emailError) {
+      console.error("Fallimento Transport SMTP:", emailError);
+      // Probabilmente va implementato un sistema di retry.
+      // Per ora logghiamo l'errore senza far crashare la registrazione.
+    }
+
     const {
       passwordHash: _,
-      __v: __,
+      verificationToken: __,
+      __v: ___,
       ...userWithoutPassword
     } = savedUser.toObject();
-
-    res.status(201).json(userWithoutPassword);
+    res.status(201).json({
+      message: "Allocazione completata. Attesa verifica email.",
+      user: userWithoutPassword,
+    });
   } catch (error) {
-    if (error.code === 11000) {
+    if (error.code === 11000)
       return res
         .status(409)
-        .json({ message: "Username or email already in use." });
-    }
+        .json({
+          message: "Collisione rilevata: Email o Username già utilizzati.",
+        });
     res.status(500).json({ message: error.message });
   }
 };

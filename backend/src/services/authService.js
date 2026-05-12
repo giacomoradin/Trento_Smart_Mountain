@@ -2,6 +2,32 @@ import User from "../models/user.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
+export const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Ricerca dell'hash nel database
+    const user = await User.findOne({ verificationToken: token });
+
+    if (!user) {
+      return res
+        .status(400)
+        .json({ message: "Token non valido, corrotto o già utilizzato." });
+    }
+
+    // Mutazione di Stato
+    user.isVerified = true;
+    user.verificationToken = undefined; // Sanificazione memoria (Token monouso)
+    await user.save();
+
+    res.status(200).json({
+      message: "Handshake completato. Identità verificata con successo.",
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Errore fatale durante la verifica." });
+  }
+};
+
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -18,6 +44,17 @@ export const loginUser = async (req, res) => {
 
     if (!isPasswordValid) {
       return res.status(401).json({ message: "password is invalid" });
+    }
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid email" });
+    }
+
+    // NUOVO WATCHDOG: Blocco accesso se non verificato
+    if (!user.isVerified) {
+      return res.status(403).json({
+        message: "Accesso negato. Eseguire la verifica SMTP inviata via email.",
+      });
     }
 
     //generate JWT token

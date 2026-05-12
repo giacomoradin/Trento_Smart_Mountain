@@ -9,7 +9,7 @@ const doc = {
   basePath: "/",
 };
 
-const outputFile = "../swagger-output.json"; 
-const routes = [ "./src/server.js"];
+const outputFile = "../apiTracker/swagger-output.json";
+const routes = ["./src/server.js"];
 
 swaggerAutogen()(outputFile, routes, doc);

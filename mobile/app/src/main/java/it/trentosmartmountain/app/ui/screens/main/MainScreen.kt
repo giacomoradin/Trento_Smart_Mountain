@@ -37,7 +37,9 @@ private enum class MainTab {
  * La tab selezionata resta in [rememberSaveable] anche dopo rotazione schermo.
  */
 @Composable
-fun MainScreen() {
+fun MainScreen(
+  onLoggedOut: () -> Unit,
+) {
   var selectedTab by rememberSaveable { mutableStateOf(MainTab.Session) }
 
   Scaffold(
@@ -67,7 +69,7 @@ fun MainScreen() {
     when (selectedTab) {
       MainTab.Session -> SessionScreen(Modifier.padding(innerPadding))
       MainTab.Map -> MapScreen(Modifier.padding(innerPadding))
-      MainTab.Profile -> ProfileScreen(Modifier.padding(innerPadding))
+      MainTab.Profile -> ProfileScreen(onLoggedOut = onLoggedOut, modifier = Modifier.padding(innerPadding))
     }
   }
 }

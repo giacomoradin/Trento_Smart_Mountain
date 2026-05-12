@@ -56,4 +56,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
       }
     }
   }
+
+  /** Logout locale: rimuove il JWT salvato (nessuna API di logout sul backend). */
+  fun logout() {
+    TokenStorage(getApplication()).clearToken()
+    _uiState.update {
+      it.copy(username = null, isLoading = false, errorMessage = null)
+    }
+  }
 }

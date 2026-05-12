@@ -16,6 +16,19 @@ import it.trentosmartmountain.app.ui.screens.register.RegisterScreen
 @Composable
 fun TsmNavHost() {
   val navController = rememberNavController()
+
+  fun navigateToMain() {
+    navController.navigate(Routes.MAIN) {
+      popUpTo(Routes.AUTH_ENTRY) { inclusive = true }
+    }
+  }
+
+  fun navigateToAuthEntry() {
+    navController.navigate(Routes.AUTH_ENTRY) {
+      popUpTo(Routes.MAIN) { inclusive = true }
+    }
+  }
+
   NavHost(navController = navController, startDestination = Routes.AUTH_ENTRY) {
     composable(Routes.AUTH_ENTRY) {
       AuthEntryScreen(
@@ -27,9 +40,7 @@ fun TsmNavHost() {
       LoginScreen(
         onLoggedIn = {
           // Rimuove tutto lo stack auth: dopo il login non si torna indietro alle credenziali.
-          navController.navigate(Routes.MAIN) {
-            popUpTo(Routes.AUTH_ENTRY) { inclusive = true }
-          }
+          navigateToMain()
         },
       )
     }
@@ -45,7 +56,7 @@ fun TsmNavHost() {
       )
     }
     composable(Routes.MAIN) {
-      MainScreen()
+      MainScreen(onLoggedOut = { navigateToAuthEntry() })
     }
   }
 }

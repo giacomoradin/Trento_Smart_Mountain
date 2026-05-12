@@ -9,7 +9,7 @@ export const authenticate = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // attach userId and role to the request
+    req.user = decoded; // attach userId and role to the request; referred in HikeSessionRoutes.js
     next(); // let the request through
   } catch (error) {
     res.status(401).json({ message: "Invalid or expired token." });

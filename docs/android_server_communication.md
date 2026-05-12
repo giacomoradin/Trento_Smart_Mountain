@@ -53,7 +53,8 @@ flowchart TB
 | Modelli JSON | `.../data/remote/dto/` | Request/response allineate al backend (`LoginRequest`, `UserResponse`, `ApiMessageBody`, …). |
 | Client | `.../data/remote/TsmApiClient.kt` | Costruisce Retrofit con `BuildConfig.BASE_URL`, Gson, timeout. |
 | Auth HTTP | `.../data/remote/AuthInterceptor.kt` | Se esiste un JWT in `TokenStorage`, aggiunge `Authorization: Bearer <token>`. |
-| JWT locale | `.../data/local/TokenStorage.kt` | Salva / legge / cancella il token in `SharedPreferences` (`tsm_auth`). |
+| JWT locale | `.../data/local/TokenStorage.kt` | Salva / legge / cancella il JWT in **EncryptedSharedPreferences** (`tsm_auth_encrypted`); migrazione one-shot da `tsm_auth` legacy. |
+| Sessione all’avvio | `.../data/local/AuthSession.kt` + `TsmNavHost` | Se il JWT locale ha `userId` e `exp` futuro → `Routes.MAIN`, altrimenti auth. |
 | Lettura `userId` | `.../data/remote/JwtDecoder.kt` | Decodifica il payload JWT (solo per ottenere `userId`, senza verificare la firma lato app). |
 | Logica API | `.../repository/*RepositoryImpl.kt` | Chiamano `TsmApiService`, gestiscono errori di rete e body di errore JSON. |
 | Stato UI | `.../viewmodel/*ViewModel.kt` | Validazione locale, loading, messaggi; usano i repository. |
@@ -153,9 +154,9 @@ I ViewModel espongono stati (caricamento, errore, successo) alla UI senza esporr
 
 - **Nessun segreto del server** nell’APK: solo URL base e chiamate pubbliche/protette come da API.
 - **Nessuna verifica crittografica del JWT** in app: il token serve a identificare l’utente e a chiamare endpoint protetti; la validità è demandata al backend.
-- **Nessun refresh token** automatico né skip del login all’avvio se il JWT è ancora presente (evoluzione legata alla persistenza auth, user story **#2**).
-- **Token in `SharedPreferences`**, non ancora cifrato (EncryptedSharedPreferences / DataStore in futuro).
+- **Nessun refresh token** automatico; la sessione all’avvio si basa sul JWT salvato e sul controllo locale di `exp` (la firma resta demandata al backend).
 - **Nessun deep link** dall’email di verifica verso l’app; la conferma passa dal link HTTP del backend.
+- **`android:allowBackup="false"`** nel manifest: il JWT cifrato non entra nei backup di sistema.
 
 Variabili come `JWT_SECRET` e SMTP restano nel **`backend/.env`** (copia locale dal documento condiviso dal team). Senza backend configurato, login e registrazione possono fallire per motivi lato server anche se l’URL dell’app è corretto.
 

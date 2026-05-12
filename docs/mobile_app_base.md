@@ -71,7 +71,7 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 | **`ui/screens/profile/`**  | **Profilo** (in questa fase: username da API protetta).                                                                                                   |
 | **`viewmodel/`**           | **`LoginViewModel`**, **`RegisterViewModel`**, **`ProfileViewModel`**.                                                                                    |
 | **`data/remote/`**         | **`TsmApiClient`**, **`TsmApiService`**, **`AuthInterceptor`**, **`JwtDecoder`**, DTO JSON.                                                               |
-| **`data/local/`**          | **`TokenStorage`**: JWT in `SharedPreferences` dopo login; **`LocalDataSource`**: segnaposto per Room / cache offline-first.                                                                 |
+| **`data/local/`**          | **`TokenStorage`**: JWT in **EncryptedSharedPreferences**; **`AuthSession`** per la destinazione iniziale; **`LocalDataSource`**: segnaposto Room. |
 | **`repository/`**          | Auth, registrazione, **`ProfileRepository`** (`GET /users/{id}`).                                                                                         |
 | **`service/`**             | Segnaposto per il **Foreground Service** (GPS/BLE, user story futura).                                                                                                                    |
 
@@ -88,7 +88,8 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 
 - Campi **email** e **password**, con messaggi di errore se i dati non sono validi (email vuota/formato, password troppo corta).
 - Pulsante **Entra**, stato di **caricamento** durante la richiesta, messaggio di errore se il server non risponde o rifiuta le credenziali.
-- Chiamata reale a **`POST /auth/login`** tramite **`AuthRepositoryImpl`**; in caso di successo il **JWT** viene salvato in **`TokenStorage`** e si naviga all’**area principale** (`MainScreen`), senza poter tornare alle schermate di autenticazione con il tasto indietro di sistema.
+- Chiamata reale a **`POST /auth/login`** tramite **`AuthRepositoryImpl`**; in caso di successo il **JWT** viene salvato in **`TokenStorage`** (storage cifrato) e si naviga all’**area principale** (`MainScreen`), senza poter tornare alle schermate di autenticazione con il tasto indietro di sistema.
+- All’**avvio successivo**, se il JWT salvato è ancora valido in locale (`userId` + `exp`), **`TsmNavHost`** apre direttamente **`MainScreen`** senza ripassare dal login.
 - Se l’account non ha ancora completato la **verifica email**, il backend risponde **403**: l’app mostra un avviso dedicato (non un errore generico di credenziali).
 - Arrivando dal flusso post-registrazione, il login può ricevere l’**email precompilata** e un promemoria di verifica (`Routes.loginRoute(pendingEmail)`).
 
@@ -130,7 +131,7 @@ L’app **non** contiene segreti del server. Per far funzionare **login e verifi
 ## 7. Cosa non è ancora stato fatto (prossimi passi tipici)
 
 - Persistenza locale **offline-first** (Room, code di sync, Hike Packet): vedi [`setup_mobile.md`](setup_mobile.md) e il piano in §9.
-- Rafforzare la conservazione del token (es. **EncryptedSharedPreferences** / DataStore) e **sessione all’avvio** (JWT valido → salto del flusso auth).
+- Biometrico / PIN per accesso offline (user story **#2**, oltre al JWT cifrato già in uso).
 - Contenuti reali per **Sessione** (API `/api/v1/sessions` già sul backend) e **Mappa** (posizione in tempo reale).
 - Ampliare **Profilo** (progressi, attività); logout sicuro lato server oltre alla cancellazione locale del JWT.
 - OAuth Google/Facebook; deep link o riinvio email dalla app.
@@ -148,7 +149,7 @@ L’app **non** contiene segreti del server. Per far funzionare **login e verifi
 
 ## 9. Persistenza locale (stato attuale e obiettivi di progetto)
 
-L’architettura di prodotto è **offline-first** (*store-and-forward*, vedi README del monorepo). Sul dispositivo oggi c’è solo il JWT in **`TokenStorage`** (`SharedPreferences`); **`LocalDataSource`** è un segnaposto. Le user story di riferimento nel backlog di progetto includono tra le altre: **#2** accesso offline con JWT in secure storage, **#10** cache coordinate GPS in Room/SQLite, **#35** tetto **50 MB** con eviction **FIFO**, **#37** coda eventi offline, **#39** Hike Packet (GeoJSON + map tiles). Il piano operativo per il team è descritto in [`setup_mobile.md`](setup_mobile.md) (sezione persistenza).
+L’architettura di prodotto è **offline-first** (*store-and-forward*, vedi README del monorepo). Sul dispositivo il JWT è in **`TokenStorage`** (**EncryptedSharedPreferences**); **`AuthSession`** decide se aprire auth o main all’avvio. **`LocalDataSource`** resta un segnaposto per Room e cache escursione.
 
 ---
 

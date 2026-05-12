@@ -5,7 +5,7 @@ import android.util.Patterns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
-import it.trentosmartmountain.app.data.local.TokenStorage
+import it.trentosmartmountain.app.TsmApplication
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.repository.AuthRepositoryImpl
 import it.trentosmartmountain.app.repository.LoginResult
@@ -33,11 +33,13 @@ data class LoginUiState(
  */
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
+  private val tokenStorage = (application as TsmApplication).tokenStorage
+
   private val authRepository =
     AuthRepositoryImpl(
       TsmApiClient.service(),
       Gson(),
-      TokenStorage(application.applicationContext),
+      tokenStorage,
     )
 
   private val _uiState = MutableStateFlow(LoginUiState())

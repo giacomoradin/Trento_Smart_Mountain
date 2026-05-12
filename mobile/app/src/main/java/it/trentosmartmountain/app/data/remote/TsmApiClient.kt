@@ -1,6 +1,7 @@
 package it.trentosmartmountain.app.data.remote
 
 import it.trentosmartmountain.app.BuildConfig
+import it.trentosmartmountain.app.data.local.TokenStorage
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -10,29 +11,41 @@ import java.util.concurrent.TimeUnit
 /**
  * Punto unico per creare Retrofit verso il backend.
  *
- * [BuildConfig.BASE_URL] viene generato da Gradle (default emulatore: `http://10.0.2.2:3000/` → host della macchina di sviluppo).
- * Il client OkHttp logga in BASIC su Logcat (utile in debug); in release si può ridurre o disattivare.
+ * Va inizializzato da [it.trentosmartmountain.app.TsmApplication] prima di qualsiasi chiamata API.
  */
 object TsmApiClient {
+  private lateinit var retrofit: Retrofit
+
+  /** Collega [TokenStorage] all’interceptor HTTP; va chiamato una sola volta all’avvio app. */
+  fun init(tokenStorage: TokenStorage) {
+    retrofit = buildRetrofit(tokenStorage)
+  }
+
   private val logging =
     HttpLoggingInterceptor().apply {
       level = HttpLoggingInterceptor.Level.BASIC
     }
 
-  private val client: OkHttpClient =
-    OkHttpClient.Builder()
-      .addInterceptor(logging)
-      .connectTimeout(30, TimeUnit.SECONDS)
-      .readTimeout(30, TimeUnit.SECONDS)
-      .build()
+  private fun buildRetrofit(tokenStorage: TokenStorage): Retrofit {
+    // OkHttp: prima il Bearer (se presente), poi log di base per debug.
+    val client =
+      OkHttpClient.Builder()
+        .addInterceptor(AuthInterceptor(tokenStorage))
+        .addInterceptor(logging)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
 
-  val retrofit: Retrofit =
-    Retrofit.Builder()
+    return Retrofit.Builder()
       .baseUrl(BuildConfig.BASE_URL)
       .client(client)
       .addConverterFactory(GsonConverterFactory.create())
       .build()
+  }
 
-  /** Istanza Retrofit dell’interfaccia API (es. [it.trentosmartmountain.app.data.remote.TsmApiService]). */
-  inline fun <reified T> service(): T = retrofit.create(T::class.java)
+  /** Restituisce il contratto Retrofit verso le route Express del backend. */
+  fun service(): TsmApiService {
+    check(::retrofit.isInitialized) { "TsmApiClient.init() must be called from Application.onCreate" }
+    return retrofit.create(TsmApiService::class.java)
+  }
 }

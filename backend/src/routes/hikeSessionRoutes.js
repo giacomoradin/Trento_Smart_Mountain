@@ -6,6 +6,7 @@ import {
   getSessionsByUser,
   updateSessionStatus,
   deleteSession,
+  joinSession,
 } from "../services/hikeSessionService.js";
 
 const router = express.Router();
@@ -34,7 +35,27 @@ router.post("/", async (req, res) => {
     res.status(500).json({ error: "Errore creazione sessione" });
   }
 });
+// POST /api/v1/sessions/join — si unisce a una sessione tramite codice invito
+router.post("/join", async (req, res) => {
+  const { inviteCode } = req.body;
 
+  if (!inviteCode) {
+    return res.status(400).json({ error: "inviteCode mancante nel body" });
+  }
+
+  try {
+    const session = await joinSession(req.user.userId, inviteCode);
+    res.status(200).json(session);
+  } catch (err) {
+    if (err.message === "SESSION_NOT_FOUND")
+      return res.status(404).json({ error: "Codice invito non valido" });
+    if (err.message === "SESSION_NOT_JOINABLE")
+      return res.status(409).json({ error: "La sessione non è più aperta" });
+    if (err.message === "ALREADY_IN_SESSION")
+      return res.status(409).json({ error: "Sei già in questa sessione" });
+    res.status(500).json({ error: "Errore durante l'accesso alla sessione" });
+  }
+});
 // GET /api/v1/sessions/my — sessioni dell'utente loggato
 router.get("/my", async (req, res) => {
   try {

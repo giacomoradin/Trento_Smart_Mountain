@@ -41,9 +41,9 @@ class RegisterViewModel : ViewModel() {
   private val _uiState = MutableStateFlow(RegisterUiState())
   val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
 
-  /** Evento “torna al login”: CONFLATED evita navigazioni duplicate se l’utente tocca più volte Invio. */
-  private val navigateLoginEvents = Channel<Unit>(Channel.CONFLATED)
-  val navigateLoginEventsFlow = navigateLoginEvents.receiveAsFlow()
+  /** Evento “verifica email”: CONFLATED evita navigazioni duplicate se l’utente tocca più volte Invio. */
+  private val navigateVerificationEvents = Channel<RegisterResult.Success>(Channel.CONFLATED)
+  val navigateVerificationEventsFlow = navigateVerificationEvents.receiveAsFlow()
 
   fun onUsernameChange(value: String) {
     _uiState.update {
@@ -136,7 +136,7 @@ class RegisterViewModel : ViewModel() {
       when (val result = registrationRepository.register(username, email, password)) {
         is RegisterResult.Success -> {
           _uiState.update { it.copy(isLoading = false) }
-          navigateLoginEvents.trySend(Unit)
+          navigateVerificationEvents.trySend(result)
         }
         is RegisterResult.Failure -> {
           _uiState.update {

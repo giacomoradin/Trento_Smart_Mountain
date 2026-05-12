@@ -61,17 +61,17 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 | **`MainActivity.kt`**      | Punto d’ingresso UI: avvia Compose e il tema.                                                                                                                                             |
 | **`TsmApplication.kt`**    | Classe `Application` globale (per ora minimale; qui si potranno mettere init future).                                                                                                     |
 | **`ui/theme/`**            | Colori e tema Material 3 (`TsmTheme`).                                                                                                                                                    |
-| **`ui/navigation/`**       | Destinazioni (`Routes`) e grafo di navigazione (`TsmNavHost`): scelta accesso/registrazione → login o registrazione → area principale con tab inferiori. |
-| **`ui/screens/auth/`**     | Schermata iniziale con pulsanti **Accedi** e **Registrati**.                                                                                              |
+| **`ui/navigation/`**       | Destinazioni (`Routes`) e grafo di navigazione (`TsmNavHost`): scelta accesso/registrazione → login, registrazione, verifica email → area principale con tab inferiori. |
+| **`ui/screens/auth/`**     | Schermata iniziale con pulsanti **Accedi**, **Registrati** e demo **Google** (non integrata).                                                                                              |
 | **`ui/screens/login/`**    | Schermata **login** (email e password).                                                                                                                   |
-| **`ui/screens/register/`** | Schermata **registrazione** (username, email, password, conferma password).                                                                               |
+| **`ui/screens/register/`** | **Registrazione** e schermata **Verifica email** dopo `POST /users`.                                                                                      |
 | **`ui/screens/main/`**     | **`MainScreen`**: barra di navigazione inferiore e contenuto della tab selezionata.                                                                        |
 | **`ui/screens/session/`**  | Scheletro **Sessione** (nuova sessione / sessione attiva).                                                                                                |
 | **`ui/screens/map/`**      | Scheletro **Mappa** (posizioni di gruppo in tempo reale, futura).                                                                                         |
 | **`ui/screens/profile/`**  | **Profilo** (in questa fase: username da API protetta).                                                                                                   |
 | **`viewmodel/`**           | **`LoginViewModel`**, **`RegisterViewModel`**, **`ProfileViewModel`**.                                                                                    |
 | **`data/remote/`**         | **`TsmApiClient`**, **`TsmApiService`**, **`AuthInterceptor`**, **`JwtDecoder`**, DTO JSON.                                                               |
-| **`data/local/`**          | **`TokenStorage`**: JWT in `SharedPreferences` dopo login.                                                                                                  |
+| **`data/local/`**          | **`TokenStorage`**: JWT in `SharedPreferences` dopo login; **`LocalDataSource`**: segnaposto per Room / cache offline-first.                                                                 |
 | **`repository/`**          | Auth, registrazione, **`ProfileRepository`** (`GET /users/{id}`).                                                                                         |
 | **`service/`**             | Segnaposto per il **Foreground Service** (GPS/BLE, user story futura).                                                                                                                    |
 
@@ -81,26 +81,29 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 
 ### Schermata iniziale (scelta)
 
-- All’avvio l’app mostra **Trento Smart Mountain** con due azioni: **Accedi** (apre il login) e **Registrati** (apre la registrazione).
+- All’avvio l’app mostra **Trento Smart Mountain** con **Accedi**, **Registrati** e un pulsante **Google** solo dimostrativo (messaggio “non ancora disponibile”).
 - È la **destinazione iniziale** del grafo di navigazione (`Routes.AUTH_ENTRY`).
 
 ### Login
 
 - Campi **email** e **password**, con messaggi di errore se i dati non sono validi (email vuota/formato, password troppo corta).
-- Pulsante **Entra**, stato di **caricamento** durante la richiesta, messaggio di errore generico se il server non risponde o rifiuta le credenziali.
+- Pulsante **Entra**, stato di **caricamento** durante la richiesta, messaggio di errore se il server non risponde o rifiuta le credenziali.
 - Chiamata reale a **`POST /auth/login`** tramite **`AuthRepositoryImpl`**; in caso di successo il **JWT** viene salvato in **`TokenStorage`** e si naviga all’**area principale** (`MainScreen`), senza poter tornare alle schermate di autenticazione con il tasto indietro di sistema.
+- Se l’account non ha ancora completato la **verifica email**, il backend risponde **403**: l’app mostra un avviso dedicato (non un errore generico di credenziali).
+- Arrivando dal flusso post-registrazione, il login può ricevere l’**email precompilata** e un promemoria di verifica (`Routes.loginRoute(pendingEmail)`).
 
 ### Area principale (dopo login)
 
 - **`MainScreen`** mostra una **barra inferiore** con tre tab, da sinistra a destra: **Sessione**, **Mappa**, **Profilo**.
 - **Sessione** e **Mappa** sono scheletri con testo descrittivo; i contenuti (sessione attiva, mappa live) arriveranno in step successivi.
-- **Profilo** carica lo **username** dell’utente loggato tramite JWT + **`GET /users/{id}`** (header `Authorization: Bearer` aggiunto da **`AuthInterceptor`**). Statistiche e attività restano fuori scope in questa fase.
+- **Profilo** carica lo **username** dell’utente loggato tramite JWT + **`GET /users/{id}`** (header `Authorization: Bearer` aggiunto da **`AuthInterceptor`**). Statistiche e attività restano fuori scope in questa fase; è disponibile il **logout** locale (cancellazione JWT e ritorno al flusso auth).
 
-### Registrazione
+### Registrazione e verifica email
 
 - Campi **username**, **email**, **password** e **conferma password** (la conferma è solo validazione lato app).
-- Chiamata a **`POST /users`** tramite **`RegistrationRepositoryImpl`** (password in chiaro nel body; hash sul server).
-- In caso di successo si torna alla schermata di **login**; in caso di conflitto (email/username già usati) o errore di rete viene mostrato un messaggio all’utente.
+- Chiamata a **`POST /users`** tramite **`RegistrationRepositoryImpl`** (password in chiaro nel body; hash sul server). Il backend crea l’account con `isVerified: false` e tenta l’invio dell’email di verifica (SMTP in **`backend/.env`**).
+- In caso di successo l’app apre **`EmailVerificationPendingScreen`** con l’indirizzo usato e i passi per aprire il link ricevuto; da lì si passa al login. La conferma avviene tramite **`GET /auth/verify/:token`** (di solito dal browser, link nell’email).
+- Conflitto (email/username già usati) o errore di rete: messaggio in UI sulla schermata di registrazione.
 
 ---
 
@@ -120,17 +123,18 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 
 ### Variabili d’ambiente del backend (per testare login e registrazione)
 
-L’app **non** contiene segreti del server. Per far funzionare il **login** sul backend serve almeno **`JWT_SECRET`** nel file **`backend/.env`** (copia locale da incollare dal **Google Docs** condiviso dal team). La **registrazione** (`POST /users`) può andare a buon fine anche senza JWT; senza `JWT_SECRET` il login fallisce alla generazione del token. Il file **`.env` non va committato** (è in `.gitignore`); dopo ogni modifica al contenuto riavviare `npm run dev`.
+L’app **non** contiene segreti del server. Per far funzionare **login e verifica email** sul backend servono almeno **`JWT_SECRET`** e la configurazione **SMTP** nel file **`backend/.env`** (copia locale da incollare dal **Google Docs** condiviso dal team). La **registrazione** (`POST /users`) può creare l’utente anche se l’invio email fallisce (errore loggato lato server); senza verifica completata il login resta bloccato con **403**. Senza `JWT_SECRET` il login fallisce anche dopo la verifica. Il file **`.env` non va committato** (è in `.gitignore`); dopo ogni modifica al contenuto riavviare `npm run dev`.
 
 ---
 
 ## 7. Cosa non è ancora stato fatto (prossimi passi tipici)
 
-- Rafforzare la conservazione del token (es. **EncryptedSharedPreferences** / DataStore).
-- Contenuti reali per **Sessione** (API sessioni escursione) e **Mappa** (posizione in tempo reale).
-- Ampliare **Profilo** (progressi, attività, logout).
-- Gestione sessione all’avvio (utente già loggato → salto del flusso auth).
-- Test automatici (unitari / UI) su login, registrazione e tab principali.
+- Persistenza locale **offline-first** (Room, code di sync, Hike Packet): vedi [`setup_mobile.md`](setup_mobile.md) e il piano in §9.
+- Rafforzare la conservazione del token (es. **EncryptedSharedPreferences** / DataStore) e **sessione all’avvio** (JWT valido → salto del flusso auth).
+- Contenuti reali per **Sessione** (API `/api/v1/sessions` già sul backend) e **Mappa** (posizione in tempo reale).
+- Ampliare **Profilo** (progressi, attività); logout sicuro lato server oltre alla cancellazione locale del JWT.
+- OAuth Google/Facebook; deep link o riinvio email dalla app.
+- Test automatici (unitari / UI) su registrazione, verifica email, login e tab principali.
 
 ---
 
@@ -142,6 +146,12 @@ L’app **non** contiene segreti del server. Per far funzionare il **login** sul
 
 ---
 
+## 9. Persistenza locale (stato attuale e obiettivi di progetto)
+
+L’architettura di prodotto è **offline-first** (*store-and-forward*, vedi README del monorepo). Sul dispositivo oggi c’è solo il JWT in **`TokenStorage`** (`SharedPreferences`); **`LocalDataSource`** è un segnaposto. Le user story di riferimento nel backlog di progetto includono tra le altre: **#2** accesso offline con JWT in secure storage, **#10** cache coordinate GPS in Room/SQLite, **#35** tetto **50 MB** con eviction **FIFO**, **#37** coda eventi offline, **#39** Hike Packet (GeoJSON + map tiles). Il piano operativo per il team è descritto in [`setup_mobile.md`](setup_mobile.md) (sezione persistenza).
+
+---
+
 ## Riepilogo in una frase
 
-È stata creata una **base di app Android moderna** (Gradle 9, Compose, navigazione auth, area principale a tab, login e registrazione collegate al backend, profilo con username), organizzata per **MVVM** e pronta per sessione escursione e mappa live.
+È stata creata una **base di app Android moderna** (Gradle 9, Compose, navigazione auth con verifica email, area principale a tab, login e registrazione collegate al backend, profilo con username e logout), organizzata per **MVVM** e pronta per persistenza offline-first, sessione escursione e mappa live.

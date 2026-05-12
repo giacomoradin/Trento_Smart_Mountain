@@ -52,6 +52,7 @@ import it.trentosmartmountain.app.viewmodel.LoginViewModel
  */
 @Composable
 fun LoginScreen(
+  pendingVerificationEmail: String = "",
   onLoggedIn: () -> Unit,
   viewModel: LoginViewModel =
     viewModel(
@@ -69,6 +70,12 @@ fun LoginScreen(
   LaunchedEffect(Unit) {
     viewModel.navigateHomeEventsFlow.collect {
       onLoggedIn()
+    }
+  }
+
+  LaunchedEffect(pendingVerificationEmail) {
+    if (pendingVerificationEmail.isNotBlank()) {
+      viewModel.onPendingVerificationEmail(pendingVerificationEmail)
     }
   }
 
@@ -162,6 +169,15 @@ fun LoginScreen(
         }
       },
     )
+
+    uiState.verificationNotice?.let { msg ->
+      Spacer(modifier = Modifier.height(12.dp))
+      Text(
+        text = msg,
+        color = MaterialTheme.colorScheme.primary,
+        style = MaterialTheme.typography.bodySmall,
+      )
+    }
 
     uiState.generalError?.let { msg ->
       Spacer(modifier = Modifier.height(12.dp))

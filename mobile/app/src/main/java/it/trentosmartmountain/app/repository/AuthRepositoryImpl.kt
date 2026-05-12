@@ -34,7 +34,13 @@ class AuthRepositoryImpl(
           raw?.let {
             runCatching { gson.fromJson(it, ApiMessageBody::class.java).message }.getOrNull()
           }
-        LoginResult.Failure(parsed ?: "Accesso non riuscito (${response.code()}).")
+        when (response.code()) {
+          403 ->
+            LoginResult.EmailNotVerified(
+              parsed ?: "Verifica l’email ricevuta dopo la registrazione, poi riprova ad accedere.",
+            )
+          else -> LoginResult.Failure(parsed ?: "Accesso non riuscito (${response.code()}).")
+        }
       }
     } catch (_: IOException) {
       LoginResult.Failure(

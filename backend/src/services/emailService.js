@@ -1,16 +1,22 @@
 import nodemailer from "nodemailer";
 
-// Inizializzazione del Transport Layer SMTP
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_SECURE === "true", // true per porta 465, false per 587
+  secure: process.env.SMTP_SECURE === "true",
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  // --- INIEZIONE PATCH TLS ---
+  tls: {
+    // Bypassa il controllo della Certificate Authority (Solo per Dev/Test)
+    rejectUnauthorized: false,
+  },
+  // ---------------------------
 });
 
+// ... resto del codice inalterato ...
 export const sendVerificationEmail = async (targetEmail, token) => {
   // Hardcoded per sviluppo locale. In produzione usare variabile d'ambiente
   const verificationUrl = `http://localhost:3000/auth/verify/${token}`;

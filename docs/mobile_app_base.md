@@ -61,15 +61,18 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 | **`MainActivity.kt`**      | Punto d’ingresso UI: avvia Compose e il tema.                                                                                                                                             |
 | **`TsmApplication.kt`**    | Classe `Application` globale (per ora minimale; qui si potranno mettere init future).                                                                                                     |
 | **`ui/theme/`**            | Colori e tema Material 3 (`TsmTheme`).                                                                                                                                                    |
-| **`ui/navigation/`**       | Destinazioni (`Routes`) e grafo di navigazione (`TsmNavHost`): scelta accesso/registrazione → login o registrazione → home.                                                               |
-| **`ui/screens/auth/`**     | Schermata iniziale con pulsanti **Accedi** e **Registrati**.                                                                                                                              |
-| **`ui/screens/login/`**    | Schermata **login** (email e password).                                                                                                                                                   |
-| **`ui/screens/register/`** | Schermata **registrazione** (username, email, password, conferma password).                                                                                                               |
-| **`ui/screens/`**          | Altre schermate (es. **`HomePlaceholderScreen`**, segnaposto dopo login).                                                                                                                 |
-| **`viewmodel/`**           | **`LoginViewModel`** e **`RegisterViewModel`**: stato dei form, validazione locale, chiamate ai repository.                                                                               |
-| **`data/remote/`**         | **`TsmApiClient`** (Retrofit + OkHttp), **`TsmApiService`** (login e registrazione), DTO JSON (`LoginRequest`, `LoginResponse`, `RegisterRequest`, `RegisterResponse`, `ApiMessageBody`). |
-| **`data/local/`**          | **`TokenStorage`**: salvataggio del JWT in `SharedPreferences` private dell’app dopo login riuscito.                                                                                      |
-| **`repository/`**          | **`AuthRepository`** / **`AuthRepositoryImpl`** (login), **`RegistrationRepository`** / **`RegistrationRepositoryImpl`** (registrazione), più **`AppRepository`** (segnaposto generico).  |
+| **`ui/navigation/`**       | Destinazioni (`Routes`) e grafo di navigazione (`TsmNavHost`): scelta accesso/registrazione → login o registrazione → area principale con tab inferiori. |
+| **`ui/screens/auth/`**     | Schermata iniziale con pulsanti **Accedi** e **Registrati**.                                                                                              |
+| **`ui/screens/login/`**    | Schermata **login** (email e password).                                                                                                                   |
+| **`ui/screens/register/`** | Schermata **registrazione** (username, email, password, conferma password).                                                                               |
+| **`ui/screens/main/`**     | **`MainScreen`**: barra di navigazione inferiore e contenuto della tab selezionata.                                                                        |
+| **`ui/screens/session/`**  | Scheletro **Sessione** (nuova sessione / sessione attiva).                                                                                                |
+| **`ui/screens/map/`**      | Scheletro **Mappa** (posizioni di gruppo in tempo reale, futura).                                                                                         |
+| **`ui/screens/profile/`**  | **Profilo** (in questa fase: username da API protetta).                                                                                                   |
+| **`viewmodel/`**           | **`LoginViewModel`**, **`RegisterViewModel`**, **`ProfileViewModel`**.                                                                                    |
+| **`data/remote/`**         | **`TsmApiClient`**, **`TsmApiService`**, **`AuthInterceptor`**, **`JwtDecoder`**, DTO JSON.                                                               |
+| **`data/local/`**          | **`TokenStorage`**: JWT in `SharedPreferences` dopo login.                                                                                                  |
+| **`repository/`**          | Auth, registrazione, **`ProfileRepository`** (`GET /users/{id}`).                                                                                         |
 | **`service/`**             | Segnaposto per il **Foreground Service** (GPS/BLE, user story futura).                                                                                                                    |
 
 ---
@@ -85,7 +88,13 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 
 - Campi **email** e **password**, con messaggi di errore se i dati non sono validi (email vuota/formato, password troppo corta).
 - Pulsante **Entra**, stato di **caricamento** durante la richiesta, messaggio di errore generico se il server non risponde o rifiuta le credenziali.
-- Chiamata reale a **`POST /auth/login`** tramite **`AuthRepositoryImpl`**; in caso di successo il **JWT** viene salvato in **`TokenStorage`** e si naviga alla **Home** (placeholder), senza poter tornare alle schermate di autenticazione con il tasto indietro di sistema.
+- Chiamata reale a **`POST /auth/login`** tramite **`AuthRepositoryImpl`**; in caso di successo il **JWT** viene salvato in **`TokenStorage`** e si naviga all’**area principale** (`MainScreen`), senza poter tornare alle schermate di autenticazione con il tasto indietro di sistema.
+
+### Area principale (dopo login)
+
+- **`MainScreen`** mostra una **barra inferiore** con tre tab, da sinistra a destra: **Sessione**, **Mappa**, **Profilo**.
+- **Sessione** e **Mappa** sono scheletri con testo descrittivo; i contenuti (sessione attiva, mappa live) arriveranno in step successivi.
+- **Profilo** carica lo **username** dell’utente loggato tramite JWT + **`GET /users/{id}`** (header `Authorization: Bearer` aggiunto da **`AuthInterceptor`**). Statistiche e attività restano fuori scope in questa fase.
 
 ### Registrazione
 
@@ -107,7 +116,7 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 ### Sicurezza di rete e client HTTP
 
 - **`network_security_config.xml`**: in sviluppo permette HTTP verso host locali (solo per test; in produzione si userà HTTPS).
-- **`TsmApiClient`**: crea un’istanza Retrofit con Gson per JSON; da qui si ottiene `TsmApiService` per le funzioni API.
+- **`TsmApiClient`**: Retrofit + OkHttp; **`AuthInterceptor`** allega il JWT alle richieste protette. Inizializzato in **`TsmApplication`**.
 
 ### Variabili d’ambiente del backend (per testare login e registrazione)
 
@@ -117,11 +126,11 @@ L’app **non** contiene segreti del server. Per far funzionare il **login** sul
 
 ## 7. Cosa non è ancora stato fatto (prossimi passi tipici)
 
-- Inviare il JWT nelle chiamate API protette (interceptor OkHttp `Authorization: Bearer …`).
 - Rafforzare la conservazione del token (es. **EncryptedSharedPreferences** / DataStore).
-- Sostituire la **Home** placeholder con le schermate reali del prodotto.
+- Contenuti reali per **Sessione** (API sessioni escursione) e **Mappa** (posizione in tempo reale).
+- Ampliare **Profilo** (progressi, attività, logout).
 - Gestione sessione all’avvio (utente già loggato → salto del flusso auth).
-- Test automatici (unitari / UI) su login e registrazione.
+- Test automatici (unitari / UI) su login, registrazione e tab principali.
 
 ---
 
@@ -135,4 +144,4 @@ L’app **non** contiene segreti del server. Per far funzionare il **login** sul
 
 ## Riepilogo in una frase
 
-È stata creata una **base di app Android moderna** (Gradle 9, Compose, navigazione auth, tema, login e registrazione collegati alle API del backend, salvataggio JWT locale), organizzata per **MVVM** e pronta per estendere le funzionalità dopo l’accesso.
+È stata creata una **base di app Android moderna** (Gradle 9, Compose, navigazione auth, area principale a tab, login e registrazione collegate al backend, profilo con username), organizzata per **MVVM** e pronta per sessione escursione e mappa live.

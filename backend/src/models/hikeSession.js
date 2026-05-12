@@ -40,6 +40,7 @@ const hikSessionSchema = new Schema({
   participants: [
     {
       userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+      role: { type: String, enum: ["hiker", "groupLeader"], default: "hiker" },
       joinedAt: { type: Date, default: Date.now },
     },
   ],

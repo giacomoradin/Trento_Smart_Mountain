@@ -3,6 +3,11 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 export const verifyEmail = async (req, res) => {
+  /* 
+     #swagger.tags = ['Auth']
+     #swagger.description = 'Verifica l'indirizzo email dell'utente tramite il token ricevuto via SMTP.'
+     #swagger.security = [] 
+  */
   try {
     const { token } = req.params;
 
@@ -29,6 +34,11 @@ export const verifyEmail = async (req, res) => {
 };
 
 export const loginUser = async (req, res) => {
+  /* 
+     #swagger.tags = ['Auth']
+     #swagger.description = 'Autentica l'utente e restituisce un token JWT se l'email è verificata.'
+     #swagger.security = [] 
+  */
   try {
     const { email, password } = req.body;
 

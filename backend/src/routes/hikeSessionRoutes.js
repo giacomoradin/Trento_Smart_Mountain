@@ -1,5 +1,9 @@
 import express from "express";
+<<<<<<< HEAD
 import { authenticate } from "../middlewares/authMiddleware.js";
+=======
+import { authenticate } from "../middleware/authMiddleware.js";
+>>>>>>> 23aa00c4ef181d4b9493a22654190c874f5c73fe
 import {
   createSession,
   getSessionById,

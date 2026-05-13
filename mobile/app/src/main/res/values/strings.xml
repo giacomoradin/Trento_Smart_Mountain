@@ -37,6 +37,8 @@
   <string name="map_placeholder_body">Qui verrà mostrata la mappa aggiornata con la posizione del gruppo e altre informazioni utili.</string>
   <string name="profile_title">Profilo</string>
   <string name="profile_username_label">Username</string>
+  <string name="profile_refreshing">Aggiornamento in corso…</string>
+  <string name="profile_offline_cache_hint">Dati salvati sul dispositivo (connessione assente o server non raggiungibile).</string>
   <string name="profile_placeholder_body">Statistiche, progressi e attività saranno disponibili nelle prossime versioni.</string>
   <string name="profile_load_error">Impossibile caricare il profilo.</string>
   <string name="profile_logout_button">Esci</string>

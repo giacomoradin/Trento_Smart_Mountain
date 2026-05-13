@@ -1,6 +1,6 @@
 package it.trentosmartmountain.app.data.local
 
 /**
- * Persistenza locale (Room / DataStore): da implementare con entity e DAO per la modalità offline-first.
+ * Persistenza locale oltre al JWT: usare [it.trentosmartmountain.app.data.local.db.TsmDatabase] e i DAO.
  */
 object LocalDataSource

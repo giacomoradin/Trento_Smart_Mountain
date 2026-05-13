@@ -59,7 +59,7 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 | Cartella                   | Ruolo                                                                                                                                                                                     |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`MainActivity.kt`**      | Punto d’ingresso UI: avvia Compose e il tema.                                                                                                                                             |
-| **`TsmApplication.kt`**    | Classe `Application` globale (per ora minimale; qui si potranno mettere init future).                                                                                                     |
+| **`TsmApplication.kt`**    | `Application`: **`TokenStorage`** singleton, **`TsmDatabase`** Room (`tsm.db`), init **`TsmApiClient`**.                                                                                                     |
 | **`ui/theme/`**            | Colori e tema Material 3 (`TsmTheme`).                                                                                                                                                    |
 | **`ui/navigation/`**       | Destinazioni (`Routes`) e grafo di navigazione (`TsmNavHost`): scelta accesso/registrazione → login, registrazione, verifica email → area principale con tab inferiori. |
 | **`ui/screens/auth/`**     | Schermata iniziale con pulsanti **Accedi**, **Registrati** e demo **Google** (non integrata).                                                                                              |
@@ -68,11 +68,11 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 | **`ui/screens/main/`**     | **`MainScreen`**: barra di navigazione inferiore e contenuto della tab selezionata.                                                                        |
 | **`ui/screens/session/`**  | Scheletro **Sessione** (nuova sessione / sessione attiva).                                                                                                |
 | **`ui/screens/map/`**      | Scheletro **Mappa** (posizioni di gruppo in tempo reale, futura).                                                                                         |
-| **`ui/screens/profile/`**  | **Profilo** (in questa fase: username da API protetta).                                                                                                   |
+| **`ui/screens/profile/`**  | **Profilo**: username da **`ProfileRepositoryImpl`** (cache Room + `GET /users/{id}`), hint offline/refresh, **logout** (JWT + tabella profilo).                                                                                                   |
 | **`viewmodel/`**           | **`LoginViewModel`**, **`RegisterViewModel`**, **`ProfileViewModel`**.                                                                                    |
 | **`data/remote/`**         | **`TsmApiClient`**, **`TsmApiService`**, **`AuthInterceptor`**, **`JwtDecoder`**, DTO JSON.                                                               |
-| **`data/local/`**          | **`TokenStorage`**: JWT in **EncryptedSharedPreferences**; **`AuthSession`** per la destinazione iniziale; **`LocalDataSource`**: segnaposto Room. |
-| **`repository/`**          | Auth, registrazione, **`ProfileRepository`** (`GET /users/{id}`).                                                                                         |
+| **`data/local/`**          | **`TokenStorage`** (JWT cifrato), **`AuthSession`**, **`data/local/db/`** (`TsmDatabase`, `CachedUserProfileEntity`, `ProfileDao`); **`LocalDataSource`** segnaposto per altre cache. |
+| **`repository/`**          | Auth, registrazione, **`ProfileRepository`** (`observeCurrentProfile()` → Room + rete).                                                                                         |
 | **`service/`**             | Segnaposto per il **Foreground Service** (GPS/BLE, user story futura).                                                                                                                    |
 
 ---
@@ -97,7 +97,7 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 
 - **`MainScreen`** mostra una **barra inferiore** con tre tab, da sinistra a destra: **Sessione**, **Mappa**, **Profilo**.
 - **Sessione** e **Mappa** sono scheletri con testo descrittivo; i contenuti (sessione attiva, mappa live) arriveranno in step successivi.
-- **Profilo** carica lo **username** dell’utente loggato tramite JWT + **`GET /users/{id}`** (header `Authorization: Bearer` aggiunto da **`AuthInterceptor`**). Statistiche e attività restano fuori scope in questa fase; è disponibile il **logout** locale (cancellazione JWT e ritorno al flusso auth).
+- **Profilo** legge prima la **cache Room** (`cached_user_profile`), poi aggiorna con **`GET /users/{id}`** (Bearer da **`AuthInterceptor`**). In assenza di rete o con errore HTTP, resta l’ultimo username salvato con messaggio esplicativo. Il **logout** rimuove JWT e svuota la tabella profilo. Statistiche e attività restano fuori scope.
 
 ### Registrazione e verifica email
 
@@ -130,7 +130,7 @@ L’app **non** contiene segreti del server. Per far funzionare **login e verifi
 
 ## 7. Cosa non è ancora stato fatto (prossimi passi tipici)
 
-- Persistenza locale **offline-first** (Room, code di sync, Hike Packet): vedi [`setup_mobile.md`](setup_mobile.md) e il piano in §9.
+- Persistenza **Room** estesa a **sessioni escursione** e altre entità; code di sync e Hike Packet: vedi [`setup_mobile.md`](setup_mobile.md) e §9.
 - Biometrico / PIN per accesso offline (user story **#2**, oltre al JWT cifrato già in uso).
 - Contenuti reali per **Sessione** (API `/api/v1/sessions` già sul backend) e **Mappa** (posizione in tempo reale).
 - Ampliare **Profilo** (progressi, attività); logout sicuro lato server oltre alla cancellazione locale del JWT.
@@ -149,10 +149,10 @@ L’app **non** contiene segreti del server. Per far funzionare **login e verifi
 
 ## 9. Persistenza locale (stato attuale e obiettivi di progetto)
 
-L’architettura di prodotto è **offline-first** (*store-and-forward*, vedi README del monorepo). Sul dispositivo il JWT è in **`TokenStorage`** (**EncryptedSharedPreferences**); **`AuthSession`** decide se aprire auth o main all’avvio. **`LocalDataSource`** resta un segnaposto per Room e cache escursione.
+L’architettura di prodotto è **offline-first** (*store-and-forward*, vedi README del monorepo). Sul dispositivo: JWT in **`TokenStorage`** (cifrato); **`AuthSession`** per auth/main all’avvio; **`TsmDatabase`** Room con tabella **`cached_user_profile`** per lo snapshot profilo dopo fetch riuscito; **`LocalDataSource`** resta segnaposto per altre tabelle (sessioni, tile, ecc.).
 
 ---
 
 ## Riepilogo in una frase
 
-È stata creata una **base di app Android moderna** (Gradle 9, Compose, navigazione auth con verifica email, area principale a tab, login e registrazione collegate al backend, profilo con username e logout), organizzata per **MVVM** e pronta per persistenza offline-first, sessione escursione e mappa live.
+È stata creata una **base di app Android moderna** (Gradle 9, Compose, navigazione auth con verifica email, area principale a tab, login e registrazione, profilo con **Room + rete** e logout che pulisce cache sensibile), organizzata per **MVVM** e pronta per sessioni escursione, mappa live e store-and-forward.

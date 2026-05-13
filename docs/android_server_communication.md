@@ -110,7 +110,7 @@ Contratto in `TsmApiService.kt` (path relativi a `BASE_URL`):
 | --- | --- | --- | --- | --- |
 | `POST` | `auth/login` | No | `AuthRepositoryImpl` | `LoginViewModel` → login |
 | `POST` | `users` | No | `RegistrationRepositoryImpl` | `RegisterViewModel` → registrazione |
-| `GET` | `users/{id}` | Sì (Bearer) | `ProfileRepositoryImpl` | `ProfileViewModel` → tab Profilo |
+| `GET` | `users/{id}` | Sì (Bearer) | `ProfileRepositoryImpl` (Room + rete) | `ProfileViewModel` → tab Profilo |
 
 ### Login
 
@@ -129,12 +129,12 @@ Contratto in `TsmApiService.kt` (path relativi a `BASE_URL`):
 
 ### Profilo (username)
 
-1. `ProfileRepositoryImpl` legge il JWT da `TokenStorage`.
-2. `JwtDecoder.userIdFrom(token)` estrae `userId` dal payload.
-3. `api.getUserById(userId)`; `AuthInterceptor` aggiunge il Bearer.
-4. Lo username arriva da `UserResponse` e viene mostrato in Profilo.
+1. `ProfileRepositoryImpl` legge il JWT da `TokenStorage` e `userId` da `JwtDecoder`.
+2. Emissione iniziale da **Room** (`ProfileDao`, tabella `cached_user_profile`) se esiste uno snapshot precedente.
+3. Chiamata `api.getUserById(userId)`; in caso di successo **`upsert`** in Room e aggiornamento UI.
+4. In caso di errore di rete o HTTP, se esiste cache locale si mantiene l’username con messaggio esplicativo.
 
-Il logout (quando usato) cancella il token con `TokenStorage.clearToken()` e riporta l’utente al flusso di autenticazione; le chiamate successive non inviano più Bearer finché non c’è un nuovo login.
+Il **logout** cancella il token (`TokenStorage.clearToken()`), svuota la tabella profilo (`ProfileDao.deleteAll()`) e riporta al flusso auth.
 
 ---
 
@@ -185,6 +185,8 @@ Dopo cambi all’URL o alle dipendenze di rete, ricompilare e verificare con bac
 | Client Retrofit | `mobile/app/src/main/java/it/trentosmartmountain/app/data/remote/TsmApiClient.kt` |
 | Bearer automatico | `mobile/app/src/main/java/it/trentosmartmountain/app/data/remote/AuthInterceptor.kt` |
 | URL in build | `mobile/app/build.gradle.kts` → `BuildConfig.BASE_URL` |
+| Database Room | `mobile/app/src/main/java/.../data/local/db/TsmDatabase.kt` |
+| DAO profilo | `mobile/app/src/main/java/.../data/local/db/ProfileDao.kt` |
 | Init applicazione | `mobile/app/src/main/java/it/trentosmartmountain/app/TsmApplication.kt` |
 
 ---

@@ -17,7 +17,7 @@ L'app segue il pattern **MVVM (Model-View-ViewModel)**:
 - `ui/`: Activity, Fragment e componenti Jetpack Compose (se utilizzati).
 - `viewmodel/`: Logica di presentazione e gestione dello stato.
 - `repository/`: Single Source of Truth per i dati (gestisce lo switch Online/Offline).
-- `data/local/`: oggi **`TokenStorage`** (JWT in `SharedPreferences`) e segnaposto **`LocalDataSource`**; obiettivo **Room** + secure storage per cache offline-first (vedi sotto).
+- `data/local/`: **`TokenStorage`** (JWT in **EncryptedSharedPreferences**, singleton da `TsmApplication`), **`AuthSession`** (ripristino sessione all’avvio), segnaposto **`LocalDataSource`**; obiettivo **Room** per cache escursione (vedi sotto).
 - `data/remote/`: Client Retrofit per le API Node.js.
 - `service/`: Contiene il **Foreground Service** per il tracking GPS continuo (User Story #42).
 
@@ -27,15 +27,15 @@ Allineato a README (**offline-first**, *store-and-forward*) e al backlog di prog
 
 | Fase | Obiettivo | User story / nota |
 | --- | --- | --- |
-| **0 — Stato attuale** | JWT in `TokenStorage`; nessun Room né coda sync | Base auth già in uso |
-| **1 — Auth persistente** | `EncryptedSharedPreferences` o DataStore; avvio app con JWT valido → salto login; logout che pulisce anche cache sensibile | **#2**, **#5** |
+| **0 — Stato attuale** | JWT cifrato + ripristino sessione all’avvio; nessun Room né coda sync | Fase auth (parziale **#2**) |
+| **1 — Auth persistente** | Biometrico/PIN oltre al JWT; logout che pulisce tutta la cache auth sensibile | Resto **#2**, **#5** |
 | **2 — Room + repository** | Database Room, DAO, migrazioni; repository che legge/scrivono locale prima della rete | **#10** (cache coordinate), fondazione SSOT |
 | **3 — Limite storage** | Tetto **50 MB** su SQLite con eviction **FIFO** sui dati più vecchi | **#35** |
 | **4 — Hike Packet** | Download traccia GeoJSON + map tiles OSM (padding 1 km) e metadati in DB; file binari su filesystem app | **#39**, **#12** |
 | **5 — Store-and-forward** | Coda append-only (posizioni, eventi SOS/metadati); `WorkManager` per upload batch al ripristino rete | **#10**, **#37**, **#11** |
 | **6 — Integrazione UI** | Sessione/mappa offline leggono dalla cache; indicatori online/offline | Tab Sessione / Mappa |
 
-Dipendenze Gradle: **Room**, **DataStore** o **Security Crypto**, **WorkManager** vanno aggiunte quando si apre la fase corrispondente (`gradle/libs.versions.toml`).
+Dipendenze Gradle: **Room**, **DataStore**, **WorkManager** vanno aggiunte quando si apre la fase corrispondente (`gradle/libs.versions.toml`). **security-crypto** è già presente per il JWT.
 
 ## Permessi Critici
 Durante lo sviluppo, testare sempre il comportamento dei permessi a runtime:

@@ -3,7 +3,7 @@ package it.trentosmartmountain.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import it.trentosmartmountain.app.data.local.TokenStorage
+import it.trentosmartmountain.app.TsmApplication
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.repository.ProfileRepositoryImpl
 import it.trentosmartmountain.app.repository.ProfileResult
@@ -25,10 +25,12 @@ data class ProfileUiState(
  */
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
 
+  private val tokenStorage = (application as TsmApplication).tokenStorage
+
   private val profileRepository =
     ProfileRepositoryImpl(
       TsmApiClient.service(),
-      TokenStorage(application.applicationContext),
+      tokenStorage,
     )
 
   private val _uiState = MutableStateFlow(ProfileUiState())
@@ -59,7 +61,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
   /** Logout locale: rimuove il JWT salvato (nessuna API di logout sul backend). */
   fun logout() {
-    TokenStorage(getApplication()).clearToken()
+    tokenStorage.clearToken()
     _uiState.update {
       it.copy(username = null, isLoading = false, errorMessage = null)
     }

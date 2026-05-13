@@ -6,8 +6,12 @@ import it.trentosmartmountain.app.data.remote.TsmApiClient
 
 /** Entry point applicazione: inizializza il client HTTP con accesso al JWT locale. */
 class TsmApplication : Application() {
+  lateinit var tokenStorage: TokenStorage
+    private set
+
   override fun onCreate() {
     super.onCreate()
-    TsmApiClient.init(TokenStorage(this))
+    tokenStorage = TokenStorage.getInstance(this)
+    TsmApiClient.init(tokenStorage)
   }
 }

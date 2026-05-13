@@ -1,11 +1,15 @@
 package it.trentosmartmountain.app.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.local.AuthSession
 import it.trentosmartmountain.app.ui.screens.auth.AuthEntryScreen
 import it.trentosmartmountain.app.ui.screens.login.LoginScreen
 import it.trentosmartmountain.app.ui.screens.main.MainScreen
@@ -18,6 +22,11 @@ import it.trentosmartmountain.app.ui.screens.register.RegisterScreen
  */
 @Composable
 fun TsmNavHost() {
+  val application = LocalContext.current.applicationContext as TsmApplication
+  val startDestination =
+    remember(application) {
+      AuthSession.startDestinationFor(application.tokenStorage)
+    }
   val navController = rememberNavController()
 
   fun navigateToMain() {
@@ -32,7 +41,10 @@ fun TsmNavHost() {
     }
   }
 
-  NavHost(navController = navController, startDestination = Routes.AUTH_ENTRY) {
+  NavHost(
+    navController = navController,
+    startDestination = startDestination,
+  ) {
     composable(Routes.AUTH_ENTRY) {
       AuthEntryScreen(
         onLoginClick = { navController.navigate(Routes.loginRoute()) },

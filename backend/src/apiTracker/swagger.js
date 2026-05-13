@@ -4,18 +4,17 @@ const doc = {
   info: {
     title: "Trento Smart Mountain API",
     description: "REST API for managing users, hiking groups and IoT telemetry",
+    version: "1.0.0",
   },
   host: "localhost:3000",
   basePath: "/",
   schemes: ["http"],
-  components: {
-    securitySchemes: {
-      bearerAuth: {
-        type: "http",
-        scheme: "bearer",
-        bearerFormat: "JWT",
-        description: "Enter JWT token. Example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-      }
+  securityDefinitions: {
+    bearerAuth: {
+      type: "apiKey",
+      name: "Authorization",
+      in: "header",
+      description: "Enter JWT token WITH the 'Bearer ' prefix. Example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
     }
   },
   security: [

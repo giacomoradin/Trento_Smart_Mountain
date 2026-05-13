@@ -47,10 +47,18 @@ fun ProfileScreen(
 
     // In questa fase l’unico dato reale è lo username; il resto è placeholder.
     when {
-      uiState.isLoading -> {
+      uiState.showBlockingLoading -> {
         CircularProgressIndicator()
       }
       uiState.username != null -> {
+        if (uiState.showInlineRefresh) {
+          Text(
+            text = stringResource(R.string.profile_refreshing),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+        }
         Text(
           text = stringResource(R.string.profile_username_label),
           style = MaterialTheme.typography.labelLarge,
@@ -61,6 +69,22 @@ fun ProfileScreen(
           text = uiState.username.orEmpty(),
           style = MaterialTheme.typography.titleLarge,
         )
+        if (uiState.offlineWithCachedProfile) {
+          Spacer(modifier = Modifier.height(8.dp))
+          Text(
+            text = stringResource(R.string.profile_offline_cache_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        uiState.errorMessage?.let { msg ->
+          Spacer(modifier = Modifier.height(8.dp))
+          Text(
+            text = msg,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyMedium,
+          )
+        }
       }
       else -> {
         Text(
@@ -82,8 +106,7 @@ fun ProfileScreen(
 
     OutlinedButton(
       onClick = {
-        viewModel.logout()
-        onLoggedOut()
+        viewModel.logout(onLoggedOut)
       },
       modifier = Modifier.fillMaxWidth(),
     ) {

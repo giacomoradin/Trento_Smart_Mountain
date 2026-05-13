@@ -102,7 +102,13 @@ local.properties
 
 # Android Studio Navigation editor temp files
 .navigation/
-.xml
+
+# XML in progetto Android: i file sotto mobile/app/src/ (AndroidManifest, res/values/*.xml,
+# layout, drawable, xml/…) sono SORGENTE e vanno committati. Non usare qui `*.xml` globale.
+# File XML solo cache IDE (es. device streaming): già esclusi tramite .idea/caches e regole .idea sotto.
+# Eccezioni esplicite (restano tracciati anche se comparisse un ignore `*.xml` più sopra nel file):
+!/mobile/app/src/main/AndroidManifest.xml
+!/mobile/app/src/main/res/**/*.xml
 
 # Android Studio captures folder
 captures/

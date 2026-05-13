@@ -1,13 +1,20 @@
 package it.trentosmartmountain.app.repository
 
-/** Esito caricamento profilo utente corrente. */
-sealed interface ProfileResult {
-  data class Success(val username: String) : ProfileResult
+import kotlinx.coroutines.flow.Flow
 
-  data class Failure(val message: String) : ProfileResult
-}
+/** Stato osservabile del profilo: cache locale, refresh di rete, errore opzionale. */
+data class ProfileObserveState(
+  val username: String?,
+  val isRefreshing: Boolean,
+  /** `true` se l’username mostrato proviene da cache non ancora confermata dal server. */
+  val isStale: Boolean,
+  val errorMessage: String?,
+)
 
-/** Lettura dati profilo senza esporre Retrofit alla UI. */
-fun interface ProfileRepository {
-  suspend fun loadCurrentUsername(): ProfileResult
+/** Lettura profilo con cache Room e aggiornamento da rete. */
+interface ProfileRepository {
+  fun observeCurrentProfile(): Flow<ProfileObserveState>
+
+  /** Logout o reset privacy: svuota la tabella profilo locale. */
+  suspend fun clearLocalCache()
 }

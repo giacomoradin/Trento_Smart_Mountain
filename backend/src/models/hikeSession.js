@@ -63,7 +63,6 @@ const hikSessionSchema = new Schema({
 
 // Indice geospaziale per query di prossimità
 hikSessionSchema.index({ "routeDetails.startPoint": "2dsphere" }); // Permette di cercare sessioni vicine a una posizione geografica
-hikSessionSchema.index({ inviteCode: 1 }); // Indice per ricerca rapida per codice invito
 
 const HikeSession = mongoose.model("HikeSession", hikSessionSchema);
 export default HikeSession;

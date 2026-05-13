@@ -4,6 +4,11 @@ import crypto from "crypto"; //SMTP/mail verification token generation
 import { sendVerificationEmail } from "./emailService.js"; //SMTP/mail verification
 
 export const createUser = async (req, res) => {
+  /* 
+     #swagger.tags = ['Auth']
+     #swagger.description = 'Registra un nuovo utente e invia l'email di verifica.'
+     #swagger.security = [] 
+  */
   try {
     const { username, email, password, role } = req.body; // plain password from client
 
@@ -51,6 +56,10 @@ export const createUser = async (req, res) => {
 
 // GET /users — Get all users
 export const getAllUsers = async (req, res) => {
+  /* 
+     #swagger.tags = ['Users']
+     #swagger.description = 'Ottiene la lista di tutti gli utenti.'
+  */
   try {
     // Exclude passwordHash from results — never expose it
     const users = await User.find().select("-passwordHash -__v");
@@ -63,6 +72,10 @@ export const getAllUsers = async (req, res) => {
 
 // GET /users/:id — Get a single user by ID
 export const getUserById = async (req, res) => {
+  /* 
+     #swagger.tags = ['Users']
+     #swagger.description = 'Recupera i dettagli di un singolo utente.'
+  */
   try {
     //https://mongoosejs.com/docs/api/query.html#Query.prototype.select()
     //exclude not wanted fields
@@ -86,6 +99,10 @@ export const getUserById = async (req, res) => {
 
 // PUT /users/:id — Update a user by ID
 export const updateUser = async (req, res) => {
+  /* 
+     #swagger.tags = ['Users']
+     #swagger.description = 'Aggiorna i dati di un utente.'
+  */
   try {
     const allowedUpdates = [
       "username",
@@ -128,6 +145,10 @@ export const updateUser = async (req, res) => {
 
 // DELETE /users/:id — Delete a user by ID
 export const deleteUser = async (req, res) => {
+  /* 
+     #swagger.tags = ['Users']
+     #swagger.description = 'Elimina un utente dal database.'
+  */
   try {
     const deletedUser = await User.findByIdAndDelete(req.params.id);
 

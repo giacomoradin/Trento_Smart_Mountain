@@ -1,5 +1,33 @@
 {
+  "name": "tsm-backend",
+  "version": "1.0.0",
+  "description": "Trento Smart Mountain Backend - Modular Monolith",
+  "main": "backend/src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node backend/src/server.js",
+    "dev": "nodemon backend/src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "swagger": "node backend/src/apiTracker/swagger.js"
+  },
+  "keywords": [],
+  "author": "Giacomo Radin",
+  "license": "SEE LICENSE IN ROOT",
   "dependencies": {
-    "nodemailer": "^8.0.7"
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.23.1",
+    "mqtt": "^5.0.0",
+    "nodemailer": "^8.0.7",
+    "socket.io": "^4.7.0",
+    "swagger-autogen": "^2.23.7",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
   }
 }

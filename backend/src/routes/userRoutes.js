@@ -1,6 +1,6 @@
 import express from "express";
-import { authenticate } from "../services/authMiddleware.js";
-import { requireRoles } from "../services/authorizationMiddleware.js";
+import { authenticate } from "../middlewares/authMiddleware.js";
+import { requireRoles } from "../middlewares/authorizationMiddleware.js";
 import {
   createUser,
   getAllUsers,

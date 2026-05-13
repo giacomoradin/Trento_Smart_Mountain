@@ -1,15 +1,41 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the current file's directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Look for .env in /backend (two levels up from /backend/src/services/)
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
 import nodemailer from "nodemailer";
 
-// Inizializzazione del Transport Layer SMTP
+// Debug SMTP configuration
+// console.log('SMTP Check:', {
+//   host: process.env.SMTP_HOST,
+//   port: process.env.SMTP_PORT,
+//   user: process.env.SMTP_USER,
+//   secure: process.env.SMTP_SECURE,
+//   path: path.resolve(__dirname, '../../.env') // Shows where it's looking
+// });
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_SECURE === "true", // true per porta 465, false per 587
+  secure: process.env.SMTP_SECURE === "true",
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  // --- INIEZIONE PATCH TLS ---
+  tls: {
+    // Bypassa il controllo della Certificate Authority (Solo per Dev/Test)
+    rejectUnauthorized: false,
+  },
+  // ---------------------------
 });
+
 
 export const sendVerificationEmail = async (targetEmail, token) => {
   // Hardcoded per sviluppo locale. In produzione usare variabile d'ambiente

@@ -70,6 +70,7 @@ dependencies {
   implementation(libs.retrofit.gson)
   implementation(libs.okhttp.logging)
   implementation(libs.gson)
+  implementation(libs.androidx.security.crypto)
   debugImplementation("androidx.compose.ui:ui-tooling")
   debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // //Look for .env in /backend (two levels up from /backend/src/services/)
- dotenv.config({ path: path.resolve(__dirname, './.env') });
+ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 
 

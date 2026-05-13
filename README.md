@@ -49,9 +49,8 @@ Seguiamo la metodologia Agile SCRUM con cicli di sviluppo settimanali.
 ## Setup Locale
 *(Istruzioni in fase di aggiornamento)*
 
-### Backend
+### Root
 ```bash
-cd backend
 npm install
 npm run dev
 ```

@@ -10,7 +10,7 @@ export const createUser = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10); // server hashes it
 
     // --- INIEZIONE MODULO SMTP VERIFICATION ---
-    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationToken = crypto.randomBytes(32).toString("hex"); // Genera un token univoco per la verifica email
     const user = new User({
       username,
       email,
@@ -42,11 +42,9 @@ export const createUser = async (req, res) => {
     });
   } catch (error) {
     if (error.code === 11000)
-      return res
-        .status(409)
-        .json({
-          message: "Collisione rilevata: Email o Username già utilizzati.",
-        });
+      return res.status(409).json({
+        message: "Collisione rilevata: Email o Username già utilizzati.",
+      });
     res.status(500).json({ message: error.message });
   }
 };

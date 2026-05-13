@@ -1,24 +1,24 @@
-// import dotenv from 'dotenv';
-// import path from 'path';
-// import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import nodemailer from "nodemailer";
 // Get the current file's directory
-// const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // //Look for .env in /backend (two levels up from /backend/src/services/)
-// dotenv.config({ path: path.resolve(__dirname, './.env') });
+ dotenv.config({ path: path.resolve(__dirname, './.env') });
 
 
 
 // //Debug SMTP configuration
-// console.log('SMTP Check:', {
-//   host: process.env.SMTP_HOST,
-//   port: process.env.SMTP_PORT,
-//   user: process.env.SMTP_USER,
-//   secure: process.env.SMTP_SECURE,
-// path: path.resolve(__dirname, '../../.env') // Shows where it's looking
-// });
+console.log('SMTP Check:', {
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  user: process.env.SMTP_USER,
+  secure: process.env.SMTP_SECURE,
+path: path.resolve(__dirname, '../../.env') // Shows where it's looking
+});
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,

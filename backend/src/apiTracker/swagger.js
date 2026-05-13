@@ -10,6 +10,6 @@ const doc = {
 };
 
 const outputFile = "../apiTracker/swagger-output.json";
-const routes = ["./src/app.js"];
+const routes = ["./backend/src/app.js"];
 
 swaggerAutogen()(outputFile, routes, doc);

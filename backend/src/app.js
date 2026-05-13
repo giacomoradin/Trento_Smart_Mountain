@@ -2,7 +2,7 @@ import express from "express";
 import userRoutes from "./routes/userRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import hikeSessionRoutes from "./routes/hikeSessionRoutes.js";
-import cors form "cors";
+import cors from "cors";
 
 
 const app = express();

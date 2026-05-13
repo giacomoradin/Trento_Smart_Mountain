@@ -6,6 +6,7 @@ import crypto from "crypto";
 function generateInviteCode() {
   return crypto.randomBytes(4).toString("hex").toUpperCase(); // es. "A3F7C12B"
 }
+
 // Controlla se l'utente è già in una sessione attiva o pianificata
 async function checkUserAlreadyInActiveSession(userId) {
   const conflict = await HikeSession.findOne({
@@ -17,8 +18,13 @@ async function checkUserAlreadyInActiveSession(userId) {
     throw new Error("USER_ALREADY_IN_SESSION");
   }
 }
+
 // Crea una nuova sessione — il creator diventa automaticamente Capogruppo
 export async function createSession(creatorId, routeDetails) {
+  /* 
+     #swagger.tags = ['Sessions']
+     #swagger.description = 'Crea una nuova sessione di escursione. Il creatore diventa automaticamente Group Leader.'
+  */
   await checkUserAlreadyInActiveSession(creatorId);
   let inviteCode;
   let isUnique = false;
@@ -41,10 +47,7 @@ export async function createSession(creatorId, routeDetails) {
 
   await session.save();
 
-
-
-// Diamo i ruoli di "groupLeader" a chi ha creato la sessione.
-  // Usiamo $push per non rimuovere i ruoli che l'utente ha già in altre sessioni.
+  // Diamo i ruoli di "groupLeader" a chi ha creato la sessione.
   await User.findByIdAndUpdate(creatorId, {
     $push: {
       sessionRoles: {
@@ -60,19 +63,20 @@ export async function createSession(creatorId, routeDetails) {
 
 // Logica per l'ingresso in sessione tramite inviteCode
 export async function joinSession(userId, inviteCode) {
+  /* 
+     #swagger.tags = ['Sessions']
+     #swagger.description = 'Permette a un utente di unirsi a una sessione esistente tramite codice invito.'
+  */
   await checkUserAlreadyInActiveSession(userId);
-  // Recuperiamo la sessione dal codice; se il codice è farlocco, usciamo subito.
   const session = await HikeSession.findOne({ inviteCode });
   if (!session) {
     throw new Error("SESSION_NOT_FOUND");
   }
 
-  // Si può entrare solo se la camminata è ancora in fase di pianificazione.
   if (session.status !== "PLANNED") {
     throw new Error("SESSION_NOT_JOINABLE");
   }
 
-  // Evitiamo duplicati: controlliamo se l'utente è già dei nostri.
   const alreadyIn = session.participants.some(
     (p) => p.userId.toString() === userId.toString()
   );
@@ -80,12 +84,9 @@ export async function joinSession(userId, inviteCode) {
     throw new Error("ALREADY_IN_SESSION");
   }
 
-  // Tutto ok, aggiungiamo l'utente ai partecipanti e salviamo su DB.
   session.participants.push({ userId });
   await session.save();
 
-  // Infine, aggiorniamo il profilo dell'utente segnando che ora partecipa come "hiker".
-  // Teniamo traccia del creatorId come riferimento per chi ha generato l'invito.
   await User.findByIdAndUpdate(userId, {
     $push: {
       sessionRoles: {
@@ -98,8 +99,13 @@ export async function joinSession(userId, inviteCode) {
 
   return session;
 }
+
 // Recupera una sessione per ID
 export async function getSessionById(sessionId) {
+  /* 
+     #swagger.tags = ['Sessions']
+     #swagger.description = 'Recupera i dettagli completi di una sessione, inclusi i dati di partecipanti e creatore.'
+  */
   return HikeSession.findById(sessionId)
     .populate("creatorId", "username email")
     .populate("participants.userId", "username email");
@@ -107,6 +113,10 @@ export async function getSessionById(sessionId) {
 
 // Recupera tutte le sessioni di un utente (come creator o partecipante)
 export async function getSessionsByUser(userId) {
+  /* 
+     #swagger.tags = ['Sessions']
+     #swagger.description = 'Ottiene la lista di tutte le sessioni a cui l'utente partecipa o che ha creato.'
+  */
   return HikeSession.find({
     $or: [{ creatorId: userId }, { "participants.userId": userId }],
   }).populate("creatorId", "username email");
@@ -114,11 +124,14 @@ export async function getSessionsByUser(userId) {
 
 // Aggiorna lo stato della sessione (es. PLANNED → ACTIVE)
 export async function updateSessionStatus(sessionId, creatorId, newStatus) {
+  /* 
+     #swagger.tags = ['Sessions']
+     #swagger.description = 'Aggiorna lo stato della sessione. Solo il creatore (Group Leader) può eseguire questa operazione.'
+  */
   const session = await HikeSession.findById(sessionId);
 
   if (!session) throw new Error("SESSION_NOT_FOUND");
 
-  // Solo il Capogruppo (creator) può cambiare lo stato
   if (session.creatorId.toString() !== creatorId) {
     throw new Error("FORBIDDEN");
   }
@@ -133,6 +146,10 @@ export async function updateSessionStatus(sessionId, creatorId, newStatus) {
 
 // Elimina una sessione (solo il creator può farlo)
 export async function deleteSession(sessionId, creatorId) {
+  /* 
+     #swagger.tags = ['Sessions']
+     #swagger.description = 'Elimina definitivamente una sessione. Operazione riservata al creatore.'
+  */
   const session = await HikeSession.findById(sessionId);
 
   if (!session) throw new Error("SESSION_NOT_FOUND");

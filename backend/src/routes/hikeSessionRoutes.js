@@ -39,6 +39,7 @@ router.post("/", async (req, res) => {
     res.status(500).json({ error: "Errore creazione sessione" });
   }
 });
+
 // POST /api/v1/sessions/join — si unisce a una sessione tramite codice invito
 router.post("/join", async (req, res) => {
   const { inviteCode } = req.body;
@@ -62,6 +63,7 @@ router.post("/join", async (req, res) => {
     res.status(500).json({ error: "Errore durante l'accesso alla sessione" });
   }
 });
+
 // GET /api/v1/sessions/my — sessioni dell'utente loggato
 router.get("/my", async (req, res) => {
   try {

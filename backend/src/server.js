@@ -2,7 +2,7 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import swaggerUi from "swagger-ui-express";
 import swaggerFile from "./apiTracker/swagger-output.json" with { type: "json" };
-import app from "./app.js"; // ← importa app.js invece di ricreare Express
+import app from "./app.js";
 
 const PORT = process.env.PORT || 3000;
 const MONGO_URI =

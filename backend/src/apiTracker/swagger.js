@@ -7,6 +7,22 @@ const doc = {
   },
   host: "localhost:3000",
   basePath: "/",
+  schemes: ["http"],
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+        description: "Enter JWT token. Example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      }
+    }
+  },
+  security: [
+    {
+      bearerAuth: []
+    }
+  ]
 };
 
 const outputFile = "../apiTracker/swagger-output.json";

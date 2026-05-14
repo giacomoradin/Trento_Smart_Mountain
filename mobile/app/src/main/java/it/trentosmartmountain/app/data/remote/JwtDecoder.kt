@@ -7,6 +7,7 @@ import com.google.gson.annotations.SerializedName
 /** Payload minimo del JWT emesso dal backend (`userId`, `role`, `exp`). */
 private data class JwtPayload(
   @SerializedName("userId") val userId: String? = null,
+  @SerializedName("role") val role: String? = null,
   @SerializedName("exp") val exp: Long? = null,
 )
 
@@ -14,6 +15,10 @@ private data class JwtPayload(
 object JwtDecoder {
 
   fun userIdFrom(token: String): String? = decodePayload(token)?.userId
+
+  /** Ruolo account (`rifugio`, `groupLeader`, `admin`, …) come nel backend. */
+  fun roleFrom(token: String): String? =
+    decodePayload(token)?.role?.trim()?.takeIf { it.isNotEmpty() }
 
   /** Verifica locale minima: payload leggibile, `userId` presente e `exp` futuro. */
   fun hasValidLocalSession(token: String): Boolean {

@@ -154,3 +154,8 @@ project.freetime
 .DS_Store
 Thumbs.db
 .claude
+
+# Default ignored files
+/shelf/
+/workspace.xml
+/deploymentTargetSelector.xml

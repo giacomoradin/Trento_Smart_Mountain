@@ -37,8 +37,8 @@ router.get('/', async (req, res, next) => {
 
     const { doc, count } = await fetchMeteoAndPersist(codice);
     res.json({ id: doc._id, stationCode: doc.stationCode, count });
-  } catch (e) {
-    next(e);
+  } catch (err) {
+    next(err);
   }
 });
 

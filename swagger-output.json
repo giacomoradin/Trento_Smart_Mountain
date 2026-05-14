@@ -1169,6 +1169,34 @@
       }
     },
     "/stations/{id}": {
+      "put": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Forza sincronizzazione metadati",
+        "description": "Ricarica i metadati tecnici (quota, coordinate) dalla sorgente remota e aggiorna il DB locale.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
       "delete": {
         "tags": [
           "Stations"

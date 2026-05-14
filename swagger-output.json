@@ -420,6 +420,343 @@
           }
         }
       }
+    },
+    "/stations/search": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Cerca stazioni meteo per nome",
+        "description": "Endpoint per la ricerca testuale delle stazioni.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Nome della stazione (es. Trento)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista di stazioni corrispondenti",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "number",
+                      "example": 1
+                    },
+                    "stations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number",
+                            "example": 1
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "Trento Nord"
+                          },
+                          "code": {
+                            "type": "string",
+                            "example": "T0129"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "number",
+                      "example": 1
+                    },
+                    "stations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number",
+                            "example": 1
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "Trento Nord"
+                          },
+                          "code": {
+                            "type": "string",
+                            "example": "T0129"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parametro name mancante",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Parametro ?name= obbligatorio"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Parametro ?name= obbligatorio"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{code}": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Dettaglio stazione per codice",
+        "description": "",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Codice univoco della stazione"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dati della stazione trovata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "example": "Trento Nord"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "altitude": {
+                      "type": "number",
+                      "example": 194
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "example": "Trento Nord"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "altitude": {
+                      "type": "number",
+                      "example": 194
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stazione non trovata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione non trovata"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione non trovata"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meteo/": {
+      "get": {
+        "tags": [
+          "Meteo"
+        ],
+        "summary": "Sincronizza ultima temperatura per codice stazione",
+        "description": "Recupera i dati meteo più recenti da una stazione specifica e li salva nel database. Se non viene fornito un codice, usa quello di default.",
+        "parameters": [
+          {
+            "name": "codice",
+            "in": "query",
+            "description": "Codice della stazione meteo (es. T0129)",
+            "required": false,
+            "example": "T0129",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sincronizzazione completata con successo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                    },
+                    "stationCode": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "count": {
+                      "type": "number",
+                      "example": 1
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                    },
+                    "stationCode": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "count": {
+                      "type": "number",
+                      "example": 1
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Codice stazione mancante",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Codice mancante (query ?codice= o METEO_STATION_CODE)"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Codice mancante (query ?codice= o METEO_STATION_CODE)"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

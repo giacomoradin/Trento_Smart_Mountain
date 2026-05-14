@@ -7,8 +7,10 @@ import {
   getSessionById,
   getSessionsByUser,
   updateSessionStatus,
+  updateSessionDetails,
   deleteSession,
   joinSession,
+  leaveSession,
 } from "../services/hikeSessionService.js";
 
 const router = express.Router();
@@ -18,20 +20,32 @@ router.use(authenticate);
 
 // POST /api/v1/sessions — crea una nuova sessione
 router.post("/", async (req, res) => {
-  const { routeDetails } = req.body;
+  const {
+    routeDetails,
+    meetingDate,
+    meetingTime,
+    meetingLocation,
+    maxParticipants,
+    minExperienceLevel,
+    gpxFileName,
+    gpxStats,
+  } = req.body;
 
-  if (
-    !routeDetails ||
-    !routeDetails.name ||
-    !routeDetails.startPoint ||
-    !routeDetails.difficultyLevel
-  ) {
-    return res.status(400).json({ error: "routeDetails incompleto" });
+  if (!routeDetails || !routeDetails.name) {
+    return res.status(400).json({ error: "routeDetails.name obbligatorio" });
   }
 
   try {
-    // req.user.userId viene dal JWT middleware (Marco/Federico lo implementano)
-    const session = await createSession(req.user.userId, routeDetails);
+    const sessionMeta = {
+      ...(meetingDate && { meetingDate }),
+      ...(meetingTime && { meetingTime }),
+      ...(meetingLocation && { meetingLocation }),
+      ...(maxParticipants && { maxParticipants }),
+      ...(minExperienceLevel && { minExperienceLevel }),
+      ...(gpxFileName && { gpxFileName }),
+      ...(gpxStats && { gpxStats }),
+    };
+    const session = await createSession(req.user.userId, routeDetails, sessionMeta);
     res.status(201).json(session);
   } catch (err) {
     if (err.message === "USER_ALREADY_IN_SESSION")
@@ -112,6 +126,30 @@ router.patch("/:id/status", async (req, res) => {
         .status(403)
         .json({ error: "Solo il Capogruppo può modificare la sessione" });
     res.status(500).json({ error: "Errore aggiornamento stato" });
+  }
+});
+
+// POST /api/v1/sessions/:id/leave — abbandona sessione
+router.post("/:id/leave", async (req, res) => {
+  try {
+    const session = await leaveSession(req.user.userId, req.params.id);
+    res.status(200).json(session);
+  } catch (err) {
+    if (err.message === "SESSION_NOT_FOUND") return res.status(404).json({ error: "Sessione non trovata" });
+    if (err.message === "CREATOR_CANNOT_LEAVE") return res.status(403).json({ error: "Il Capogruppo non può abbandonare la sessione. Eliminala se vuoi rimuoverla." });
+    res.status(500).json({ error: "Errore durante l'abbandono della sessione" });
+  }
+});
+
+// PATCH /api/v1/sessions/:id — modifica dettagli sessione (solo creator, inviteCode immutabile)
+router.patch("/:id", async (req, res) => {
+  try {
+    const session = await updateSessionDetails(req.params.id, req.user.userId, req.body);
+    res.status(200).json(session);
+  } catch (err) {
+    if (err.message === "SESSION_NOT_FOUND") return res.status(404).json({ error: "Sessione non trovata" });
+    if (err.message === "FORBIDDEN") return res.status(403).json({ error: "Solo il Capogruppo può modificare la sessione" });
+    res.status(500).json({ error: "Errore aggiornamento sessione" });
   }
 });
 

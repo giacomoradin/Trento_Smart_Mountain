@@ -13,6 +13,15 @@ const userSchema = new Schema(
     },
     isVerified: { type: Boolean, default: false },
     verificationToken: { type: String },
+    passwordResetToken: { type: String },
+    passwordResetExpires: { type: Date },
+    rifugioDetails: {
+      rifugioName: { type: String },
+      caiCode: { type: String },
+      quota: { type: Number },
+      posti: { type: Number },
+      coordinates: { type: String },
+    },
     createdAt: { type: Date, default: Date.now },
   },
   {

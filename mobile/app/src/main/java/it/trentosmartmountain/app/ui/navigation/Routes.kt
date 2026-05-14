@@ -18,6 +18,8 @@ object Routes {
   const val MAIN_HIKER = "main_hiker"
   /** Area principale account rifugio (metriche IoT, crediti ospiti). */
   const val MAIN_RIFUGIO = "main_rifugio"
+  /** Recupero password via email. */
+  const val FORGOT_PASSWORD = "forgot_password"
 
   fun loginRoute(pendingEmail: String = ""): String =
     "login?pendingEmail=${Uri.encode(pendingEmail)}"

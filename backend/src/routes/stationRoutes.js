@@ -24,15 +24,40 @@ router.get('/search', async (req, res, next) => {
         description: 'Parametro name mancante',
         schema: { error: 'Parametro ?name= obbligatorio' }
     }
+    #swagger.responses[404] = {
+        description: 'Nessuna stazione trovata',
+        schema: { error: 'Nessuna stazione corrisponde al nome cercato' }
+    }
   */
   try {
     const { name } = req.query;
-    if (!name) {
+    
+    // Validazione input
+    if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Parametro ?name= obbligatorio' });
     }
+
     const results = await findStationsByName(name);
-    res.json({ count: results.length, stations: results });
+
+    // Gestione "Not Found" logico
+    // Alternativa: di solito si restituisce un array vuoto con 200 OK.
+    // stile "rigido" 404 per indicare che la risorsa non esiste:
+    if (!results || results.length === 0) {
+      return res.status(404).json({ error: 'Nessuna stazione corrisponde al nome cercato' });
+    }
+
+    res.status(200).json({ 
+      count: results.length, 
+      stations: results 
+    });
+
   } catch (e) {
+    // Gestione errori specifici (se il service li lancia)
+    if (e.message === 'DATABASE_TIMEOUT') {
+      return res.status(503).json({ error: 'Il database è temporaneamente rallentato' });
+    }
+    
+    // Passa gli errori tecnici imprevisti al middleware globale
     next(e);
   }
 });
@@ -57,11 +82,12 @@ router.get('/:code', async (req, res, next) => {
     }
   */
   try {
-    const station = await findStationByCode(req.params.code);
-    if (!station) return res.status(404).json({ error: 'Stazione non trovata' });
-    res.json(station);
-  } catch (e) {
-    next(e);
+    const result = await fetchMeteoAndPersist(codice);
+    res.json(result);
+  } catch (err) {
+    if (err.message === "STATION_NOT_FOUND")
+      return res.status(404).json({ error: "Stazione non trovata" });
+    next(err);
   }
 });
 

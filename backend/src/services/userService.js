@@ -10,12 +10,11 @@ export const createUser = async (req, res) => {
      #swagger.security = [] 
   */
   try {
-    const { username, email, password, role } = req.body; // plain password from client
+    const { username, email, password, role, rifugioDetails } = req.body;
 
-    const passwordHash = await bcrypt.hash(password, 10); // server hashes it
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    // --- INIEZIONE MODULO SMTP VERIFICATION ---
-    const verificationToken = crypto.randomBytes(32).toString("hex"); // Genera un token univoco per la verifica email
+    const verificationToken = crypto.randomBytes(32).toString("hex");
     const user = new User({
       username,
       email,
@@ -23,6 +22,7 @@ export const createUser = async (req, res) => {
       role,
       isVerified: false,
       verificationToken,
+      ...(rifugioDetails && { rifugioDetails }),
     });
 
     const savedUser = await user.save();

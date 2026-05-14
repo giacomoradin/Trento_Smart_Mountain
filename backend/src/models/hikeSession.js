@@ -14,18 +14,33 @@ const hikSessionSchema = new Schema({
     name: { type: String, required: true },
     startPoint: {
       type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: { type: [Number], required: true }, // [lng, lat]
+      coordinates: { type: [Number], default: [0, 0] }, // [lng, lat]
     },
     endPoint: {
       type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: { type: [Number], required: true },
+      coordinates: { type: [Number], default: [0, 0] },
     },
     difficultyLevel: {
       type: String,
-      enum: ["T", "E", "EE", "EEA"], // scala CAI standard
-      required: true,
+      enum: ["T", "E", "EE", "EEA"],
+      default: "E",
     },
-    elevationGain: { type: Number }, // dislivello in metri
+    elevationGain: { type: Number },
+  },
+
+  // Metadati sessione
+  meetingDate: { type: String },
+  meetingTime: { type: String },
+  meetingLocation: { type: String },
+  maxParticipants: { type: Number },
+  minExperienceLevel: { type: String, enum: ["T", "E", "EE", "EEA"] },
+
+  // Dati tracciato GPX (opzionale, da import mobile)
+  gpxFileName: { type: String },
+  gpxStats: {
+    distanceKm: { type: Number },
+    elevationGainM: { type: Number },
+    trackPoints: { type: Number },
   },
 
   // Codice invito alfanumerico univoco (generato automaticamente)

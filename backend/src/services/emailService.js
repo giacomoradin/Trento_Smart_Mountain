@@ -2,59 +2,74 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import nodemailer from "nodemailer";
-// Get the current file's directory
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// //Look for .env in /backend (two levels up from /backend/src/services/)
- dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-
-
-
-// //Debug SMTP configuration
-console.log('SMTP Check:', {
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  user: process.env.SMTP_USER,
-  secure: process.env.SMTP_SECURE,
-path: path.resolve(__dirname, '../../.env') // Shows where it's looking
-});
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST, // SMTP server address (e.g., smtp.gmail.com)
-  port: process.env.SMTP_PORT, // SMTP server port (e.g., 587 for TLS, 465 for SSL)
-  secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  secure: process.env.SMTP_SECURE === "true",
   auth: {
-    user: process.env.SMTP_USER, // Email address for SMTP authentication
-    pass: process.env.SMTP_PASS, // Password for SMTP authentication
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
-  // --- INIEZIONE PATCH TLS ---
-  tls: {
-    // Bypassa il controllo della Certificate Authority (Solo per Dev/Test)
-    rejectUnauthorized: false,
-  },
-  // ---------------------------
+  tls: { rejectUnauthorized: false },
 });
 
+async function sendMailWithRetry(mailOptions, maxRetries = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await transporter.sendMail(mailOptions);
+      return;
+    } catch (err) {
+      lastError = err;
+      console.warn(`SMTP attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+  throw lastError;
+}
+
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 export const sendVerificationEmail = async (targetEmail, token) => {
-  // Hardcoded per sviluppo locale. In produzione usare variabile d'ambiente
-  const verificationUrl = `http://localhost:3000/auth/verify/${token}`;
-
-  const mailOptions = {
-    from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`, // Mittente (può essere lo stesso dell'autenticazione SMTP)
+  const verificationUrl = `${BASE_URL}/auth/verify/${token}`;
+  await sendMailWithRetry({
+    from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`,
     to: targetEmail,
     subject: "Inizializzazione Account - Verifica Richiesta",
     html: `
       <h3>Inizializzazione Nodo Operativa</h3>
       <p>Il tuo account è stato allocato nel cluster Trento Smart Mountain.</p>
-      <p>Per completare l'handshake e sbloccare l'accesso, conferma il tuo vettore di comunicazione cliccando sul link sottostante:</p>
-      <a href="${verificationUrl}" style="background-color: #0f8513; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+      <p>Per completare l'handshake e sbloccare l'accesso, clicca sul link:</p>
+      <a href="${verificationUrl}" style="background:#2E5A27;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
         Verifica Identità
       </a>
-      <p><small>Seleziona questo link solo se hai esplicitamente richiesto l'accesso.</small></p>
+      <p><small>Ignora questa email se non hai richiesto l'accesso.</small></p>
     `,
-  };
+  });
+};
 
-  await transporter.sendMail(mailOptions);
+export const sendPasswordResetEmail = async (targetEmail, token) => {
+  const resetUrl = `${BASE_URL}/auth/reset-password/${token}`;
+  await sendMailWithRetry({
+    from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`,
+    to: targetEmail,
+    subject: "Reset Password - Trento Smart Mountain",
+    html: `
+      <h3>Reset Password</h3>
+      <p>Hai richiesto il reset della password per il tuo account TSM.</p>
+      <p>Il link scade tra 1 ora.</p>
+      <a href="${resetUrl}" style="background:#2E5A27;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
+        Reimposta Password
+      </a>
+      <p><small>Se non hai richiesto questo reset, ignora questa email.</small></p>
+    `,
+  });
 };

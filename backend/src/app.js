@@ -13,6 +13,7 @@ const swaggerDocument = JSON.parse(readFileSync(new URL('../../swagger-output.js
 const app = express();
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
 app.use("/users", userRoutes);

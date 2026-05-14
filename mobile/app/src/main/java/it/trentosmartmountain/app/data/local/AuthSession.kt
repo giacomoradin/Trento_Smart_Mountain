@@ -12,6 +12,14 @@ object AuthSession {
       tokenStorage.clearToken()
       return Routes.AUTH_ENTRY
     }
-    return Routes.MAIN
+    return mainShellRouteForToken(token)
   }
+
+  /** Shell principale (escursionista vs rifugio) per navigazione post-login. */
+  fun mainShellRouteForToken(token: String): String =
+    if (JwtDecoder.roleFrom(token).equals("rifugio", ignoreCase = true)) {
+      Routes.MAIN_RIFUGIO
+    } else {
+      Routes.MAIN_HIKER
+    }
 }

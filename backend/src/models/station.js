@@ -45,4 +45,4 @@ const temperatureListSchema = new mongoose.Schema(
   { collection: 'temperature_lists' }
 );
 
-export default  mongoose.model('TemperatureList', temperatureListSchema);
+export default  mongoose.model('Station', temperatureListSchema);

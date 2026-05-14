@@ -1,6 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
-import  TemperatureList from '../models/temperatureList.js'; 
-import  {findStationByCode}  from './stationRegistry.service.js'; 
+import  Station from '../models/station.js'; 
+import  {findRemoteStationByCode}  from './stationRegistry.service.js'; 
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -35,7 +35,7 @@ function temperatureListFromParsed(parsed) {
 
 async function fetchMeteoAndPersist(codice) {
   // 1. Metadati stazione
-  const stationInfo = await findStationByCode(codice);
+  const stationInfo = await findRemoteStationByCode(codice);
   if (!stationInfo) {
     throw Object.assign(new Error(`Stazione ${codice} non trovata nel registry`), { statusCode: 404 });
   }
@@ -58,7 +58,7 @@ async function fetchMeteoAndPersist(codice) {
     throw Object.assign(new Error("Nessun dato trovato nell'XML"), { statusCode: 404 });
 
   // 3. Salva tutto insieme
-  const doc = await TemperatureList.findOneAndUpdate(
+  const doc = await Station.findOneAndUpdate(
     { stationCode: String(codice) },
     {
       stationCode:     String(codice),

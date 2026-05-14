@@ -1,0 +1,2 @@
+#Each branch will have its own version of README.md, so we want to keep the current branch's version during merges.
+README.md merge=ours

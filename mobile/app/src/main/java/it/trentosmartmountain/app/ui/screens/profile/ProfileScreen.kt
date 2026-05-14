@@ -23,7 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.viewmodel.ProfileViewModel
 
-/** Profilo utente: in questa fase mostra solo lo username. */
+/** Profilo utente: username, sezioni social credit e impostazioni (placeholder), logout. */
 @Composable
 fun ProfileScreen(
   onLoggedOut: () -> Unit,
@@ -68,6 +68,28 @@ fun ProfileScreen(
         Text(
           text = uiState.username.orEmpty(),
           style = MaterialTheme.typography.titleLarge,
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+          text = stringResource(R.string.profile_social_credits_label),
+          style = MaterialTheme.typography.labelLarge,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+          text = stringResource(R.string.profile_social_credits_placeholder),
+          style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+          text = stringResource(R.string.profile_settings_section_title),
+          style = MaterialTheme.typography.titleSmall,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+          text = stringResource(R.string.profile_settings_placeholder),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (uiState.offlineWithCachedProfile) {
           Spacer(modifier = Modifier.height(8.dp))

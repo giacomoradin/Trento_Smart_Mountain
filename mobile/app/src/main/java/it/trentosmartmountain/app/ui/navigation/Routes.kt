@@ -8,12 +8,16 @@ object Routes {
   const val AUTH_ENTRY = "auth_entry"
   /** Form di accesso; `pendingEmail` opzionale precompila il campo e mostra un promemoria. */
   const val LOGIN = "login?pendingEmail={pendingEmail}"
-  /** Creazione account. */
+  /** Creazione account escursionista / generico. */
   const val REGISTER = "register"
+  /** Creazione account rifugio (flusso dedicato, UI in evoluzione). */
+  const val REGISTER_RIFUGIO = "register_rifugio"
   /** Istruzioni verifica email dopo `POST /users`. */
   const val EMAIL_VERIFICATION_PENDING = "email_verification_pending/{email}"
-  /** Shell con tab Sessione / Mappa / Profilo. */
-  const val MAIN = "main"
+  /** Area principale utente escursionista (bottom bar: Home, Sessione, Registra, Profilo). */
+  const val MAIN_HIKER = "main_hiker"
+  /** Area principale account rifugio (metriche IoT, crediti ospiti). */
+  const val MAIN_RIFUGIO = "main_rifugio"
 
   fun loginRoute(pendingEmail: String = ""): String =
     "login?pendingEmail=${Uri.encode(pendingEmail)}"

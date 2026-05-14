@@ -62,12 +62,14 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 | **`TsmApplication.kt`**    | `Application`: **`TokenStorage`** singleton, **`TsmDatabase`** Room (`tsm.db`), init **`TsmApiClient`**.                                                                                                     |
 | **`ui/theme/`**            | Colori e tema Material 3 (`TsmTheme`).                                                                                                                                                    |
 | **`ui/navigation/`**       | Destinazioni (`Routes`) e grafo di navigazione (`TsmNavHost`): scelta accesso/registrazione → login, registrazione, verifica email → area principale con tab inferiori. |
-| **`ui/screens/auth/`**     | Schermata iniziale con pulsanti **Accedi**, **Registrati** e demo **Google** (non integrata).                                                                                              |
+| **`ui/screens/auth/`**     | **`AuthEntryScreen`**: **Registrazione utente**, **Registrazione rifugio**, **Accedi**.                                                                                                                                    |
 | **`ui/screens/login/`**    | Schermata **login** (email e password).                                                                                                                   |
-| **`ui/screens/register/`** | **Registrazione** e schermata **Verifica email** dopo `POST /users`.                                                                                      |
-| **`ui/screens/main/`**     | **`MainScreen`**: barra di navigazione inferiore e contenuto della tab selezionata.                                                                        |
-| **`ui/screens/session/`**  | Scheletro **Sessione** (nuova sessione / sessione attiva).                                                                                                |
-| **`ui/screens/map/`**      | Scheletro **Mappa** (posizioni di gruppo in tempo reale, futura).                                                                                         |
+| **`ui/screens/register/`** | **`RegisterScreen`** (utente), **`RegisterRifugioScreen`** (rifugio, placeholder), **Verifica email** dopo `POST /users`.                                  |
+| **`ui/screens/main/`**     | **`HikerMainScreen`**: barra inferiore (Home, Sessione, Registra, Profilo) per utenti escursionisti.                                                        |
+| **`ui/screens/home/`**     | **Home** con sottotab Social / Attività personali (placeholder).                                                                                          |
+| **`ui/screens/registra/`** | Schermata **Registra** (mappa sessione + SOS, placeholder).                                                                                                 |
+| **`ui/screens/refuge/`**   | **`RefugeMainScreen`**: dashboard rifugista (IoT, social credit) per JWT con ruolo `rifugio`.                                                               |
+| **`ui/screens/session/`**  | **`SessionHubScreen`**: sottotab **Pianifica** / **Unisciti** (placeholder).                                                                              |
 | **`ui/screens/profile/`**  | **Profilo**: username da **`ProfileRepositoryImpl`** (cache Room + `GET /users/{id}`), hint offline/refresh, **logout** (JWT + tabella profilo).                                                                                                   |
 | **`viewmodel/`**           | **`LoginViewModel`**, **`RegisterViewModel`**, **`ProfileViewModel`**.                                                                                    |
 | **`data/remote/`**         | **`TsmApiClient`**, **`TsmApiService`**, **`AuthInterceptor`**, **`JwtDecoder`**, DTO JSON.                                                               |
@@ -81,22 +83,22 @@ Cartelle principali sotto `java/it/trentosmartmountain/app/`:
 
 ### Schermata iniziale (scelta)
 
-- All’avvio l’app mostra **Trento Smart Mountain** con **Accedi**, **Registrati** e un pulsante **Google** solo dimostrativo (messaggio “non ancora disponibile”).
+- All’avvio l’app mostra **Trento Smart Mountain** con **Registrazione utente**, **Registrazione rifugio** e **Accedi**.
 - È la **destinazione iniziale** del grafo di navigazione (`Routes.AUTH_ENTRY`).
 
 ### Login
 
 - Campi **email** e **password**, con messaggi di errore se i dati non sono validi (email vuota/formato, password troppo corta).
 - Pulsante **Entra**, stato di **caricamento** durante la richiesta, messaggio di errore se il server non risponde o rifiuta le credenziali.
-- Chiamata reale a **`POST /auth/login`** tramite **`AuthRepositoryImpl`**; in caso di successo il **JWT** viene salvato in **`TokenStorage`** (storage cifrato) e si naviga all’**area principale** (`MainScreen`), senza poter tornare alle schermate di autenticazione con il tasto indietro di sistema.
-- All’**avvio successivo**, se il JWT salvato è ancora valido in locale (`userId` + `exp`), **`TsmNavHost`** apre direttamente **`MainScreen`** senza ripassare dal login.
+- Chiamata reale a **`POST /auth/login`** tramite **`AuthRepositoryImpl`**; in caso di successo il **JWT** viene salvato in **`TokenStorage`** (storage cifrato) e si naviga all’**area principale** (`HikerMainScreen` se ruolo escursionista, `RefugeMainScreen` se `rifugio` nel payload JWT), senza poter tornare alle schermate credenziali con il tasto indietro di sistema.
+- All’**avvio successivo**, se il JWT salvato è ancora valido in locale (`userId` + `exp`), **`TsmNavHost`** apre direttamente la shell corretta senza ripassare dal login.
 - Se l’account non ha ancora completato la **verifica email**, il backend risponde **403**: l’app mostra un avviso dedicato (non un errore generico di credenziali).
 - Arrivando dal flusso post-registrazione, il login può ricevere l’**email precompilata** e un promemoria di verifica (`Routes.loginRoute(pendingEmail)`).
 
 ### Area principale (dopo login)
 
-- **`MainScreen`** mostra una **barra inferiore** con tre tab, da sinistra a destra: **Sessione**, **Mappa**, **Profilo**.
-- **Sessione** e **Mappa** sono scheletri con testo descrittivo; i contenuti (sessione attiva, mappa live) arriveranno in step successivi.
+- **`HikerMainScreen`** mostra una **barra inferiore** con quattro tab: **Home**, **Sessione**, **Registra**, **Profilo**. **Home** e **Sessione** hanno sottotab (Social / Attività; Pianifica / Unisciti) con placeholder.
+- **Registra** è lo scheletro per mappa sessione attiva, gruppo in tempo reale e SOS (contenuti funzionali in arrivo).
 - **Profilo** legge prima la **cache Room** (`cached_user_profile`), poi aggiorna con **`GET /users/{id}`** (Bearer da **`AuthInterceptor`**). In assenza di rete o con errore HTTP, resta l’ultimo username salvato con messaggio esplicativo. Il **logout** rimuove JWT e svuota la tabella profilo. Statistiche e attività restano fuori scope.
 
 ### Registrazione e verifica email

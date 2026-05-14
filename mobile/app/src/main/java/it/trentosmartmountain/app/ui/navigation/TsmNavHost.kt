@@ -12,13 +12,14 @@ import it.trentosmartmountain.app.TsmApplication
 import it.trentosmartmountain.app.data.local.AuthSession
 import it.trentosmartmountain.app.ui.screens.auth.AuthEntryScreen
 import it.trentosmartmountain.app.ui.screens.login.LoginScreen
-import it.trentosmartmountain.app.ui.screens.main.MainScreen
+import it.trentosmartmountain.app.ui.screens.main.HikerMainScreen
+import it.trentosmartmountain.app.ui.screens.refuge.RefugeMainScreen
 import it.trentosmartmountain.app.ui.screens.register.EmailVerificationPendingScreen
+import it.trentosmartmountain.app.ui.screens.register.RegisterRifugioScreen
 import it.trentosmartmountain.app.ui.screens.register.RegisterScreen
 
 /**
- * Grafo di navigazione Compose: scelta accesso/registrazione → login o registrazione → area principale.
- * Dopo il login si usa [popUpTo] sulla route auth così l’utente non torna alle schermate credenziali col tasto sistema.
+ * Grafo Compose: auth (tre ingressi) → login / registrazioni → area principale in base al ruolo JWT.
  */
 @Composable
 fun TsmNavHost() {
@@ -29,15 +30,22 @@ fun TsmNavHost() {
     }
   val navController = rememberNavController()
 
-  fun navigateToMain() {
-    navController.navigate(Routes.MAIN) {
+  fun navigateToMainAfterLogin() {
+    val token = application.tokenStorage.getToken()
+    val route =
+      token?.let { AuthSession.mainShellRouteForToken(it) } ?: Routes.MAIN_HIKER
+    navController.navigate(route) {
       popUpTo(Routes.AUTH_ENTRY) { inclusive = true }
+      launchSingleTop = true
     }
   }
 
   fun navigateToAuthEntry() {
     navController.navigate(Routes.AUTH_ENTRY) {
-      popUpTo(Routes.MAIN) { inclusive = true }
+      popUpTo(navController.graph.id) {
+        inclusive = true
+      }
+      launchSingleTop = true
     }
   }
 
@@ -47,8 +55,9 @@ fun TsmNavHost() {
   ) {
     composable(Routes.AUTH_ENTRY) {
       AuthEntryScreen(
+        onRegisterUserClick = { navController.navigate(Routes.REGISTER) },
+        onRegisterRifugioClick = { navController.navigate(Routes.REGISTER_RIFUGIO) },
         onLoginClick = { navController.navigate(Routes.loginRoute()) },
-        onRegisterClick = { navController.navigate(Routes.REGISTER) },
       )
     }
     composable(
@@ -64,9 +73,7 @@ fun TsmNavHost() {
       val pendingEmail = backStackEntry.arguments?.getString("pendingEmail").orEmpty()
       LoginScreen(
         pendingVerificationEmail = pendingEmail,
-        onLoggedIn = {
-          navigateToMain()
-        },
+        onLoggedIn = { navigateToMainAfterLogin() },
       )
     }
     composable(Routes.REGISTER) {
@@ -78,6 +85,9 @@ fun TsmNavHost() {
         },
         onBack = { navController.popBackStack() },
       )
+    }
+    composable(Routes.REGISTER_RIFUGIO) {
+      RegisterRifugioScreen(onBack = { navController.popBackStack() })
     }
     composable(
       route = "${Routes.EMAIL_VERIFICATION_PENDING}?serverMessage={serverMessage}",
@@ -106,8 +116,11 @@ fun TsmNavHost() {
         onBack = { navController.popBackStack() },
       )
     }
-    composable(Routes.MAIN) {
-      MainScreen(onLoggedOut = { navigateToAuthEntry() })
+    composable(Routes.MAIN_HIKER) {
+      HikerMainScreen(onLoggedOut = { navigateToAuthEntry() })
+    }
+    composable(Routes.MAIN_RIFUGIO) {
+      RefugeMainScreen(onLoggedOut = { navigateToAuthEntry() })
     }
   }
 }

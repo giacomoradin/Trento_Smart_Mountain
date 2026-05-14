@@ -54,7 +54,7 @@ flowchart TB
 | Client | `.../data/remote/TsmApiClient.kt` | Costruisce Retrofit con `BuildConfig.BASE_URL`, Gson, timeout. |
 | Auth HTTP | `.../data/remote/AuthInterceptor.kt` | Se esiste un JWT in `TokenStorage`, aggiunge `Authorization: Bearer <token>`. |
 | JWT locale | `.../data/local/TokenStorage.kt` | Salva / legge / cancella il JWT in **EncryptedSharedPreferences** (`tsm_auth_encrypted`); migrazione one-shot da `tsm_auth` legacy. |
-| Sessione all’avvio | `.../data/local/AuthSession.kt` + `TsmNavHost` | Se il JWT locale ha `userId` e `exp` futuro → `Routes.MAIN`, altrimenti auth. |
+| Sessione all’avvio | `.../data/local/AuthSession.kt` + `TsmNavHost` | Se il JWT locale ha `userId` e `exp` futuro → `Routes.MAIN_HIKER` o `Routes.MAIN_RIFUGIO` in base al claim `role`, altrimenti auth. |
 | Lettura `userId` | `.../data/remote/JwtDecoder.kt` | Decodifica il payload JWT (solo per ottenere `userId`, senza verificare la firma lato app). |
 | Logica API | `.../repository/*RepositoryImpl.kt` | Chiamano `TsmApiService`, gestiscono errori di rete e body di errore JSON. |
 | Stato UI | `.../viewmodel/*ViewModel.kt` | Validazione locale, loading, messaggi; usano i repository. |

@@ -6,7 +6,8 @@ import stations from "./routes/stationRoutes.js";
 import meteo from "./routes/meteoRoutes.js";
 import cors from "cors";
 import swaggerUI from "swagger-ui-express";
-import { readFileSync } from 'fs';
+import { glob, readFileSync } from 'fs';
+import { globalErrorHandler, notFoundHandler } from "./middleware/errorMiddleware.js";
 
 const swaggerDocument = JSON.parse(readFileSync(new URL('../../swagger-output.json', import.meta.url)));
 const app = express();
@@ -20,5 +21,9 @@ app.use("/api/v1/sessions", hikeSessionRoutes);
 
 app.use("/stations",stations);
 app.use("/meteo",meteo);
+
+app.use(notFoundHandler);
+app.use(globalErrorHandler);
+
 
 export default app;

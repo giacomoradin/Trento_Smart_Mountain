@@ -1,11 +1,13 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import { 
   findRemoteStationsByName, 
   findRemoteStationByCode,
   findLocalStationsByName,
   findLocalStationByCode,
   saveStationToDb,
-  deleteStationFromDb 
+  deleteStationFromDb,
+  refreshStationData
 } from '../services/stationRegistry.service.js';
 
 
@@ -199,30 +201,46 @@ router.post('/', async (req, res, next) => {
     const { code } = req.body;
     if (!code) return res.status(400).json({ error: 'Il campo code è obbligatorio' });
 
-    // 1. Cerca i dati completi dall'API esterna
+    // 1. Prendi i dati grezzi dal fornitore esterno
     const remoteData = await findRemoteStationByCode(code);
-    if (!remoteData) return res.status(404).json({ error: 'Codice stazione non trovato sui server remoti' });
+    if (!remoteData) return res.status(404).json({ error: 'Codice stazione non trovato' });
 
-    // 2. Mappatura esplicita per evitare stationInfo: null
-    const stationToSave = {
-      name: remoteData.name,
-      code: String(remoteData.code).toUpperCase(),
-      stationInfo: {
-        shortname: remoteData.shortname,
-        altitude: remoteData.altitude,
-        latitude: remoteData.latitude,
-        longitude: remoteData.longitude
-      },
-      fetchedAt: new Date()
-    };
+    // 2. SALVATAGGIO CENTRALIZZATO
+    // Passiamo l'oggetto ricevuto direttamente al servizio
+    // Sarà il servizio (o il modello) a preoccuparsi di dove mettere i campi
+    const saved = await saveStationToDb({
+      stationCode: remoteData.code,
+      stationInfo: remoteData, // Passiamo tutto, il modello filtrerà ciò che serve
+      sourceUrl: 'Importazione Manuale' 
+    });
 
-    // 3. Salvataggio nel DB locale
-    const saved = await saveStationToDb(stationToSave);
     res.status(201).json(saved);
     
   } catch (err) { 
-    if (err.code === 11000) return res.status(409).json({ error: 'Stazione già presente nel database' });
+    if (err.code === 11000) return res.status(409).json({ error: 'Stazione già presente' });
     next(err); 
+  }
+});
+
+router.put('/:id', async (req, res, next) => {
+  /* #swagger.tags = ['Stations']
+     #swagger.summary = 'Forza sincronizzazione metadati'
+     #swagger.description = 'Ricarica i metadati tecnici (quota, coordinate) dalla sorgente remota e aggiorna il DB locale.'
+  */
+  try {
+    const { id } = req.params;
+    
+    // Validazione preventiva dell'ID (come da tuo report v1.2)
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID non valido' });
+    }
+
+    const updated = await refreshStationData(id);
+    if (!updated) return res.status(404).json({ error: 'Stazione non trovata' });
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
   }
 });
 

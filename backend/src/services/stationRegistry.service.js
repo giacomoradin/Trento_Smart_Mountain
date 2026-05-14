@@ -58,5 +58,19 @@ export async function deleteStationFromDb(id) {
   // Rimozione fisica dal database
   return await Station.findByIdAndDelete(id);
 }
+export async function refreshStationData(id) {
+  // 1. Trova la stazione locale per ID (per sapere quale codice cercare fuori)
+  const localStation = await Station.findById(id);
+  if (!localStation) return null;
 
+  // 2. Recupera i dati aggiornati dal registro remoto
+  const remoteData = await findRemoteStationByCode(localStation.stationCode);
+  if (!remoteData) throw new Error("Dati remoti non disponibili per il refresh");
+
+  // 3. Aggiorna e salva (Mongoose gestisce lo scarto dei campi extra)
+  localStation.stationInfo = remoteData;
+  localStation.fetchedAt = new Date();
+  
+  return await localStation.save();
+}
 export { fetchAllStations };

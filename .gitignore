@@ -109,7 +109,7 @@ local.properties
 # Eccezioni esplicite (restano tracciati anche se comparisse un ignore `*.xml` più sopra nel file):
 !/mobile/app/src/main/AndroidManifest.xml
 !/mobile/app/src/main/res/**/*.xml
-
+PROJECT_OVERVIEW.md
 # Android Studio captures folder
 captures/
 
@@ -153,3 +153,9 @@ project.freetime
 # System Files
 .DS_Store
 Thumbs.db
+.claude
+
+# Default ignored files
+/shelf/
+/workspace.xml
+/deploymentTargetSelector.xml

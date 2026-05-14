@@ -1,68 +1,86 @@
-# Trento Smart Mountain 🏔️
 
-## Overview
-**Trento Smart Mountain** è un ecosistema digitale innovativo per l'ambiente montano, sviluppato come progetto per il corso di Ingegneria del Software (Università di Trento). La piattaforma mira a superare i limiti delle tradizionali app di navigazione passiva, offrendo strumenti attivi per la **sicurezza**, la **sostenibilità** e la **gamification**.
 
-### Pilastri del Progetto
-1.  **Sicurezza Proattiva:** Gestione delle emergenze tramite reti ibride (4G/5G e fallback BLE Mesh offline).
-2.  **Sostenibilità & Gamification:** Percorsi educativi e certificazione di vetta tramite NFC per guadagnare "Social Credits" ($S_c$).
-3.  **Monitoraggio IoT:** Gestione intelligente dei rifiuti e dell'affollamento nei rifugi alpini tramite Edge Computing.
+## 📌 Panoramica del Sistema
+
+Il sistema gestisce l'integrazione di dati meteorologici tra **MeteoTrentino** e un database locale **MongoDB**. L'obiettivo è la persistenza sincronizzata dei dati delle stazioni e delle temperature, garantendo coerenza tra metadati locali e sorgente remota.
 
 ---
 
-## Architettura di Sistema
-Il progetto adotta un pattern **Offline-First** basato sul principio *Store-and-Forward*, garantendo la continuità operativa anche in totale assenza di segnale.
+## 🛠 Architettura e Moduli Aggiornati
 
-- **Backend:** Monolite Modulare in Node.js con MongoDB.
-- **Mobile:** App Android nativa in Kotlin (MVVM).
-- **IoT:** Edge Gateway basati su MQTT per la comunicazione con sensori e macchinari.
-- **Comunicazione:** Protocollo di relay SOS firmato ECC via BLE Mesh.
+### 1. Modulo Meteo: Sincronizzazione Avanzata
 
----
+- **Fetch & Persist Automizzato:** La funzione `fetchMeteoAndPersist` esegue un'operazione di **Upsert** sul database locale.
+    
+- **Arricchimento Dati:** Recupera metadati aggiornati tramite `findRemoteStationByCode` ad ogni download di temperatura.
+    
 
-## Struttura della Repository (Monorepo)
-- `/backend`: API RESTful e logica di business del server.
-- `/mobile`: Codice sorgente dell'applicazione Android.
-- `/iot`: Script e configurazioni per i gateway e i sensori di rifugio.
-- `/docs`: Documentazione tecnica (D1, D2), diagrammi UML e backlog di progetto.
+### 2. Modulo Stations: Gestione Ibrida e Persistenza
 
----
-
-## Flusso di Lavoro (SCRUM & Git Flow)
-Seguiamo la metodologia Agile SCRUM con cicli di sviluppo settimanali.
-
-### Strategia di Branching
-- `main`: Branch stabile per le release ufficiali.
-- `develop`: Branch di integrazione per lo sviluppo corrente.
-- `feature/<ID-UserStory>`: Branch temporanei per lo sviluppo di nuove funzionalità (es. `feature/1-login`).
-- `bugfix/<descrizione>`: Branch per la risoluzione di problemi riscontrati.
-
-### Sprint 1: Obiettivi Principali
-- [ ] Implementazione Autenticazione OAuth (Google/Facebook).
-- [ ] Sviluppo Android Foreground Service per tracking continuo.
-- [ ] Setup schema DB e inizializzazione sessioni escursione.
-- [ ] Algoritmo base per checklist dinamica (Meteo/Percorso).
-- [ ] Prototipo UI per la Dashboard SOS.
+- **Refresh Centralizzato (Novità):** Implementata la rotta `PUT /:id` che forza la sincronizzazione dei metadati tecnici senza permettere modifiche manuali arbitrarie, mantenendo l'integrità dei dati ufficiali.
+    
+- **Robustezza e Validazione:** Tutte le rotte (`PUT`, `DELETE`, `POST`) ora includono l'importazione di `mongoose` per validare preventivamente il formato degli `ObjectId`, prevenendo crash applicativi.
+    
+- **Prevenzione Duplicati:** L'uso di `findOneAndUpdate` e della logica di "Refresh per ID" garantisce che ogni stazione fisica corrisponda a un unico record locale.
+    
 
 ---
 
-## Setup Locale
-*Variabili d'ambiente backend:*
-- Prelevare dal documento su google docs il file ***.env*** aggiornato e sostituire il contenuto dello stesso file in locale se presenti modifiche.
+## 📂 Stato del Piano d'Azione CRUD
 
-### Backend
-```bash
-cd backend
-npm install
-npm run dev
-```
-
-### Mobile
-Apri la cartella `mobile/` con Android Studio e sincronizza con Gradle.
+|**Risorsa**|**Metodo**|**Endpoint**|**Stato**|**Descrizione**|
+|---|---|---|---|---|
+|**Meteo**|`GET`|`/meteo?codice=X`|✅|Scarica temperatura e aggiorna metadati stazione nel DB.|
+|**Stations**|`POST`|`/`|✅|Importazione iniziale di una stazione da remoto a locale.|
+|**Stations**|`DELETE`|`/:id`|✅|Rimozione sicura tramite ID MongoDB.|
+|**Stations**|`PUT`|`/:id`|✅|**Refresh Sincronizzato**: Ricarica metadati tecnici dal remoto.|
+|**Stations**|`GET`|`/local/search`|✅|Recupero totale o filtrato dal DB locale.|
 
 ---
 
-## Contatti e Licenza
-Sviluppato da: **Giacomo Radin**
+## 📝 Note Tecniche Importanti
 
-© 2026 Giacomo Radin. Tutti i diritti riservati. La riproduzione o l'uso non autorizzato di questo codice è vietata.
+- **Modularità ES:** Assicurarsi sempre che le nuove funzioni (come `refreshStationData`) siano esplicitamente esportate nel service e importate nelle routes per evitare `ReferenceError`.
+    
+- **Schema Interno:** Il modello `TemperatureList` (alias `Station`) gestisce sia l'anagrafica (`stationInfo`) che le rilevazioni (`air_temperature`).
+    
+- **Mongoose Import:** È obbligatorio in `stationRoutes.js` per utilizzare `mongoose.Types.ObjectId.isValid()`.
+    
+
+---
+
+## 🧪 Workflow di Test Suggerito
+
+Per verificare che tutto funzioni come previsto, segui questa sequenza di test (usando Postman, Swagger o cURL):
+
+### 1. Test di Importazione (POST)
+
+- **Azione:** `POST /stations` con body `{ "code": "T0129" }`.
+    
+- **Verifica:** Il database deve creare un nuovo documento. Controlla che `stationInfo` sia popolato e `air_temperature` sia `[]`.
+    
+
+### 2. Test di Sincronizzazione Meteo (GET)
+
+- **Azione:** `GET /meteo?codice=T0129`.
+    
+- **Verifica:** Il documento creato al punto 1 deve ora contenere un elemento nell'array `air_temperature`. Non deve essere creato un secondo documento (duplicato).
+    
+
+### 3. Test di Refresh Metadati (PUT)
+
+- **Azione:** `PUT /stations/[ID_DI_MONGO]`.
+    
+- **Verifica:** Il campo `fetchedAt` deve aggiornarsi all'ora attuale e i metadati tecnici devono essere ricaricati dal remoto. Se l'ID è malformato, deve rispondere `400`.
+    
+
+### 4. Test di Rimozione (DELETE)
+
+- **Azione:** `DELETE /stations/[ID_DI_MONGO]`.
+    
+- **Verifica:** Il documento deve sparire dal DB. Una successiva `GET /local/search` non deve mostrarlo.
+    
+
+---
+
+**Stato Integrazione:** 🟢 **Operativo**. La logica di sincronizzazione è ora completa e protetta da errori di validazione ID.

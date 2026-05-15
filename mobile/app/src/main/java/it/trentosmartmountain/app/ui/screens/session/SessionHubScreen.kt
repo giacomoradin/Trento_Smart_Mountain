@@ -98,6 +98,8 @@ import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
+import it.trentosmartmountain.app.data.remote.dto.SessionResponse
+import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.viewmodel.SessionJoinViewModel
 import it.trentosmartmountain.app.viewmodel.SessionPlanViewModel
 import java.text.SimpleDateFormat
@@ -535,6 +537,37 @@ private fun SessionJoinTab(
         SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
     }
 
+    // Dialog conferma AVVIA quando la data della sessione non è oggi
+    // (identico al flusso di SessionDetailScreen.showAvviaConfirm)
+    var avviaConfirmSession by remember { mutableStateOf<SessionResponse?>(null) }
+    avviaConfirmSession?.let { session ->
+        AlertDialog(
+            onDismissRequest = { avviaConfirmSession = null },
+            containerColor = TsmSurface,
+            title = { Text("Avviare in anticipo?", color = Color.White) },
+            text = {
+                Text(
+                    "La sessione è pianificata per ${session.meetingDate ?: "un altro giorno"}. Vuoi avviarla ugualmente?",
+                    color = Color.Gray,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        SessionStartCoordinator.requestStart(session._id)
+                        avviaConfirmSession = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
+                ) { Text("Avvia") }
+            },
+            dismissButton = {
+                TextButton(onClick = { avviaConfirmSession = null }) {
+                    Text("Annulla", color = Color.Gray)
+                }
+            },
+        )
+    }
+
     // Refresh ogni volta che l'utente entra in UNISCITI (es. ritorno da SessionDetail
     // dopo aver creato/joinato/eliminato una sessione → la lista deve riflettere lo state attuale).
     LaunchedEffect(Unit) { viewModel.loadSessions() }
@@ -685,7 +718,16 @@ private fun SessionJoinTab(
                         isToday = isToday,
                         isCreator = isCreator,
                         onDetailClick = { onNavigateToDetail(session._id) },
-                        onAvviaClick = { onNavigateToDetail(session._id) },
+                        onAvviaClick = {
+                            // Stessa logica di SessionDetailScreen.AVVIA ESCURSIONE:
+                            // se è il giorno pianificato → avvio diretto via Coordinator;
+                            // altrimenti → dialog conferma (stessa UX del detail screen).
+                            if (isToday) {
+                                SessionStartCoordinator.requestStart(session._id)
+                            } else {
+                                avviaConfirmSession = session
+                            }
+                        },
                         onRemoveClick = { viewModel.requestRemoveSession(session) },
                     )
                 }

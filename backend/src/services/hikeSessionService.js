@@ -128,6 +128,8 @@ export async function leaveSession(userId, sessionId) {
     (p) => p.userId.toString() !== userId.toString(),
   );
   await session.save();
+  // Route handler invia solo { message } quindi il body non viene deserializzato come SessionResponse.
+  // Restituiamo l'oggetto grezzo — il client Kotlin usa Response<ApiMessageBody> per questa route.
   return session;
 }
 
@@ -146,7 +148,13 @@ export async function updateSessionDetails(sessionId, userId, updates) {
   if (updates.minExperienceLevel !== undefined) session.minExperienceLevel = updates.minExperienceLevel;
   // inviteCode is never updated
   await session.save();
-  return session.populate("creatorId", "username email");
+  // Popola entrambi i campi ref in modo simmetrico a getSessionById/getSessionsByUser.
+  // Senza populate("participants.userId"), la risposta contiene ObjectId raw (string)
+  // invece dell'oggetto User → Gson crash: "Expected BEGIN_OBJECT but was STRING".
+  return session.populate([
+    { path: "creatorId", select: "username email" },
+    { path: "participants.userId", select: "username email" },
+  ]);
 }
 
 // Aggiorna lo stato della sessione (es. PLANNED → ACTIVE)

@@ -157,8 +157,11 @@ class SessionDetailViewModel : ViewModel() {
     fun saveEdit() {
         val state = _uiState.value
         val sessionId = state.session?._id ?: return
+
+        // 1. ISOLAMENTO UI: Forza la distruzione del nodo visivo incondizionatamente
+        _uiState.update { it.copy(isSaving = true, editMode = false) }
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true) }
             try {
                 val body = UpdateSessionRequest(
                     routeDetails = UpdateRouteDetails(name = state.editName, difficultyLevel = state.editDifficulty),
@@ -166,32 +169,54 @@ class SessionDetailViewModel : ViewModel() {
                     meetingTime = state.editTime.ifBlank { null },
                     maxParticipants = state.editMaxParticipants,
                 )
+                
+                // 2. Chiamata I/O Server
                 val response = TsmApiClient.service().updateSession(sessionId, body)
+
                 if (response.isSuccessful) {
-                    // Esci dall'edit mode immediatamente (l'utente vede il pannello chiudersi)
-                    // e azzera i campi di edit per evitare state stale al prossimo enterEditMode.
                     _uiState.update {
                         it.copy(
                             isSaving = false,
-                            editMode = false,
-                            editName = "",
-                            editDate = "",
-                            editTime = "",
+                            error = null
                         )
                     }
-                    // Ricarica la sessione completa (con populate creatorId + participants)
-                    // perché il PATCH ritorna un documento parziale.
-                    loadSession(sessionId)
+                    silentReloadSession(sessionId) // Ricarica in background
                 } else {
+                    // 3. SEGNALAZIONE FALLIMENTO (Senza riaprire la tendina)
+                    val errorBody = response.errorBody()?.string() ?: "Errore Sconosciuto"
                     _uiState.update {
                         it.copy(
                             isSaving = false,
-                            error = "Errore salvataggio (${response.code()}). Riprova.",
+                            // Lasciamo editMode = false per confermare che l'input UI funziona.
+                            error = "HTTP ${response.code()}: $errorBody" 
                         )
                     }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSaving = false, error = "Errore: ${e.javaClass.simpleName}") }
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = "Network Fault: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Modulo di sincronizzazione background.
+     * Recupera il documento aggiornato dal server senza scatenare
+     * il flag `isLoading` principale, garantendo stabilità grafica.
+     */
+    private fun silentReloadSession(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                val response = TsmApiClient.service().getSessionById(sessionId)
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(session = response.body()) }
+                }
+            } catch (e: Exception) {
+                // Il buffer rimane inalterato in caso di drop dei pacchetti
             }
         }
     }

@@ -66,14 +66,22 @@ interface TsmApiService {
   @DELETE("api/v1/sessions/{id}")
   suspend fun deleteSession(@Path("id") id: String): Response<ApiMessageBody>
 
+  // Return type ApiMessageBody invece di SessionResponse:
+  // Gson deserializza il response body in modo eager nel thread Retrofit.
+  // Se il backend restituisce participants.userId come ObjectId raw (non popolato),
+  // Gson crashava con "Expected BEGIN_OBJECT but was STRING" (IllegalStateException).
+  // saveEdit() non legge il body — ricarica la sessione via getSessionById() — quindi
+  // ApiMessageBody (solo { message? }) è il contratto corretto e non crash su nessun JSON.
   @PATCH("api/v1/sessions/{id}")
-  suspend fun updateSession(@Path("id") id: String, @Body body: UpdateSessionRequest): Response<SessionResponse>
+  suspend fun updateSession(@Path("id") id: String, @Body body: UpdateSessionRequest): Response<ApiMessageBody>
 
+  // Stesso principio: updateSessionStatus non necessita del payload SessionResponse completo.
+  // Se si ha bisogno della sessione aggiornata, richiamare getSessionById() dopo.
   @PATCH("api/v1/sessions/{id}/status")
   suspend fun updateSessionStatus(
     @Path("id") id: String,
     @Body body: UpdateSessionStatusRequest,
-  ): Response<SessionResponse>
+  ): Response<ApiMessageBody>
 
   // ── Weather (implementazione di Marco via meteo.report / TINIA) ──
 

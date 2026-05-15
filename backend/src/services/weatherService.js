@@ -43,6 +43,8 @@ function parseSlot(key, raw, startDate, intervalMinutes) {
     validFrom,
     validTo,
     temperature:      raw.temperature       ?? null,
+    temperatureMin:   raw.temperature_minimum ?? null,
+    temperatureMax:   raw.temperature_maximum ?? null,
     rainFall:         raw.rain_fall         ?? null,
     rainProbability:  raw.rain_probability  ?? null,
     freshSnow:        raw.fresh_snow        ?? null,

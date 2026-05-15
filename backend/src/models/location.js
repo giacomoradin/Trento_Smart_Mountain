@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 
 // Un singolo slot di previsione (3h o 24h)
@@ -11,7 +10,9 @@ const forecastSlotSchema = new mongoose.Schema({
   validTo:   { type: Date, required: true },
 
   // Tutti i campi meteo dal JSON originale
-  temperature:      Number,        // °C
+  temperature:      Number,        // °C (solo slot 3h)
+  temperatureMin:   Number,        // °C (solo slot 24h)
+  temperatureMax:   Number,        // °C (solo slot 24h)
   rainFall:         Number,        // mm
   rainProbability:  Number,        // %
   freshSnow:        Number,        // cm
@@ -56,4 +57,4 @@ const locationSchema = new mongoose.Schema({
 locationSchema.index({ location: '2dsphere' });
 locationSchema.index({ type: 1, regionId: 1 });
 
-export default mongoose.model('Location', locationSchema);  
+export default mongoose.model('Location', locationSchema);

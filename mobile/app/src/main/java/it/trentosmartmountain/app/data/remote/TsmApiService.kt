@@ -14,16 +14,28 @@ import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.remote.dto.UserResponse
+import it.trentosmartmountain.app.data.remote.dto.WeatherForecastResponse
+import it.trentosmartmountain.app.data.remote.dto.WeatherLocationsResponse
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface TsmApiService {
+
+  // ── Auth ──
+
   @POST("auth/login")
   suspend fun login(@Body body: LoginRequest): Response<LoginResponse>
+
+  @POST("auth/forgot-password")
+  suspend fun forgotPassword(@Body body: ForgotPasswordRequest): Response<ApiMessageBody>
+
+  // ── Users ──
 
   @POST("users")
   suspend fun register(@Body body: RegisterRequest): Response<RegisterResponse>
@@ -34,8 +46,7 @@ interface TsmApiService {
   @GET("users/{id}")
   suspend fun getUserById(@Path("id") id: String): Response<UserResponse>
 
-  @POST("auth/forgot-password")
-  suspend fun forgotPassword(@Body body: ForgotPasswordRequest): Response<ApiMessageBody>
+  // ── Sessions ──
 
   @POST("api/v1/sessions")
   suspend fun createSession(@Body body: CreateSessionRequest): Response<SessionCreatedResponse>
@@ -52,28 +63,8 @@ interface TsmApiService {
   @POST("api/v1/sessions/{id}/leave")
   suspend fun leaveSession(@Path("id") id: String): Response<ApiMessageBody>
 
-  @retrofit2.http.DELETE("api/v1/sessions/{id}")
+  @DELETE("api/v1/sessions/{id}")
   suspend fun deleteSession(@Path("id") id: String): Response<ApiMessageBody>
-
-  // ── Meteo (endpoints di Marco) ──
-
-  /** Sincronizza l'ultima temperatura per una stazione dal servizio MeteoTrentino. */
-  @GET("meteo")
-  suspend fun syncMeteo(
-    @retrofit2.http.Query("codice") stationCode: String,
-  ): Response<it.trentosmartmountain.app.data.remote.dto.MeteoSyncResponse>
-
-  /** Recupera il documento Station persistito (con air_temperature e metadati). */
-  @GET("stations/local/{code}")
-  suspend fun getStationByCode(
-    @Path("code") code: String,
-  ): Response<it.trentosmartmountain.app.data.remote.dto.StationResponse>
-
-  /** Lista stazioni locali (filtro opzionale per nome). */
-  @GET("stations/local/search")
-  suspend fun searchLocalStations(
-    @retrofit2.http.Query("name") name: String? = null,
-  ): Response<List<it.trentosmartmountain.app.data.remote.dto.StationResponse>>
 
   @PATCH("api/v1/sessions/{id}")
   suspend fun updateSession(@Path("id") id: String, @Body body: UpdateSessionRequest): Response<SessionResponse>
@@ -83,4 +74,46 @@ interface TsmApiService {
     @Path("id") id: String,
     @Body body: UpdateSessionStatusRequest,
   ): Response<SessionResponse>
+
+  // ── Weather (implementazione di Marco via meteo.report / TINIA) ──
+
+  /**
+   * Trova le location meteo più vicine a una coordinata GPS.
+   * Backend: GET /weather/locations/nearby?lon=&lat=&maxDistance=&type=&limit=
+   *
+   * type: "town" per previsioni complete, "poi" per punti di interesse.
+   * Il DB deve essere seedato una volta con POST /weather/seed (admin, eseguito dal server).
+   */
+  @GET("weather/locations/nearby")
+  suspend fun getWeatherLocationsNearby(
+    @Query("lon") lon: Double,
+    @Query("lat") lat: Double,
+    @Query("maxDistance") maxDistance: Int? = null,
+    @Query("type") type: String? = null,
+    @Query("limit") limit: Int? = null,
+  ): Response<WeatherLocationsResponse>
+
+  /**
+   * Cerca location meteo per nome.
+   * Backend: GET /weather/locations/search?q=Trento&type=town
+   */
+  @GET("weather/locations/search")
+  suspend fun searchWeatherLocations(
+    @Query("q") query: String,
+    @Query("type") type: String? = null,
+    @Query("limit") limit: Int? = null,
+  ): Response<WeatherLocationsResponse>
+
+  /**
+   * Restituisce le previsioni complete per una location (3h + 24h).
+   * Backend: GET /weather/forecast/:externalId
+   *
+   * Cache server-side 1h. Se forceRefresh=true, bypassa la cache.
+   * I POI vengono automaticamente risolti alla loro town di riferimento.
+   */
+  @GET("weather/forecast/{externalId}")
+  suspend fun getWeatherForecast(
+    @Path("externalId") externalId: String,
+    @Query("forceRefresh") forceRefresh: Boolean? = null,
+  ): Response<WeatherForecastResponse>
 }

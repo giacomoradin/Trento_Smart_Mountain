@@ -41,6 +41,12 @@ const hikSessionSchema = new Schema({
     distanceKm: { type: Number },
     elevationGainM: { type: Number },
     trackPoints: { type: Number },
+    // Profilo altimetrico campionato (max 50 punti) per il rendering del chart
+    // nella SessionDetailScreen. Calcolato dal parser GPX mobile con smoothing.
+    elevationProfile: { type: [Number], default: undefined },
+    // Stima punti calcolata col modello CAI in fase di pianificazione (μ = 1.0).
+    // Verrà sostituita al COMPLETED con il punteggio finale che pesa l'efficienza reale.
+    estimatedPoints: { type: Number },
   },
 
   // Codice invito alfanumerico univoco (generato automaticamente)

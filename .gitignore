@@ -156,6 +156,5 @@ Thumbs.db
 .claude
 
 # Default ignored files
-/shelf/
-/workspace.xml
-/deploymentTargetSelector.xml
+./workspace.xml
+./deploymentTargetSelector.xml

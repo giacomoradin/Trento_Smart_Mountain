@@ -1,86 +1,137 @@
 
 
-## 📌 Panoramica del Sistema
+# 🌦️ Weather Service & API (Modulo Meteo)
 
-Il sistema gestisce l'integrazione di dati meteorologici tra **MeteoTrentino** e un database locale **MongoDB**. L'obiettivo è la persistenza sincronizzata dei dati delle stazioni e delle temperature, garantendo coerenza tra metadati locali e sorgente remota.
+Questo branch introduce la gestione completa delle previsioni meteorologiche per **Towns** (Comuni) e **POI** (Punti di Interesse). Il sistema minimizza le chiamate alle API esterne tramite una doppia strategia di caching (in-memory per le anagrafiche e MongoDB per i forecast).
 
----
+## 🚀 Funzionalità principali
 
-## 🛠 Architettura e Moduli Aggiornati
+* **Geospatial Search**: Ricerca di location vicine tramite coordinate (Lon/Lat) con supporto MongoDB `2dsphere`.
+* **Smart Forecast Association**: I POI non memorizzano previsioni proprie; il sistema risolve automaticamente la "Town" di riferimento tramite `regionId` per recuperare i dati meteo.
+* **Dual-Layer Cache**:
+* **Venues**: I dati statici (nomi, coordinate) sono in RAM per 24 ore.
+* **Forecasts**: Le previsioni (3h/24h) sono salvate su MongoDB con un TTL (Time To Live) di 1 ora.
 
-### 1. Modulo Meteo: Sincronizzazione Avanzata
 
-- **Fetch & Persist Automizzato:** La funzione `fetchMeteoAndPersist` esegue un'operazione di **Upsert** sul database locale.
-    
-- **Arricchimento Dati:** Recupera metadati aggiornati tramite `findRemoteStationByCode` ad ogni download di temperatura.
-    
-
-### 2. Modulo Stations: Gestione Ibrida e Persistenza
-
-- **Refresh Centralizzato (Novità):** Implementata la rotta `PUT /:id` che forza la sincronizzazione dei metadati tecnici senza permettere modifiche manuali arbitrarie, mantenendo l'integrità dei dati ufficiali.
-    
-- **Robustezza e Validazione:** Tutte le rotte (`PUT`, `DELETE`, `POST`) ora includono l'importazione di `mongoose` per validare preventivamente il formato degli `ObjectId`, prevenendo crash applicativi.
-    
-- **Prevenzione Duplicati:** L'uso di `findOneAndUpdate` e della logica di "Refresh per ID" garantisce che ogni stazione fisica corrisponda a un unico record locale.
-    
+* **On-Demand Population**: Il database viene popolato con i dati meteo solo quando una location viene effettivamente richiesta (Lazy Loading).
 
 ---
 
-## 📂 Stato del Piano d'Azione CRUD
+## 🛠️ Architettura dei Dati
 
-|**Risorsa**|**Metodo**|**Endpoint**|**Stato**|**Descrizione**|
-|---|---|---|---|---|
-|**Meteo**|`GET`|`/meteo?codice=X`|✅|Scarica temperatura e aggiorna metadati stazione nel DB.|
-|**Stations**|`POST`|`/`|✅|Importazione iniziale di una stazione da remoto a locale.|
-|**Stations**|`DELETE`|`/:id`|✅|Rimozione sicura tramite ID MongoDB.|
-|**Stations**|`PUT`|`/:id`|✅|**Refresh Sincronizzato**: Ricarica metadati tecnici dal remoto.|
-|**Stations**|`GET`|`/local/search`|✅|Recupero totale o filtrato dal DB locale.|
+Il sistema usa un modello Mongoose `Location` per due entità:
+
+1. **Town**: Contiene l'oggetto `forecasts` (slot meteo reali).
+2. **POI**: Contiene metadati geografici e punta a una Town tramite `regionId`.
 
 ---
 
-## 📝 Note Tecniche Importanti
+## 🛣️ API Endpoints
 
-- **Modularità ES:** Assicurarsi sempre che le nuove funzioni (come `refreshStationData`) siano esplicitamente esportate nel service e importate nelle routes per evitare `ReferenceError`.
-    
-- **Schema Interno:** Il modello `TemperatureList` (alias `Station`) gestisce sia l'anagrafica (`stationInfo`) che le rilevazioni (`air_temperature`).
-    
-- **Mongoose Import:** È obbligatorio in `stationRoutes.js` per utilizzare `mongoose.Types.ObjectId.isValid()`.
-    
+Puoi testare gli endpoint tramite la dashboard **Swagger** (`/api-docs`) o utilizzando **Thunder Client / Postman**.
 
----
+### Location
 
-## 🧪 Workflow di Test Suggerito
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| `GET` | `/weather/locations/search?q=...` | Cerca location per nome. |
+| `GET` | `/weather/locations/nearby?lon=..&lat=..` | Trova luoghi vicini (default 50km). |
 
-Per verificare che tutto funzioni come previsto, segui questa sequenza di test (usando Postman, Swagger o cURL):
+### Previsioni
 
-### 1. Test di Importazione (POST)
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| `GET` | `/weather/forecast/:externalId` | Recupera il meteo. Salva su DB se assente o scaduto. |
+| `POST` | `/weather/forecast/:id/refresh` | Forza l'aggiornamento immediato dei dati nel DB. |
 
-- **Azione:** `POST /stations` con body `{ "code": "T0129" }`.
-    
-- **Verifica:** Il database deve creare un nuovo documento. Controlla che `stationInfo` sia popolato e `air_temperature` sia `[]`.
-    
+### Admin
 
-### 2. Test di Sincronizzazione Meteo (GET)
-
-- **Azione:** `GET /meteo?codice=T0129`.
-    
-- **Verifica:** Il documento creato al punto 1 deve ora contenere un elemento nell'array `air_temperature`. Non deve essere creato un secondo documento (duplicato).
-    
-
-### 3. Test di Refresh Metadati (PUT)
-
-- **Azione:** `PUT /stations/[ID_DI_MONGO]`.
-    
-- **Verifica:** Il campo `fetchedAt` deve aggiornarsi all'ora attuale e i metadati tecnici devono essere ricaricati dal remoto. Se l'ID è malformato, deve rispondere `400`.
-    
-
-### 4. Test di Rimozione (DELETE)
-
-- **Azione:** `DELETE /stations/[ID_DI_MONGO]`.
-    
-- **Verifica:** Il documento deve sparire dal DB. Una successiva `GET /local/search` non deve mostrarlo.
-    
+| Metodo | Endpoint | Descrizione |
+| --- | --- | --- |
+| `POST` | `/weather/seed` | Inizializza il DB con 700+ anagrafiche (senza forecast). |
 
 ---
 
-**Stato Integrazione:** 🟢 **Operativo**. La logica di sincronizzazione è ora completa e protetta da errori di validazione ID.
+## 🧪 Come Testare
+
+### 1. Seed del Database
+
+Invia una richiesta `POST` a `/weather/seed`.
+
+* **Risultato**: Il database verrà popolato con i nomi e le coordinate delle città (es. Laives, Cornedo all'Isarco).
+* *Nota: In questa fase il campo `forecasts` nel DB rimarrà vuoto o null.*
+
+### 2. Test del Salvataggio (On-Demand)
+
+Scegli una Town (es. Laives) e usa la `GET /weather/forecast/{externalId}`.
+
+* **Cosa succede**: Il sistema vede che il DB è vuoto, scarica i dati dall'API esterna e **li salva automaticamente in MongoDB**.
+* **Verifica**: Controlla il campo `meta.fromCache` nella risposta: sarà `false`. Se rifai la stessa chiamata entro un'ora, diventerà `true`.
+
+### 3. Forza Aggiornamento (Refresh)
+
+Usa la `POST /weather/forecast/{externalId}/refresh`.
+
+* Questo endpoint ignora la cache e forza il sistema a riscrivere il documento sul database con dati freschi. Utile per testare la persistenza immediata.
+
+### 4. Verifica su VS Code (MongoDB Extension)
+
+Per vedere i dati salvati nel database:
+
+1. Apri la barra laterale di MongoDB in VS Code.
+2. **Importante**: Clicca sull'icona **Refresh** (freccia circolare) sulla collection `locations`.
+3. Usa un **Playground** per cercare i documenti popolati:
+```javascript
+db.locations.find({ "forecasts.fetchedAt": { $exists: true } })
+
+```
+
+
+
+---
+
+## 📦 Note Tecniche
+
+* **Indici**: È richiesto l'indice `2dsphere` sul campo `location` per le ricerche geografiche.
+* **Mongoose**: Viene utilizzato `location.markModified('forecasts')` per garantire che i cambiamenti agli oggetti annidati vengano sempre rilevati e salvati.
+* **Performance**: I POI caricano i dati dalla Town di riferimento tramite una seconda query ottimizzata per `externalId`.
+
+# Query utile per MongoDB
+```javascript
+/* global use, db */
+use('trento_smart_mountain');
+
+const citta = db.locations.findOne({ name: "Laives" });
+
+if (!citta || !citta.forecasts) {
+    print("ERRORE: Dati non trovati per Laives.");
+} else {
+    // FUNZIONE DI SUPPORTO PER STAMPARE I DATI
+    const stampaDettagli = (slot, tipo) => {
+        const dataStr = slot.validFrom.toISOString().replace('T', ' ').substring(0, 16);
+        print(`\n[${tipo}] - Inizio: ${dataStr}`);
+        print(`  🌡️ Temp: ${slot.temperature}°C | 🧊 Zero Termico: ${slot.freezingLevel}m`);
+        print(`  💧 Pioggia: ${slot.rainFall}mm (${slot.rainProbability}%)`);
+        print(`  ❄️ Neve: ${slot.freshSnow}cm (Quota: ${slot.snowLevel}m)`);
+        print(`  💨 Vento: ${slot.windSpeed}km/h (Raffica: ${slot.windGust}km/h) - Dir: ${slot.windDirection}°`);
+        print(`  ☀️ Sole: ${slot.sunshineDuration}h | ☁️ Sky: ${slot.skyCondition}`);
+        print(`--------------------------------------------------`);
+    };
+
+    print(`========== REPORT METEO: ${citta.name} ==========`);
+
+    // 1. PRIME 3 PREVISIONI (OGNI 3 ORE)
+    print(`\n>>> PRIME 3 PREVISIONI (DETTAGLIO 3H)`);
+    citta.forecasts.slots3h.slice(0, 3).forEach(slot => {
+        stampaDettagli(slot, "3 ORE");
+    });
+
+    print(`\n\n`);
+
+    // 2. PRIME 3 PREVISIONI (GIORNALIERE 24H)
+    print(`\n>>> PRIME 3 PREVISIONI (GIORNALIERE 24H)`);
+    citta.forecasts.slots24h.slice(0, 3).forEach(slot => {
+        stampaDettagli(slot, "24 ORE");
+    });
+}
+```

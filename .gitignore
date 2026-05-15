@@ -113,15 +113,21 @@ PROJECT_OVERVIEW.md
 # Android Studio captures folder
 captures/
 
-# IntelliJ
+# IntelliJ / Android Studio
 *.iml
-.idea\workspace.xml
-.idea\tasks.xml
-.idea\gradle.xml
-.idea\assetWizardSettings.xml
-.idea\dictionaries
-.idea\libraries
-.idea\caches
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+# IDE locale / cache (qualsiasi modulo, es. mobile/.idea/)
+**/.idea/workspace.xml
+**/.idea/deploymentTargetSelector.xml
+**/.idea/caches/
+**/.idea/deviceManager.xml
+**/.idea/planningMode.xml
+**/.idea/appInsightsSettings.xml
+**/.idea/shelf/
 
 # Keystore files
 *.jks
@@ -154,7 +160,3 @@ project.freetime
 .DS_Store
 Thumbs.db
 .claude
-
-# Default ignored files
-\Trento_Smart_Mountain\mobile\.idea\workspace.xml
-\Trento_Smart_Mountain\mobile\.idea\deploymentTargetSelector.xml

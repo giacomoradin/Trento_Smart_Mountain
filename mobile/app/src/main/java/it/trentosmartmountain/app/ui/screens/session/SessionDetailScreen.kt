@@ -1,5 +1,9 @@
 package it.trentosmartmountain.app.ui.screens.session
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,7 +86,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
-import it.trentosmartmountain.app.ui.screens.auth.TsmMountainLogo
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmBorder
@@ -95,6 +98,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,10 +114,21 @@ fun SessionDetailScreen(
     val todayFormatted = remember {
         SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
     }
+    
+    // Per debug: mostra un Toast con l'errore se il ViewModel segnala un errore di caricamento o salvataggio della sessione
+    val context = LocalContext.current
+
+    // TELEMETRIA: Se il ViewModel genera un errore (es. dal salvataggio), stampalo a schermo
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { errorMessage ->
+            if (errorMessage.isNotBlank() && uiState.session != null) {
+                Toast.makeText(context, "DIAGNOSTICA SERVER: $errorMessage", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
 
-    // AVVIA confirmation dialog (when not same day)
     if (uiState.showAvviaConfirm) {
         AlertDialog(
             onDismissRequest = viewModel::dismissAvviaConfirm,
@@ -128,8 +144,6 @@ fun SessionDetailScreen(
                 Button(
                     onClick = {
                         viewModel.dismissAvviaConfirm()
-                        // Segnaliamo via Coordinator: HikerMainScreen switcha alla tab Registra,
-                        // RegistraViewModel auto-avvia il tracking.
                         SessionStartCoordinator.requestStart(sessionId)
                         onAvviaConfirmed(sessionId)
                     },
@@ -142,14 +156,10 @@ fun SessionDetailScreen(
         )
     }
 
-    // Edit mode date/time pickers
     var showEditDatePicker by remember { mutableStateOf(false) }
     var showEditTimePicker by remember { mutableStateOf(false) }
     var showDifficultyMenu by remember { mutableStateOf(false) }
 
-    // Chiusura sicura di tutti i picker locali quando il VM esce dall'edit mode
-    // (es. dopo saveEdit con successo). Senza questo, il dropdown della difficoltà
-    // poteva rimanere aperto in overlay e confondere l'utente.
     LaunchedEffect(uiState.editMode) {
         if (!uiState.editMode) {
             showEditDatePicker = false
@@ -282,8 +292,11 @@ fun SessionDetailScreen(
         ) {
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Edit mode fields
-            if (uiState.editMode) {
+            AnimatedVisibility(
+                visible = uiState.editMode && !uiState.isSaving,
+                enter = expandVertically(animationSpec = tween(250)),
+                exit = shrinkVertically(animationSpec = tween(250))
+            ) {
                 EditModeCard(
                     uiState = uiState,
                     viewModel = viewModel,
@@ -291,26 +304,25 @@ fun SessionDetailScreen(
                     onTimeClick = { showEditTimePicker = true },
                     showDifficultyMenu = showDifficultyMenu,
                     onDifficultyMenuToggle = { showDifficultyMenu = !showDifficultyMenu },
-                    onDifficultySelect = { d -> viewModel.onEditDifficultyChange(d); showDifficultyMenu = false },
+                    onDifficultySelect = { d ->
+                        viewModel.onEditDifficultyChange(d)
+                        showDifficultyMenu = false
+                    },
                 )
             }
 
-            // ── CONDIVISIONE (codice invito sempre visibile) ──
             InviteCodeCard(inviteCode = session.inviteCode)
 
-            // ── ELEVATION PROFILE + STATS (formule CAI per stima durata e punti) ──
             DetailCard {
+                val dist = session.gpxStats?.distanceKm
+                val elev = session.gpxStats?.elevationGainM
+
                 ElevationProfileChart(
-                    distanceKm = session.gpxStats?.distanceKm ?: 0.0,
-                    elevationGainM = session.gpxStats?.elevationGainM ?: 0,
                     elevationProfile = session.gpxStats?.elevationProfile,
                     modifier = Modifier.fillMaxWidth().height(140.dp),
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    val dist = session.gpxStats?.distanceKm
-                    val elev = session.gpxStats?.elevationGainM
-                    // Tempo CAI ufficiale con polinomio sulla pendenza
                     val estDurationLabel = if (dist != null && elev != null) {
                         it.trentosmartmountain.app.data.estimation.HikeEstimation.formatHours(
                             it.trentosmartmountain.app.data.estimation.HikeEstimation.caiTimeHours(dist, elev),
@@ -320,9 +332,7 @@ fun SessionDetailScreen(
                     StatCell("DISLIVELLO", elev?.let { "+$it m" } ?: "—", TsmAccent, Modifier.weight(1f))
                     StatCell("DURATA CAI", estDurationLabel, TsmPrimary, Modifier.weight(1f))
                 }
-                // Card punti stimati col modello TSM (μ = 1.0 in pianificazione)
-                val dist = session.gpxStats?.distanceKm
-                val elev = session.gpxStats?.elevationGainM
+
                 if (dist != null && elev != null && dist > 0.0) {
                     Spacer(modifier = Modifier.height(8.dp))
                     val estPoints = session.gpxStats.estimatedPoints
@@ -360,25 +370,16 @@ fun SessionDetailScreen(
                 }
             }
 
-            // ── METEO (dati reali da MeteoTrentino via backend di Marco) ──
             MeteoCard(
                 meetingDate = session.meetingDate ?: "—",
                 uiState = uiState,
                 onRefresh = viewModel::refreshMeteo,
             )
 
-            // ── CHECKLIST ──
             ChecklistCard(uiState = uiState, viewModel = viewModel)
 
-            // ── PARTECIPANTI ──
-            /*
-             * PARTECIPANTI — Profili completi in sviluppo (HOME SOCIAL)
-             * I profili completi (avatar foto, social credits, badge) saranno disponibili
-             * quando HomeScreen Social sarà implementata. Per ora: avatar con iniziali + colore.
-             */
             ParticipantsCard(session = session)
 
-            // ── AVVIA ──
             Button(
                 onClick = {
                     viewModel.onAvviaClick(todayFormatted) {
@@ -397,8 +398,6 @@ fun SessionDetailScreen(
         }
     }
 }
-
-// ── Edit mode card ──
 
 @Composable
 private fun EditModeCard(
@@ -462,22 +461,8 @@ private fun EditModeCard(
     }
 }
 
-// ── Elevation profile chart (usa i dati GPX reali, fallback bezier se assenti) ──
-
-/**
- * Disegna il profilo altimetrico reale dal campione [elevationProfile] (max 50 punti
- * forniti dal parser GPX mobile dopo smoothing). Se il profile è assente o troppo corto,
- * mostra una curva bezier generica come fallback decorativo.
- *
- * Normalizzazione altimetrica:
- *   minEle, maxEle dal profile → mappati nel range [padding, h - padding] del canvas
- *   in modo che il punto più alto del tracciato corrisponda al top del chart e il più
- *   basso al bottom. Questo rende il grafico effettivamente rappresentativo del percorso.
- */
 @Composable
 private fun ElevationProfileChart(
-    distanceKm: Double,
-    elevationGainM: Int,
     elevationProfile: List<Double>?,
     modifier: Modifier = Modifier,
 ) {
@@ -487,7 +472,6 @@ private fun ElevationProfileChart(
         val padX = 8.dp.toPx()
         val padY = 12.dp.toPx()
 
-        // Faint terrain background layers (puramente decorativi)
         for (i in 0..2) {
             val terrainPath = Path().apply {
                 val base = h * (0.65f + i * 0.10f)
@@ -501,7 +485,6 @@ private fun ElevationProfileChart(
         }
 
         if (elevationProfile != null && elevationProfile.size >= 2) {
-            // Profilo reale dal GPX
             val minEle = elevationProfile.min()
             val maxEle = elevationProfile.max()
             val range = (maxEle - minEle).coerceAtLeast(1.0)
@@ -514,7 +497,6 @@ private fun ElevationProfileChart(
             fun yOf(ele: Double): Float =
                 (padY + chartH * (1.0 - (ele - minEle) / range)).toFloat()
 
-            // Linea profilo (continua, non tratteggiata: rappresenta dati reali)
             val profilePath = Path().apply {
                 elevationProfile.forEachIndexed { i, e ->
                     val x = xOf(i)
@@ -528,7 +510,6 @@ private fun ElevationProfileChart(
                 style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
             )
 
-            // Area sotto il profilo con gradient morbido
             val fillPath = Path().apply {
                 addPath(profilePath)
                 lineTo(xOf(elevationProfile.size - 1), h - padY)
@@ -537,7 +518,6 @@ private fun ElevationProfileChart(
             }
             drawPath(fillPath, color = TsmAccent.copy(alpha = 0.15f))
 
-            // Marker start (verde) + end (rosso/SOS)
             val startCenter = Offset(xOf(0), yOf(elevationProfile.first()))
             drawCircle(color = Color(0xFF1B5E20), radius = 10.dp.toPx(), center = startCenter)
             drawCircle(color = TsmPrimary, radius = 7.dp.toPx(), center = startCenter)
@@ -546,7 +526,6 @@ private fun ElevationProfileChart(
             drawCircle(color = Color(0xFF880E4F).copy(alpha = 0.4f), radius = 13.dp.toPx(), center = endCenter)
             drawCircle(color = TsmSos, radius = 9.dp.toPx(), center = endCenter)
         } else {
-            // Fallback: curva bezier decorativa (nessun GPX importato)
             val profilePath = Path().apply {
                 moveTo(w * 0.05f, h * 0.72f)
                 cubicTo(
@@ -574,8 +553,6 @@ private fun ElevationProfileChart(
     }
 }
 
-// ── Stats row cell ──
-
 @Composable
 private fun StatCell(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
     Column(
@@ -588,37 +565,12 @@ private fun StatCell(label: String, value: String, valueColor: Color, modifier: 
     }
 }
 
-// ── Meteo card (previsioni complete da meteo.report/TINIA via backend di Marco) ──
-
-/**
- * Mappa i codici `skyCondition` dell'API TINIA/meteo.report in emoji visualizzabili.
- *
- * Il backend (weatherService.js) salva il campo `sky_condition` dal JSON raw.
- * I valori sono interi come stringa dal formato MeteoTrentino:
- *   1 = Sereno, 2 = Poco nuvoloso, 3 = Parz. nuvoloso, 4 = Molto nuvoloso,
- *   5 = Coperto, 6 = Nebbia, 7 = Pioggia debole, 8 = Pioggia, 9 = Pioggia forte,
- *   10 = Neve debole, 11 = Neve, 12 = Temporale, 13 = Grandine
- * Riferimento: https://www.meteotrentino.it/
- */
 private fun skyConditionEmoji(code: String?): String = when (code?.trim()) {
-    "1" -> "☀️"
-    "2" -> "🌤"
-    "3" -> "⛅"
-    "4" -> "🌥"
-    "5" -> "☁️"
-    "6" -> "🌫"
-    "7" -> "🌦"
-    "8" -> "🌧"
-    "9" -> "⛈"
-    "10" -> "🌨"
-    "11" -> "❄️"
-    "12" -> "⛈"
-    "13" -> "🌨"
-    // Fallback se il codice non è numerico (per futura compatibilità)
-    "A" -> "☀️"; "B" -> "🌤"; "C" -> "⛅"
-    "D" -> "☁️"; "E" -> "🌫"; "F" -> "🌧"
-    "G" -> "❄️"; null -> "🌤"
-    else -> "🌤"
+    "1" -> "☀️"; "2" -> "🌤"; "3" -> "⛅"; "4" -> "🌥"; "5" -> "☁️"
+    "6" -> "🌫"; "7" -> "🌦"; "8" -> "🌧"; "9" -> "⛈"; "10" -> "🌨"
+    "11" -> "❄️"; "12" -> "⛈"; "13" -> "🌨"
+    "A" -> "☀️"; "B" -> "🌤"; "C" -> "⛅"; "D" -> "☁️"; "E" -> "🌫"; "F" -> "🌧"; "G" -> "❄️"
+    null -> "🌤"; else -> "🌤"
 }
 
 @Composable
@@ -631,13 +583,11 @@ private fun MeteoCard(
     val locationName = forecast?.location?.name ?: forecast?.referenceTown?.name ?: "—"
     val elevation = forecast?.location?.elevation?.let { " · ${it}m" } ?: ""
 
-    // 24h: prendo il primo slot futuro per il riepilogo del giorno
     val today24h = forecast?.forecast24h?.firstOrNull()
     val tempMin = today24h?.temperatureMin?.let { "%.0f°".format(it) } ?: "—"
     val tempMax = today24h?.temperatureMax?.let { "%.0f°".format(it) } ?: "—"
     val mainIcon = skyConditionEmoji(today24h?.skyCondition)
 
-    // 3h: prossimi 5 slot
     val next3h = forecast?.forecast3h?.take(5) ?: emptyList()
 
     val updatedAgo = uiState.meteoLastUpdate?.let { ts ->
@@ -650,7 +600,6 @@ private fun MeteoCard(
     } ?: "—"
 
     DetailCard {
-        // Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -690,7 +639,7 @@ private fun MeteoCard(
         when {
             uiState.meteoError != null -> {
                 Text(
-                    text = uiState.meteoError!!,
+                    text = uiState.meteoError,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -707,7 +656,6 @@ private fun MeteoCard(
                 )
             }
             forecast != null -> {
-                // Riepilogo giornaliero
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -724,7 +672,6 @@ private fun MeteoCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray,
                         )
-                        // Vento se disponibile
                         today24h?.windSpeed?.let { ws ->
                             val dir = today24h.windDirection?.let { d ->
                                 val dirs = listOf("N","NE","E","SE","S","SO","O","NO")
@@ -736,7 +683,6 @@ private fun MeteoCard(
                                 color = Color.Gray,
                             )
                         }
-                        // Pioggia se rilevante
                         today24h?.rainProbability?.let { prob ->
                             if (prob > 20) {
                                 Text(
@@ -749,7 +695,6 @@ private fun MeteoCard(
                     }
                 }
 
-                // Previsioni orarie 3h
                 if (next3h.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
@@ -757,7 +702,6 @@ private fun MeteoCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         next3h.forEach { slot ->
-                            // Mostra solo l'ora (HH:mm) dall'ISO timestamp
                             val hourLabel = slot.validFrom
                                 ?.substringAfter("T")
                                 ?.substringBefore(":")
@@ -774,7 +718,6 @@ private fun MeteoCard(
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                     color = Color.White,
                                 )
-                                // Pioggia probabilità se > 30%
                                 slot.rainProbability?.let { prob ->
                                     if (prob > 30) {
                                         Text(
@@ -793,8 +736,6 @@ private fun MeteoCard(
     }
 }
 
-// ── Checklist card (drag-and-drop con sh.calvin.reorderable) ──
-
 @Composable
 private fun ChecklistCard(
     uiState: SessionDetailViewModel.UiState,
@@ -809,7 +750,6 @@ private fun ChecklistCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Modulo 1: Identifier testuale
             Text(
                 text = "CHECKLIST",
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
@@ -817,8 +757,6 @@ private fun ChecklistCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-
-            // Modulo 2: Telemetria di stato (Items completati / Totali)
             Text(
                 text = "$checkedCount / $total",
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
@@ -829,12 +767,10 @@ private fun ChecklistCard(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // ReorderableColumn: long-press sul drag handle per spostare gli item
         sh.calvin.reorderable.ReorderableColumn(
             list = uiState.checklist,
             onSettle = { from, to -> viewModel.onChecklistMove(from, to) },
         ) { _, item, _ ->
-            // Key per item: necessario per Compose recomposition stabile durante il drag.
             key(item.id) {
                 Row(
                     modifier = Modifier
@@ -842,7 +778,6 @@ private fun ChecklistCard(
                         .padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Drag handle: long-press qui attiva il drag-and-drop dell'item
                     IconButton(
                         modifier = Modifier
                             .size(28.dp)
@@ -880,7 +815,6 @@ private fun ChecklistCard(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Add new item input
         OutlinedTextField(
             value = uiState.newItemText,
             onValueChange = viewModel::onNewItemTextChange,
@@ -907,8 +841,6 @@ private fun ChecklistCard(
         )
     }
 }
-
-// ── Participants card ──
 
 @Composable
 private fun ParticipantsCard(session: SessionResponse) {
@@ -940,7 +872,6 @@ private fun ParticipantsCard(session: SessionResponse) {
                     Text(initials.take(2), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
                 }
             }
-            // Empty slots
             val emptySlots = (max - participants.size).coerceIn(0, 4)
             repeat(emptySlots) {
                 Box(
@@ -961,8 +892,6 @@ private fun avatarColorFor(username: String): Color {
     )
     return palette[abs(username.hashCode()) % palette.size]
 }
-
-// ── Invite Code Card (sempre visibile, copyable in clipboard) ──
 
 @Composable
 private fun InviteCodeCard(inviteCode: String) {
@@ -1001,8 +930,6 @@ private fun InviteCodeCard(inviteCode: String) {
         }
     }
 }
-
-// ── Utility ──
 
 @Composable
 private fun DetailCard(content: @Composable () -> Unit) {

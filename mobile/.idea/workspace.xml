@@ -10,7 +10,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ce74a261-e8fc-4b56-8530-187bfe9b92da" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/AndroidManifest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/AndroidManifest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/data/location/UserLocationTracker.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/data/location/UserLocationTracker.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/service/ForegroundTrackingPlaceholder.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/registra/RegistraScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/registra/RegistraScreen.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/registra/TsmMapView.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/registra/TsmMapView.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/RegistraViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/RegistraViewModel.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/res/values/strings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/res/values/strings.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -20,7 +27,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[PhysicalDevice::serial=MRPN4LVGMRV8VS4P]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />
@@ -159,6 +166,17 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="kotlin-line">
+          <url>file://$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/registra/RegistraTrackingControls.kt</url>
+          <line>60</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
   <component name="play_dynamic_filters_status">
     <option name="appIdToCheckInfo">

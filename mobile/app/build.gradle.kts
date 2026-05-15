@@ -76,6 +76,8 @@ dependencies {
   implementation(libs.androidx.room.ktx)
   ksp(libs.androidx.room.compiler)
   implementation(libs.zxing.core)
+  implementation(libs.osmdroid.android)
+  implementation(libs.play.services.location)
   debugImplementation("androidx.compose.ui:ui-tooling")
   debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

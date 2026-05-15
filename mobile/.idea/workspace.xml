@@ -10,31 +10,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ce74a261-e8fc-4b56-8530-187bfe9b92da" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/deploymentTargetSelector.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/planningMode.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../backend/src/app.js" beforeDir="false" afterPath="$PROJECT_DIR$/../backend/src/app.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../backend/src/models/user.js" beforeDir="false" afterPath="$PROJECT_DIR$/../backend/src/models/user.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../backend/src/routes/authRoutes.js" beforeDir="false" afterPath="$PROJECT_DIR$/../backend/src/routes/authRoutes.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../backend/src/services/authService.js" beforeDir="false" afterPath="$PROJECT_DIR$/../backend/src/services/authService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../backend/src/services/emailService.js" beforeDir="false" afterPath="$PROJECT_DIR$/../backend/src/services/emailService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../backend/src/services/userService.js" beforeDir="false" afterPath="$PROJECT_DIR$/../backend/src/services/userService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/caches/deviceStreaming.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/caches/deviceStreaming.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/app/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/data/remote/TsmApiService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/data/remote/TsmApiService.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/navigation/Routes.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/navigation/Routes.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/navigation/TsmNavHost.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/navigation/TsmNavHost.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/auth/AuthEntryScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/auth/AuthEntryScreen.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/login/LoginScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/login/LoginScreen.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/register/RegisterRifugioScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/register/RegisterRifugioScreen.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/register/RegisterScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/register/RegisterScreen.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/session/SessionHubScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/session/SessionHubScreen.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/theme/Color.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/theme/Color.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/theme/Theme.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/theme/Theme.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/res/values/strings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/res/values/strings.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradle.properties" beforeDir="false" afterPath="$PROJECT_DIR$/gradle.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradle/libs.versions.toml" beforeDir="false" afterPath="$PROJECT_DIR$/gradle/libs.versions.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" beforeDir="false" afterPath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/main/HikerMainScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/main/HikerMainScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/SessionDetailViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/SessionDetailViewModel.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

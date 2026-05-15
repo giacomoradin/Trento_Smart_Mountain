@@ -21,7 +21,7 @@ fun RegistraRecFab(
 ) {
   FloatingActionButton(
     onClick = onClick,
-    modifier = modifier.size(72.dp),
+    modifier = modifier.size(60.dp),
     shape = CircleShape,
     containerColor = TsmPrimary,
     contentColor = Color.White,

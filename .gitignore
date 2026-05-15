@@ -156,5 +156,5 @@ Thumbs.db
 .claude
 
 # Default ignored files
-.idea/workspace.xml
-.idea/deploymentTargetSelector.xml
+mobile\.idea\workspace.xml
+mobile\.idea\deploymentTargetSelector.xml

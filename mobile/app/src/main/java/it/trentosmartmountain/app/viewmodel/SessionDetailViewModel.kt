@@ -210,13 +210,11 @@ class SessionDetailViewModel : ViewModel() {
 
     // --- AVVIA ---
 
-    fun onAvviaClick(todayFormatted: String) {
+    fun onAvviaClick(todayFormatted: String, onNavigate: () -> Unit) {
         val meetingDate = _uiState.value.session?.meetingDate ?: ""
         if (meetingDate.isBlank() || meetingDate == todayFormatted) {
-            // Same day or no date set → proceed directly
-            _uiState.update { it.copy(showAvviaConfirm = false) }
+            onNavigate()
         } else {
-            // Different day → ask confirmation
             _uiState.update { it.copy(showAvviaConfirm = true) }
         }
     }

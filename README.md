@@ -146,7 +146,8 @@ GET /weather/forecast/5d9e12bb-7274-483e-9acd-44bfdcb916e5?forceRefresh=true
 | Campo | Unità | Descrizione |
 |---|---|---|
 | `validFrom` / `validTo` | ISO 8601 | Intervallo di validità dello slot |
-| `temperature` | °C | Temperatura |
+| `temperature` | °C | Temperatura (solo slot 3h) |
+| `temperatureMin` / `temperatureMax` | °C | Temperatura min/max (solo slot 24h) |
 | `rainFall` | mm | Precipitazioni |
 | `rainProbability` | % | Probabilità pioggia |
 | `freshSnow` | cm | Neve fresca |
@@ -280,7 +281,10 @@ if (!citta?.forecasts) {
 } else {
     const stampa = (slot, tipo) => {
         const data = slot.validFrom.toISOString().replace('T', ' ').substring(0, 16);
-        print(`[${tipo}] ${data} | Temp: ${slot.temperature}°C | Neve: ${slot.freshSnow}cm | Vento: ${slot.windSpeed}km/h | Sky: ${slot.skyCondition}`);
+        const temp = slot.temperature != null
+            ? `${slot.temperature}°C`
+            : `${slot.temperatureMin}–${slot.temperatureMax}°C`;
+        print(`[${tipo}] ${data} | Temp: ${temp} | Neve: ${slot.freshSnow}cm | Vento: ${slot.windSpeed}km/h | Sky: ${slot.skyCondition}`);
     };
 
     print(`=== ${citta.name} — Forecast 3h (prime 3 slot) ===`);

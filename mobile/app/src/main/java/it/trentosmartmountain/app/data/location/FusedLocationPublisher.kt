@@ -9,57 +9,39 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
-data class LocationSnapshot(
-  val latitude: Double,
-  val longitude: Double,
-  val accuracyMeters: Float,
-  val altitudeMeters: Double?,
-  val speedMps: Float? = null,
-  val timestampMs: Long = System.currentTimeMillis(),
-)
-
-/**
- * Aggiornamenti GPS ad alta precisione per la mappa Registra (foreground).
- */
-class UserLocationTracker(context: Context) {
+internal class FusedLocationPublisher(context: Context) {
 
   private val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-  private val _location = MutableStateFlow<LocationSnapshot?>(null)
-  val location: StateFlow<LocationSnapshot?> = _location.asStateFlow()
-
   private var callback: LocationCallback? = null
 
   @SuppressLint("MissingPermission")
-  fun start() {
+  fun start(
+    intervalMs: Long,
+    minIntervalMs: Long,
+    onLocation: (LocationSnapshot) -> Unit,
+  ) {
     if (callback != null) return
     val request =
-      LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, UPDATE_INTERVAL_MS)
-        .setMinUpdateIntervalMillis(MIN_UPDATE_INTERVAL_MS)
+      LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMs)
+        .setMinUpdateIntervalMillis(minIntervalMs)
         .build()
     val locationCallback =
       object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-          result.lastLocation?.let { publishLocation(it) }
+          result.lastLocation?.let { onLocation(it.toSnapshot()) }
         }
       }
     callback = locationCallback
     fusedClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
     fusedClient.lastLocation.addOnSuccessListener { loc ->
-      if (loc != null) publishLocation(loc)
+      if (loc != null) onLocation(loc.toSnapshot())
     }
   }
 
   fun stop() {
     callback?.let { fusedClient.removeLocationUpdates(it) }
     callback = null
-  }
-
-  private fun publishLocation(location: Location) {
-    _location.value = location.toSnapshot()
   }
 
   private fun Location.toSnapshot() =
@@ -71,19 +53,4 @@ class UserLocationTracker(context: Context) {
       speedMps = speed.takeIf { hasSpeed() }?.coerceAtLeast(0f),
       timestampMs = time,
     )
-
-  companion object {
-    private const val UPDATE_INTERVAL_MS = 2_000L
-    private const val MIN_UPDATE_INTERVAL_MS = 1_000L
-
-    fun gpsSignalLevel(accuracyMeters: Float): Int =
-      when {
-        accuracyMeters <= 0f -> 0
-        accuracyMeters < 10f -> 4
-        accuracyMeters < 25f -> 3
-        accuracyMeters < 50f -> 2
-        accuracyMeters < 100f -> 1
-        else -> 0
-      }
-  }
 }

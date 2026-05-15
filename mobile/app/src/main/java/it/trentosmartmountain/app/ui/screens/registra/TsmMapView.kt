@@ -17,16 +17,20 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 
 /** Centro predefinito: area Trento (zoom escursionistico). */
 val TSM_DEFAULT_MAP_CENTER = GeoPoint(46.0664, 11.1257)
 
 private const val USER_MARKER_ID = "tsm_user_location"
 
+private const val TRACK_POLYLINE_ID = "tsm_live_track"
+
 @Composable
 fun TsmMapView(
   modifier: Modifier = Modifier,
   userLocation: LocationSnapshot?,
+  trackGeoPoints: List<GeoPoint>,
   centerOnUserTick: Int,
   hasLocationPermission: Boolean,
 ) {
@@ -71,6 +75,24 @@ fun TsmMapView(
       mapView.onPause()
       mapView.overlays.remove(userMarker)
     }
+  }
+
+  val trackPolyline =
+    remember(mapView) {
+      Polyline(mapView).apply {
+        id = TRACK_POLYLINE_ID
+        outlinePaint.color = android.graphics.Color.parseColor("#4FC3F7")
+        outlinePaint.strokeWidth = 10f
+      }
+    }
+
+  LaunchedEffect(trackGeoPoints) {
+    mapView.overlays.remove(trackPolyline)
+    if (trackGeoPoints.size >= 2) {
+      trackPolyline.setPoints(ArrayList(trackGeoPoints))
+      mapView.overlays.add(0, trackPolyline)
+    }
+    mapView.invalidate()
   }
 
   LaunchedEffect(hasLocationPermission, userLocation) {

@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.location.LocationSnapshot
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
@@ -37,6 +38,7 @@ fun TsmMapView(
       MapView(context).apply {
         setTileSource(openTopoMapTileSource())
         setMultiTouchControls(true)
+        zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
         isTilesScaledToDpi = true
         controller.setZoom(13.0)
         controller.setCenter(TSM_DEFAULT_MAP_CENTER)

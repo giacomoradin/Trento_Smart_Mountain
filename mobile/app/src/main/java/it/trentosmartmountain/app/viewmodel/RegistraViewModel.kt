@@ -9,6 +9,9 @@ import it.trentosmartmountain.app.data.location.StationaryDetector
 import it.trentosmartmountain.app.data.location.TrackingLocationBus
 import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.data.location.UserLocationTracker
+import it.trentosmartmountain.app.data.remote.TsmApiClient
+import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
+import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.service.ForegroundTrackingService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,6 +40,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val currentAltitudeMeters: Int? = null,
     val trackGeoPoints: List<GeoPoint> = emptyList(),
     val showStopConfirm: Boolean = false,
+    /** Sessione attiva collegata al tracking (null = sessione libera). */
+    val activeSessionId: String? = null,
   )
 
   private val app = getApplication<Application>()
@@ -65,6 +70,41 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
           applyLocation(snapshot)
         }
       }
+    }
+    // Auto-start tracking quando SessionDetail.AVVIA emette un sessionId.
+    // Lo consumiamo subito per evitare retrigger su recomposition/rotation.
+    viewModelScope.launch {
+      SessionStartCoordinator.pendingSessionStart.collect { sessionId ->
+        if (sessionId != null && _uiState.value.trackingStatus == TrackingStatus.IDLE) {
+          autoStartFromSession(sessionId)
+          SessionStartCoordinator.consume()
+        }
+      }
+    }
+  }
+
+  /**
+   * Avvia il tracking collegato a una sessione esistente:
+   *   1. Marca lo stato locale con l'activeSessionId
+   *   2. PATCH /api/v1/sessions/{id}/status = ACTIVE sul backend
+   *      (così la sessione esce da PLANNED e startTime viene popolato)
+   *   3. Avvia il tracking GPS standard
+   *
+   * Se l'utente non ha ancora concesso il permesso GPS, lo richiediamo lazily
+   * dal lato Compose; quando arriverà il grant, il tracking partirà.
+   */
+  private fun autoStartFromSession(sessionId: String) {
+    _uiState.update { it.copy(activeSessionId = sessionId) }
+    viewModelScope.launch {
+      runCatching {
+        TsmApiClient.service().updateSessionStatus(
+          sessionId,
+          UpdateSessionStatusRequest(status = "ACTIVE"),
+        )
+      }
+    }
+    if (_uiState.value.hasLocationPermission) {
+      startTracking()
     }
   }
 
@@ -134,6 +174,19 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     if (_uiState.value.hasLocationPermission) {
       locationTracker.start()
     }
+    // Se il tracking era collegato a una sessione, segnala COMPLETED sul backend.
+    // (in futuro: salvataggio activity in Home → "LE MIE ATTIVITÀ" come da requisito utente)
+    val sessionId = _uiState.value.activeSessionId
+    if (sessionId != null) {
+      viewModelScope.launch {
+        runCatching {
+          TsmApiClient.service().updateSessionStatus(
+            sessionId,
+            UpdateSessionStatusRequest(status = "COMPLETED"),
+          )
+        }
+      }
+    }
     _uiState.update {
       it.copy(
         trackingStatus = TrackingStatus.IDLE,
@@ -143,6 +196,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         elapsedSeconds = 0,
         distanceMeters = 0.0,
         elevationGainMeters = 0,
+        activeSessionId = null,
       )
     }
   }

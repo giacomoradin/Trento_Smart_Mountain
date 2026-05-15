@@ -1,7 +1,10 @@
 package it.trentosmartmountain.app.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
@@ -12,7 +15,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
 
-class SessionJoinViewModel : ViewModel() {
+class SessionJoinViewModel(application: Application) : AndroidViewModel(application) {
+
+    /**
+     * Modalità di rimozione da una sessione:
+     * - LEAVE: partecipante non-creator → POST /:id/leave (rimane la sessione, esce solo lui)
+     * - DELETE: creator → DELETE /:id (rimuove l'intera sessione anche per i partecipanti)
+     */
+    enum class RemovalMode { LEAVE, DELETE }
 
     data class UiState(
         val joinCode: String = "TSM-",
@@ -21,14 +31,23 @@ class SessionJoinViewModel : ViewModel() {
         val isJoining: Boolean = false,
         val joinError: String? = null,
         val generalError: String? = null,
-        val leaveConfirmSessionId: String? = null,
-        val isLeaving: Boolean = false,
+        val removeConfirm: RemovalRequest? = null,
+        val isRemoving: Boolean = false,
+        val currentUserId: String = "",
     )
+
+    data class RemovalRequest(val sessionId: String, val mode: RemovalMode)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    init { loadSessions() }
+    init {
+        // Estrai userId dal JWT per il check creator/partecipante
+        val token = (getApplication() as TsmApplication).tokenStorage.getToken()
+        val userId = token?.let { JwtDecoder.userIdFrom(it) } ?: ""
+        _uiState.update { it.copy(currentUserId = userId) }
+        loadSessions()
+    }
 
     fun loadSessions() {
         viewModelScope.launch {
@@ -46,11 +65,9 @@ class SessionJoinViewModel : ViewModel() {
                         )
                     }
                 }
-            } catch (e: IOException) {
+            } catch (_: IOException) {
                 _uiState.update { it.copy(isLoadingSessions = false, generalError = "Nessuna connessione al server.") }
             } catch (e: Exception) {
-                // JsonSyntaxException o altri errori di deserializzazione: esponiamo il messaggio
-                // invece di inghiottirlo silenziosamente (error-swallowing bug).
                 _uiState.update {
                     it.copy(
                         isLoadingSessions = false,
@@ -61,11 +78,6 @@ class SessionJoinViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Accetta qualsiasi input dall'utente e lo normalizza al formato `TSM-XXXX`.
-     * Strip alfanumerico + uppercase, rimuove eventuale prefisso "TSM" digitato,
-     * mantiene massimo 4 caratteri esadecimali dopo il prefisso.
-     */
     fun onJoinCodeChange(rawInput: String) {
         val cleaned = rawInput.uppercase().filter { it.isLetterOrDigit() }
         val trailing = when {
@@ -96,7 +108,7 @@ class SessionJoinViewModel : ViewModel() {
                     }
                     _uiState.update { it.copy(isJoining = false, joinError = error) }
                 }
-            } catch (e: IOException) {
+            } catch (_: IOException) {
                 _uiState.update { it.copy(isJoining = false, joinError = "Nessuna connessione.") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isJoining = false, joinError = "Errore: ${e.javaClass.simpleName}") }
@@ -104,26 +116,47 @@ class SessionJoinViewModel : ViewModel() {
         }
     }
 
-    fun requestLeaveSession(sessionId: String) {
-        _uiState.update { it.copy(leaveConfirmSessionId = sessionId) }
+    /**
+     * Richiede conferma per rimuovere la sessione. La modalità (LEAVE vs DELETE)
+     * è determinata dal ruolo dell'utente sulla sessione specifica.
+     */
+    fun requestRemoveSession(session: SessionResponse) {
+        val mode = if (session.creatorId?._id == _uiState.value.currentUserId) {
+            RemovalMode.DELETE
+        } else {
+            RemovalMode.LEAVE
+        }
+        _uiState.update { it.copy(removeConfirm = RemovalRequest(session._id, mode)) }
     }
 
-    fun dismissLeaveConfirm() {
-        _uiState.update { it.copy(leaveConfirmSessionId = null) }
+    fun dismissRemoveConfirm() {
+        _uiState.update { it.copy(removeConfirm = null) }
     }
 
-    fun confirmLeaveSession() {
-        val sessionId = _uiState.value.leaveConfirmSessionId ?: return
+    fun confirmRemoveSession() {
+        val request = _uiState.value.removeConfirm ?: return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLeaving = true, leaveConfirmSessionId = null) }
+            _uiState.update { it.copy(isRemoving = true, removeConfirm = null) }
             try {
-                TsmApiClient.service().leaveSession(sessionId)
-                _uiState.update { it.copy(isLeaving = false) }
+                val response = when (request.mode) {
+                    RemovalMode.LEAVE -> TsmApiClient.service().leaveSession(request.sessionId)
+                    RemovalMode.DELETE -> TsmApiClient.service().deleteSession(request.sessionId)
+                }
+                if (!response.isSuccessful) {
+                    _uiState.update {
+                        it.copy(
+                            isRemoving = false,
+                            generalError = "Errore (${response.code()}) durante la rimozione.",
+                        )
+                    }
+                } else {
+                    _uiState.update { it.copy(isRemoving = false) }
+                }
                 loadSessions()
-            } catch (e: IOException) {
-                _uiState.update { it.copy(isLeaving = false, generalError = "Nessuna connessione.") }
+            } catch (_: IOException) {
+                _uiState.update { it.copy(isRemoving = false, generalError = "Nessuna connessione.") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLeaving = false, generalError = "Errore: ${e.javaClass.simpleName}") }
+                _uiState.update { it.copy(isRemoving = false, generalError = "Errore: ${e.javaClass.simpleName}") }
             }
         }
     }

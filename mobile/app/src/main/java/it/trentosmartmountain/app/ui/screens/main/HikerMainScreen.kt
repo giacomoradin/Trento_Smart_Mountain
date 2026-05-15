@@ -12,13 +12,16 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.ui.screens.home.HomeScreen
 import it.trentosmartmountain.app.ui.screens.profile.ProfileScreen
 import it.trentosmartmountain.app.ui.screens.registra.RegistraScreen
@@ -32,6 +35,13 @@ fun HikerMainScreen(
   onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
+
+  // Quando SessionDetail.AVVIA conferma, il Coordinator emette un sessionId:
+  // switchiamo automaticamente alla tab Registra (RegistraViewModel auto-avvia il tracking).
+  val pendingStart by SessionStartCoordinator.pendingSessionStart.collectAsStateWithLifecycle()
+  LaunchedEffect(pendingStart) {
+    if (pendingStart != null) selectedTab = HikerTab.Registra
+  }
 
   Scaffold(
     bottomBar = {

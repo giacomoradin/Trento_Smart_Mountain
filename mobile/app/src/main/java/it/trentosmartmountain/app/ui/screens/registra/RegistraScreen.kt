@@ -81,6 +81,25 @@ fun RegistraScreen(
     }
   }
 
+  // Se c'è una sessione pendente da SessionDetail e ora abbiamo i permessi GPS,
+  // avvia il tracking automaticamente. Notification permission segue lo stesso flow del bottone REC.
+  LaunchedEffect(uiState.activeSessionId, uiState.hasLocationPermission) {
+    if (uiState.activeSessionId != null &&
+      uiState.hasLocationPermission &&
+      uiState.trackingStatus == TrackingStatus.IDLE
+    ) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val hasNotifPermission =
+          ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+          ) == PackageManager.PERMISSION_GRANTED
+        if (!hasNotifPermission) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+      }
+      viewModel.startTracking()
+    }
+  }
+
   val onStartTracking = {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       val hasNotifPermission =

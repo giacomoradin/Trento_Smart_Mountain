@@ -52,6 +52,29 @@ interface TsmApiService {
   @POST("api/v1/sessions/{id}/leave")
   suspend fun leaveSession(@Path("id") id: String): Response<ApiMessageBody>
 
+  @retrofit2.http.DELETE("api/v1/sessions/{id}")
+  suspend fun deleteSession(@Path("id") id: String): Response<ApiMessageBody>
+
+  // ── Meteo (endpoints di Marco) ──
+
+  /** Sincronizza l'ultima temperatura per una stazione dal servizio MeteoTrentino. */
+  @GET("meteo")
+  suspend fun syncMeteo(
+    @retrofit2.http.Query("codice") stationCode: String,
+  ): Response<it.trentosmartmountain.app.data.remote.dto.MeteoSyncResponse>
+
+  /** Recupera il documento Station persistito (con air_temperature e metadati). */
+  @GET("stations/local/{code}")
+  suspend fun getStationByCode(
+    @Path("code") code: String,
+  ): Response<it.trentosmartmountain.app.data.remote.dto.StationResponse>
+
+  /** Lista stazioni locali (filtro opzionale per nome). */
+  @GET("stations/local/search")
+  suspend fun searchLocalStations(
+    @retrofit2.http.Query("name") name: String? = null,
+  ): Response<List<it.trentosmartmountain.app.data.remote.dto.StationResponse>>
+
   @PATCH("api/v1/sessions/{id}")
   suspend fun updateSession(@Path("id") id: String, @Body body: UpdateSessionRequest): Response<SessionResponse>
 

@@ -109,18 +109,18 @@ local.properties
 # Eccezioni esplicite (restano tracciati anche se comparisse un ignore `*.xml` più sopra nel file):
 !/mobile/app/src/main/AndroidManifest.xml
 !/mobile/app/src/main/res/**/*.xml
-PROJECT_OVERVIEW.md
+# PROJECT_OVERVIEW.md
 # Android Studio captures folder
 captures/
 
-# IntelliJ / Android Studio
+# IntelliJ / Android Studio (usa sempre / nei pattern, non \)
 *.iml
 .idea/workspace.xml
 .idea/tasks.xml
 .idea/assetWizardSettings.xml
 .idea/dictionaries
 .idea/libraries
-# IDE locale / cache (qualsiasi modulo, es. mobile/.idea/)
+# File IDE solo locali — qualsiasi modulo (es. mobile/.idea/)
 **/.idea/workspace.xml
 **/.idea/deploymentTargetSelector.xml
 **/.idea/caches/
@@ -128,6 +128,8 @@ captures/
 **/.idea/planningMode.xml
 **/.idea/appInsightsSettings.xml
 **/.idea/shelf/
+mobile/.idea/workspace.xml
+mobile/.idea/deploymentTargetSelector.xml
 
 # Keystore files
 *.jks
@@ -160,3 +162,4 @@ project.freetime
 .DS_Store
 Thumbs.db
 .claude
+

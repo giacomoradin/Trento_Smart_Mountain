@@ -1,43 +1,74 @@
 package it.trentosmartmountain.app.data.remote.dto
 
-/**
- * Response da `GET /api/v1/meteo?codice=` — sync wrapper (id documento Station aggiornato).
- * I dati climatici reali stanno nel documento Station (vedi [StationResponse]).
- */
-data class MeteoSyncResponse(
-    val id: String,
-    val stationCode: String,
+// ─── Risposta /weather/locations/nearby e /weather/locations/search ───────────
+
+data class WeatherLocationsResponse(
     val count: Int,
+    val results: List<WeatherLocationResult>,
+)
+
+data class WeatherLocationResult(
+    val externalId: String,
+    val type: String,         // "town" | "poi"
+    val name: String,
+    val elevation: Int?,
+    val location: WeatherGeoPoint?,
+    val regionId: String?,
+)
+
+data class WeatherGeoPoint(
+    val type: String,
+    val coordinates: List<Double>, // [lon, lat]
+)
+
+// ─── Risposta /weather/forecast/:externalId ────────────────────────────────────
+
+data class WeatherForecastResponse(
+    val location: WeatherLocationResult,
+    val referenceTown: WeatherLocationReference?,
+    val meta: WeatherForecastMeta?,
+    val forecast3h: List<WeatherForecastSlot>,
+    val forecast24h: List<WeatherForecastSlot>,
+    val fromCache: Boolean?,
+)
+
+data class WeatherLocationReference(
+    val externalId: String,
+    val name: String,
+)
+
+data class WeatherForecastMeta(
+    val fetchedAt: String?,
+    val validFrom: String?,
+    val validTo: String?,
+    val fromCache: Boolean?,
 )
 
 /**
- * Response da `GET /stations/local/:code` o `GET /stations/local/search?name=`.
- * Documento Station con metadati stazione + ultima(e) temperatura(e).
+ * Singolo slot di previsione (3h o 24h).
+ *
+ * Campo `skyCondition`: codice stringa dal formato MeteoTrentino/TINIA.
+ * Mapping consigliato per la UI → [skyConditionEmoji].
+ *
+ * Campi 3h: `temperature`
+ * Campi 24h: `temperatureMin`, `temperatureMax`
  */
-data class StationResponse(
-    val _id: String,
-    val stationCode: String,
-    val stationInfo: StationInfo?,
-    val sourceUrl: String?,
-    val fetchedAt: String?,
-    val air_temperature: List<TemperatureReading>?,
-)
-
-data class StationInfo(
-    val code: String?,
-    val name: String?,
-    val shortname: String?,
-    val elevation: Int?,
-    val latitude: Double?,
-    val longitude: Double?,
-    val east: Double?,
-    val north: Double?,
-    val startdate: String?,
-    val enddate: String?,
-)
-
-data class TemperatureReading(
-    val UM: String?,
-    val date: String?,
-    val value: Double?,
+data class WeatherForecastSlot(
+    val timeLayoutKey: String?,
+    val intervalMinutes: Int?,
+    val validFrom: String?,
+    val validTo: String?,
+    val temperature: Double?,
+    val temperatureMin: Double?,
+    val temperatureMax: Double?,
+    val rainFall: Double?,
+    val rainProbability: Double?,
+    val freshSnow: Double?,
+    val snowLevel: Double?,
+    val windSpeed: Double?,
+    val windGust: Double?,
+    val windDirection: Double?,
+    val freezingLevel: Double?,
+    val skyCondition: String?,      // codice iconografico TINIA
+    val sunshineDuration: Double?,
 )

@@ -35,6 +35,10 @@ class SessionPlanViewModel : ViewModel() {
         val trackPoints: Int,
         val firstPoint: Pair<Double, Double>?,
         val lastPoint: Pair<Double, Double>?,
+        /** Profilo altimetrico campionato (max 50 punti) per il chart. */
+        val elevationProfile: List<Double> = emptyList(),
+        /** Punti stimati con il modello CAI in fase di pianificazione. */
+        val estimatedPoints: Int = 0,
     )
 
     data class UiState(
@@ -116,6 +120,8 @@ class SessionPlanViewModel : ViewModel() {
                             distanceKm = it.distanceKm,
                             elevationGainM = it.elevationGainM,
                             trackPoints = it.trackPoints,
+                            elevationProfile = it.elevationProfile.ifEmpty { null },
+                            estimatedPoints = it.estimatedPoints.takeIf { p -> p > 0 },
                         )
                     },
                 )
@@ -138,7 +144,18 @@ class SessionPlanViewModel : ViewModel() {
         }
     }
 
-    // --- GPX Parser ---
+    // ── GPX Parser ────────────────────────────────────────────────────────
+    //
+    // Algoritmo dislivello: parser naive (sum di TUTTE le variazioni positive)
+    // sovrastima il dislivello reale di un 30-200% per via del noise GPS.
+    //
+    // Soluzione adottata (standard industriale):
+    //  1. Smoothing con moving-average su finestra di 5 campioni → riduce il jitter
+    //  2. Algoritmo "valley-peak" con threshold: accumula il dislivello solo quando
+    //     l'oscillazione locale supera 10m (filtra le micro-variazioni).
+    //  3. Campionamento del profile a max 50 punti per il chart (riduce payload).
+    //
+    // Riferimenti: stessa strategia usata da Strava/Komoot/Wikiloc.
 
     private fun parseGpx(stream: InputStream, fileName: String): GpxParseResult {
         data class TrackPoint(val lat: Double, val lon: Double, val ele: Double?)
@@ -180,28 +197,130 @@ class SessionPlanViewModel : ViewModel() {
 
         if (points.isEmpty()) throw IllegalStateException("Nessun track point trovato nel file GPX.")
 
+        // 1) Distanza planimetrica cumulata (Haversine)
         var totalDistanceKm = 0.0
-        var elevationGainM = 0
         for (i in 1 until points.size) {
             totalDistanceKm += haversineKm(
                 points[i - 1].lat, points[i - 1].lon,
                 points[i].lat, points[i].lon,
             )
-            val prevEle = points[i - 1].ele
-            val currEle = points[i].ele
-            if (prevEle != null && currEle != null && currEle > prevEle) {
-                elevationGainM += (currEle - prevEle).toInt()
-            }
         }
+
+        // 2) Elevation cleaning: interpola i null + smoothing moving-average
+        val rawElevations = interpolateNulls(points.map { it.ele })
+        val smoothedElevations = movingAverage(rawElevations, window = 5)
+
+        // 3) Dislivello con algoritmo valley-peak (threshold 10m)
+        val elevationGainM = computeElevationGain(smoothedElevations, thresholdM = 10.0).toInt()
+
+        // 4) Profilo campionato per il chart (max 50 punti)
+        val sampledProfile = sampleProfile(smoothedElevations, maxSamples = 50)
+
+        // 5) Punti stimati col modello CAI (μ = 1.0 in fase di pianificazione)
+        val distanceKmRounded = (totalDistanceKm * 10).toLong() / 10.0
+        val estimated = it.trentosmartmountain.app.data.estimation.HikeEstimation
+            .estimatedPoints(distanceKmRounded, elevationGainM)
 
         return GpxParseResult(
             fileName = fileName,
-            distanceKm = (totalDistanceKm * 10).toLong() / 10.0,
+            distanceKm = distanceKmRounded,
             elevationGainM = elevationGainM,
             trackPoints = points.size,
             firstPoint = points.first().let { Pair(it.lat, it.lon) },
             lastPoint = points.last().let { Pair(it.lat, it.lon) },
+            elevationProfile = sampledProfile,
+            estimatedPoints = estimated,
         )
+    }
+
+    /**
+     * Interpola linearmente i valori null fra due punti validi.
+     * Necessario per gestire GPX con campi `<ele>` mancanti in alcuni punti.
+     */
+    private fun interpolateNulls(values: List<Double?>): List<Double> {
+        if (values.isEmpty()) return emptyList()
+        val result = MutableList(values.size) { 0.0 }
+        // Trova il primo valore non-null per inizializzare
+        val firstNonNull = values.firstOrNull { it != null } ?: 0.0
+        for (i in values.indices) {
+            val v = values[i]
+            if (v != null) {
+                result[i] = v
+            } else {
+                // Trova il prossimo non-null per interpolare
+                val prev = (i - 1 downTo 0).firstOrNull { values[it] != null }?.let { values[it]!! }
+                val next = (i + 1 until values.size).firstOrNull { values[it] != null }?.let { values[it]!! }
+                result[i] = when {
+                    prev != null && next != null -> (prev + next) / 2.0
+                    prev != null -> prev
+                    next != null -> next
+                    else -> firstNonNull
+                }
+            }
+        }
+        return result
+    }
+
+    /**
+     * Moving-average smoothing su finestra centrata. Riduce il jitter del GPS.
+     */
+    private fun movingAverage(values: List<Double>, window: Int): List<Double> {
+        if (values.size <= window || window <= 1) return values
+        val half = window / 2
+        return List(values.size) { i ->
+            val start = (i - half).coerceAtLeast(0)
+            val end = (i + half + 1).coerceAtMost(values.size)
+            values.subList(start, end).average()
+        }
+    }
+
+    /**
+     * Calcola il dislivello positivo cumulato con algoritmo valley-peak.
+     * Accumula la salita solo quando l'oscillazione locale supera [thresholdM] metri.
+     * Questo elimina il rumore del barometro/GPS che gonfia il dato 2-3x.
+     */
+    private fun computeElevationGain(elevations: List<Double>, thresholdM: Double): Double {
+        if (elevations.size < 2) return 0.0
+        var gain = 0.0
+        var minLocal = elevations[0]
+        var maxLocal = elevations[0]
+        var goingUp = true
+
+        for (i in 1 until elevations.size) {
+            val e = elevations[i]
+            if (goingUp) {
+                if (e > maxLocal) {
+                    maxLocal = e
+                } else if (maxLocal - e > thresholdM) {
+                    gain += maxLocal - minLocal
+                    goingUp = false
+                    minLocal = e
+                }
+            } else {
+                if (e < minLocal) {
+                    minLocal = e
+                } else if (e - minLocal > thresholdM) {
+                    goingUp = true
+                    maxLocal = e
+                }
+            }
+        }
+        // Chiusura: se stiamo ancora salendo, conta il segmento finale
+        if (goingUp && maxLocal > minLocal) gain += maxLocal - minLocal
+        return gain
+    }
+
+    /**
+     * Campiona N punti uniformemente distribuiti dalla serie originale.
+     * Preserva primo e ultimo punto per il rendering del chart.
+     */
+    private fun sampleProfile(elevations: List<Double>, maxSamples: Int): List<Double> {
+        if (elevations.size <= maxSamples) return elevations
+        val step = (elevations.size - 1).toDouble() / (maxSamples - 1)
+        return (0 until maxSamples).map { i ->
+            val idx = (i * step).toInt().coerceAtMost(elevations.size - 1)
+            elevations[idx]
+        }
     }
 
     private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
@@ -226,7 +345,8 @@ class SessionPlanViewModel : ViewModel() {
  *
  * Obiettivo: classificare automaticamente un percorso GPX e generare la "Hike Packet"
  * con dati offline (tile mappa, meteo fascia oraria, equipment consigliato).
- *
+ * Utilizzo: durante la creazione della sessione, dopo il parsing del GPX, ma prima
+ * della conferma finale da parte dell'utente (ATTIVA).
  * Algoritmo di scoring (RF1, RF2, RF3):
  *
  * 1. INPUT: punti GPS (lat/lon/ele) + metadata OpenData Trentino/OSM

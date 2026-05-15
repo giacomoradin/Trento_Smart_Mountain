@@ -74,6 +74,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -145,6 +146,17 @@ fun SessionDetailScreen(
     var showEditDatePicker by remember { mutableStateOf(false) }
     var showEditTimePicker by remember { mutableStateOf(false) }
     var showDifficultyMenu by remember { mutableStateOf(false) }
+
+    // Chiusura sicura di tutti i picker locali quando il VM esce dall'edit mode
+    // (es. dopo saveEdit con successo). Senza questo, il dropdown della difficoltà
+    // poteva rimanere aperto in overlay e confondere l'utente.
+    LaunchedEffect(uiState.editMode) {
+        if (!uiState.editMode) {
+            showEditDatePicker = false
+            showEditTimePicker = false
+            showDifficultyMenu = false
+        }
+    }
 
     if (showEditDatePicker) {
         val dateState = rememberDatePickerState()
@@ -286,22 +298,65 @@ fun SessionDetailScreen(
             // ── CONDIVISIONE (codice invito sempre visibile) ──
             InviteCodeCard(inviteCode = session.inviteCode)
 
-            // ── ELEVATION PROFILE + STATS ──
+            // ── ELEVATION PROFILE + STATS (formule CAI per stima durata e punti) ──
             DetailCard {
                 ElevationProfileChart(
                     distanceKm = session.gpxStats?.distanceKm ?: 0.0,
                     elevationGainM = session.gpxStats?.elevationGainM ?: 0,
+                    elevationProfile = session.gpxStats?.elevationProfile,
                     modifier = Modifier.fillMaxWidth().height(140.dp),
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
                     val dist = session.gpxStats?.distanceKm
                     val elev = session.gpxStats?.elevationGainM
-                    val estHours = if (dist != null && elev != null)
-                        "~%.0fh".format(dist / 2.5 + elev / 400.0) else "—"
+                    // Tempo CAI ufficiale con polinomio sulla pendenza
+                    val estDurationLabel = if (dist != null && elev != null) {
+                        it.trentosmartmountain.app.data.estimation.HikeEstimation.formatHours(
+                            it.trentosmartmountain.app.data.estimation.HikeEstimation.caiTimeHours(dist, elev),
+                        )
+                    } else "—"
                     StatCell("DISTANZA", dist?.let { "%.1f km".format(it) } ?: "—", TsmBorder, Modifier.weight(1f))
                     StatCell("DISLIVELLO", elev?.let { "+$it m" } ?: "—", TsmAccent, Modifier.weight(1f))
-                    StatCell("DURATA", estHours, TsmPrimary, Modifier.weight(1f))
+                    StatCell("DURATA CAI", estDurationLabel, TsmPrimary, Modifier.weight(1f))
+                }
+                // Card punti stimati col modello TSM (μ = 1.0 in pianificazione)
+                val dist = session.gpxStats?.distanceKm
+                val elev = session.gpxStats?.elevationGainM
+                if (dist != null && elev != null && dist > 0.0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val estPoints = session.gpxStats.estimatedPoints
+                        ?: it.trentosmartmountain.app.data.estimation.HikeEstimation
+                            .estimatedPoints(dist, elev)
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = TsmSurfaceVariant,
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column {
+                                Text(
+                                    "PUNTI STIMATI",
+                                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                                    color = Color.Gray,
+                                )
+                                Text(
+                                    "Valore medio · μ = 1.0",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.Gray.copy(alpha = 0.6f),
+                                )
+                            }
+                            Text(
+                                "$estPoints pt",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = TsmAccent,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -407,55 +462,115 @@ private fun EditModeCard(
     }
 }
 
-// ── Elevation profile chart ──
+// ── Elevation profile chart (usa i dati GPX reali, fallback bezier se assenti) ──
 
+/**
+ * Disegna il profilo altimetrico reale dal campione [elevationProfile] (max 50 punti
+ * forniti dal parser GPX mobile dopo smoothing). Se il profile è assente o troppo corto,
+ * mostra una curva bezier generica come fallback decorativo.
+ *
+ * Normalizzazione altimetrica:
+ *   minEle, maxEle dal profile → mappati nel range [padding, h - padding] del canvas
+ *   in modo che il punto più alto del tracciato corrisponda al top del chart e il più
+ *   basso al bottom. Questo rende il grafico effettivamente rappresentativo del percorso.
+ */
 @Composable
-private fun ElevationProfileChart(distanceKm: Double, elevationGainM: Int, modifier: Modifier = Modifier) {
+private fun ElevationProfileChart(
+    distanceKm: Double,
+    elevationGainM: Int,
+    elevationProfile: List<Double>?,
+    modifier: Modifier = Modifier,
+) {
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
+        val padX = 8.dp.toPx()
+        val padY = 12.dp.toPx()
 
-        // Faint terrain background layers
+        // Faint terrain background layers (puramente decorativi)
         for (i in 0..2) {
             val terrainPath = Path().apply {
-                val base = h * (0.6f + i * 0.12f)
+                val base = h * (0.65f + i * 0.10f)
                 moveTo(0f, h)
                 cubicTo(w * 0.2f, base - 15f, w * 0.5f, base + 25f, w * 0.75f, base - 10f)
                 cubicTo(w * 0.85f, base - 5f, w * 0.92f, base + 15f, w, base)
                 lineTo(w, h)
                 close()
             }
-            drawPath(terrainPath, color = Color(0xFF2A2A2A).copy(alpha = 0.6f + i * 0.1f))
+            drawPath(terrainPath, color = Color(0xFF2A2A2A).copy(alpha = 0.5f + i * 0.08f))
         }
 
-        // Elevation profile dashed line
-        val profilePath = Path().apply {
-            moveTo(w * 0.05f, h * 0.72f)
-            cubicTo(
-                w * 0.25f, h * 0.68f,
-                w * 0.55f, h * 0.18f,
-                w * 0.95f, h * 0.30f,
+        if (elevationProfile != null && elevationProfile.size >= 2) {
+            // Profilo reale dal GPX
+            val minEle = elevationProfile.min()
+            val maxEle = elevationProfile.max()
+            val range = (maxEle - minEle).coerceAtLeast(1.0)
+            val chartW = w - 2 * padX
+            val chartH = h - 2 * padY
+
+            fun xOf(i: Int): Float =
+                padX + chartW * (i.toDouble() / (elevationProfile.size - 1)).toFloat()
+
+            fun yOf(ele: Double): Float =
+                (padY + chartH * (1.0 - (ele - minEle) / range)).toFloat()
+
+            // Linea profilo (continua, non tratteggiata: rappresenta dati reali)
+            val profilePath = Path().apply {
+                elevationProfile.forEachIndexed { i, e ->
+                    val x = xOf(i)
+                    val y = yOf(e)
+                    if (i == 0) moveTo(x, y) else lineTo(x, y)
+                }
+            }
+            drawPath(
+                profilePath,
+                color = TsmAccent,
+                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round),
             )
+
+            // Area sotto il profilo con gradient morbido
+            val fillPath = Path().apply {
+                addPath(profilePath)
+                lineTo(xOf(elevationProfile.size - 1), h - padY)
+                lineTo(xOf(0), h - padY)
+                close()
+            }
+            drawPath(fillPath, color = TsmAccent.copy(alpha = 0.15f))
+
+            // Marker start (verde) + end (rosso/SOS)
+            val startCenter = Offset(xOf(0), yOf(elevationProfile.first()))
+            drawCircle(color = Color(0xFF1B5E20), radius = 10.dp.toPx(), center = startCenter)
+            drawCircle(color = TsmPrimary, radius = 7.dp.toPx(), center = startCenter)
+
+            val endCenter = Offset(xOf(elevationProfile.size - 1), yOf(elevationProfile.last()))
+            drawCircle(color = Color(0xFF880E4F).copy(alpha = 0.4f), radius = 13.dp.toPx(), center = endCenter)
+            drawCircle(color = TsmSos, radius = 9.dp.toPx(), center = endCenter)
+        } else {
+            // Fallback: curva bezier decorativa (nessun GPX importato)
+            val profilePath = Path().apply {
+                moveTo(w * 0.05f, h * 0.72f)
+                cubicTo(
+                    w * 0.25f, h * 0.68f,
+                    w * 0.55f, h * 0.18f,
+                    w * 0.95f, h * 0.30f,
+                )
+            }
+            drawPath(
+                profilePath,
+                color = TsmAccent.copy(alpha = 0.6f),
+                style = Stroke(
+                    width = 3.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 9f), 0f),
+                ),
+            )
+            val startCenter = Offset(w * 0.05f, h * 0.72f)
+            drawCircle(color = Color(0xFF1B5E20), radius = 10.dp.toPx(), center = startCenter)
+            drawCircle(color = TsmPrimary, radius = 7.dp.toPx(), center = startCenter)
+            val endCenter = Offset(w * 0.95f, h * 0.30f)
+            drawCircle(color = Color(0xFF880E4F).copy(alpha = 0.4f), radius = 13.dp.toPx(), center = endCenter)
+            drawCircle(color = TsmSos, radius = 9.dp.toPx(), center = endCenter)
         }
-        drawPath(
-            profilePath,
-            color = TsmAccent,
-            style = Stroke(
-                width = 3.dp.toPx(),
-                cap = StrokeCap.Round,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 9f), 0f),
-            ),
-        )
-
-        // Start marker (green circle)
-        val startCenter = Offset(w * 0.05f, h * 0.72f)
-        drawCircle(color = Color(0xFF1B5E20), radius = 10.dp.toPx(), center = startCenter)
-        drawCircle(color = TsmPrimary, radius = 7.dp.toPx(), center = startCenter)
-
-        // End marker (red/SOS circle)
-        val endCenter = Offset(w * 0.95f, h * 0.30f)
-        drawCircle(color = Color(0xFF880E4F).copy(alpha = 0.4f), radius = 13.dp.toPx(), center = endCenter)
-        drawCircle(color = TsmSos, radius = 9.dp.toPx(), center = endCenter)
     }
 }
 
@@ -473,7 +588,38 @@ private fun StatCell(label: String, value: String, valueColor: Color, modifier: 
     }
 }
 
-// ── Meteo card (dati reali da MeteoTrentino via backend di Marco) ──
+// ── Meteo card (previsioni complete da meteo.report/TINIA via backend di Marco) ──
+
+/**
+ * Mappa i codici `skyCondition` dell'API TINIA/meteo.report in emoji visualizzabili.
+ *
+ * Il backend (weatherService.js) salva il campo `sky_condition` dal JSON raw.
+ * I valori sono interi come stringa dal formato MeteoTrentino:
+ *   1 = Sereno, 2 = Poco nuvoloso, 3 = Parz. nuvoloso, 4 = Molto nuvoloso,
+ *   5 = Coperto, 6 = Nebbia, 7 = Pioggia debole, 8 = Pioggia, 9 = Pioggia forte,
+ *   10 = Neve debole, 11 = Neve, 12 = Temporale, 13 = Grandine
+ * Riferimento: https://www.meteotrentino.it/
+ */
+private fun skyConditionEmoji(code: String?): String = when (code?.trim()) {
+    "1" -> "☀️"
+    "2" -> "🌤"
+    "3" -> "⛅"
+    "4" -> "🌥"
+    "5" -> "☁️"
+    "6" -> "🌫"
+    "7" -> "🌦"
+    "8" -> "🌧"
+    "9" -> "⛈"
+    "10" -> "🌨"
+    "11" -> "❄️"
+    "12" -> "⛈"
+    "13" -> "🌨"
+    // Fallback se il codice non è numerico (per futura compatibilità)
+    "A" -> "☀️"; "B" -> "🌤"; "C" -> "⛅"
+    "D" -> "☁️"; "E" -> "🌫"; "F" -> "🌧"
+    "G" -> "❄️"; null -> "🌤"
+    else -> "🌤"
+}
 
 @Composable
 private fun MeteoCard(
@@ -481,10 +627,19 @@ private fun MeteoCard(
     uiState: SessionDetailViewModel.UiState,
     onRefresh: () -> Unit,
 ) {
-    val station = uiState.meteoStation
-    val latestTemp = station?.air_temperature?.lastOrNull()
-    val stationName = station?.stationInfo?.name ?: station?.stationCode ?: "—"
-    val elevation = station?.stationInfo?.elevation?.let { "${it} m" } ?: ""
+    val forecast = uiState.weatherForecast
+    val locationName = forecast?.location?.name ?: forecast?.referenceTown?.name ?: "—"
+    val elevation = forecast?.location?.elevation?.let { " · ${it}m" } ?: ""
+
+    // 24h: prendo il primo slot futuro per il riepilogo del giorno
+    val today24h = forecast?.forecast24h?.firstOrNull()
+    val tempMin = today24h?.temperatureMin?.let { "%.0f°".format(it) } ?: "—"
+    val tempMax = today24h?.temperatureMax?.let { "%.0f°".format(it) } ?: "—"
+    val mainIcon = skyConditionEmoji(today24h?.skyCondition)
+
+    // 3h: prossimi 5 slot
+    val next3h = forecast?.forecast3h?.take(5) ?: emptyList()
+
     val updatedAgo = uiState.meteoLastUpdate?.let { ts ->
         val diffMs = System.currentTimeMillis() - ts
         when {
@@ -495,6 +650,7 @@ private fun MeteoCard(
     } ?: "—"
 
     DetailCard {
+        // Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -543,52 +699,97 @@ private fun MeteoCard(
                     Text("Riprova", color = TsmAccent, style = MaterialTheme.typography.labelMedium)
                 }
             }
-            latestTemp == null -> {
+            forecast == null && !uiState.meteoLoading -> {
                 Text(
                     "Nessun dato meteo disponibile.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray,
                 )
             }
-            else -> {
+            forecast != null -> {
+                // Riepilogo giornaliero
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    // Icona dinamica in base alla temperatura (placeholder finché Marco non aggiunge condition icons)
-                    val icon = when {
-                        (latestTemp.value ?: 0.0) < 0 -> "❄️"
-                        (latestTemp.value ?: 0.0) < 10 -> "🌤"
-                        (latestTemp.value ?: 0.0) < 20 -> "☀️"
-                        else -> "🔥"
-                    }
-                    Text(icon, fontSize = 36.sp)
+                    Text(mainIcon, fontSize = 36.sp)
                     Column {
                         Text(
-                            text = "${latestTemp.value?.let { "%.1f".format(it) } ?: "—"}${latestTemp.UM ?: "°C"}",
+                            text = "$tempMin / $tempMax",
                             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                             color = Color.White,
                         )
                         Text(
-                            text = "Stazione: $stationName${if (elevation.isNotBlank()) " · $elevation" else ""}",
+                            text = "$locationName$elevation",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray,
                         )
-                        latestTemp.date?.let {
+                        // Vento se disponibile
+                        today24h?.windSpeed?.let { ws ->
+                            val dir = today24h.windDirection?.let { d ->
+                                val dirs = listOf("N","NE","E","SE","S","SO","O","NO")
+                                dirs[((d + 22.5) / 45).toInt() % 8]
+                            } ?: ""
                             Text(
-                                text = "Rilevazione: $it",
-                                style = MaterialTheme.typography.labelSmall,
+                                text = "Vento $dir ${ws.toInt()} km/h",
+                                style = MaterialTheme.typography.bodySmall,
                                 color = Color.Gray,
                             )
+                        }
+                        // Pioggia se rilevante
+                        today24h?.rainProbability?.let { prob ->
+                            if (prob > 20) {
+                                Text(
+                                    text = "Pioggia ${prob.toInt()}%${today24h.rainFall?.let { " · ${it}mm" } ?: ""}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TsmAccent,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Previsioni orarie 3h
+                if (next3h.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        next3h.forEach { slot ->
+                            // Mostra solo l'ora (HH:mm) dall'ISO timestamp
+                            val hourLabel = slot.validFrom
+                                ?.substringAfter("T")
+                                ?.substringBefore(":")
+                                ?.let { "${it}h" }
+                                ?: "—"
+                            val tempLabel = slot.temperature?.let { "%.0f°".format(it) } ?: "—"
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(hourLabel, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(skyConditionEmoji(slot.skyCondition), fontSize = 18.sp)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    tempLabel,
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White,
+                                )
+                                // Pioggia probabilità se > 30%
+                                slot.rainProbability?.let { prob ->
+                                    if (prob > 30) {
+                                        Text(
+                                            "${prob.toInt()}%",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TsmAccent,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-
-        // NOTA: hourly forecast + previsioni multi-giorno saranno disponibili
-        // quando Marco aggiungerà l'endpoint forecast.
-        // Per ora il backend espone solo l'ultima temperatura per stazione.
     }
 }
 
@@ -603,17 +804,27 @@ private fun ChecklistCard(
     val total = uiState.checklist.size
 
     DetailCard {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("CHECKLIST", style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp), color = Color.Gray)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("$checkedCount / $total", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = TsmAccent)
-                IconButton(
-                    onClick = { if (uiState.newItemText.isNotBlank()) viewModel.onAddItem() },
-                    modifier = Modifier.size(28.dp).background(TsmPrimary, RoundedCornerShape(6.dp)),
-                ) {
-                    Icon(Icons.Outlined.Add, contentDescription = "Aggiungi", tint = Color.White, modifier = Modifier.size(18.dp))
-                }
-            }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Modulo 1: Identifier testuale
+            Text(
+                text = "CHECKLIST",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                color = Color.Gray,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            // Modulo 2: Telemetria di stato (Items completati / Totali)
+            Text(
+                text = "$checkedCount / $total",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = TsmAccent,
+                maxLines = 1
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))

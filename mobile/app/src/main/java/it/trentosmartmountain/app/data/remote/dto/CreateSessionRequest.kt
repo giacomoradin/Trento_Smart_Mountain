@@ -28,6 +28,10 @@ data class GpxStats(
     val distanceKm: Double,
     val elevationGainM: Int,
     val trackPoints: Int,
+    /** Profilo altimetrico campionato per il rendering del chart (max 50 punti, in metri). */
+    val elevationProfile: List<Double>? = null,
+    /** Punti stimati col modello CAI in fase di pianificazione (μ = 1.0). */
+    val estimatedPoints: Int? = null,
 )
 
 data class SessionCreatedResponse(

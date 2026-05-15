@@ -4,13 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
-import it.trentosmartmountain.app.data.remote.dto.StationResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateRouteDetails
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
+import it.trentosmartmountain.app.data.remote.dto.WeatherForecastResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,8 +38,8 @@ class SessionDetailViewModel : ViewModel() {
         val editTime: String = "",
         val editMaxParticipants: Int = 8,
         val editDifficulty: String = "E",
-        // Meteo (dati reali dalla stazione MeteoTrentino più vicina)
-        val meteoStation: StationResponse? = null,
+        // Meteo (dati reali da meteo.report/TINIA via backend di Marco)
+        val weatherForecast: WeatherForecastResponse? = null,
         val meteoLoading: Boolean = false,
         val meteoError: String? = null,
         val meteoLastUpdate: Long? = null, // System.currentTimeMillis()
@@ -172,12 +168,30 @@ class SessionDetailViewModel : ViewModel() {
                 )
                 val response = TsmApiClient.service().updateSession(sessionId, body)
                 if (response.isSuccessful) {
-                    _uiState.update { it.copy(isSaving = false, editMode = false, session = response.body()) }
+                    // Esci dall'edit mode immediatamente (l'utente vede il pannello chiudersi)
+                    // e azzera i campi di edit per evitare state stale al prossimo enterEditMode.
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            editMode = false,
+                            editName = "",
+                            editDate = "",
+                            editTime = "",
+                        )
+                    }
+                    // Ricarica la sessione completa (con populate creatorId + participants)
+                    // perché il PATCH ritorna un documento parziale.
+                    loadSession(sessionId)
                 } else {
-                    _uiState.update { it.copy(isSaving = false) }
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            error = "Errore salvataggio (${response.code()}). Riprova.",
+                        )
+                    }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSaving = false) }
+                _uiState.update { it.copy(isSaving = false, error = "Errore: ${e.javaClass.simpleName}") }
             }
         }
     }
@@ -229,85 +243,82 @@ class SessionDetailViewModel : ViewModel() {
 
     fun dismissAvviaConfirm() = _uiState.update { it.copy(showAvviaConfirm = false) }
 
-    // ── METEO ──
+    // ── METEO (API meteo.report/TINIA via backend di Marco) ──
 
     /**
-     * Carica i dati meteo dalla stazione MeteoTrentino più vicina al punto di partenza
-     * del GPX. Backend di Marco fornisce:
-     *   - GET /meteo?codice=X → sync ultima temperatura dal servizio remoto
-     *   - GET /stations/local/search → elenco stazioni cached
-     *   - GET /stations/local/{code} → singola stazione cached
+     * Carica le previsioni meteo per il punto di partenza della sessione.
      *
-     * Strategia: prendiamo l'elenco stazioni locali, troviamo la più vicina via Haversine,
-     * triggeriamo un sync (POST equivalente con GET trigger), poi rileggiamo lo Station doc.
+     * Flow:
+     *   1. Estrae le coordinate dal GPX startPoint (GeoJSON [lon, lat])
+     *   2. GET /weather/locations/nearby?lon=&lat=&type=town&limit=1 → town più vicina
+     *   3. GET /weather/forecast/:externalId → slots3h (prossime 48h) + slots24h (7 giorni)
      *
-     * Future improvements (DA FARE QUANDO Marco aggiunge forecast endpoint):
-     *   - GET /api/v1/meteo/forecast?lat={lat}&lon={lon}&date={date}
-     *   - Polling ogni 5min con LaunchedEffect + delay
-     *   - Storico 5 giorni con paginazione
-     *   - Room cache offline
+     * Se il DB non è seedato (POST /weather/seed) o non ci sono stazioni nel raggio,
+     * la MeteoCard mostra un messaggio di errore con bottone Riprova.
+     *
+     * Cache server-side: 1h. Il refresh manuale dalla UI chiama con forceRefresh=true.
+     *
+     * TODO — quando il DB è seedato in produzione:
+     *   - Aggiungere polling ogni 5 min con LaunchedEffect + delay(5 * 60_000L)
+     *   - Storico giorni precedenti via slot24h con filtro su validFrom
+     *   - Room cache offline per le sessioni già visualizzate
      */
-    fun loadMeteo(session: SessionResponse) {
+    fun loadMeteo(session: SessionResponse, forceRefresh: Boolean = false) {
+        // GeoJSON coordinates = [lon, lat]
         val coords = session.routeDetails?.startPoint?.coordinates
-        // coordinates GeoJSON = [lng, lat]
-        val lng = coords?.getOrNull(0)
+        val lon = coords?.getOrNull(0)
         val lat = coords?.getOrNull(1)
-        if (lat == null || lng == null || (lat == 0.0 && lng == 0.0)) {
-            // Nessun punto di partenza valido → fallback su stazione di default
-            loadMeteoForStation("T0129")
+
+        if (lon == null || lat == null || (lon == 0.0 && lat == 0.0)) {
+            _uiState.update { it.copy(meteoLoading = false, meteoError = "Nessun punto GPS per il meteo.") }
             return
         }
-        viewModelScope.launch {
-            _uiState.update { it.copy(meteoLoading = true, meteoError = null) }
-            try {
-                val response = TsmApiClient.service().searchLocalStations(null)
-                if (!response.isSuccessful) {
-                    _uiState.update { it.copy(meteoLoading = false, meteoError = "Errore stazioni (${response.code()})") }
-                    return@launch
-                }
-                val stations = response.body() ?: emptyList()
-                val nearest = stations
-                    .filter { it.stationInfo?.latitude != null && it.stationInfo.longitude != null }
-                    .minByOrNull { s ->
-                        haversineKm(lat, lng, s.stationInfo!!.latitude!!, s.stationInfo.longitude!!)
-                    }
-                if (nearest != null) {
-                    loadMeteoForStation(nearest.stationCode)
-                } else {
-                    // Nessuna stazione cached → tenta sync diretto con stazione di default
-                    loadMeteoForStation("T0129")
-                }
-            } catch (e: IOException) {
-                _uiState.update { it.copy(meteoLoading = false, meteoError = "Nessuna connessione.") }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(meteoLoading = false, meteoError = "Errore meteo: ${e.javaClass.simpleName}") }
-            }
-        }
-    }
 
-    private fun loadMeteoForStation(stationCode: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(meteoLoading = true, meteoError = null) }
             try {
-                // 1. Trigger sync sul backend per aggiornare il documento Station
-                runCatching { TsmApiClient.service().syncMeteo(stationCode) }
-                // 2. Recupera lo Station document aggiornato
-                val response = TsmApiClient.service().getStationByCode(stationCode)
-                if (response.isSuccessful) {
+                // 1. Trova la town più vicina
+                val nearbyResp = TsmApiClient.service().getWeatherLocationsNearby(
+                    lon = lon,
+                    lat = lat,
+                    type = "town",
+                    limit = 1,
+                    maxDistance = 100_000, // 100 km — copre tutta la regione
+                )
+                if (!nearbyResp.isSuccessful || nearbyResp.body()?.results.isNullOrEmpty()) {
                     _uiState.update {
                         it.copy(
                             meteoLoading = false,
-                            meteoStation = response.body(),
+                            meteoError = "Nessuna stazione meteo trovata nelle vicinanze (${nearbyResp.code()}).",
+                        )
+                    }
+                    return@launch
+                }
+                val town = nearbyResp.body()!!.results.first()
+
+                // 2. Recupera il forecast completo (cache 1h server-side)
+                val forecastResp = TsmApiClient.service().getWeatherForecast(
+                    externalId = town.externalId,
+                    forceRefresh = if (forceRefresh) true else null,
+                )
+                if (forecastResp.isSuccessful) {
+                    _uiState.update {
+                        it.copy(
+                            meteoLoading = false,
+                            weatherForecast = forecastResp.body(),
                             meteoLastUpdate = System.currentTimeMillis(),
                         )
                     }
                 } else {
                     _uiState.update {
-                        it.copy(meteoLoading = false, meteoError = "Stazione $stationCode non trovata (${response.code()}).")
+                        it.copy(
+                            meteoLoading = false,
+                            meteoError = "Errore forecast (${forecastResp.code()}). Il DB potrebbe non essere seedato.",
+                        )
                     }
                 }
             } catch (e: IOException) {
-                _uiState.update { it.copy(meteoLoading = false, meteoError = "Nessuna connessione.") }
+                _uiState.update { it.copy(meteoLoading = false, meteoError = "Nessuna connessione al server.") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(meteoLoading = false, meteoError = "Errore meteo: ${e.javaClass.simpleName}") }
             }
@@ -315,16 +326,6 @@ class SessionDetailViewModel : ViewModel() {
     }
 
     fun refreshMeteo() {
-        _uiState.value.session?.let { loadMeteo(it) }
-    }
-
-    private fun haversineKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
-        val r = 6371.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLng = Math.toRadians(lng2 - lng1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-            sin(dLng / 2) * sin(dLng / 2)
-        return r * 2 * atan2(sqrt(a), sqrt(1 - a))
+        _uiState.value.session?.let { loadMeteo(it, forceRefresh = true) }
     }
 }

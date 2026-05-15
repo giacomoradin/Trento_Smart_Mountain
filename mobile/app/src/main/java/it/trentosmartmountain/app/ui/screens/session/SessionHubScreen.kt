@@ -698,96 +698,101 @@ private fun SessionJoinTab(
 
 // ── Moduli Sub-Gerarchici (Componenti Custom) ──
 
-/**
- * Input "OTP-style" per il codice sessione TSM-XXXX.
- *
- * Implementazione: un [BasicTextField] full-width gestisce input e focus,
- * con `decorationBox` che sostituisce il rendering testuale con una Row
- * di 8 box responsive (weight 1f → si adattano allo schermo).
- * Il testo del field è reso trasparente; la posizione del cursore è
- * rappresentata visivamente dal bordo TsmAccent attivo sul box corrente.
- *
- * Nota: il ViewModel normalizza sempre l'input a `TSM-XXXX`,
- * quindi posizioni 0..3 sono fisse e grigie, 4..7 accettano hex utente.
- */
 @Composable
 private fun SessionCodeBoxInput(code: String, onCodeChange: (String) -> Unit) {
-    // Usa TextFieldValue per controllare ESPLICITAMENTE la posizione del cursore.
-    // Senza questo: cursore in posizioni inaspettate + "ghost" dei codici precedenti
-    // su backspace ripetuto (state interno del field desync rispetto al valore esterno).
+    val focusRequester = remember { FocusRequester() }
+
+    // Manteniamo lo stato locale per controllare la selezione, ma lo allineiamo
+    // in modo SINCRONO al source of truth (il ViewModel), bypassando il dispatcher.
     var textFieldValue by remember {
         mutableStateOf(
             androidx.compose.ui.text.input.TextFieldValue(
                 text = code,
-                selection = androidx.compose.ui.text.TextRange(code.length),
-            ),
+                selection = androidx.compose.ui.text.TextRange(code.length)
+            )
         )
     }
 
-    // Riallinea TFV ogni volta che il VM normalizza/resetta `code` esternamente
-    // (es. dopo join → reset a "TSM-"). Elimina lo state stale.
-    androidx.compose.runtime.LaunchedEffect(code) {
-        if (textFieldValue.text != code) {
-            textFieldValue = androidx.compose.ui.text.input.TextFieldValue(
-                text = code,
-                selection = androidx.compose.ui.text.TextRange(code.length),
-            )
-        }
+    // Sincronizzazione in-composition (elimina la race condition e l'effetto ghosting)
+    if (textFieldValue.text != code) {
+        textFieldValue = textFieldValue.copy(
+            text = code,
+            selection = androidx.compose.ui.text.TextRange(code.length)
+        )
     }
 
-    BasicTextField(
-        value = textFieldValue,
-        onValueChange = { new ->
-            // Forza il cursore alla fine (no edit nel mezzo) e propaga solo le modifiche al testo
-            textFieldValue = new.copy(selection = androidx.compose.ui.text.TextRange(new.text.length))
-            if (new.text != code) onCodeChange(new.text)
-        },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        textStyle = androidx.compose.ui.text.TextStyle.Default.copy(color = Color.Transparent),
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.Transparent),
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-            keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii,
-            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-        ),
-        decorationBox = { innerTextField ->
-            Box(modifier = Modifier.fillMaxWidth()) {
-                // Text field invisibile ma funzionale: cattura focus, tastiera, click
-                innerTextField()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null // Disabilita il ripple nativo per un feel più raw/embedded
+            ) {
+                focusRequester.requestFocus()
+            }
+    ) {
+        // 1. OVERLAY VISUALE (State Representation)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            val display = code.padEnd(8)
+            (0..7).forEach { i ->
+                val char = display.getOrElse(i) { ' ' }
+                val isFixedPrefix = i <= 3 // T, S, M, -
+                val isCursorHere = i == code.length && code.length < 8
 
-                // Overlay visuale: 8 box responsive
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp)
+                        .background(TsmSurfaceVariant, RoundedCornerShape(6.dp))
+                        .border(
+                            1.dp,
+                            if (isCursorHere) TsmAccent else Color(0xFF3A3A3A),
+                            RoundedCornerShape(6.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    val display = code.padEnd(8)
-                    (0..7).forEach { i ->
-                        val char = display.getOrElse(i) { ' ' }
-                        val isFixedPrefix = i <= 3 // T, S, M, -
-                        val isCursorHere = i == code.length && code.length < 8
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(52.dp)
-                                .background(TsmSurfaceVariant, RoundedCornerShape(6.dp))
-                                .border(
-                                    1.dp,
-                                    if (isCursorHere) TsmAccent else Color(0xFF3A3A3A),
-                                    RoundedCornerShape(6.dp),
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = if (char == ' ') "" else char.toString(),
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = if (isFixedPrefix) Color.Gray else Color.White,
-                            )
-                        }
-                    }
+                    Text(
+                        text = if (char == ' ') "" else char.toString(),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = if (isFixedPrefix) Color.Gray else Color.White,
+                    )
                 }
             }
+        }
+
+        // 2. BUFFER DI INPUT HIDDEN (Logic Core)
+        BasicTextField(
+            value = textFieldValue,
+            onValueChange = { newTfv ->
+                // Clamp alla fonte: blocca l'alterazione del prefisso hardcoded
+                // impedendo che l'UndoManager nativo registri un'operazione invalida.
+                val isDeletingPrefix = newTfv.text.length < 4 && code.startsWith("TSM-")
+
+                if (!isDeletingPrefix) {
+                    // Forza il cursore rigorosamente alla fine
+                    val enforcedTfv = newTfv.copy(selection = androidx.compose.ui.text.TextRange(newTfv.text.length))
+                    textFieldValue = enforcedTfv
+
+                    // Propaga il segnale solo se c'è stata una mutazione effettiva
+                    if (enforcedTfv.text != code) {
+                        onCodeChange(enforcedTfv.text)
+                    }
+                }
             },
-    )
+            modifier = Modifier
+                .focusRequester(focusRequester)
+                .size(1.dp) // Riduzione a 1px per isolare il bounding box
+                .alpha(0f), // Nasconde maniglie di selezione OS-level
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+            )
+        )
+    }
 }
 
 @Composable

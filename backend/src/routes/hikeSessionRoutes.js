@@ -49,7 +49,7 @@ router.post("/", async (req, res) => {
     res.status(201).json(session);
   } catch (err) {
     if (err.message === "USER_ALREADY_IN_SESSION")
-      return res.status(409).json({ error: "Sei già in una sessione attiva" });
+      return res.status(409).json({ error: "Hai una sessione attualmente in corso (tracciamento ATTIVO). Concludila prima di crearne un'altra." });
     res.status(500).json({ error: "Errore creazione sessione" });
   }
 });
@@ -67,7 +67,7 @@ router.post("/join", async (req, res) => {
     res.status(200).json(session);
   } catch (err) {
     if (err.message === "USER_ALREADY_IN_SESSION")
-      return res.status(409).json({ error: "Sei già in una sessione attiva" });
+      return res.status(409).json({ error: "Hai una sessione attualmente in corso (tracciamento ATTIVO). Concludila prima di unirti a una nuova." });
     if (err.message === "SESSION_NOT_FOUND")
       return res.status(404).json({ error: "Codice invito non valido" });
     if (err.message === "SESSION_NOT_JOINABLE")

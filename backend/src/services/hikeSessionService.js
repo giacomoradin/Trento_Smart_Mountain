@@ -7,11 +7,14 @@ function generateInviteCode() {
   return "TSM-" + crypto.randomBytes(2).toString("hex").toUpperCase(); // es. "TSM-7A4F"
 }
 
-// Controlla se l'utente è già in una sessione attiva o pianificata
+// Blocca solo se l'utente è in una sessione ATTIVA (tracciamento in corso).
+// Più sessioni PLANNED in parallelo sono consentite: l'utente può pianificare
+// più escursioni future e accettare diversi inviti, ma può essere attivo
+// in una sola alla volta (vincolo OCL D2 §4: una sola sessione live per user).
 async function checkUserAlreadyInActiveSession(userId) {
   const conflict = await HikeSession.findOne({
     "participants.userId": userId,
-    status: { $in: ["PLANNED", "ACTIVE"] },
+    status: "ACTIVE",
   });
 
   if (conflict) {

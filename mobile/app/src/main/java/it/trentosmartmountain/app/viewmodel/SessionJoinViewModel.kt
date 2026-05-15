@@ -15,7 +15,7 @@ import java.io.IOException
 class SessionJoinViewModel : ViewModel() {
 
     data class UiState(
-        val joinCode: String = "",
+        val joinCode: String = "TSM-",
         val sessions: List<SessionResponse> = emptyList(),
         val isLoadingSessions: Boolean = false,
         val isJoining: Boolean = false,
@@ -61,14 +61,24 @@ class SessionJoinViewModel : ViewModel() {
         }
     }
 
-    fun onJoinCodeChange(value: String) {
-        _uiState.update { it.copy(joinCode = value.uppercase(), joinError = null) }
+    /**
+     * Accetta qualsiasi input dall'utente e lo normalizza al formato `TSM-XXXX`.
+     * Strip alfanumerico + uppercase, rimuove eventuale prefisso "TSM" digitato,
+     * mantiene massimo 4 caratteri esadecimali dopo il prefisso.
+     */
+    fun onJoinCodeChange(rawInput: String) {
+        val cleaned = rawInput.uppercase().filter { it.isLetterOrDigit() }
+        val trailing = when {
+            cleaned.startsWith("TSM") -> cleaned.substring(3).take(4)
+            else -> cleaned.take(4)
+        }
+        _uiState.update { it.copy(joinCode = "TSM-$trailing", joinError = null) }
     }
 
     fun onJoinSession() {
         val code = _uiState.value.joinCode.trim()
-        if (code.length < 4) {
-            _uiState.update { it.copy(joinError = "Codice non valido.") }
+        if (code.length != 8) {
+            _uiState.update { it.copy(joinError = "Codice incompleto (TSM-XXXX).") }
             return
         }
         viewModelScope.launch {
@@ -76,7 +86,7 @@ class SessionJoinViewModel : ViewModel() {
             try {
                 val response = TsmApiClient.service().joinSession(JoinSessionRequest(code))
                 if (response.isSuccessful) {
-                    _uiState.update { it.copy(isJoining = false, joinCode = "") }
+                    _uiState.update { it.copy(isJoining = false, joinCode = "TSM-") }
                     loadSessions()
                 } else {
                     val error = when (response.code()) {

@@ -2,6 +2,8 @@ package it.trentosmartmountain.app.data.remote.dto
 
 data class JoinSessionRequest(val inviteCode: String)
 
+data class UpdateSessionStatusRequest(val status: String)
+
 data class UpdateSessionRequest(
     val routeDetails: UpdateRouteDetails? = null,
     val meetingDate: String? = null,

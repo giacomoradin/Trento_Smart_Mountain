@@ -23,6 +23,8 @@ data class SessionRouteDetailsResponse(
     val name: String,
     val difficultyLevel: String?,
     val elevationGain: Int?,
+    val startPoint: GeoPoint? = null,
+    val endPoint: GeoPoint? = null,
 )
 
 data class GpxStatsResponse(

@@ -12,6 +12,7 @@ import it.trentosmartmountain.app.data.remote.dto.RegisterRifugioRequest
 import it.trentosmartmountain.app.data.remote.dto.SessionCreatedResponse
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
+import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.remote.dto.UserResponse
 import retrofit2.Response
 import retrofit2.http.Body
@@ -53,4 +54,10 @@ interface TsmApiService {
 
   @PATCH("api/v1/sessions/{id}")
   suspend fun updateSession(@Path("id") id: String, @Body body: UpdateSessionRequest): Response<SessionResponse>
+
+  @PATCH("api/v1/sessions/{id}/status")
+  suspend fun updateSessionStatus(
+    @Path("id") id: String,
+    @Body body: UpdateSessionStatusRequest,
+  ): Response<SessionResponse>
 }

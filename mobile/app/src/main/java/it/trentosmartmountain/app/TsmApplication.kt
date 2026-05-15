@@ -5,6 +5,7 @@ import androidx.room.Room
 import it.trentosmartmountain.app.data.local.TokenStorage
 import it.trentosmartmountain.app.data.local.db.TsmDatabase
 import it.trentosmartmountain.app.data.remote.TsmApiClient
+import org.osmdroid.config.Configuration
 
 /** Entry point applicazione: inizializza il client HTTP con accesso al JWT locale. */
 class TsmApplication : Application() {
@@ -16,6 +17,11 @@ class TsmApplication : Application() {
 
   override fun onCreate() {
     super.onCreate()
+    Configuration.getInstance().userAgentValue = packageName
+    Configuration.getInstance().load(
+      applicationContext,
+      getSharedPreferences("osmdroid", MODE_PRIVATE),
+    )
     tokenStorage = TokenStorage.getInstance(this)
     database =
       Room.databaseBuilder(

@@ -10,9 +10,18 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ce74a261-e8fc-4b56-8530-187bfe9b92da" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/../.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/registra/RegistraRecFab.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/registra/RegistraRecFab.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/theme/Color.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/theme/Color.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/app/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/data/remote/TsmApiService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/data/remote/TsmApiService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/main/HikerMainScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/main/HikerMainScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/registra/RegistraScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/registra/RegistraScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/session/SessionDetailScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/session/SessionDetailScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/session/SessionHubScreen.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/ui/screens/session/SessionHubScreen.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/RegistraViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/RegistraViewModel.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/SessionDetailViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/SessionDetailViewModel.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/SessionJoinViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/it/trentosmartmountain/app/viewmodel/SessionJoinViewModel.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gradle/libs.versions.toml" beforeDir="false" afterPath="$PROJECT_DIR$/gradle/libs.versions.toml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -22,7 +31,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[PhysicalDevice::serial=MRPN4LVGMRV8VS4P, PhysicalDevice::serial=R52N91CWKRZ]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[PhysicalDevice::serial=RZCTA1FF6XM]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />

@@ -81,6 +81,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.createBitmap
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.zxing.BarcodeFormat
@@ -530,18 +535,50 @@ private fun SessionJoinTab(
         SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
     }
 
-    if (uiState.leaveConfirmSessionId != null) {
+    // Refresh ogni volta che l'utente entra in UNISCITI (es. ritorno da SessionDetail
+    // dopo aver creato/joinato/eliminato una sessione → la lista deve riflettere lo state attuale).
+    LaunchedEffect(Unit) { viewModel.loadSessions() }
+
+    // Refresh anche quando l'app torna in foreground (es. ritorno da app email per QR)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.loadSessions()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    uiState.removeConfirm?.let { request ->
+        val isDelete = request.mode == SessionJoinViewModel.RemovalMode.DELETE
         AlertDialog(
-            onDismissRequest = viewModel::dismissLeaveConfirm,
+            onDismissRequest = viewModel::dismissRemoveConfirm,
             containerColor = TsmSurface,
-            title = { Text(stringResource(R.string.session_leave_confirm_title), color = Color.White) },
-            text = { Text(stringResource(R.string.session_leave_confirm_body), color = Color.Gray) },
+            title = {
+                Text(
+                    if (isDelete) "Eliminare la sessione?" else stringResource(R.string.session_leave_confirm_title),
+                    color = Color.White,
+                )
+            },
+            text = {
+                Text(
+                    if (isDelete) {
+                        "Sei il Capogruppo. L'eliminazione rimuove la sessione anche per tutti i partecipanti e questa azione è irreversibile."
+                    } else {
+                        stringResource(R.string.session_leave_confirm_body)
+                    },
+                    color = Color.Gray,
+                )
+            },
             confirmButton = {
-                Button(onClick = viewModel::confirmLeaveSession, colors = ButtonDefaults.buttonColors(containerColor = TsmSos)) {
-                    Text("Abbandona", color = Color.White)
+                Button(
+                    onClick = viewModel::confirmRemoveSession,
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
+                ) {
+                    Text(if (isDelete) "Elimina" else "Abbandona", color = Color.White)
                 }
             },
-            dismissButton = { TextButton(onClick = viewModel::dismissLeaveConfirm) { Text("Annulla", color = Color.Gray) } },
+            dismissButton = { TextButton(onClick = viewModel::dismissRemoveConfirm) { Text("Annulla", color = Color.Gray) } },
         )
     }
 
@@ -642,12 +679,14 @@ private fun SessionJoinTab(
                 }
                 uiState.sessions.forEach { session ->
                     val isToday = session.meetingDate == todayFormatted
+                    val isCreator = session.creatorId?._id == uiState.currentUserId
                     SessionCard(
                         session = session,
                         isToday = isToday,
+                        isCreator = isCreator,
                         onDetailClick = { onNavigateToDetail(session._id) },
                         onAvviaClick = { onNavigateToDetail(session._id) },
-                        onAbbandonaClick = { viewModel.requestLeaveSession(session._id) },
+                        onRemoveClick = { viewModel.requestRemoveSession(session) },
                     )
                 }
             }
@@ -659,58 +698,116 @@ private fun SessionJoinTab(
 
 // ── Moduli Sub-Gerarchici (Componenti Custom) ──
 
+/**
+ * Input "OTP-style" per il codice sessione TSM-XXXX.
+ *
+ * Implementazione: un [BasicTextField] full-width gestisce input e focus,
+ * con `decorationBox` che sostituisce il rendering testuale con una Row
+ * di 8 box responsive (weight 1f → si adattano allo schermo).
+ * Il testo del field è reso trasparente; la posizione del cursore è
+ * rappresentata visivamente dal bordo TsmAccent attivo sul box corrente.
+ *
+ * Nota: il ViewModel normalizza sempre l'input a `TSM-XXXX`,
+ * quindi posizioni 0..3 sono fisse e grigie, 4..7 accettano hex utente.
+ */
 @Composable
 private fun SessionCodeBoxInput(code: String, onCodeChange: (String) -> Unit) {
-    val focusRequester = remember { FocusRequester() }
-    val display = code.uppercase().padEnd(8)
-
-    Box(modifier = Modifier.fillMaxWidth().clickable { focusRequester.requestFocus() }) {
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            (0..7).forEach { i ->
-                val char = display.getOrElse(i) { ' ' }
-                val isCursor = i == code.length && code.length < 8
-                Box(
-                    modifier = Modifier
-                        .size(width = 42.dp, height = 52.dp)
-                        .background(TsmSurfaceVariant, RoundedCornerShape(6.dp))
-                        .border(1.dp, if (isCursor) TsmAccent else Color(0xFF3A3A3A), RoundedCornerShape(6.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = if (char == ' ') "" else char.toString(),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = if (i == 3) Color.Gray else Color.White,
-                    )
-                }
-            }
-        }
-        BasicTextField(
-            value = code,
-            onValueChange = { new ->
-                val filtered = new.uppercase().filter { it.isLetterOrDigit() || it == '-' }.take(8)
-                onCodeChange(filtered)
-            },
-            modifier = Modifier.focusRequester(focusRequester).alpha(0f).size(1.dp),
-            singleLine = true,
+    // Usa TextFieldValue per controllare ESPLICITAMENTE la posizione del cursore.
+    // Senza questo: cursore in posizioni inaspettate + "ghost" dei codici precedenti
+    // su backspace ripetuto (state interno del field desync rispetto al valore esterno).
+    var textFieldValue by remember {
+        mutableStateOf(
+            androidx.compose.ui.text.input.TextFieldValue(
+                text = code,
+                selection = androidx.compose.ui.text.TextRange(code.length),
+            ),
         )
     }
+
+    // Riallinea TFV ogni volta che il VM normalizza/resetta `code` esternamente
+    // (es. dopo join → reset a "TSM-"). Elimina lo state stale.
+    androidx.compose.runtime.LaunchedEffect(code) {
+        if (textFieldValue.text != code) {
+            textFieldValue = androidx.compose.ui.text.input.TextFieldValue(
+                text = code,
+                selection = androidx.compose.ui.text.TextRange(code.length),
+            )
+        }
+    }
+
+    BasicTextField(
+        value = textFieldValue,
+        onValueChange = { new ->
+            // Forza il cursore alla fine (no edit nel mezzo) e propaga solo le modifiche al testo
+            textFieldValue = new.copy(selection = androidx.compose.ui.text.TextRange(new.text.length))
+            if (new.text != code) onCodeChange(new.text)
+        },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle.Default.copy(color = Color.Transparent),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.Transparent),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+            keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii,
+            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+        ),
+        decorationBox = { innerTextField ->
+            Box(modifier = Modifier.fillMaxWidth()) {
+                // Text field invisibile ma funzionale: cattura focus, tastiera, click
+                innerTextField()
+
+                // Overlay visuale: 8 box responsive
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    val display = code.padEnd(8)
+                    (0..7).forEach { i ->
+                        val char = display.getOrElse(i) { ' ' }
+                        val isFixedPrefix = i <= 3 // T, S, M, -
+                        val isCursorHere = i == code.length && code.length < 8
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                                .background(TsmSurfaceVariant, RoundedCornerShape(6.dp))
+                                .border(
+                                    1.dp,
+                                    if (isCursorHere) TsmAccent else Color(0xFF3A3A3A),
+                                    RoundedCornerShape(6.dp),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = if (char == ' ') "" else char.toString(),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = if (isFixedPrefix) Color.Gray else Color.White,
+                            )
+                        }
+                    }
+                }
+            }
+            },
+    )
 }
 
 @Composable
 private fun SessionCard(
     session: it.trentosmartmountain.app.data.remote.dto.SessionResponse,
     isToday: Boolean,
+    isCreator: Boolean,
     onDetailClick: () -> Unit,
     onAvviaClick: () -> Unit,
-    onAbbandonaClick: () -> Unit,
+    onRemoveClick: () -> Unit,
 ) {
     val name = session.routeDetails?.name ?: "Sessione"
     val dateTime = listOfNotNull(session.meetingDate, session.meetingTime).joinToString(" · ")
     val host = session.creatorId?.username?.let { "host $it" } ?: ""
     val subtitle = listOf(dateTime, host).filter { it.isNotBlank() }.joinToString(" · ")
     val distKm = session.gpxStats?.distanceKm?.let { "%.1f km".format(it) }
+    val elev = session.gpxStats?.elevationGainM?.let { "+$it m" }
+    val diff = session.routeDetails?.difficultyLevel
     val participants = session.participants?.size?.let { "$it partecipanti" }
-    val stats = listOfNotNull(distKm, participants).joinToString("  ·  ")
+    val stats = listOfNotNull(distKm, elev, diff, participants).joinToString("  ·  ")
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -728,7 +825,6 @@ private fun SessionCard(
                     color = TsmSurfaceVariant,
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        // Inserire l'icona TSMMountain o un placeholder corretto:
                         Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = TsmAccent)
                     }
                 }
@@ -741,9 +837,30 @@ private fun SessionCard(
                                 Text(stringResource(R.string.session_card_oggi), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = Color.White)
                             }
                         }
+                        if (isCreator) {
+                            Surface(color = TsmAccent.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp)) {
+                                Text(
+                                    "HOST",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = TsmAccent,
+                                )
+                            }
+                        }
                     }
                     if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     if (stats.isNotBlank()) Text(stats, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    // Invite code sempre visibile in card (per condivisione futura).
+                    // Vincolo D2: il codice è immutabile per non perdere i partecipanti.
+                    Text(
+                        text = session.inviteCode,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp,
+                        ),
+                        color = TsmAccent,
+                    )
                 }
                 Icon(
                     imageVector = Icons.Outlined.Close,
@@ -767,12 +884,16 @@ private fun SessionCard(
                     }
                 }
                 OutlinedButton(
-                    onClick = onAbbandonaClick,
+                    onClick = onRemoveClick,
                     modifier = Modifier.weight(if (isToday && session.status == "PLANNED") 1f else 2f).height(40.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, TsmSos),
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text(stringResource(R.string.session_card_abbandona), color = TsmSos, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                    Text(
+                        if (isCreator) "🗑 Elimina" else stringResource(R.string.session_card_abbandona),
+                        color = TsmSos,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    )
                 }
             }
         }

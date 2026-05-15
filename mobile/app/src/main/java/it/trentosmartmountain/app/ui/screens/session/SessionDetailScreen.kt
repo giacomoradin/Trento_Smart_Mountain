@@ -56,6 +56,7 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +69,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -76,6 +80,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
+import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.ui.screens.auth.TsmMountainLogo
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
@@ -122,6 +127,9 @@ fun SessionDetailScreen(
                 Button(
                     onClick = {
                         viewModel.dismissAvviaConfirm()
+                        // Segnaliamo via Coordinator: HikerMainScreen switcha alla tab Registra,
+                        // RegistraViewModel auto-avvia il tracking.
+                        SessionStartCoordinator.requestStart(sessionId)
                         onAvviaConfirmed(sessionId)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
@@ -275,6 +283,9 @@ fun SessionDetailScreen(
                 )
             }
 
+            // ── CONDIVISIONE (codice invito sempre visibile) ──
+            InviteCodeCard(inviteCode = session.inviteCode)
+
             // ── ELEVATION PROFILE + STATS ──
             DetailCard {
                 ElevationProfileChart(
@@ -294,34 +305,12 @@ fun SessionDetailScreen(
                 }
             }
 
-            // ── METEO ──
-            /*
-             * INTEGRAZIONE METEO — DA COMPLETARE DAL COLLEGA (BACKEND)
-             *
-             * Endpoint atteso: GET /api/v1/meteo?lat={lat}&lon={lon}&date={meetingDate}
-             * Response shape:
-             *   {
-             *     "tempMin": 14, "tempMax": 22,
-             *     "description": "Variabile",
-             *     "wind": "NE 12 km/h",
-             *     "hourly": [
-             *       { "hour": "06h", "icon": "cloud", "tempC": 12 },
-             *       { "hour": "09h", "icon": "partly_cloudy", "tempC": 16 },
-             *       ...
-             *     ]
-             *   }
-             *
-             * Implementazione mobile suggerita:
-             * 1. In SessionDetailViewModel.loadSession(), dopo il fetch sessione,
-             *    chiamare fetchMeteo(lat, lon, meetingDate) se startPoint disponibile.
-             * 2. Aggiornare ogni 5 minuti con LaunchedEffect + delay(5 * 60 * 1000L).
-             * 3. Mostrare "Aggiornato X min fa" calcolando elapsed time.
-             * 4. Storico 5 giorni: paginare per data (tab scroll orizzontale o dropdown).
-             * 5. Salvare in Room per accesso offline (TelemetryBucket o nuova tabella MeteoCache).
-             *
-             * Per ora: dati mock statici pronti per essere sostituiti.
-             */
-            MeteoCard(meetingDate = session.meetingDate ?: "—")
+            // ── METEO (dati reali da MeteoTrentino via backend di Marco) ──
+            MeteoCard(
+                meetingDate = session.meetingDate ?: "—",
+                uiState = uiState,
+                onRefresh = viewModel::refreshMeteo,
+            )
 
             // ── CHECKLIST ──
             ChecklistCard(uiState = uiState, viewModel = viewModel)
@@ -336,7 +325,12 @@ fun SessionDetailScreen(
 
             // ── AVVIA ──
             Button(
-                onClick = { viewModel.onAvviaClick(todayFormatted) { onAvviaConfirmed(sessionId) } },
+                onClick = {
+                    viewModel.onAvviaClick(todayFormatted) {
+                        SessionStartCoordinator.requestStart(sessionId)
+                        onAvviaConfirmed(sessionId)
+                    }
+                },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
                 shape = RoundedCornerShape(8.dp),
@@ -479,51 +473,126 @@ private fun StatCell(label: String, value: String, valueColor: Color, modifier: 
     }
 }
 
-// ── Meteo card (mock — backend integration pending) ──
+// ── Meteo card (dati reali da MeteoTrentino via backend di Marco) ──
 
 @Composable
-private fun MeteoCard(meetingDate: String) {
+private fun MeteoCard(
+    meetingDate: String,
+    uiState: SessionDetailViewModel.UiState,
+    onRefresh: () -> Unit,
+) {
+    val station = uiState.meteoStation
+    val latestTemp = station?.air_temperature?.lastOrNull()
+    val stationName = station?.stationInfo?.name ?: station?.stationCode ?: "—"
+    val elevation = station?.stationInfo?.elevation?.let { "${it} m" } ?: ""
+    val updatedAgo = uiState.meteoLastUpdate?.let { ts ->
+        val diffMs = System.currentTimeMillis() - ts
+        when {
+            diffMs < 60_000L -> "ora"
+            diffMs < 3_600_000L -> "${diffMs / 60_000L} min fa"
+            else -> "${diffMs / 3_600_000L} h fa"
+        }
+    } ?: "—"
+
     DetailCard {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("METEO · ${meetingDate.uppercase()}", style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp), color = Color.Gray)
-            Surface(color = TsmSurfaceVariant, shape = RoundedCornerShape(20.dp)) {
-                Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Outlined.Schedule, null, tint = TsmAccent, modifier = Modifier.size(12.dp))
-                    Text("Aggiornato 5 min fa", style = MaterialTheme.typography.labelSmall, color = TsmAccent)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "METEO · ${meetingDate.uppercase()}",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                color = Color.Gray,
+            )
+            Surface(
+                color = TsmSurfaceVariant,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.clickable(enabled = !uiState.meteoLoading) { onRefresh() },
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (uiState.meteoLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = TsmAccent)
+                    } else {
+                        Icon(Icons.Outlined.Schedule, null, tint = TsmAccent, modifier = Modifier.size(12.dp))
+                    }
+                    Text(
+                        if (uiState.meteoLoading) "Aggiornamento..." else "Aggiornato $updatedAgo",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TsmAccent,
+                    )
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Animated cloud/wind icon (placeholder text glyph)
-            Text("🌤", fontSize = 36.sp)
-            Column {
-                Text("14° / 22°", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = Color.White)
-                Text("Variabile · vento NE 12 km/h", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        when {
+            uiState.meteoError != null -> {
+                Text(
+                    text = uiState.meteoError!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(onClick = onRefresh) {
+                    Text("Riprova", color = TsmAccent, style = MaterialTheme.typography.labelMedium)
+                }
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Hourly forecast strip
-        val hourly = listOf("06h" to ("☁" to 12), "09h" to ("⛅" to 16), "12h" to ("☀" to 21), "15h" to ("☀" to 22), "18h" to ("⛅" to 19))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            hourly.forEach { (hour, iconTemp) ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(hour, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(iconTemp.first, fontSize = 18.sp)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text("${iconTemp.second}°", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+            latestTemp == null -> {
+                Text(
+                    "Nessun dato meteo disponibile.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                )
+            }
+            else -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    // Icona dinamica in base alla temperatura (placeholder finché Marco non aggiunge condition icons)
+                    val icon = when {
+                        (latestTemp.value ?: 0.0) < 0 -> "❄️"
+                        (latestTemp.value ?: 0.0) < 10 -> "🌤"
+                        (latestTemp.value ?: 0.0) < 20 -> "☀️"
+                        else -> "🔥"
+                    }
+                    Text(icon, fontSize = 36.sp)
+                    Column {
+                        Text(
+                            text = "${latestTemp.value?.let { "%.1f".format(it) } ?: "—"}${latestTemp.UM ?: "°C"}",
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                        )
+                        Text(
+                            text = "Stazione: $stationName${if (elevation.isNotBlank()) " · $elevation" else ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray,
+                        )
+                        latestTemp.date?.let {
+                            Text(
+                                text = "Rilevazione: $it",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray,
+                            )
+                        }
+                    }
                 }
             }
         }
+
+        // NOTA: hourly forecast + previsioni multi-giorno saranno disponibili
+        // quando Marco aggiungerà l'endpoint forecast.
+        // Per ora il backend espone solo l'ultima temperatura per stazione.
     }
 }
 
-// ── Checklist card ──
+// ── Checklist card (drag-and-drop con sh.calvin.reorderable) ──
 
 @Composable
 private fun ChecklistCard(
@@ -549,47 +618,51 @@ private fun ChecklistCard(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        uiState.checklist.forEachIndexed { index, item ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Drag handle (visual only)
-                // TODO: Implementare drag-and-drop con la libreria `com.github.berstanio:compose-reorderable`
-                // o con gestureDetector pointerInput + LazyColumn state reorder.
-                // Per ora: icona visiva con pulsanti ↑↓ accessibili via long-press futuro.
-                Icon(
-                    Icons.Outlined.DragHandle,
-                    contentDescription = "Sposta",
-                    tint = Color(0xFF555555),
-                    modifier = Modifier.size(20.dp),
-                )
-                Checkbox(
-                    checked = item.checked,
-                    onCheckedChange = { viewModel.onToggleCheck(item.id) },
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = TsmPrimary,
-                        uncheckedColor = Color(0xFF555555),
-                        checkmarkColor = Color.White,
-                    ),
-                )
-                Text(
-                    item.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (item.checked) Color.Gray else Color.White,
-                    modifier = Modifier.weight(1f),
-                )
-                // Move up/down buttons
-                Column(modifier = Modifier.size(width = 24.dp, height = 40.dp), verticalArrangement = Arrangement.Center) {
-                    if (index > 0) {
-                        Text("↑", color = Color(0xFF666666), fontSize = 11.sp, modifier = Modifier.clickable { viewModel.onMoveItemUp(item.id) })
+        // ReorderableColumn: long-press sul drag handle per spostare gli item
+        sh.calvin.reorderable.ReorderableColumn(
+            list = uiState.checklist,
+            onSettle = { from, to -> viewModel.onChecklistMove(from, to) },
+        ) { _, item, _ ->
+            // Key per item: necessario per Compose recomposition stabile durante il drag.
+            key(item.id) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Drag handle: long-press qui attiva il drag-and-drop dell'item
+                    IconButton(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .draggableHandle(),
+                        onClick = {},
+                    ) {
+                        Icon(
+                            Icons.Outlined.DragHandle,
+                            contentDescription = "Trascina per riordinare",
+                            tint = Color(0xFF888888),
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
-                    if (index < uiState.checklist.size - 1) {
-                        Text("↓", color = Color(0xFF666666), fontSize = 11.sp, modifier = Modifier.clickable { viewModel.onMoveItemDown(item.id) })
+                    Checkbox(
+                        checked = item.checked,
+                        onCheckedChange = { viewModel.onToggleCheck(item.id) },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = TsmPrimary,
+                            uncheckedColor = Color(0xFF555555),
+                            checkmarkColor = Color.White,
+                        ),
+                    )
+                    Text(
+                        item.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (item.checked) Color.Gray else Color.White,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { viewModel.onRemoveItem(item.id) }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color(0xFF888888), modifier = Modifier.size(18.dp))
                     }
-                }
-                IconButton(onClick = { viewModel.onRemoveItem(item.id) }, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color(0xFF555555), modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -676,6 +749,46 @@ private fun avatarColorFor(username: String): Color {
         Color(0xFF4A148C), Color(0xFF006064), Color(0xFF3E2723),
     )
     return palette[abs(username.hashCode()) % palette.size]
+}
+
+// ── Invite Code Card (sempre visibile, copyable in clipboard) ──
+
+@Composable
+private fun InviteCodeCard(inviteCode: String) {
+    val clipboard = LocalClipboardManager.current
+    DetailCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "CODICE INVITO",
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                    color = Color.Gray,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    inviteCode,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp,
+                    ),
+                    color = TsmAccent,
+                )
+                Text(
+                    "Condividi con i partecipanti per unirsi",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                )
+            }
+            TextButton(onClick = { clipboard.setText(AnnotatedString(inviteCode)) }) {
+                Text("COPIA", color = TsmAccent, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+            }
+        }
+    }
 }
 
 // ── Utility ──

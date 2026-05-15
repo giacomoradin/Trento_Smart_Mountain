@@ -78,6 +78,7 @@ dependencies {
   implementation(libs.zxing.core)
   implementation(libs.osmdroid.android)
   implementation(libs.play.services.location)
+  implementation(libs.reorderable)
   debugImplementation("androidx.compose.ui:ui-tooling")
   debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

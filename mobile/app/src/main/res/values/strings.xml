@@ -118,7 +118,9 @@
   <string name="session_detail_edit_title">Modifica sessione</string>
   <string name="session_detail_save">SALVA</string>
   <string name="registra_title">Registra</string>
-  <string name="registra_placeholder_body">Mappa della sessione attiva, posizione del gruppo in tempo reale e strumenti di tracciamento saranno integrati qui.</string>
+  <string name="registra_gps_label">GPS</string>
+  <string name="registra_center_location_cd">Centra mappa sulla mia posizione</string>
+  <string name="registra_location_permission_denied">Abilita la posizione per vedere la tua ubicazione sulla mappa.</string>
   <string name="registra_sos_cd">Emergenza SOS</string>
   <string name="registra_sos_dialog_title">SOS</string>
   <string name="registra_sos_dialog_body">Flusso di emergenza in costruzione. In produzione questo passaggio contatterà i servizi o il gruppo secondo le policy del prodotto.</string>

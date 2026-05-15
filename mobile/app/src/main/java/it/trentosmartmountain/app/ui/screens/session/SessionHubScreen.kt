@@ -25,7 +25,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -52,6 +51,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -76,7 +76,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -129,11 +128,12 @@ fun SessionHubScreen(
             contentColor = Color.White,
             divider = { HorizontalDivider(color = Color(0xFF2A2A2A)) },
             indicator = {
-                Box(
-                    modifier = Modifier
-                        .tabIndicatorOffset(selectedTabIndex = subTab)
-                        .height(2.dp)
-                        .background(TsmAccent),
+                TabRowDefaults.PrimaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(
+                        selectedTabIndex = subTab,
+                        matchContentSize = true
+                    ),
+                    color = TsmAccent
                 )
             },
         ) {
@@ -209,7 +209,6 @@ private fun SessionPlanTab(
         )
     }
 
-    // Date picker dialog
     if (showDatePicker) {
         val dateState = rememberDatePickerState()
         DatePickerDialog(
@@ -229,7 +228,6 @@ private fun SessionPlanTab(
         }
     }
 
-    // Time picker dialog
     if (showTimePicker) {
         val timeState = rememberTimePickerState(initialHour = 6, initialMinute = 30)
         Dialog(onDismissRequest = { showTimePicker = false }) {
@@ -260,7 +258,7 @@ private fun SessionPlanTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // ── TRACCIATO SECTION ──
+        // TRACCIATO SECTION
         SectionCard {
             SectionLabel(stringResource(R.string.session_tracciato_title))
             Spacer(modifier = Modifier.height(4.dp))
@@ -271,7 +269,6 @@ private fun SessionPlanTab(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            // GPX drop zone
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -315,7 +312,6 @@ private fun SessionPlanTab(
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
-            // GPX file info row
             uiState.gpxData?.let { gpx ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
@@ -342,7 +338,7 @@ private fun SessionPlanTab(
             }
         }
 
-        // ── DETTAGLI SESSIONE ──
+        // DETTAGLI SESSIONE
         SectionCard {
             SectionLabel(stringResource(R.string.session_details_section))
 
@@ -446,7 +442,7 @@ private fun SessionPlanTab(
             }
         }
 
-        // ── CONDIVISIONE ──
+        // CONDIVISIONE
         SectionCard {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -534,7 +530,6 @@ private fun SessionJoinTab(
         SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
     }
 
-    // Leave confirmation dialog
     if (uiState.leaveConfirmSessionId != null) {
         AlertDialog(
             onDismissRequest = viewModel::dismissLeaveConfirm,
@@ -554,7 +549,7 @@ private fun SessionJoinTab(
         modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // ── CODE INPUT + JOIN ──
+        // CODE INPUT + JOIN
         SectionCard {
             SectionLabel(stringResource(R.string.session_join_code_label))
             Spacer(modifier = Modifier.height(8.dp))
@@ -573,17 +568,13 @@ private fun SessionJoinTab(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
-                    onClick = {
-                        // TODO: Aggiungere ML Kit Barcode Scanning (com.google.mlkit:barcode-scanning)
-                        // Richiede: CAMERA permission, CameraX, BarcodeScanner instance
-                        // Al completamento, chiamare viewModel.onJoinCodeChange(scannedCode)
-                    },
+                    onClick = { /* TODO: ML Kit Barcode Scanning */ },
                     modifier = Modifier.weight(1f).height(48.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, TsmBorder),
                     shape = RoundedCornerShape(8.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.CheckCircle, // placeholder per QrCodeScanner
+                        imageVector = Icons.Filled.CheckCircle,
                         contentDescription = null,
                         tint = TsmAccent,
                         modifier = Modifier.size(18.dp),
@@ -611,48 +602,62 @@ private fun SessionJoinTab(
             }
         }
 
-        // ── SESSION LIST ──
-        if (uiState.isLoadingSessions) {
-            Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = TsmAccent)
+        // SESSION LIST — tre stati: loading | error | empty | populated
+        when {
+            uiState.isLoadingSessions -> {
+                Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = TsmAccent)
+                }
             }
-        } else if (uiState.sessions.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.session_join_sessions_header),
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
-                    color = Color.Gray,
-                )
-                Text(
-                    uiState.sessions.size.toString(),
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = TsmAccent,
-                )
+            uiState.generalError != null -> {
+                // Errore visibile (include JsonSyntaxException da backend asimmetrico)
+                Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = TsmSurface) {
+                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(uiState.generalError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                        TextButton(onClick = viewModel::loadSessions) {
+                            Text("Riprova", color = TsmAccent, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                        }
+                    }
+                }
             }
-
-            uiState.sessions.forEach { session ->
-                val isToday = session.meetingDate == todayFormatted
-                SessionCard(
-                    session = session,
-                    isToday = isToday,
-                    onDetailClick = { onNavigateToDetail(session._id) },
-                    onAvviaClick = { onNavigateToDetail(session._id) },
-                    onAbbandonaClick = { viewModel.requestLeaveSession(session._id) },
-                )
+            uiState.sessions.isEmpty() -> {
+                // Empty state esplicito — non collassa silenziosamente
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp, horizontal = 16.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Nessuna escursione in programma.\nInserisci un codice invito o scansiona un QR per unirti a una sessione.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
-        } else {
-            uiState.generalError?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(4.dp))
+            else -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.session_join_sessions_header), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp), color = Color.Gray)
+                    Text(uiState.sessions.size.toString(), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = TsmAccent)
+                }
+                uiState.sessions.forEach { session ->
+                    val isToday = session.meetingDate == todayFormatted
+                    SessionCard(
+                        session = session,
+                        isToday = isToday,
+                        onDetailClick = { onNavigateToDetail(session._id) },
+                        onAvviaClick = { onNavigateToDetail(session._id) },
+                        onAbbandonaClick = { viewModel.requestLeaveSession(session._id) },
+                    )
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
+
+// ── Moduli Sub-Gerarchici (Componenti Custom) ──
 
 @Composable
 private fun SessionCodeBoxInput(code: String, onCodeChange: (String) -> Unit) {
@@ -723,7 +728,8 @@ private fun SessionCard(
                     color = TsmSurfaceVariant,
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        it.trentosmartmountain.app.ui.screens.auth.TsmMountainLogo(iconSize = 28.dp)
+                        // Inserire l'icona TSMMountain o un placeholder corretto:
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = TsmAccent)
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -740,7 +746,7 @@ private fun SessionCard(
                     if (stats.isNotBlank()) Text(stats, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 }
                 Icon(
-                    imageVector = Icons.Outlined.Close, // placeholder for chevron
+                    imageVector = Icons.Outlined.Close,
                     contentDescription = null,
                     tint = Color.Gray,
                     modifier = Modifier.size(20.dp).alpha(0.5f),
@@ -773,7 +779,7 @@ private fun SessionCard(
     }
 }
 
-// ── Utility composables ──
+// ── Utility Base Composables ──
 
 @Composable
 private fun SectionCard(content: @Composable () -> Unit) {

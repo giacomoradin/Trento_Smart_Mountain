@@ -35,7 +35,7 @@ export async function createSession(creatorId, routeDetails, sessionMeta = {}) {
     creatorId,
     routeDetails,
     inviteCode,
-    participants: [{ userId: creatorId }],
+    participants: [{ userId: creatorId, role: "groupLeader" }],
     status: "PLANNED",
     ...sessionMeta,
   });
@@ -108,13 +108,12 @@ export async function getSessionById(sessionId) {
 
 // Recupera tutte le sessioni di un utente (come creator o partecipante)
 export async function getSessionsByUser(userId) {
-  /* 
-     #swagger.tags = ['Sessions']
-     #swagger.description = 'Ottiene la lista di tutte le sessioni a cui l'utente partecipa o che ha creato.'
-  */
   return HikeSession.find({
     $or: [{ creatorId: userId }, { "participants.userId": userId }],
-  }).populate("creatorId", "username email");
+  })
+    .populate("creatorId", "username email")
+    .populate("participants.userId", "username email")
+    .sort({ meetingDate: 1 });
 }
 
 // Abbandona una sessione (non disponibile per il creator)

@@ -47,7 +47,7 @@ fun TsmNavHost() {
 
     // Legge userId dal JWT per il check "isCreator" nella sessione
     val currentUserId = remember(application) {
-        application.tokenStorage.getToken()?.let { JwtDecoder.getUserId(it) } ?: ""
+        application.tokenStorage.getToken()?.let { JwtDecoder.userIdFrom(it) } ?: ""
     }
 
     NavHost(navController = navController, startDestination = startDestination) {

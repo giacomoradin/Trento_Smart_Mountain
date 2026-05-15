@@ -39,12 +39,24 @@ class SessionJoinViewModel : ViewModel() {
                     val sorted = (response.body() ?: emptyList()).sortedBy { it.meetingDate ?: "" }
                     _uiState.update { it.copy(isLoadingSessions = false, sessions = sorted) }
                 } else {
-                    _uiState.update { it.copy(isLoadingSessions = false) }
+                    _uiState.update {
+                        it.copy(
+                            isLoadingSessions = false,
+                            generalError = "Errore server (${response.code()}). Riprova.",
+                        )
+                    }
                 }
             } catch (e: IOException) {
-                _uiState.update { it.copy(isLoadingSessions = false, generalError = "Nessuna connessione.") }
+                _uiState.update { it.copy(isLoadingSessions = false, generalError = "Nessuna connessione al server.") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoadingSessions = false) }
+                // JsonSyntaxException o altri errori di deserializzazione: esponiamo il messaggio
+                // invece di inghiottirlo silenziosamente (error-swallowing bug).
+                _uiState.update {
+                    it.copy(
+                        isLoadingSessions = false,
+                        generalError = "Errore nel parsing dei dati: ${e.javaClass.simpleName}",
+                    )
+                }
             }
         }
     }
@@ -70,14 +82,14 @@ class SessionJoinViewModel : ViewModel() {
                     val error = when (response.code()) {
                         404 -> "Codice non trovato."
                         409 -> "Sei già in questa sessione o in un'altra attiva."
-                        else -> "Errore (${response.code()})."
+                        else -> "Errore server (${response.code()})."
                     }
                     _uiState.update { it.copy(isJoining = false, joinError = error) }
                 }
             } catch (e: IOException) {
                 _uiState.update { it.copy(isJoining = false, joinError = "Nessuna connessione.") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isJoining = false, joinError = e.message) }
+                _uiState.update { it.copy(isJoining = false, joinError = "Errore: ${e.javaClass.simpleName}") }
             }
         }
     }
@@ -95,11 +107,13 @@ class SessionJoinViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLeaving = true, leaveConfirmSessionId = null) }
             try {
-                val response = TsmApiClient.service().leaveSession(sessionId)
+                TsmApiClient.service().leaveSession(sessionId)
                 _uiState.update { it.copy(isLeaving = false) }
                 loadSessions()
+            } catch (e: IOException) {
+                _uiState.update { it.copy(isLeaving = false, generalError = "Nessuna connessione.") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLeaving = false) }
+                _uiState.update { it.copy(isLeaving = false, generalError = "Errore: ${e.javaClass.simpleName}") }
             }
         }
     }

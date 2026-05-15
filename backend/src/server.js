@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import app from "./app.js"; // ← importa app.js invece di ricreare Express
+import { seedLocations } from './services/weatherService.js';
 
 const PORT = process.env.PORT || 3000;
 const MONGO_URI =
@@ -8,7 +9,8 @@ const MONGO_URI =
 
 mongoose
   .connect(MONGO_URI)
-  .then(() => {
+  .then(async() => {
+    await seedLocations();
     console.log("Connected to MongoDB");
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })

@@ -20,6 +20,10 @@ object Routes {
   const val MAIN_RIFUGIO = "main_rifugio"
   /** Recupero password via email. */
   const val FORGOT_PASSWORD = "forgot_password"
+  /** Dettaglio sessione escursione (modale sul nav principale). */
+  const val SESSION_DETAIL = "session_detail/{sessionId}"
+
+  fun sessionDetailRoute(sessionId: String) = "session_detail/$sessionId"
 
   fun loginRoute(pendingEmail: String = ""): String =
     "login?pendingEmail=${Uri.encode(pendingEmail)}"

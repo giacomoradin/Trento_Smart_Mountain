@@ -24,20 +24,12 @@ import it.trentosmartmountain.app.ui.screens.profile.ProfileScreen
 import it.trentosmartmountain.app.ui.screens.registra.RegistraScreen
 import it.trentosmartmountain.app.ui.screens.session.SessionHubScreen
 
-private enum class HikerTab {
-  Home,
-  Session,
-  Registra,
-  Profile,
-}
+private enum class HikerTab { Home, Session, Registra, Profile }
 
-/**
- * Area principale utente escursionista: bottom bar Home, Sessione, Registra, Profilo
- * (allineato a modelli tipo Strava / Komoot).
- */
 @Composable
 fun HikerMainScreen(
   onLoggedOut: () -> Unit,
+  onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
 
@@ -73,10 +65,12 @@ fun HikerMainScreen(
   ) { innerPadding ->
     when (selectedTab) {
       HikerTab.Home -> HomeScreen(Modifier.padding(innerPadding))
-      HikerTab.Session -> SessionHubScreen(Modifier.padding(innerPadding))
+      HikerTab.Session -> SessionHubScreen(
+        modifier = Modifier.padding(innerPadding),
+        onNavigateToDetail = onNavigateToSessionDetail,
+      )
       HikerTab.Registra -> RegistraScreen(Modifier.padding(innerPadding))
-      HikerTab.Profile ->
-        ProfileScreen(onLoggedOut = onLoggedOut, modifier = Modifier.padding(innerPadding))
+      HikerTab.Profile -> ProfileScreen(onLoggedOut = onLoggedOut, modifier = Modifier.padding(innerPadding))
     }
   }
 }

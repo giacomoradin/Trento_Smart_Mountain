@@ -40,7 +40,7 @@ fun RegistraMetricStrip(
         .fillMaxWidth()
         .clip(RoundedCornerShape(12.dp))
         .background(TsmSurface.copy(alpha = 0.94f))
-        .padding(horizontal = 16.dp, vertical = 10.dp),
+        .padding(horizontal = 12.dp, vertical = 8.dp),
     horizontalArrangement = Arrangement.SpaceEvenly,
     verticalAlignment = Alignment.CenterVertically,
   ) {

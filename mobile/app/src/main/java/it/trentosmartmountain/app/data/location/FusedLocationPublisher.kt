@@ -10,6 +10,12 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 
+/**
+ * Wrapper su Fused Location Provider per aggiornamenti GPS ad alta precisione.
+ *
+ * Usato dal [ForegroundTrackingService] durante la registrazione; espone callback
+ * sincroni invece di Flow per ridurre overhead nel servizio foreground.
+ */
 internal class FusedLocationPublisher(context: Context) {
 
   private val fusedClient = LocationServices.getFusedLocationProviderClient(context)
@@ -34,6 +40,7 @@ internal class FusedLocationPublisher(context: Context) {
       }
     callback = locationCallback
     fusedClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
+    // Ultima posizione nota: fix immediato sulla mappa prima del primo callback periodico
     fusedClient.lastLocation.addOnSuccessListener { loc ->
       if (loc != null) onLocation(loc.toSnapshot())
     }

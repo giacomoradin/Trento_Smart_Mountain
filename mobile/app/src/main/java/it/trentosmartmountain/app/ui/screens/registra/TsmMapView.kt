@@ -26,6 +26,15 @@ private const val USER_MARKER_ID = "tsm_user_location"
 
 private const val TRACK_POLYLINE_ID = "tsm_live_track"
 
+/**
+ * Wrapper Compose per [MapView] **OSMdroid**: mappa escursionistica con tile OpenTopoMap.
+ *
+ * - Marker posizione utente e polyline del percorso registrato
+ * - Ciclo di vita allineato all'Activity (`onResume` / `onPause`)
+ * - Centratura mappa solo su incremento di [centerOnUserTick] (tap FAB, non ad ogni fix GPS)
+ *
+ * La configurazione globale OSMdroid è in [it.trentosmartmountain.app.TsmApplication].
+ */
 @Composable
 fun TsmMapView(
   modifier: Modifier = Modifier,

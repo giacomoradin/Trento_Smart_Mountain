@@ -26,8 +26,12 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+/**
+ * Tab **Pianifica** in [SessionHubScreen]: parsing GPX locale e creazione sessione su backend.
+ */
 class SessionPlanViewModel : ViewModel() {
 
+    /** Risultato del parsing GPX lato client (metriche e profilo altimetrico campionato). */
     data class GpxParseResult(
         val fileName: String,
         val distanceKm: Double,
@@ -41,6 +45,7 @@ class SessionPlanViewModel : ViewModel() {
         val estimatedPoints: Int = 0,
     )
 
+    /** Stato del form di pianificazione escursione. */
     data class UiState(
         val sessionName: String = "",
         val meetingDate: String = "",

@@ -15,14 +15,19 @@ import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.UUID
 
+/**
+ * Dettaglio sessione: caricamento da API, modifica capogruppo, checklist locale, meteo.
+ */
 class SessionDetailViewModel : ViewModel() {
 
+    /** Elemento della checklist escursionistica (stato solo locale, non ancora persistito). */
     data class ChecklistItem(
         val id: String = UUID.randomUUID().toString(),
         val text: String,
         val checked: Boolean = false,
     )
 
+    /** Stato per [it.trentosmartmountain.app.ui.screens.session.SessionDetailScreen]. */
     data class UiState(
         val session: SessionResponse? = null,
         val isLoading: Boolean = false,

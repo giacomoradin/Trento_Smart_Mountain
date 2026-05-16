@@ -23,7 +23,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.viewmodel.ProfileViewModel
 
-/** Profilo utente: username, sezioni social credit e impostazioni (placeholder), logout. */
+/**
+ * Tab **Profilo**: username (cache Room + refresh API), sezioni placeholder e logout.
+ *
+ * @param onLoggedOut callback dopo pulizia token (navigazione verso auth)
+ */
 @Composable
 fun ProfileScreen(
   onLoggedOut: () -> Unit,

@@ -28,6 +28,7 @@ object JwtDecoder {
     return expiresAtSeconds > System.currentTimeMillis() / 1000
   }
 
+  /** Decodifica il payload JWT (secondo segmento Base64URL) senza verificare la firma. */
   private fun decodePayload(token: String): JwtPayload? {
     val payloadSegment = token.split(".").getOrNull(1) ?: return null
     return runCatching {

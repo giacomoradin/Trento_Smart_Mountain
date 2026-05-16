@@ -2,8 +2,10 @@ package it.trentosmartmountain.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+/** Palette colori condivisa (tema scuro montagna / outdoor). */
 val TsmPrimary         = Color(0xFF3F7020)
 val TsmAccent          = Color(0xFF4FC3F7)
+/** Rosso per azioni critiche (SOS, elimina sessione, abbandona). */
 val TsmSos             = Color(0xFF6B0D0D)
 val TsmSurface         = Color(0xFF1E1E1E)
 val TsmBorder          = Color(0xFF5D4037)

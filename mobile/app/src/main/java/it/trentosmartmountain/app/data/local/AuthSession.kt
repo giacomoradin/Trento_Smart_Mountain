@@ -3,9 +3,18 @@ package it.trentosmartmountain.app.data.local
 import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.ui.navigation.Routes
 
-/** Risolve la destinazione iniziale del grafo auth in base al JWT salvato sul dispositivo. */
+/**
+ * Risolve la destinazione iniziale del grafo di navigazione in base al JWT locale.
+ *
+ * Usato all'avvio dell'app (offline-first): se il token è assente o scaduto si apre il flusso auth,
+ * altrimenti si salta direttamente alla shell escursionista o rifugio.
+ */
 object AuthSession {
 
+  /**
+   * Route Compose iniziale: [Routes.AUTH_ENTRY] oppure shell principale dopo validazione locale del JWT.
+   * Token non validi vengono rimossi da [TokenStorage] prima del redirect.
+   */
   fun startDestinationFor(tokenStorage: TokenStorage): String {
     val token = tokenStorage.getToken() ?: return Routes.AUTH_ENTRY
     if (!JwtDecoder.hasValidLocalSession(token)) {

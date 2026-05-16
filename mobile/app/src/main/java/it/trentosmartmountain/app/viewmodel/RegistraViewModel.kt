@@ -31,8 +31,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
 
+/**
+ * Logica della tab **Registra**: permessi GPS, tracking escursione, metriche e traccia su mappa OSMdroid.
+ *
+ * Coordina [HikeTrackingEngine], servizio in foreground e [SessionStartCoordinator]
+ * quando l'utente avvia una sessione dal dettaglio escursione.
+ */
 class RegistraViewModel(application: Application) : AndroidViewModel(application) {
 
+  /** Stato osservato da [it.trentosmartmountain.app.ui.screens.registra.RegistraScreen]. */
   data class UiState(
     val hasLocationPermission: Boolean = false,
     val locationPermissionDenied: Boolean = false,

@@ -50,7 +50,13 @@ import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.RegistraViewModel
 
 /**
- * Schermata “Registra”: mappa escursionistica, tracking GPS e SOS.
+ * Tab **Registra**: mappa OSMdroid, tracking GPS in tempo reale e pulsante SOS.
+ *
+ * Integra [TsmMapView] (tile OpenTopoMap), permessi posizione/notifiche,
+ * [RegistraViewModel] per metriche e traccia live.
+ *
+ * **Dialog SOS**: informativo (conferma/dismiss); non invia ancora allarme al backend.
+ * **Dialog stop**: conferma arresto registrazione e chiusura sessione sul server se collegata.
  */
 @Composable
 fun RegistraScreen(
@@ -149,13 +155,16 @@ fun RegistraScreen(
       hasLocationPermission = uiState.hasLocationPermission,
     )
 
-    GpsSignalIndicator(
-      signalLevel = uiState.gpsSignalLevel,
-      accuracyLabel = uiState.gpsAccuracyLabel,
-      modifier =
-        Modifier
-          .align(Alignment.TopCenter)
-          .padding(top = RegistraLayout.gpsIndicatorTop),
+    RegistraTopHud(
+      isTrackingActive = isTrackingActive,
+      trackingStatus = uiState.trackingStatus,
+      gpsSignalLevel = uiState.gpsSignalLevel,
+      gpsAccuracyLabel = uiState.gpsAccuracyLabel,
+      elapsedSeconds = uiState.elapsedSeconds,
+      distanceMeters = uiState.distanceMeters,
+      elevationGainMeters = uiState.elevationGainMeters,
+      altitudeMeters = uiState.currentAltitudeMeters,
+      modifier = Modifier.align(Alignment.TopCenter),
     )
 
     if (uiState.isAutoPaused) {
@@ -164,10 +173,7 @@ fun RegistraScreen(
           Modifier
             .align(Alignment.TopCenter)
             .padding(
-              top =
-                RegistraLayout.gpsIndicatorTop +
-                  RegistraLayout.gpsIndicatorApproxHeight +
-                  RegistraLayout.autoPauseBelowGps,
+              top = RegistraLayout.autoPauseTop(isTrackingActive),
               start = 24.dp,
               end = 24.dp,
             ),
@@ -193,7 +199,6 @@ fun RegistraScreen(
     }
 
     RegistraMapActionFabs(
-      isTrackingActive = isTrackingActive,
       canCenterOnUser = canCenterOnUser,
       onCenterOnUser = viewModel::centerOnUser,
       onSosClick = { showSosDialog = true },
@@ -201,35 +206,15 @@ fun RegistraScreen(
     )
 
     if (isTrackingActive) {
-      Column(
+      RegistraTrackingControls(
+        trackingStatus = uiState.trackingStatus,
+        onTogglePause = viewModel::togglePause,
+        onStop = viewModel::requestStopTracking,
         modifier =
           Modifier
             .align(Alignment.BottomCenter)
-            .fillMaxWidth()
-            .padding(
-              start = 16.dp,
-              end = 16.dp,
-              bottom = RegistraLayout.bottomInset,
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-      ) {
-        RegistraTrackingControls(
-          trackingStatus = uiState.trackingStatus,
-          onTogglePause = viewModel::togglePause,
-          onStop = viewModel::requestStopTracking,
-        )
-        RegistraMetricStrip(
-          trackingStatus = uiState.trackingStatus,
-          elapsedSeconds = uiState.elapsedSeconds,
-          distanceMeters = uiState.distanceMeters,
-          elevationGainMeters = uiState.elevationGainMeters,
-          altitudeMeters = uiState.currentAltitudeMeters,
-          modifier =
-            Modifier
-              .fillMaxWidth()
-              .padding(top = RegistraLayout.metricsGap),
-        )
-      }
+            .padding(bottom = RegistraLayout.bottomInset),
+      )
     } else {
       RegistraRecFab(
         onClick = onStartTracking,

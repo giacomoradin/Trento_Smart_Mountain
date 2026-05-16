@@ -14,8 +14,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
 
+/** Registrazione account rifugio verso API dedicata. */
 class RegisterRifugioViewModel : ViewModel() {
 
+    /** Campi del form rifugio e messaggi di errore. */
     data class UiState(
         val rifugioName: String = "",
         val caiCode: String = "",

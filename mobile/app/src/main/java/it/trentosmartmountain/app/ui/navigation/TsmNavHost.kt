@@ -22,6 +22,17 @@ import it.trentosmartmountain.app.ui.screens.register.RegisterScreen
 import it.trentosmartmountain.app.ui.screens.home.ActivityDetailScreen
 import it.trentosmartmountain.app.ui.screens.session.SessionDetailScreen
 
+/**
+ * Grafo di navigazione principale (Jetpack Navigation Compose).
+ *
+ * Flussi:
+ * - **Auth** (non autenticato): [Routes.AUTH_ENTRY] → login / registrazione escursionista o rifugio
+ * - **Shell escursionista** ([Routes.MAIN_HIKER]): bottom bar con tab Home, Sessione, Registra, Profilo — vedi [it.trentosmartmountain.app.ui.screens.main.HikerMainScreen]
+ * - **Shell rifugio** ([Routes.MAIN_RIFUGIO]): area dedicata account rifugio
+ * - **Dettaglio sessione** ([Routes.SESSION_DETAIL]): schermata full-screen sopra la shell; al conferma AVVIA torna alla shell e la tab Registra può avviare il GPS via [it.trentosmartmountain.app.data.session.SessionStartCoordinator]
+ *
+ * La destinazione iniziale dipende dal JWT salvato ([it.trentosmartmountain.app.data.local.AuthSession]).
+ */
 @Composable
 fun TsmNavHost() {
     val application = LocalContext.current.applicationContext as TsmApplication

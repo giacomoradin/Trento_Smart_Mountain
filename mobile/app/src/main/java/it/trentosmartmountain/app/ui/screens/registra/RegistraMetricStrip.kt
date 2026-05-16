@@ -22,6 +22,7 @@ import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 
+/** Striscia metriche live: tempo, distanza, dislivello, quota (visibile solo con tracking attivo). */
 @Composable
 fun RegistraMetricStrip(
   trackingStatus: TrackingStatus,
@@ -39,7 +40,7 @@ fun RegistraMetricStrip(
         .fillMaxWidth()
         .clip(RoundedCornerShape(12.dp))
         .background(TsmSurface.copy(alpha = 0.94f))
-        .padding(horizontal = 16.dp, vertical = 10.dp),
+        .padding(horizontal = 12.dp, vertical = 8.dp),
     horizontalArrangement = Arrangement.SpaceEvenly,
     verticalAlignment = Alignment.CenterVertically,
   ) {

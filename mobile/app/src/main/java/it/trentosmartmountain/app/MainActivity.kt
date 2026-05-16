@@ -9,7 +9,9 @@ import it.trentosmartmountain.app.ui.theme.TsmTheme
 
 /**
  * Activity principale dichiarata nel manifest; ospita tutta la UI Jetpack Compose.
- * Il grafo di navigazione parte da [TsmNavHost] (schermata iniziale: scelta accesso o registrazione).
+ *
+ * Applica [it.trentosmartmountain.app.ui.theme.TsmTheme] e avvia [it.trentosmartmountain.app.ui.navigation.TsmNavHost]
+ * (destinazione iniziale: auth o shell escursionista/rifugio se esiste un JWT valido).
  */
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {

@@ -9,6 +9,7 @@ object TrackingLocationBus {
   private val _locations = MutableSharedFlow<LocationSnapshot>(extraBufferCapacity = 32)
   val locations: SharedFlow<LocationSnapshot> = _locations.asSharedFlow()
 
+  /** Pubblica un fix GPS; `tryEmit` evita blocco se nessun collector è attivo. */
   fun emit(snapshot: LocationSnapshot) {
     _locations.tryEmit(snapshot)
   }

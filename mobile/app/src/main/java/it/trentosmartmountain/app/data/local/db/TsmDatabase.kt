@@ -3,6 +3,10 @@ package it.trentosmartmountain.app.data.local.db
 import androidx.room.Database
 import androidx.room.RoomDatabase
 
+/**
+ * Database Room locale dell'app: cache offline per dati che devono sopravvivere
+ * a assenza di rete (es. username profilo dopo il primo fetch).
+ */
 @Database(
   entities = [
     CachedUserProfileEntity::class,

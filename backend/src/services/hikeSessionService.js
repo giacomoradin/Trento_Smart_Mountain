@@ -98,6 +98,65 @@ export async function joinSession(userId, inviteCode) {
   return session;
 }
 
+/**
+ * Statistiche aggregate delle sessioni COMPLETATE per un dato anno.
+ * Usato dalla schermata "Le Mie Attività" per le card metriche e il grafico mensile.
+ *
+ * @returns {{
+ *   year: number,
+ *   totalActivities: number,
+ *   totalDistanceKm: number,
+ *   totalElevationGainM: number,
+ *   totalPoints: number,
+ *   monthlyActivityCount: number[],   // 12 elementi (Jan=0 ... Dec=11)
+ *   monthlyAvgDifficulty: number[],   // 0.0–1.0 per mese (T=0.25, E=0.5, EE=0.75, EEA=1.0)
+ * }}
+ */
+export async function getActivityStats(userId, year) {
+  const sessions = await HikeSession.find({
+    $or: [{ creatorId: userId }, { "participants.userId": userId }],
+    status: "COMPLETED",
+  }).lean();
+
+  const diffScore = { T: 0.25, E: 0.5, EE: 0.75, EEA: 1.0 };
+  const monthlyCount = new Array(12).fill(0);
+  const monthlyDiffSum = new Array(12).fill(0);
+  const monthlyDiffN = new Array(12).fill(0);
+
+  let totalDist = 0;
+  let totalElev = 0;
+  let totalPoints = 0;
+  let yearCount = 0;
+
+  sessions.forEach((s) => {
+    const ref = s.endTime || s.createdAt;
+    if (!ref) return;
+    const d = new Date(ref);
+    if (d.getFullYear() !== year) return;
+    const m = d.getMonth(); // 0-11
+    monthlyCount[m]++;
+    yearCount++;
+    totalDist += s.gpxStats?.distanceKm || 0;
+    totalElev += s.gpxStats?.elevationGainM || 0;
+    totalPoints += s.gpxStats?.estimatedPoints || 0;
+    const score = diffScore[s.routeDetails?.difficultyLevel] ?? 0.5;
+    monthlyDiffSum[m] += score;
+    monthlyDiffN[m]++;
+  });
+
+  return {
+    year,
+    totalActivities: yearCount,
+    totalDistanceKm: Math.round(totalDist * 10) / 10,
+    totalElevationGainM: totalElev,
+    totalPoints,
+    monthlyActivityCount: monthlyCount,
+    monthlyAvgDifficulty: monthlyCount.map((_, i) =>
+      monthlyDiffN[i] > 0 ? monthlyDiffSum[i] / monthlyDiffN[i] : 0,
+    ),
+  };
+}
+
 // Recupera una sessione per ID
 export async function getSessionById(sessionId) {
   /* 

@@ -20,10 +20,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import it.trentosmartmountain.app.R
 
-/** Home: feed sociale e storico attività personali (contenuti mock finché non ci sono API). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+fun HomeScreen(
+  modifier: Modifier = Modifier,
+  onActivityClick: (activityId: String, sessionId: String?) -> Unit = { _, _ -> },
+) {
   var subTab by rememberSaveable { mutableIntStateOf(0) }
 
   Column(modifier = modifier.fillMaxSize()) {
@@ -41,7 +43,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     }
     when (subTab) {
       0 -> HomeSocialPlaceholder(Modifier.padding(24.dp))
-      1 -> HomePersonalPlaceholder(Modifier.padding(24.dp))
+      1 -> ActivityListScreen(onActivityClick = onActivityClick)
     }
   }
 }
@@ -56,22 +58,6 @@ private fun HomeSocialPlaceholder(modifier: Modifier = Modifier) {
     Spacer(modifier = Modifier.height(8.dp))
     Text(
       text = stringResource(R.string.home_social_placeholder),
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-  }
-}
-
-@Composable
-private fun HomePersonalPlaceholder(modifier: Modifier = Modifier) {
-  Column(modifier = modifier) {
-    Text(
-      text = stringResource(R.string.home_personal_title),
-      style = MaterialTheme.typography.headlineSmall,
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-    Text(
-      text = stringResource(R.string.home_personal_placeholder),
       style = MaterialTheme.typography.bodyMedium,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

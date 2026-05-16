@@ -22,8 +22,13 @@ object Routes {
   const val FORGOT_PASSWORD = "forgot_password"
   /** Dettaglio sessione escursione (modale sul nav principale). */
   const val SESSION_DETAIL = "session_detail/{sessionId}"
+  /** Dettaglio attività completata (da "Le Mie Attività"). */
+  const val ACTIVITY_DETAIL = "activity_detail/{activityId}?sessionId={sessionId}"
 
   fun sessionDetailRoute(sessionId: String) = "session_detail/$sessionId"
+  fun activityDetailRoute(activityId: String, sessionId: String? = null): String =
+    if (sessionId != null) "activity_detail/$activityId?sessionId=$sessionId"
+    else "activity_detail/$activityId?sessionId="
 
   fun loginRoute(pendingEmail: String = ""): String =
     "login?pendingEmail=${Uri.encode(pendingEmail)}"

@@ -6,6 +6,7 @@ import {
   createSession,
   getSessionById,
   getSessionsByUser,
+  getActivityStats,
   updateSessionStatus,
   updateSessionDetails,
   deleteSession,
@@ -75,6 +76,18 @@ router.post("/join", async (req, res) => {
     if (err.message === "ALREADY_IN_SESSION")
       return res.status(409).json({ error: "Sei già in questa sessione" });
     res.status(500).json({ error: "Errore durante l'accesso alla sessione" });
+  }
+});
+
+// GET /api/v1/sessions/stats — statistiche aggregate attività completate (per anno)
+// Query: ?year=2026 (default: anno corrente)
+router.get("/stats", async (req, res) => {
+  const year = parseInt(req.query.year) || new Date().getFullYear();
+  try {
+    const stats = await getActivityStats(req.user.userId, year);
+    res.status(200).json(stats);
+  } catch (err) {
+    res.status(500).json({ error: "Errore nel calcolo statistiche" });
   }
 });
 

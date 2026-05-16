@@ -119,6 +119,12 @@ interface TsmApiService {
    * Cache server-side 1h. Se forceRefresh=true, bypassa la cache.
    * I POI vengono automaticamente risolti alla loro town di riferimento.
    */
+  // ── Activity Stats ──
+
+  /** Statistiche aggregate attività completate per anno (card + bar chart in HomeScreen). */
+  @GET("api/v1/sessions/stats")
+  suspend fun getActivityStats(@retrofit2.http.Query("year") year: Int): Response<it.trentosmartmountain.app.data.remote.dto.ActivityStatsResponse>
+
   @GET("weather/forecast/{externalId}")
   suspend fun getWeatherForecast(
     @Path("externalId") externalId: String,

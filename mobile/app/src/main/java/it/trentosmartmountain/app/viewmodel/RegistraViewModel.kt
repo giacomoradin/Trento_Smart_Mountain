@@ -9,10 +9,18 @@ import it.trentosmartmountain.app.data.location.StationaryDetector
 import it.trentosmartmountain.app.data.location.TrackingLocationBus
 import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.data.location.UserLocationTracker
+import com.google.gson.Gson
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.estimation.HikeEstimation
+import it.trentosmartmountain.app.data.local.db.CompletedActivityEntity
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.service.ForegroundTrackingService
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +50,12 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val showStopConfirm: Boolean = false,
     /** Sessione attiva collegata al tracking (null = sessione libera). */
     val activeSessionId: String? = null,
+    /** Epoch ms di inizio tracking (per salvare start time su Room). */
+    val trackStartTimeMs: Long = 0L,
+    /** Nome bozza dell'attività che l'utente può modificare nel dialog di salvataggio. */
+    val activityNameDraft: String = "",
+    /** true dopo che il salvataggio in Room è completato → mostra feedback all'utente. */
+    val activitySaved: Boolean = false,
   )
 
   private val app = getApplication<Application>()
@@ -138,6 +152,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         distanceMeters = 0.0,
         elevationGainMeters = 0,
         trackGeoPoints = emptyList(),
+        trackStartTimeMs = System.currentTimeMillis(),
       )
     }
     lastSnapshot?.let { applyLocation(it) }
@@ -157,36 +172,26 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     }
   }
 
+  fun onActivityNameDraftChange(name: String) {
+    _uiState.update { it.copy(activityNameDraft = name) }
+  }
+
   fun requestStopTracking() {
-    _uiState.update { it.copy(showStopConfirm = true) }
+    // Prepopola il nome con data corrente, poi mostra il dialog di salvataggio
+    val dateSuffix = SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
+    _uiState.update { it.copy(showStopConfirm = true, activityNameDraft = "Escursione – $dateSuffix") }
   }
 
   fun dismissStopConfirm() {
-    _uiState.update { it.copy(showStopConfirm = false) }
+    _uiState.update { it.copy(showStopConfirm = false, activityNameDraft = "") }
   }
 
-  fun confirmStopTracking() {
-    trackingEngine.stop()
-    stationaryDetector.stop()
-    ForegroundTrackingService.stop(app)
-    timerJob?.cancel()
-    stillSinceMs = null
-    if (_uiState.value.hasLocationPermission) {
-      locationTracker.start()
-    }
-    // Se il tracking era collegato a una sessione, segnala COMPLETED sul backend.
-    // (in futuro: salvataggio activity in Home → "LE MIE ATTIVITÀ" come da requisito utente)
-    val sessionId = _uiState.value.activeSessionId
-    if (sessionId != null) {
-      viewModelScope.launch {
-        runCatching {
-          TsmApiClient.service().updateSessionStatus(
-            sessionId,
-            UpdateSessionStatusRequest(status = "COMPLETED"),
-          )
-        }
-      }
-    }
+  /**
+   * Scarta il tracciato senza salvare e termina il tracking.
+   * Usato dal bottone "Scarta" nel dialog di salvataggio.
+   */
+  fun discardTracking() {
+    stopHardware()
     _uiState.update {
       it.copy(
         trackingStatus = TrackingStatus.IDLE,
@@ -197,8 +202,120 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         distanceMeters = 0.0,
         elevationGainMeters = 0,
         activeSessionId = null,
+        trackStartTimeMs = 0L,
+        activityNameDraft = "",
       )
     }
+  }
+
+  private fun stopHardware() {
+    trackingEngine.stop()
+    stationaryDetector.stop()
+    ForegroundTrackingService.stop(app)
+    timerJob?.cancel()
+    stillSinceMs = null
+    if (_uiState.value.hasLocationPermission) {
+      locationTracker.start()
+    }
+  }
+
+  fun confirmStopTracking() {
+    stopHardware()
+    val snapState = _uiState.value
+
+    // 1. Resetta subito lo state UI (nasconde i controlli di tracking)
+    _uiState.update {
+      it.copy(
+        trackingStatus = TrackingStatus.IDLE,
+        isAutoPaused = false,
+        showStopConfirm = false,
+        trackGeoPoints = emptyList(),
+        elapsedSeconds = 0,
+        distanceMeters = 0.0,
+        elevationGainMeters = 0,
+        activeSessionId = null,
+        trackStartTimeMs = 0L,
+        activityNameDraft = "",
+        activitySaved = false,  // sarà true SOLO dopo che Room conferma l'insert
+      )
+    }
+
+    // 2. Tutto il lavoro asincrono in sequenza:
+    //    a) PATCH backend (fire-and-forget, non blocca il salvataggio locale)
+    //    b) INSERT in Room (await — solo dopo mostra il Toast)
+    viewModelScope.launch {
+      val sessionId = snapState.activeSessionId
+      if (sessionId != null) {
+        runCatching {
+          TsmApiClient.service().updateSessionStatus(
+            sessionId,
+            UpdateSessionStatusRequest(status = "COMPLETED"),
+          )
+        }
+      }
+      // saveCompletedActivity imposta activitySaved = true dopo l'insert Room confermato
+      saveCompletedActivity(snapState)
+    }
+  }
+
+  fun dismissActivitySaved() {
+    _uiState.update { it.copy(activitySaved = false) }
+  }
+
+  /**
+   * Persiste il tracciato e le metriche in Room al termine di ogni sessione GPS.
+   * Le attività salvate qui appariranno nella schermata "Le Mie Attività" (HomeScreen).
+   *
+   * Il tracciato [GeoPoint] viene serializzato come JSON [[lat, lon, alt], ...].
+   * I punti vengono campionati a max 200 per non superare i limiti di SQLite (~1MB per riga).
+   */
+  private suspend fun saveCompletedActivity(state: UiState) {
+    if (state.distanceMeters < 50.0) return // ignora avvii accidentali < 50m
+    val dao = (app as TsmApplication).database.completedActivityDao()
+    val gson = Gson()
+
+    // Campionamento: max 200 punti
+    val points = state.trackGeoPoints
+    val sampled = if (points.size > 200) {
+      val step = points.size / 200
+      points.filterIndexed { i, _ -> i % step == 0 }
+    } else points
+
+    val trackJson = gson.toJson(sampled.map { listOf(it.latitude, it.longitude, it.altitude) })
+    val distKm = state.distanceMeters / 1000.0
+    val movingSec = state.elapsedSeconds
+    val elevM = state.elevationGainMeters
+    val actualH = movingSec / 3600.0
+    val points2 = HikeEstimation.finalPoints(distKm, elevM, actualH)
+    val cals = (70 * distKm * 0.85).toInt()
+    val now = System.currentTimeMillis()
+    val startMs = if (state.trackStartTimeMs > 0) state.trackStartTimeMs else now - movingSec * 1000L
+    // Usa il nome che l'utente ha scelto nel dialog; fallback su default se vuoto
+    val dateSuffix = SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date(now))
+    val activityName = state.activityNameDraft.trim().ifBlank { "Escursione – $dateSuffix" }
+
+    dao.upsert(CompletedActivityEntity(
+      id = UUID.randomUUID().toString(),
+      sessionId = state.activeSessionId,
+      name = activityName,
+      activityType = "hiking",
+      startTimeMs = startMs,
+      endTimeMs = now,
+      movingSeconds = movingSec,
+      totalSeconds = movingSec,
+      distanceMeters = state.distanceMeters,
+      elevationGainMeters = elevM,
+      currentAltitudeMeters = state.currentAltitudeMeters,
+      difficultyLevel = null,
+      trackLatLng = trackJson,
+      estimatedCalories = cals,
+      points = points2,
+      isSynced = false,
+      completedAt = now,
+    ))
+
+    // Insert Room confermato → ora il Toast ha senso + il Flow in ActivityListViewModel emette
+    _uiState.update { it.copy(activitySaved = true) }
   }
 
   fun centerOnUser() {

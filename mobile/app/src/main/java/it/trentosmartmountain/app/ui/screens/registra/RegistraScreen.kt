@@ -6,9 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -133,13 +131,16 @@ fun RegistraScreen(
       hasLocationPermission = uiState.hasLocationPermission,
     )
 
-    GpsSignalIndicator(
-      signalLevel = uiState.gpsSignalLevel,
-      accuracyLabel = uiState.gpsAccuracyLabel,
-      modifier =
-        Modifier
-          .align(Alignment.TopCenter)
-          .padding(top = RegistraLayout.gpsIndicatorTop),
+    RegistraTopHud(
+      isTrackingActive = isTrackingActive,
+      trackingStatus = uiState.trackingStatus,
+      gpsSignalLevel = uiState.gpsSignalLevel,
+      gpsAccuracyLabel = uiState.gpsAccuracyLabel,
+      elapsedSeconds = uiState.elapsedSeconds,
+      distanceMeters = uiState.distanceMeters,
+      elevationGainMeters = uiState.elevationGainMeters,
+      altitudeMeters = uiState.currentAltitudeMeters,
+      modifier = Modifier.align(Alignment.TopCenter),
     )
 
     if (uiState.isAutoPaused) {
@@ -148,10 +149,7 @@ fun RegistraScreen(
           Modifier
             .align(Alignment.TopCenter)
             .padding(
-              top =
-                RegistraLayout.gpsIndicatorTop +
-                  RegistraLayout.gpsIndicatorApproxHeight +
-                  RegistraLayout.autoPauseBelowGps,
+              top = RegistraLayout.autoPauseTop(isTrackingActive),
               start = 24.dp,
               end = 24.dp,
             ),
@@ -177,7 +175,6 @@ fun RegistraScreen(
     }
 
     RegistraMapActionFabs(
-      isTrackingActive = isTrackingActive,
       canCenterOnUser = canCenterOnUser,
       onCenterOnUser = viewModel::centerOnUser,
       onSosClick = { showSosDialog = true },
@@ -185,35 +182,15 @@ fun RegistraScreen(
     )
 
     if (isTrackingActive) {
-      Column(
+      RegistraTrackingControls(
+        trackingStatus = uiState.trackingStatus,
+        onTogglePause = viewModel::togglePause,
+        onStop = viewModel::requestStopTracking,
         modifier =
           Modifier
             .align(Alignment.BottomCenter)
-            .fillMaxWidth()
-            .padding(
-              start = 16.dp,
-              end = 16.dp,
-              bottom = RegistraLayout.bottomInset,
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-      ) {
-        RegistraTrackingControls(
-          trackingStatus = uiState.trackingStatus,
-          onTogglePause = viewModel::togglePause,
-          onStop = viewModel::requestStopTracking,
-        )
-        RegistraMetricStrip(
-          trackingStatus = uiState.trackingStatus,
-          elapsedSeconds = uiState.elapsedSeconds,
-          distanceMeters = uiState.distanceMeters,
-          elevationGainMeters = uiState.elevationGainMeters,
-          altitudeMeters = uiState.currentAltitudeMeters,
-          modifier =
-            Modifier
-              .fillMaxWidth()
-              .padding(top = RegistraLayout.metricsGap),
-        )
-      }
+            .padding(bottom = RegistraLayout.bottomInset),
+      )
     } else {
       RegistraRecFab(
         onClick = onStartTracking,

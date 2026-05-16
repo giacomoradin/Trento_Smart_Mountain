@@ -10,7 +10,6 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,8 +36,9 @@ fun RegistraTrackingControls(
     horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    SmallFloatingActionButton(
+    FloatingActionButton(
       onClick = onTogglePause,
+      modifier = Modifier.size(RegistraLayout.primaryFabSize),
       containerColor = TsmSurface,
       contentColor = TsmAccent,
     ) {
@@ -55,17 +55,19 @@ fun RegistraTrackingControls(
           } else {
             stringResource(R.string.registra_resume_cd)
           },
+        modifier = Modifier.size(RegistraLayout.primaryFabIconSize),
       )
     }
     FloatingActionButton(
       onClick = onStop,
-      modifier = Modifier.size(56.dp),
+      modifier = Modifier.size(RegistraLayout.secondaryFabSize),
       containerColor = TsmSos,
       contentColor = MaterialTheme.colorScheme.onError,
     ) {
       Icon(
         imageVector = Icons.Filled.Stop,
         contentDescription = stringResource(R.string.registra_stop_cd),
+        modifier = Modifier.size(RegistraLayout.secondaryFabIconSize),
       )
     }
   }

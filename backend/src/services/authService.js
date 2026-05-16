@@ -3,42 +3,42 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 export const verifyEmail = async (req, res) => {
-  /* 
-     #swagger.tags = ['Auth']
-     #swagger.description = 'Verifica l'indirizzo email dell'utente tramite il token ricevuto via SMTP.'
+  /* #swagger.tags = ['Auth']
+     #swagger.description = 'Verifica l'indirizzo email tramite token. Esegue un redirect (Deep Link) all'app mobile passando il JWT.'
      #swagger.security = [] 
   */
   try {
     const { token } = req.params;
 
-    // Ricerca dell'hash nel database
+    // 1. Ricerca dell'hash nel database
     const user = await User.findOne({ verificationToken: token });
 
     if (!user) {
-      return res
-        .status(400)
-        .json({ message: "Token non valido, corrotto o già utilizzato." });
+      // Failsafe: Token invalido o già usato -> Redirect all'app con flag di errore
+      return res.redirect("tsm://auth/error?message=token_invalido_o_scaduto");
     }
 
-    // Mutazione di Stato
+    // 2. Mutazione di Stato
     user.isVerified = true;
     user.verificationToken = undefined; // Sanificazione memoria (Token monouso)
     await user.save();
 
-    res.status(200).json({
-      message: "Handshake completato. Identità verificata con successo.",
-    });
+    // 3. AUTO-LOGIN: Generazione del Token JWT crittografico
+    const jwtToken = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || "1d" },
+    );
+
+    // 4. DIROTTO: Chiude il browser e risveglia l'app passando il token
+    res.redirect(`tsm://auth/success?jwt=${jwtToken}`);
   } catch (error) {
-    res.status(500).json({ message: "Errore fatale durante la verifica." });
+    console.error("Errore fatale in verifyEmail:", error);
+    res.redirect("tsm://auth/error?message=errore_server_interno");
   }
 };
 
 export const loginUser = async (req, res) => {
-  /* 
-     #swagger.tags = ['Auth']
-     #swagger.description = 'Autentica l'utente e restituisce un token JWT se l'email è verificata.'
-     #swagger.security = [] 
-  */
   try {
     const { email, password } = req.body;
 

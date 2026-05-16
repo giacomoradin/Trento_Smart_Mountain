@@ -23,6 +23,10 @@ import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 
+/**
+ * FAB in basso a destra sulla mappa: centra su utente e **SOS** (apre dialog in [RegistraScreen]).
+ * Si solleva quando il tracking è attivo per non coprire i controlli.
+ */
 @Composable
 fun RegistraMapActionFabs(
   isTrackingActive: Boolean,

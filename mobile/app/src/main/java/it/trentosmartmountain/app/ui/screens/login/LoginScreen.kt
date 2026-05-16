@@ -61,6 +61,14 @@ import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.LoginViewModel
 
+/**
+ * Form di accesso con email e password.
+ *
+ * @param pendingVerificationEmail se valorizzata, precompila l'email e mostra il promemoria post-registrazione
+ * @param onLoggedIn chiamato dopo login riuscito (navigazione verso shell principale)
+ * @param onForgotPassword apre il recupero password
+ * @param onRegisterClick torna al flusso registrazione
+ */
 @Composable
 fun LoginScreen(
     pendingVerificationEmail: String = "",

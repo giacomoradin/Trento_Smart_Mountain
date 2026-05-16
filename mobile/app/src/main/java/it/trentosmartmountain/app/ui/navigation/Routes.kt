@@ -23,11 +23,14 @@ object Routes {
   /** Dettaglio sessione escursione (modale sul nav principale). */
   const val SESSION_DETAIL = "session_detail/{sessionId}"
 
+  /** Route concreta per il dettaglio sessione (argomento `sessionId`). */
   fun sessionDetailRoute(sessionId: String) = "session_detail/$sessionId"
 
+  /** Route login con email opzionale in query (post verifica account). */
   fun loginRoute(pendingEmail: String = ""): String =
     "login?pendingEmail=${Uri.encode(pendingEmail)}"
 
+  /** Route schermata attesa verifica email, con messaggio server opzionale in query. */
   fun emailVerificationPendingRoute(
     email: String,
     serverMessage: String?,

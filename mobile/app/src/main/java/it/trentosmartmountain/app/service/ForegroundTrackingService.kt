@@ -17,7 +17,10 @@ import it.trentosmartmountain.app.data.location.FusedLocationPublisher
 import it.trentosmartmountain.app.data.location.TrackingLocationBus
 
 /**
- * Mantiene il tracking GPS in foreground durante la registrazione (RF8).
+ * Servizio Android in foreground per il tracking GPS durante la registrazione (RF8).
+ *
+ * Garantisce che l'OS non sospenda gli aggiornamenti posizione in background: le fix
+ * vengono pubblicate su [TrackingLocationBus] per il ViewModel Registra.
  */
 class ForegroundTrackingService : Service() {
 
@@ -111,6 +114,7 @@ class ForegroundTrackingService : Service() {
     private const val RECORDING_INTERVAL_MS = 2_000L
     private const val RECORDING_MIN_INTERVAL_MS = 1_000L
 
+    /** Avvia il servizio con notifica persistente e tipo `location` (API 29+). */
     fun start(context: Context) {
       val intent =
         Intent(context, ForegroundTrackingService::class.java).apply {
@@ -119,6 +123,7 @@ class ForegroundTrackingService : Service() {
       context.startForegroundService(intent)
     }
 
+    /** Invia ACTION_STOP: ferma il publisher GPS e termina il servizio. */
     fun stop(context: Context) {
       val intent =
         Intent(context, ForegroundTrackingService::class.java).apply {

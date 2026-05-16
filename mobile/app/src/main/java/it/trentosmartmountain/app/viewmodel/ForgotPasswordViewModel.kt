@@ -11,8 +11,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
 
+/** Recupero password via email. */
 class ForgotPasswordViewModel : ViewModel() {
 
+    /** Stato del form forgot password. */
     data class UiState(
         val email: String = "",
         val isLoading: Boolean = false,

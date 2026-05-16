@@ -23,6 +23,7 @@ class AuthRepositoryImpl(
       if (response.isSuccessful) {
         val token = response.body()?.token
         if (token != null) {
+          // Persistenza JWT per sessioni successive e AuthInterceptor
           tokenStorage.saveToken(token)
           LoginResult.Success
         } else {

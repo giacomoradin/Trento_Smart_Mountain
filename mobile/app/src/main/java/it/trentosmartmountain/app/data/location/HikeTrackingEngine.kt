@@ -6,6 +6,7 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+/** Snapshot metriche al termine o durante la registrazione GPS. */
 data class TrackingMetrics(
   val distanceMeters: Double,
   val elevationGainMeters: Int,
@@ -13,7 +14,10 @@ data class TrackingMetrics(
 )
 
 /**
- * Accumula punti traccia e metriche mentre lo stato è [TrackingStatus.RECORDING].
+ * Motore di accumulo traccia: filtra i fix GPS rumorosi e calcola distanza/dislivello.
+ *
+ * Usato dal layer registrazione (ViewModel + [ForegroundTrackingService]); non persiste
+ * su disco: la persistenza avviene a livello superiore (upload sessione / GPX).
  */
 class HikeTrackingEngine {
 
@@ -39,6 +43,7 @@ class HikeTrackingEngine {
     elevationGainM = 0
   }
 
+  /** @param manual `true` se la pausa è richiesta dall'utente; `false` per auto-pausa (RF6). */
   fun pause(manual: Boolean) {
     status = TrackingStatus.PAUSED
     isAutoPaused = !manual
@@ -49,6 +54,7 @@ class HikeTrackingEngine {
     isAutoPaused = false
   }
 
+  /** Termina la registrazione e restituisce le metriche finali; resetta lo stato a [TrackingStatus.IDLE]. */
   fun stop(): TrackingMetrics {
     val result = snapshot()
     status = TrackingStatus.IDLE
@@ -78,6 +84,7 @@ class HikeTrackingEngine {
     }
     val distanceM = haversineM(last, candidate)
     val elapsedMs = candidate.timestampMs - last.timestampMs
+    // Accetta il punto se si è mosso abbastanza oppure è passato troppo tempo (evita buchi nella traccia)
     if (distanceM >= MIN_POINT_DISTANCE_M || elapsedMs >= MAX_POINT_INTERVAL_MS) {
       accept(candidate, segmentMeters = distanceM)
     }

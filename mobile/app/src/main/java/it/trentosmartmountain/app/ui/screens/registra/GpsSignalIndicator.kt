@@ -22,6 +22,7 @@ import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 
+/** Indicatore qualità segnale GPS (barre + accuratezza in metri) sopra la mappa. */
 @Composable
 fun GpsSignalIndicator(
   signalLevel: Int,

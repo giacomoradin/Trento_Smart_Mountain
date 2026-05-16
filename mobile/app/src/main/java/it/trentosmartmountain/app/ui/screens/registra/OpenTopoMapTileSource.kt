@@ -2,7 +2,10 @@ package it.trentosmartmountain.app.ui.screens.registra
 
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 
-/** Tile outdoor per escursionismo (sentieri e curve di livello). */
+/**
+ * Sorgente tile **OpenTopoMap** per OSMdroid (sentieri, curve di livello).
+ * Usata da [TsmMapView]; richiede user-agent configurato in [it.trentosmartmountain.app.TsmApplication].
+ */
 fun openTopoMapTileSource() =
   XYTileSource(
     "OpenTopoMap",

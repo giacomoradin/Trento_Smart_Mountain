@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
 
+/**
+ * Tab **Unisciti** in [SessionHubScreen]: join per codice invito e gestione lista sessioni dell'utente.
+ */
 class SessionJoinViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
@@ -24,6 +27,7 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
      */
     enum class RemovalMode { LEAVE, DELETE }
 
+    /** Stato del tab unisciti (codice, lista sessioni, dialog rimozione). */
     data class UiState(
         val joinCode: String = "TSM-",
         val sessions: List<SessionResponse> = emptyList(),

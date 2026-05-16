@@ -36,7 +36,13 @@ import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.viewmodel.RegistraViewModel
 
 /**
- * Schermata “Registra”: mappa escursionistica, tracking GPS e SOS.
+ * Tab **Registra**: mappa OSMdroid, tracking GPS in tempo reale e pulsante SOS.
+ *
+ * Integra [TsmMapView] (tile OpenTopoMap), permessi posizione/notifiche,
+ * [RegistraViewModel] per metriche e traccia live.
+ *
+ * **Dialog SOS**: informativo (conferma/dismiss); non invia ancora allarme al backend.
+ * **Dialog stop**: conferma arresto registrazione e chiusura sessione sul server se collegata.
  */
 @Composable
 fun RegistraScreen(

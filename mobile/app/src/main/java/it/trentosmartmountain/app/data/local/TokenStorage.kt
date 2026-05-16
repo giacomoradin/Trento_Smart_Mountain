@@ -35,6 +35,7 @@ class TokenStorage private constructor(
     prefs.edit().clear().apply()
   }
 
+  /** Migrazione one-shot da SharedPreferences in chiaro (versioni precedenti dell'app). */
   private fun migrateLegacyTokenIfNeeded() {
     if (!getToken().isNullOrBlank()) return
 
@@ -49,6 +50,7 @@ class TokenStorage private constructor(
     @Volatile
     private var instance: TokenStorage? = null
 
+    /** Istanza singleton legata al [Context.applicationContext]. */
     fun getInstance(context: Context): TokenStorage =
       instance ?: synchronized(this) {
         instance ?: TokenStorage(context.applicationContext).also { instance = it }

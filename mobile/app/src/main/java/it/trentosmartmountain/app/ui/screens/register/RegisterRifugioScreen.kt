@@ -59,6 +59,12 @@ import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.RegisterRifugioViewModel
 
+/**
+ * Registrazione account rifugio (dati struttura + credenziali).
+ *
+ * @param onBack torna alla schermata di ingresso auth
+ * @param onRegistrationPendingVerification come per [RegisterScreen], verso verifica email
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterRifugioScreen(

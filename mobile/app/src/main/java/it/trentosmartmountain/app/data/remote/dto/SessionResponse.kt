@@ -1,5 +1,11 @@
 package it.trentosmartmountain.app.data.remote.dto
 
+/**
+ * Sessione escursionistica restituita dalle API `GET/POST /api/v1/sessions`.
+ *
+ * DTO di deserializzazione Gson: i campi popolati dipendono dall'endpoint e dal livello
+ * di populate del backend (es. `participants.userId` come oggetto utente embedded).
+ */
 data class SessionResponse(
     val _id: String,
     val inviteCode: String,
@@ -19,6 +25,7 @@ data class SessionResponse(
     val createdAt: String?,
 )
 
+/** Dettagli percorso inclusi nella sessione (nome, difficoltà, punti GeoJSON). */
 data class SessionRouteDetailsResponse(
     val name: String,
     val difficultyLevel: String?,
@@ -27,6 +34,7 @@ data class SessionRouteDetailsResponse(
     val endPoint: GeoPoint? = null,
 )
 
+/** Statistiche GPX calcolate lato client o server e persistite sulla sessione. */
 data class GpxStatsResponse(
     val distanceKm: Double?,
     val elevationGainM: Int?,
@@ -37,12 +45,14 @@ data class GpxStatsResponse(
     val estimatedPoints: Int? = null,
 )
 
+/** Utente embedded (creatore o partecipante) nella risposta sessione. */
 data class SessionUserInfo(
     val _id: String,
     val username: String,
     val email: String?,
 )
 
+/** Partecipante a una sessione con ruolo e timestamp di join. */
 data class SessionParticipant(
     val userId: SessionUserInfo?,
     val role: String?,

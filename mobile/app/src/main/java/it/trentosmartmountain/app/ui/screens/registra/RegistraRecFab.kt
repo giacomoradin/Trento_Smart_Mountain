@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 
+/** FAB centrale per avviare la registrazione GPS quando il tracking è in stato IDLE. */
 @Composable
 fun RegistraRecFab(
   onClick: () -> Unit,

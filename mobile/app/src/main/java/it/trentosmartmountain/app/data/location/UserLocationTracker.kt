@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Fix GPS normalizzato per UI e motori di tracking (indipendente da [android.location.Location]). */
 data class LocationSnapshot(
   val latitude: Double,
   val longitude: Double,
@@ -76,6 +77,10 @@ class UserLocationTracker(context: Context) {
     private const val UPDATE_INTERVAL_MS = 2_000L
     private const val MIN_UPDATE_INTERVAL_MS = 1_000L
 
+    /**
+     * Livello qualità segnale GPS (0–4) derivato dall'accuracia orizzontale in metri.
+     * Usato dalla UI Registra per l'indicatore a barre.
+     */
     fun gpsSignalLevel(accuracyMeters: Float): Int =
       when {
         accuracyMeters <= 0f -> 0

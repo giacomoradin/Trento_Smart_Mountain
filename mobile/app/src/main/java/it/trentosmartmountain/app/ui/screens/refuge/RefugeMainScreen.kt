@@ -20,7 +20,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.viewmodel.ProfileViewModel
 
-/** Shell principale account con ruolo `rifugio`: metriche IoT e social credit ospiti. */
+/**
+ * Shell principale account con ruolo **rifugio** (senza bottom bar a tab).
+ *
+ * Sezioni IoT e social credit ospiti sono placeholder; logout tramite [ProfileViewModel].
+ *
+ * @param onLoggedOut callback dopo logout (navigazione verso auth)
+ */
 @Composable
 fun RefugeMainScreen(
   onLoggedOut: () -> Unit,

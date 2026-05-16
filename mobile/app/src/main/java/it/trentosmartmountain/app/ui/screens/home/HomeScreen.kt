@@ -20,6 +20,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import it.trentosmartmountain.app.R
 
+/**
+ * Tab **Home**: due sotto-tab interni (navigazione locale, non Jetpack Navigation).
+ *
+ * - Sociale — feed community (placeholder)
+ * - Personale — storico attività (placeholder)
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(

@@ -101,6 +101,17 @@ import kotlin.math.abs
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 
+/**
+ * Dettaglio escursione (navigazione full-screen sopra [HikerMainScreen]).
+ *
+ * Mostra tracciato, meteo, checklist, partecipanti e pulsante **AVVIA ESCURSIONE**.
+ * Se la data non è oggi, un dialog chiede conferma prima di avviare.
+ *
+ * @param sessionId identificativo sessione da caricare
+ * @param onBack pop dello stack di navigazione
+ * @param onAvviaConfirmed chiamato dopo conferma avvio (tipicamente torna alla shell; il tracking parte in tab Registra)
+ * @param currentUserId dal JWT, per abilitare modifica/eliminazione al capogruppo
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionDetailScreen(

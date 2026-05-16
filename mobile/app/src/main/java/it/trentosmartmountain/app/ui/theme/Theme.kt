@@ -23,6 +23,7 @@ private val DarkColors = darkColorScheme(
     onError            = Color.White,
 )
 
+/** Tema Material 3 scuro dell'app; applicato da [it.trentosmartmountain.app.MainActivity]. */
 @Composable
 fun TsmTheme(content: @Composable () -> Unit) {
     MaterialTheme(

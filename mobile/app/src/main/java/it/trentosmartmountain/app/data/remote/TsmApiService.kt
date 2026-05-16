@@ -25,6 +25,12 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
+/**
+ * Contratto Retrofit verso il backend Express (auth, utenti, sessioni escursionistiche, meteo).
+ *
+ * Layer remoto del modello MVVM: i [it.trentosmartmountain.app.repository] incapsulano
+ * error handling, cache e mapping verso la UI.
+ */
 interface TsmApiService {
 
   // ── Auth ──

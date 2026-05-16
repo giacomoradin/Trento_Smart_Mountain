@@ -58,6 +58,12 @@ import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.RegisterViewModel
 
+/**
+ * Registrazione account escursionista (username, email, password).
+ *
+ * @param onRegistrationPendingVerification navigazione verifica email con messaggio opzionale dal server
+ * @param onBack torna alla schermata precedente nello stack
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(

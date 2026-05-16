@@ -16,6 +16,7 @@ import it.trentosmartmountain.app.R
 
 private val AutoPauseBackground = Color(0xCCBF360C)
 
+/** Banner mostrato quando il [RegistraViewModel] mette in pausa automatica per stazionamento prolungato. */
 @Composable
 fun RegistraAutoPauseBanner(modifier: Modifier = Modifier) {
   Surface(

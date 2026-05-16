@@ -50,6 +50,7 @@ class StationaryDetector(context: Context) : SensorEventListener {
       variance += delta * delta
     }
     variance /= samples.size
+    // Bassa varianza dell'accelerazione → dispositivo fermo (conferma auto-pausa insieme alla velocità GPS)
     _isStationary = variance < VARIANCE_THRESHOLD
   }
 

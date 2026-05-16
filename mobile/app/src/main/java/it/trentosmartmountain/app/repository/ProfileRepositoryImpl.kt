@@ -32,6 +32,7 @@ class ProfileRepositoryImpl(
         return@flow
       }
 
+      // Offline-first: mostra subito la cache, poi tenta il refresh di rete
       val cached =
         withContext(Dispatchers.IO) {
           profileDao.getByUserId(userId)

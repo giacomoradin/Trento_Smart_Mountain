@@ -46,6 +46,11 @@ import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.ForgotPasswordViewModel
 
+/**
+ * Recupero password: invio link via email (`POST /auth/forgot-password`).
+ *
+ * @param onBack torna al login
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForgotPasswordScreen(

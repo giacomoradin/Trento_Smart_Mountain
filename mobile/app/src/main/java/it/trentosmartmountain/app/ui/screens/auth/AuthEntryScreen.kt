@@ -40,6 +40,13 @@ import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 
+/**
+ * Prima schermata per utenti non autenticati: scelta tra login e registrazione.
+ *
+ * @param onRegisterUserClick naviga al form registrazione escursionista
+ * @param onRegisterRifugioClick naviga al form registrazione rifugio
+ * @param onLoginClick naviga al form di accesso
+ */
 @Composable
 fun AuthEntryScreen(
     onRegisterUserClick: () -> Unit,
@@ -149,6 +156,7 @@ fun AuthEntryScreen(
     }
 }
 
+/** Logo montagna stilizzato (Canvas) riusato in auth e login. */
 @Composable
 fun TsmMountainLogo(iconSize: Dp = 48.dp) {
     Box(modifier = Modifier.size(iconSize)) {

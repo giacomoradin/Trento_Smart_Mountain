@@ -22,6 +22,7 @@ import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 
+/** Pulsanti pausa/ripresa e stop durante la registrazione attiva. */
 @Composable
 fun RegistraTrackingControls(
   trackingStatus: TrackingStatus,

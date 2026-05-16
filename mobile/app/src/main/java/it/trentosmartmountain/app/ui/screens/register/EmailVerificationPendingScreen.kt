@@ -25,7 +25,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import it.trentosmartmountain.app.R
 
-/** Schermata post-registrazione: istruzioni per completare la verifica email prima del login. */
+/**
+ * Schermata post-registrazione: istruzioni per completare la verifica email prima del login.
+ *
+ * @param email indirizzo registrato (mostrato all'utente)
+ * @param serverMessage messaggio opzionale restituito da `POST /users`
+ * @param onContinueToLogin apre il login con email precompilata
+ * @param onBack torna indietro nello stack di navigazione
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EmailVerificationPendingScreen(

@@ -1,7 +1,13 @@
 package it.trentosmartmountain.app.data.remote.dto
 
-// ─── Risposta /weather/locations/nearby e /weather/locations/search ───────────
+/**
+ * DTO per le API meteo del backend (proxy verso MeteoTrentino/TINIA).
+ *
+ * - [WeatherLocationsResponse]: risultati di ricerca o location vicine a coordinate GPS
+ * - [WeatherForecastResponse]: previsioni 3h e 24h per una location
+ */
 
+/** Risposta di `GET /weather/locations/nearby` e `/weather/locations/search`. */
 data class WeatherLocationsResponse(
     val count: Int,
     val results: List<WeatherLocationResult>,
@@ -18,11 +24,11 @@ data class WeatherLocationResult(
 
 data class WeatherGeoPoint(
     val type: String,
-    val coordinates: List<Double>, // [lon, lat]
+    /** Coordinate GeoJSON: `[longitudine, latitudine]`. */
+    val coordinates: List<Double>,
 )
 
-// ─── Risposta /weather/forecast/:externalId ────────────────────────────────────
-
+/** Risposta di `GET /weather/forecast/{externalId}` (slot 3h + 24h, eventuale cache server). */
 data class WeatherForecastResponse(
     val location: WeatherLocationResult,
     val referenceTown: WeatherLocationReference?,

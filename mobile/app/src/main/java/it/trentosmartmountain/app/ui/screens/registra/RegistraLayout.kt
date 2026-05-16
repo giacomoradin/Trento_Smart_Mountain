@@ -2,7 +2,10 @@ package it.trentosmartmountain.app.ui.screens.registra
 
 import androidx.compose.ui.unit.dp
 
-/** Altezze indicative per allineare FAB destra al pannello tracking in basso. */
+/**
+ * Costanti di layout per la tab Registra (padding FAB, altezze pannelli).
+ * Evita sovrapposizioni tra mappa, indicatori GPS e controlli in basso.
+ */
 object RegistraLayout {
   val gpsIndicatorTop = 20.dp
   val gpsIndicatorApproxHeight = 36.dp

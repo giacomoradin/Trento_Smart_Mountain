@@ -106,6 +106,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * Tab **Sessione** nella shell escursionista: due sotto-tab interni.
+ *
+ * - **Pianifica** — crea escursione (GPX, QR invito) via [SessionPlanViewModel]
+ * - **Unisciti** — codice invito, lista sessioni, avvio anticipato via [it.trentosmartmountain.app.data.session.SessionStartCoordinator]
+ *
+ * @param onNavigateToDetail apre [SessionDetailScreen] sul grafo di navigazione root
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionHubScreen(

@@ -27,8 +27,21 @@ import it.trentosmartmountain.app.ui.screens.profile.ProfileScreen
 import it.trentosmartmountain.app.ui.screens.registra.RegistraScreen
 import it.trentosmartmountain.app.ui.screens.session.SessionHubScreen
 
+/** Tab della bottom bar dell'area escursionista. */
 private enum class HikerTab { Home, Session, Registra, Profile }
 
+/**
+ * Shell principale utente escursionista: navigazione a **tab** (non nested graph).
+ *
+ * Tab:
+ * - Home — feed e attività personali
+ * - Sessione — pianifica / unisciti ([it.trentosmartmountain.app.ui.screens.session.SessionHubScreen])
+ * - Registra — mappa OSMdroid e tracking GPS
+ * - Profilo — dati utente e logout
+ *
+ * @param onLoggedOut callback dopo logout (navigazione verso auth)
+ * @param onNavigateToSessionDetail apre il dettaglio sessione sul grafo root ([Routes.SESSION_DETAIL])
+ */
 @Composable
 fun HikerMainScreen(
   onLoggedOut: () -> Unit,

@@ -163,4 +163,7 @@ project.freetime
 Thumbs.db
 .claude
 
+# File di lavoro interni al team
 PROJECT_OVERVIEW.md
+PROJECT_TSM_PROJECT_STATE.md
+T6_D3_Ingegneria_Del_Software.md

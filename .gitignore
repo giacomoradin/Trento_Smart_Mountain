@@ -153,6 +153,7 @@ project.freetime
 *.toc
 *.out
 *.log
+T6_D3_Ingegneria_Del_Software.md
 
 # Excel (backlog, fogli locali)
 *.xlsx

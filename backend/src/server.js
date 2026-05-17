@@ -1,22 +1,16 @@
 import "dotenv/config";
-import express from "express";
 import mongoose from "mongoose";
-import userRoutes from "./userRoutes.js";
+import app from "./app.js"; // ← importa app.js invece di ricreare Express
+import { seedLocations } from './services/weatherService.js';
 
-const app = express();
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/trento_smart_mountain";
+const MONGO_URI =
+  process.env.MONGO_URI || "mongodb://localhost:27017/trento_smart_mountain";
 
-// Middleware — parses incoming JSON request bodies
-app.use(express.json());
-
-// Routes
-app.use("/users", userRoutes);
-
-// Connect to MongoDB, then start the server
 mongoose
   .connect(MONGO_URI)
-  .then(() => {
+  .then(async() => {
+    await seedLocations();
     console.log("Connected to MongoDB");
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })

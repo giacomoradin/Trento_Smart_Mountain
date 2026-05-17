@@ -1,68 +1,183 @@
-# Trento Smart Mountain 🏔️
+# RBAC — Role-Based Access Control
 
-## Overview
-**Trento Smart Mountain** è un ecosistema digitale innovativo per l'ambiente montano, sviluppato come progetto per il corso di Ingegneria del Software (Università di Trento). La piattaforma mira a superare i limiti delle tradizionali app di navigazione passiva, offrendo strumenti attivi per la **sicurezza**, la **sostenibilità** e la **gamification**.
-
-### Pilastri del Progetto
-1.  **Sicurezza Proattiva:** Gestione delle emergenze tramite reti ibride (4G/5G e fallback BLE Mesh offline).
-2.  **Sostenibilità & Gamification:** Percorsi educativi e certificazione di vetta tramite NFC per guadagnare "Social Credits" ($S_c$).
-3.  **Monitoraggio IoT:** Gestione intelligente dei rifiuti e dell'affollamento nei rifugi alpini tramite Edge Computing.
+Documentazione del sistema di autenticazione e autorizzazione del backend **Trento Smart Mountain**.
 
 ---
 
-## Architettura di Sistema
-Il progetto adotta un pattern **Offline-First** basato sul principio *Store-and-Forward*, garantendo la continuità operativa anche in totale assenza di segnale.
+## Panoramica
 
-- **Backend:** Monolite Modulare in Node.js con MongoDB.
-- **Mobile:** App Android nativa in Kotlin (MVVM).
-- **IoT:** Edge Gateway basati su MQTT per la comunicazione con sensori e macchinari.
-- **Comunicazione:** Protocollo di relay SOS firmato ECC via BLE Mesh.
+Il sistema RBAC è composto da due livelli distinti e separati:
 
----
+1. **Autenticazione** (`authMiddleware.js`) — verifica che la richiesta porti un JWT valido.
+2. **Autorizzazione** (`authorizationMiddleware.js`) — verifica che l'utente autenticato abbia il ruolo richiesto dalla rotta.
 
-## Struttura della Repository (Monorepo)
-- `/backend`: API RESTful e logica di business del server.
-- `/mobile`: Codice sorgente dell'applicazione Android.
-- `/iot`: Script e configurazioni per i gateway e i sensori di rifugio.
-- `/docs`: Documentazione tecnica (D1, D2), diagrammi UML e backlog di progetto.
+I due middleware vengono applicati in sequenza sulle singole rotte o sull'intero router.
 
 ---
 
-## Flusso di Lavoro (SCRUM & Git Flow)
-Seguiamo la metodologia Agile SCRUM con cicli di sviluppo settimanali.
+## Ruoli disponibili
 
-### Strategia di Branching
-- `main`: Branch stabile per le release ufficiali.
-- `develop`: Branch di integrazione per lo sviluppo corrente.
-- `feature/<ID-UserStory>`: Branch temporanei per lo sviluppo di nuove funzionalità (es. `feature/1-login`).
-- `bugfix/<descrizione>`: Branch per la risoluzione di problemi riscontrati.
+I ruoli sono definiti nello schema Mongoose del modello `User` (`models/user.js`):
 
-### Sprint 1: Obiettivi Principali
-- [ ] Implementazione Autenticazione OAuth (Google/Facebook).
-- [ ] Sviluppo Android Foreground Service per tracking continuo.
-- [ ] Setup schema DB e inizializzazione sessioni escursione.
-- [ ] Algoritmo base per checklist dinamica (Meteo/Percorso).
-- [ ] Prototipo UI per la Dashboard SOS.
+| Ruolo | Descrizione |
+|---|---|
+| `groupLeader` | Utente standard — crea e gestisce sessioni di escursione. Ruolo di default alla registrazione. |
+| `rifugio` | Gestore di rifugio — può avere i dettagli del rifugio nel profilo (`rifugioDetails`). |
+| `admin` | Amministratore di sistema — accesso completo a tutte le operazioni privilegiate. |
+
+Il ruolo viene assegnato al momento della registrazione tramite il campo `role` nel body della `POST /users`. Se non specificato, viene applicato il default `groupLeader`.
 
 ---
 
-## Setup Locale
-*Variabili d'ambiente backend:*
-- Prelevare dal documento su google docs il file ***.env*** aggiornato e sostituire il contenuto dello stesso file in locale se presenti modifiche.
+## Flusso di autenticazione
 
-### Backend
-```bash
-cd backend
-npm install
-npm run dev
+### 1. Login e generazione del JWT
+
+Al login (`POST /auth/login`), l'`authService` genera un token JWT firmato con `JWT_SECRET` che include nel payload:
+
+```js
+{ userId: user._id, role: user.role }
 ```
 
-### Mobile
-Apri la cartella `mobile/` con Android Studio e sincronizza con Gradle.
+Il token viene restituito al client, che deve includerlo in ogni richiesta protetta nell'header:
+
+```
+Authorization: Bearer <token>
+```
+
+### 2. Middleware `authenticate`
+
+Definito in `middleware/authMiddleware.js`.
+
+```js
+export const authenticate = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1]; // "Bearer <token>"
+
+  if (!token) {
+    return res.status(401).json({ message: "No token provided." });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // { userId, role } disponibile in tutti i middleware successivi
+    next();
+  } catch (error) {
+    res.status(401).json({ message: "Invalid or expired token." });
+  }
+};
+```
+
+Dopo la verifica, attacca `{ userId, role }` a `req.user`, rendendolo disponibile a tutti i middleware e controller successivi nella catena.
+
+**Risposte in caso di errore:**
+
+| Codice | Causa |
+|---|---|
+| `401` | Header `Authorization` assente o token mancante |
+| `401` | Token non valido o scaduto |
+
+### 3. Middleware `requireRoles`
+
+Definito in `middleware/authorizationMiddleware.js`.
+
+```js
+export const requireRoles = (...allowedRoles) => (req, res, next) => {
+  if (!req.user || !allowedRoles.includes(req.user.role)) {
+    return res.status(403).json({ message: "Forbidden." });
+  }
+  next();
+};
+```
+
+È una **higher-order function**: riceve uno o più ruoli consentiti e restituisce un middleware. Legge `req.user.role` (popolato da `authenticate`) e blocca la richiesta se il ruolo non è tra quelli autorizzati.
+
+Deve essere sempre applicato **dopo** `authenticate`, poiché dipende da `req.user`.
+
+**Risposte in caso di errore:**
+
+| Codice | Causa |
+|---|---|
+| `403` | Utente autenticato ma ruolo non sufficiente |
 
 ---
 
-## Contatti e Licenza
-Sviluppato da: **Giacomo Radin**
+## Applicazione sulle rotte
 
-© 2026 Giacomo Radin. Tutti i diritti riservati. La riproduzione o l'uso non autorizzato di questo codice è vietata.
+### `/users` — userRoutes.js
+
+| Metodo | Endpoint | `authenticate` | `requireRoles` | Ruoli ammessi |
+|---|---|:---:|:---:|---|
+| `POST` | `/users` | ✗ | ✗ | Pubblico |
+| `GET` | `/users` | ✓ | ✗ | Qualsiasi ruolo autenticato |
+| `GET` | `/users/:id` | ✓ | ✗ | Qualsiasi ruolo autenticato |
+| `PUT` | `/users/:id` | ✓ | ✓ | `admin` |
+| `DELETE` | `/users/:id` | ✓ | ✓ | `admin` |
+
+### `/auth` — authRoutes.js
+
+Tutte le rotte sono pubbliche — nessun middleware di autenticazione applicato.
+
+| Metodo | Endpoint | Accesso |
+|---|---|---|
+| `POST` | `/auth/login` | Pubblico |
+| `GET` | `/auth/verify/:token` | Pubblico |
+| `POST` | `/auth/forgot-password` | Pubblico |
+| `GET` | `/auth/reset-password/:token` | Pubblico |
+| `POST` | `/auth/reset-password/:token` | Pubblico |
+
+### `/api/v1/sessions` — hikeSessionRoutes.js
+
+`authenticate` è applicato a livello di router (`router.use(authenticate)`), quindi **tutte** le rotte della sessione richiedono JWT. Non viene usato `requireRoles`: l'autorizzazione per-operazione (es. solo il creator può modificare/eliminare la sessione) è gestita internamente dal `hikeSessionService` confrontando `req.user.userId` con il campo `createdBy` della sessione.
+
+| Metodo | Endpoint | `authenticate` | Nota |
+|---|---|:---:|---|
+| `POST` | `/api/v1/sessions` | ✓ | Qualsiasi utente autenticato |
+| `POST` | `/api/v1/sessions/join` | ✓ | Qualsiasi utente autenticato |
+| `GET` | `/api/v1/sessions/my` | ✓ | Qualsiasi utente autenticato |
+| `GET` | `/api/v1/sessions/stats` | ✓ | Qualsiasi utente autenticato |
+| `GET` | `/api/v1/sessions/:id` | ✓ | Qualsiasi utente autenticato |
+| `PATCH` | `/api/v1/sessions/:id/status` | ✓ | Solo creator (controllo in service) |
+| `PATCH` | `/api/v1/sessions/:id` | ✓ | Solo creator (controllo in service) |
+| `POST` | `/api/v1/sessions/:id/leave` | ✓ | Qualsiasi partecipante (escluso creator) |
+| `DELETE` | `/api/v1/sessions/:id` | ✓ | Solo creator (controllo in service) |
+
+### `/weather` — weatherRoutes.js
+
+| Metodo | Endpoint | `authenticate` | `requireRoles` | Ruoli ammessi |
+|---|---|:---:|:---:|---|
+| `GET` | `/weather/locations/search` | ✗ | ✗ | Pubblico |
+| `GET` | `/weather/locations/nearby` | ✗ | ✗ | Pubblico |
+| `GET` | `/weather/forecast/:externalId` | ✗ | ✗ | Pubblico |
+| `POST` | `/weather/forecast/:externalId/refresh` | ✓ | ✓ | `admin` |
+| `POST` | `/weather/seed` | ✓ | ✓ | `admin` |
+
+---
+
+## Matrice dei permessi per ruolo
+
+| Operazione | `groupLeader` | `rifugio` | `admin` |
+|---|:---:|:---:|:---:|
+| Registrarsi | ✓ | ✓ | ✓ |
+| Accedere ai propri dati | ✓ | ✓ | ✓ |
+| Vedere lista utenti | ✓ | ✓ | ✓ |
+| Modificare un utente | ✗ | ✗ | ✓ |
+| Eliminare un utente | ✗ | ✗ | ✓ |
+| Creare una sessione | ✓ | ✓ | ✓ |
+| Unirsi a una sessione | ✓ | ✓ | ✓ |
+| Modificare/eliminare la propria sessione | ✓ | ✓ | ✓ |
+| Forzare refresh meteo | ✗ | ✗ | ✓ |
+| Eseguire seed dei dati meteo | ✗ | ✗ | ✓ |
+
+---
+
+## File di riferimento
+
+| File | Ruolo |
+|---|---|
+| `backend/src/middleware/authMiddleware.js` | Verifica JWT e popola `req.user` |
+| `backend/src/middleware/authorizationMiddleware.js` | Controlla il ruolo su `req.user` |
+| `backend/src/models/user.js` | Definisce i ruoli disponibili (`groupLeader`, `rifugio`, `admin`) |
+| `backend/src/services/authService.js` | Genera il JWT con payload `{ userId, role }` al login |
+| `backend/src/routes/userRoutes.js` | Applica RBAC sulle operazioni CRUD utente |
+| `backend/src/routes/hikeSessionRoutes.js` | Applica `authenticate` globale; autorizzazione per-risorsa nel service |
+| `backend/src/routes/weatherRoutes.js` | Applica RBAC sulle operazioni admin meteo |

@@ -1,67 +1,268 @@
-# Trento Smart Mountain 🏔️
+# User CRUD — Documentazione API
 
-## Overview
-**Trento Smart Mountain** è un ecosistema digitale innovativo per l'ambiente montano, sviluppato come progetto per il corso di Ingegneria del Software (Università di Trento). La piattaforma mira a superare i limiti delle tradizionali app di navigazione passiva, offrendo strumenti attivi per la **sicurezza**, la **sostenibilità** e la **gamification**.
-
-### Pilastri del Progetto
-1.  **Sicurezza Proattiva:** Gestione delle emergenze tramite reti ibride (4G/5G e fallback BLE Mesh offline).
-2.  **Sostenibilità & Gamification:** Percorsi educativi e certificazione di vetta tramite NFC per guadagnare "Social Credits" ($S_c$).
-3.  **Monitoraggio IoT:** Gestione intelligente dei rifiuti e dell'affollamento nei rifugi alpini tramite Edge Computing.
+Questa documentazione descrive le operazioni CRUD esposte sul modello `User` all'interno del backend di **Trento Smart Mountain**.
 
 ---
 
-## Architettura di Sistema
-Il progetto adotta un pattern **Offline-First** basato sul principio *Store-and-Forward*, garantendo la continuità operativa anche in totale assenza di segnale.
+## Base URL
 
-- **Backend:** Monolite Modulare in Node.js con MongoDB.
-- **Mobile:** App Android nativa in Kotlin (MVVM).
-- **IoT:** Edge Gateway basati su MQTT per la comunicazione con sensori e macchinari.
-- **Comunicazione:** Protocollo di relay SOS firmato ECC via BLE Mesh.
-
----
-
-## Struttura della Repository (Monorepo)
-- `/backend`: API RESTful e logica di business del server.
-- `/mobile`: Codice sorgente dell'applicazione Android.
-- `/iot`: Script e configurazioni per i gateway e i sensori di rifugio.
-- `/docs`: Documentazione tecnica (D1, D2), diagrammi UML e backlog di progetto.
-
----
-
-## Flusso di Lavoro (SCRUM & Git Flow)
-Seguiamo la metodologia Agile SCRUM con cicli di sviluppo settimanali.
-
-### Strategia di Branching
-- `main`: Branch stabile per le release ufficiali.
-- `develop`: Branch di integrazione per lo sviluppo corrente.
-- `feature/<ID-UserStory>`: Branch temporanei per lo sviluppo di nuove funzionalità (es. `feature/1-login`).
-- `bugfix/<descrizione>`: Branch per la risoluzione di problemi riscontrati.
-
-### Sprint 1: Obiettivi Principali
-- [ ] Implementazione Autenticazione OAuth (Google/Facebook).
-- [ ] Sviluppo Android Foreground Service per tracking continuo.
-- [ ] Setup schema DB e inizializzazione sessioni escursione.
-- [ ] Algoritmo base per checklist dinamica (Meteo/Percorso).
-- [ ] Prototipo UI per la Dashboard SOS.
-
----
-
-## Setup Locale
-*(Istruzioni in fase di aggiornamento)*
-
-### Backend
-```bash
-cd backend
-npm install
-npm run dev
+```
+/users
 ```
 
-### Mobile
-Apri la cartella `mobile/` con Android Studio e sincronizza con Gradle.
+Registrato in `app.js` tramite:
+
+```js
+app.use("/users", userRoutes);
+```
 
 ---
 
-## Contatti e Licenza
-Sviluppato da: **Giacomo Radin**
+## Modello User
 
-© 2026 Giacomo Radin. Tutti i diritti riservati. La riproduzione o l'uso non autorizzato di questo codice è vietata.
+Il modello Mongoose è definito in `backend/src/models/user.js`.
+
+| Campo | Tipo | Note |
+|---|---|---|
+| `username` | String | Obbligatorio, univoco |
+| `email` | String | Obbligatorio, univoco |
+| `passwordHash` | String | Obbligatorio — mai esposto nelle risposte |
+| `role` | String | Enum: `groupLeader`, `rifugio`, `admin` — default: `groupLeader` |
+| `isVerified` | Boolean | Default: `false` — impostato a `true` dopo verifica email |
+| `verificationToken` | String | Token generato alla registrazione per la verifica via SMTP |
+| `rifugioDetails` | Object | Opzionale — solo per utenti con ruolo `rifugio` (nome, codice CAI, quota, posti, coordinate) |
+| `sessionRoles` | Array | Ruoli per-sessione di escursione (`groupLeader`, `hiker`) |
+| `createdAt` | Date | Default: data corrente |
+| `mySessions` | Virtual | Populate delle `HikeSession` a cui l'utente partecipa |
+
+---
+
+## Protezione degli endpoint
+
+Gli endpoint sono gestiti da due middleware:
+
+- **`authenticate`** — verifica il JWT nella richiesta (richiesto per tutti gli endpoint protetti).
+- **`requireRoles("admin")`** — verifica che l'utente autenticato abbia ruolo `admin`.
+
+---
+
+## Operazioni CRUD
+
+### CREATE — Registrazione utente
+
+```
+POST /users
+```
+
+**Accesso:** pubblico (nessun JWT richiesto).
+
+**Body (JSON):**
+
+```json
+{
+  "username": "mario_rossi",
+  "email": "mario@example.com",
+  "password": "SecurePass123",
+  "role": "groupLeader",
+  "rifugioDetails": { }
+}
+```
+
+`rifugioDetails` è opzionale e va incluso solo per utenti con ruolo `rifugio`.
+
+**Comportamento:**
+- La password viene hashata con `bcrypt` (salt rounds: 10).
+- Viene generato un `verificationToken` casuale (32 byte hex) con il modulo `crypto`.
+- L'utente viene salvato con `isVerified: false`.
+- Viene inviata un'email di verifica tramite `emailService`.
+
+**Risposta 201:**
+
+```json
+{
+  "message": "Allocazione completata. Attesa verifica email.",
+  "user": {
+    "_id": "...",
+    "username": "mario_rossi",
+    "email": "mario@example.com",
+    "role": "groupLeader",
+    "isVerified": false
+  }
+}
+```
+
+**Errori:**
+
+| Codice | Causa |
+|---|---|
+| `409` | Email o username già registrati (indice univoco MongoDB) |
+| `500` | Errore generico del server |
+
+---
+
+### READ — Lista di tutti gli utenti
+
+```
+GET /users
+```
+
+**Accesso:** protetto — richiede JWT valido (`authenticate`).
+
+**Risposta 200:** array di oggetti utente. I campi `passwordHash` e `__v` sono sempre esclusi dalla risposta.
+
+```json
+[
+  {
+    "_id": "...",
+    "username": "mario_rossi",
+    "email": "mario@example.com",
+    "role": "groupLeader",
+    "isVerified": true
+  }
+]
+```
+
+**Errori:**
+
+| Codice | Causa |
+|---|---|
+| `401` | JWT mancante o non valido |
+| `500` | Errore generico del server |
+
+---
+
+### READ — Singolo utente per ID
+
+```
+GET /users/:id
+```
+
+**Accesso:** protetto — richiede JWT valido (`authenticate`).
+
+**Parametro URL:** `:id` — `ObjectId` MongoDB dell'utente.
+
+**Risposta 200:**
+
+```json
+{
+  "_id": "...",
+  "username": "mario_rossi",
+  "email": "mario@example.com",
+  "role": "groupLeader",
+  "isVerified": true,
+  "sessionRoles": []
+}
+```
+
+**Errori:**
+
+| Codice | Causa |
+|---|---|
+| `400` | Formato ID non valido (`CastError`) |
+| `401` | JWT mancante o non valido |
+| `404` | Utente non trovato |
+| `500` | Errore generico del server |
+
+---
+
+### UPDATE — Aggiornamento utente
+
+```
+PUT /users/:id
+```
+
+**Accesso:** protetto — richiede JWT valido (`authenticate`) **e** ruolo `admin` (`requireRoles("admin")`).
+
+**Parametro URL:** `:id` — `ObjectId` MongoDB dell'utente.
+
+**Body (JSON):** solo i campi da aggiornare tra quelli consentiti:
+
+```json
+{
+  "username": "nuovo_nome",
+  "email": "nuova@email.com",
+  "role": "admin",
+  "sessionRoles": []
+}
+```
+
+Campi aggiornabili: `username`, `email`, `passwordHash`, `role`, `sessionRoles`. Qualsiasi altro campo nel body viene ignorato.
+
+**Comportamento:**
+- Usa `findByIdAndUpdate` con `new: true` (restituisce il documento aggiornato) e `runValidators: true` (applica le regole dello schema).
+- `passwordHash` e `__v` sono esclusi dalla risposta.
+
+**Risposta 200:**
+
+```json
+{
+  "_id": "...",
+  "username": "nuovo_nome",
+  "email": "nuova@email.com",
+  "role": "admin"
+}
+```
+
+**Errori:**
+
+| Codice | Causa |
+|---|---|
+| `400` | Formato ID non valido (`CastError`) |
+| `401` | JWT mancante o non valido |
+| `403` | Utente non ha ruolo `admin` |
+| `404` | Utente non trovato |
+| `409` | Username o email già in uso |
+| `500` | Errore generico del server |
+
+---
+
+### DELETE — Eliminazione utente
+
+```
+DELETE /users/:id
+```
+
+**Accesso:** protetto — richiede JWT valido (`authenticate`) **e** ruolo `admin` (`requireRoles("admin")`).
+
+**Parametro URL:** `:id` — `ObjectId` MongoDB dell'utente.
+
+**Risposta 200:**
+
+```json
+{
+  "message": "User deleted successfully."
+}
+```
+
+**Errori:**
+
+| Codice | Causa |
+|---|---|
+| `400` | Formato ID non valido (`CastError`) |
+| `401` | JWT mancante o non valido |
+| `403` | Utente non ha ruolo `admin` |
+| `404` | Utente non trovato |
+| `500` | Errore generico del server |
+
+---
+
+## Riepilogo endpoint
+
+| Metodo | Endpoint | Auth | Ruolo | Operazione |
+|---|---|---|---|---|
+| `POST` | `/users` | No | — | Crea un nuovo utente |
+| `GET` | `/users` | JWT | qualsiasi | Legge tutti gli utenti |
+| `GET` | `/users/:id` | JWT | qualsiasi | Legge un utente per ID |
+| `PUT` | `/users/:id` | JWT | `admin` | Aggiorna un utente |
+| `DELETE` | `/users/:id` | JWT | `admin` | Elimina un utente |
+
+---
+
+## File di riferimento
+
+| File | Ruolo |
+|---|---|
+| `backend/src/app.js` | Registra il router `/users` nell'app Express |
+| `backend/src/routes/userRoutes.js` | Definisce le rotte e applica i middleware di autenticazione/autorizzazione |
+| `backend/src/services/userService.js` | Contiene la logica dei controller CRUD |
+| `backend/src/models/user.js` | Schema Mongoose del modello `User` |

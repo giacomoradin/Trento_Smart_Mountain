@@ -1,209 +1,326 @@
-# Autenticazione & JWT — Documentazione
+# 🌦️ Weather Service & API (Modulo Meteo)
 
-Documentazione del sistema di login, verifica email, gestione token JWT e reset password nel backend **Trento Smart Mountain**.
+Questo branch introduce la gestione completa delle previsioni meteorologiche per **Towns** (Comuni) e **POI** (Punti di Interesse). Il sistema minimizza le chiamate alle API esterne tramite una doppia strategia di caching.
 
----
+## 🚀 Funzionalità principali
 
-## Panoramica
-
-Il flusso di autenticazione si articola in tre macro-aree:
-
-1. **Registrazione + verifica email** — l'utente si registra tramite `POST /users` (gestita da `userService`), riceve un'email con un token di verifica e lo conferma via deep link.
-2. **Login e JWT** — l'utente verifica le credenziali e ottiene un token JWT da usare nelle richieste successive.
-3. **Reset password** — flusso autonomo basato su un token temporaneo inviato via email.
-
----
-
-## Registrazione in `app.js`
-
-```js
-app.use("/auth", authRoutes);
-```
-
-Tutte le rotte di autenticazione sono montate sul prefisso `/auth`. Nessun middleware globale è applicato — gli endpoint sono tutti pubblici per definizione.
+- **Geospatial Search**: ricerca di location vicine tramite coordinate (lon/lat) con indice MongoDB `2dsphere`.
+- **Smart Forecast Association**: i POI non memorizzano previsioni proprie; il sistema risolve automaticamente la Town di riferimento tramite `regionId`.
+- **Dual-Layer Cache**:
+  - **Venues** (towns + POI): dati statici tenuti in RAM per 24 ore.
+  - **Forecasts**: previsioni (3h/24h) salvate su MongoDB, considerate valide per 1 ora.
+- **Lazy Loading**: il forecast viene scaricato dall'API esterna e persistito su MongoDB solo alla prima richiesta (o quando scaduto).
+- **Auto-seed all'avvio**: all'avvio del server, `seedLocations()` viene chiamata automaticamente per popolare il DB con towns e POI (operazione idempotente, sicura da eseguire più volte).
 
 ---
 
-## Rotte — `authRoutes.js`
+## 🛠️ Architettura dei Dati
 
-```js
-router.post("/login",                    loginUser);
-router.get("/verify/:token",             verifyEmail);
-router.post("/forgot-password",          forgotPassword);
-router.get("/reset-password/:token",     getResetPasswordForm);
-router.post("/reset-password/:token",    resetPassword);
-```
+Il modello Mongoose `Location` gestisce due tipi di entità distinte:
 
-| Metodo | Endpoint | Handler | Descrizione |
-|---|---|---|---|
-| `POST` | `/auth/login` | `loginUser` | Verifica credenziali e restituisce il JWT |
-| `GET` | `/auth/verify/:token` | `verifyEmail` | Conferma l'email e rilascia un JWT via deep link |
-| `POST` | `/auth/forgot-password` | `forgotPassword` | Avvia il flusso di reset password |
-| `GET` | `/auth/reset-password/:token` | `getResetPasswordForm` | Serve il form HTML per la nuova password |
-| `POST` | `/auth/reset-password/:token` | `resetPassword` | Salva la nuova password hashata |
+| Campo       | Town                          | POI                                        |
+| ----------- | ----------------------------- | ------------------------------------------ |
+| `type`      | `"town"`                      | `"poi"`                                    |
+| `forecasts` | Contiene gli slot meteo reali | Sempre `null`                              |
+| `regionId`  | ID della regione geografica   | **`externalId` della Town di riferimento** |
+
+Quando si richiede il forecast di un POI, il sistema usa `regionId` per trovare la Town collegata e restituire le sue previsioni.
 
 ---
 
-## Modello User — campi rilevanti per l'auth
+## 🛣️ API Endpoints
 
-Dal modello `models/user.js`:
+Il server gira di default su `http://localhost:3000`. La dashboard Swagger è disponibile su `/api-docs`.
 
-| Campo | Tipo | Ruolo nell'autenticazione |
-|---|---|---|
-| `email` | String, univoco | Identificatore per il login |
-| `passwordHash` | String | Hash bcrypt della password (mai esposto nelle risposte) |
-| `role` | `groupLeader` \| `rifugio` \| `admin` | Incluso nel payload JWT |
-| `isVerified` | Boolean | Il login è bloccato finché è `false` |
-| `verificationToken` | String | Token one-time per la verifica email (rimosso dopo l'uso) |
-| `passwordResetToken` | String | Token one-time per il reset password (rimosso dopo l'uso) |
-| `passwordResetExpires` | Date | Scadenza del token di reset (1 ora) |
+> Tutti gli endpoint sono sotto il prefisso `/weather`.
 
 ---
 
-## Payload JWT
+### `GET /weather/locations/search`
 
-In entrambi i punti di emissione (login e verifica email) il token viene firmato con:
+Cerca locations nel DB locale per nome (ricerca case-insensitive, parziale).
 
-```js
-jwt.sign(
-  { userId: user._id, role: user.role },
-  process.env.JWT_SECRET,
-  { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
-)
-```
+**Query parameters:**
 
-| Campo payload | Valore |
-|---|---|
-| `userId` | `_id` MongoDB dell'utente |
-| `role` | Ruolo dell'utente (`groupLeader`, `rifugio`, `admin`) |
-| Scadenza | Variabile d'ambiente `JWT_EXPIRES_IN`, default `1d` |
+| Parametro | Tipo   | Obbligatorio | Default | Descrizione                          |
+| --------- | ------ | ------------ | ------- | ------------------------------------ |
+| `q`       | string | ✅           | —       | Testo da cercare (min. 2 caratteri)  |
+| `type`    | string | ❌           | tutti   | Filtra per tipo: `town` oppure `poi` |
+| `limit`   | number | ❌           | `10`    | Numero massimo di risultati          |
 
-Il JWT viene verificato dal middleware `authenticate` in `authMiddleware.js` su ogni endpoint protetto, che attacca il payload decodificato a `req.user`.
-
----
-
-## Flusso login — `loginUser`
+**Esempio:**
 
 ```
-POST /auth/login
-Body: { email, password }
+GET /weather/locations/search?q=Merano&type=town&limit=5
 ```
-
-**Passi interni:**
-
-1. Cerca l'utente per `email` nel database.
-2. Confronta la password in chiaro con `user.passwordHash` usando `bcrypt.compare`.
-3. Controlla che `user.isVerified === true` — se non verificato, blocca con `403`.
-4. Genera e restituisce il JWT.
-
-**Risposte:**
-
-| Codice | Causa |
-|---|---|
-| `200` | Login riuscito — body: `{ token: "..." }` |
-| `401` | Email non trovata o password errata (messaggio generico per non esporre quale campo è sbagliato) |
-| `403` | Utente registrato ma email non ancora verificata |
-| `500` | Errore generico del server |
-
----
-
-## Flusso verifica email — `verifyEmail`
-
-```
-GET /auth/verify/:token
-```
-
-Questo endpoint è il destinatario del link inviato via SMTP al momento della registrazione.
-
-**Passi interni:**
-
-1. Cerca l'utente con `verificationToken === :token`.
-2. Imposta `isVerified = true` e cancella `verificationToken` dal documento.
-3. Genera un JWT (stessa struttura del login).
-4. Reindirizza l'utente all'app mobile via deep link: `tsm://auth/success?jwt=<token>`.
-
-**Redirect:**
-
-| Esito | Destinazione |
-|---|---|
-| Verifica riuscita | `tsm://auth/success?jwt=<token>` |
-| Token non valido o già usato | `tsm://auth/error?message=token_invalido_o_scaduto` |
-| Errore server | `tsm://auth/error?message=errore_server_interno` |
-
-Il JWT viene passato direttamente nel query string del deep link così l'app mobile può salvarlo localmente senza un ulteriore login.
-
----
-
-## Flusso reset password
-
-### 1. Richiesta reset — `forgotPassword`
-
-```
-POST /auth/forgot-password
-Body: { email }
-```
-
-**Passi interni:**
-
-1. Cerca l'utente per email.
-2. Se trovato, genera un token casuale con `crypto.randomBytes(32)` e lo salva su `passwordResetToken`. Imposta `passwordResetExpires` a **1 ora** dalla richiesta (`Date.now() + 60 * 60 * 1000`).
-3. Invia l'email con il link di reset tramite `emailService`.
-4. Risponde sempre con `200` e un messaggio generico — anche se l'email non esiste nel database — per prevenire la **user enumeration**.
 
 **Risposta:**
 
 ```json
-{ "message": "Se l'indirizzo è registrato, riceverai un link per il reset." }
+{
+  "count": 1,
+  "results": [
+    {
+      "externalId": "5d9e12bb-...",
+      "type": "town",
+      "name": "Merano",
+      "elevation": 325,
+      "location": { "type": "Point", "coordinates": [11.159, 46.671] },
+      "regionId": "..."
+    }
+  ]
+}
 ```
-
-### 2. Form di reset — `getResetPasswordForm`
-
-```
-GET /auth/reset-password/:token
-```
-
-Serve una pagina HTML con un form per inserire e confermare la nuova password. Il form esegue una `POST` sullo stesso URL. Usato principalmente da client non-mobile (browser).
-
-### 3. Salvataggio nuova password — `resetPassword`
-
-```
-POST /auth/reset-password/:token
-Body (form o JSON): { password, confirmPassword }
-```
-
-**Passi interni:**
-
-1. Verifica che `password` e `confirmPassword` coincidano (solo se la richiesta non è JSON).
-2. Controlla che la password abbia almeno 8 caratteri.
-3. Cerca l'utente con `passwordResetToken === :token` **e** `passwordResetExpires > now` — il token scaduto viene rifiutato.
-4. Hasha la nuova password con `bcrypt` (salt rounds: 10) e la salva su `passwordHash`.
-5. Cancella `passwordResetToken` e `passwordResetExpires` dal documento.
-
-**Doppia modalità di risposta** — l'handler rileva il `Content-Type` della richiesta (`req.is('application/json')`) e risponde in JSON per le chiamate API o in HTML per le submission del form browser.
-
-| Codice | Causa |
-|---|---|
-| `200` | Password aggiornata con successo |
-| `400` | Password troppo corta, non coincidente, o token non valido/scaduto |
-| `500` | Errore generico del server |
 
 ---
 
-## Variabili d'ambiente richieste
+### `GET /weather/locations/nearby`
 
-| Variabile | Utilizzo |
-|---|---|
-| `JWT_SECRET` | Chiave di firma e verifica del JWT |
-| `JWT_EXPIRES_IN` | Durata del JWT (es. `"1d"`, `"7d"`) — default `"1d"` se non impostata |
+Trova locations vicine a una coordinata geografica.
+
+**Query parameters:**
+
+| Parametro     | Tipo   | Obbligatorio | Default | Descrizione                          |
+| ------------- | ------ | ------------ | ------- | ------------------------------------ |
+| `lon`         | number | ✅           | —       | Longitudine                          |
+| `lat`         | number | ✅           | —       | Latitudine                           |
+| `maxDistance` | number | ❌           | `50000` | Raggio di ricerca in **metri**       |
+| `type`        | string | ❌           | tutti   | Filtra per tipo: `town` oppure `poi` |
+| `limit`       | number | ❌           | `5`     | Numero massimo di risultati          |
+
+**Esempio:**
+
+```
+GET /weather/locations/nearby?lon=11.35&lat=46.50&maxDistance=20000&type=town
+```
+
+**Risposta:** stessa struttura di `/locations/search`.
 
 ---
 
-## File di riferimento
+### `GET /weather/forecast/:externalId`
 
-| File | Ruolo |
-|---|---|
-| `backend/src/routes/authRoutes.js` | Definisce le rotte pubbliche `/auth` |
-| `backend/src/services/authService.js` | Logica di login, verifica email, reset password e generazione JWT |
-| `backend/src/models/user.js` | Campi `isVerified`, `verificationToken`, `passwordResetToken`, `passwordResetExpires`, `role` |
-| `backend/src/app.js` | Monta `authRoutes` su `/auth` |
-| `backend/src/middleware/authMiddleware.js` | Verifica il JWT su ogni endpoint protetto (fuori scope di questo documento) |
+Restituisce il forecast per una location (Town o POI). Se i dati sono assenti o scaduti (>1h), vengono scaricati dall'API esterna e salvati su MongoDB automaticamente.
+
+> Se la location è un **POI**, il forecast viene risolto dalla Town collegata tramite `regionId`. La risposta includerà sia i dati del POI che quelli della Town di riferimento.
+
+**Path parameter:**
+
+| Parametro    | Descrizione                                             |
+| ------------ | ------------------------------------------------------- |
+| `externalId` | UUID della location (ricavabile da `/locations/search`) |
+
+**Query parameter opzionale:**
+
+| Parametro      | Tipo    | Default | Descrizione                                       |
+| -------------- | ------- | ------- | ------------------------------------------------- |
+| `forceRefresh` | boolean | `false` | Se `true`, ignora la cache e scarica dati freschi |
+
+**Esempio:**
+
+```
+GET /weather/forecast/5d9e12bb-7274-483e-9acd-44bfdcb916e5
+GET /weather/forecast/5d9e12bb-7274-483e-9acd-44bfdcb916e5?forceRefresh=true
+```
+
+**Risposta:**
+
+```json
+{
+  "location": {
+    "externalId": "5d9e12bb-...",
+    "type": "town",
+    "name": "Merano",
+    "elevation": 325,
+    "coordinates": [11.159, 46.671]
+  },
+  "referenceTown": { ... },  // presente solo se la location è un POI
+  "meta": {
+    "fetchedAt": "2025-05-15T10:00:00.000Z",
+    "validFrom": "2025-05-15T06:00:00.000Z",
+    "validTo":   "2025-05-22T06:00:00.000Z",
+    "fromCache": true
+  },
+  "forecast3h":  [ /* fino a 16 slot → prossime ~48h */ ],
+  "forecast24h": [ /* fino a 7 slot  → prossimi 7 giorni */ ]
+}
+```
+
+**Campi di ogni slot meteo:**
+
+| Campo                               | Unità    | Descrizione                                |
+| ----------------------------------- | -------- | ------------------------------------------ |
+| `validFrom` / `validTo`             | ISO 8601 | Intervallo di validità dello slot          |
+| `temperature`                       | °C       | Temperatura (solo slot 3h)                 |
+| `temperatureMin` / `temperatureMax` | °C       | Temperatura min/max (solo slot 24h)        |
+| `rainFall`                          | mm       | Precipitazioni                             |
+| `rainProbability`                   | %        | Probabilità pioggia                        |
+| `freshSnow`                         | cm       | Neve fresca                                |
+| `snowLevel`                         | m s.l.m. | Quota neve                                 |
+| `windSpeed` / `windGust`            | km/h     | Velocità e raffica vento                   |
+| `windDirection`                     | 0–360°   | Direzione vento                            |
+| `freezingLevel`                     | m s.l.m. | Zero termico                               |
+| `skyCondition`                      | codice   | Condizione cielo (es. `"A"`, `"B"`, `"C"`) |
+| `sunshineDuration`                  | ore      | Ore di sole                                |
+
+> `meta.fromCache: true` significa che i dati provengono dal DB (< 1h); `false` significa che sono stati appena scaricati dall'API esterna.
+
+---
+
+### `POST /weather/forecast/:externalId/refresh`
+
+Forza il refresh del forecast ignorando completamente la cache. Scarica dati freschi dall'API esterna e li sovrascrive su MongoDB.
+
+> **Solo per Towns.** Chiamare su un POI restituisce errore `400`.
+
+**Esempio:**
+
+```
+POST /weather/forecast/5d9e12bb-7274-483e-9acd-44bfdcb916e5/refresh
+```
+
+**Risposta:**
+
+```json
+{
+  "message": "Forecast aggiornato per Merano",
+  "fetchedAt": "2025-05-15T10:05:00.000Z",
+  "slotsCount": { "3h": 48, "24h": 7 }
+}
+```
+
+---
+
+### `POST /weather/seed`
+
+Popola (o aggiorna) il DB con tutte le towns e i POI dall'API esterna. Operazione idempotente (usa upsert): sicura da chiamare più volte.
+
+> Il seed viene eseguito automaticamente all'avvio del server. Questo endpoint è utile per forzare un aggiornamento manuale delle anagrafiche.
+
+**Risposta:**
+
+```json
+{
+  "message": "Seed completato",
+  "towns": 712,
+  "pois": 183
+}
+```
+
+---
+
+## 🧪 Come Testare (Flusso Completo)
+
+> **Prerequisito**: server avviato e MongoDB raggiungibile. Il seed delle anagrafiche avviene in automatico all'avvio.
+
+### Passo 1 — Trova l'`externalId` di una location
+
+Cerca una Town per nome:
+
+```
+GET /weather/locations/search?q=Laives&type=town
+```
+
+Dalla risposta, copia il campo `externalId` del risultato. Ti servirà nei passi successivi.
+
+### Passo 2 — Richiedi il forecast (prima volta)
+
+```
+GET /weather/forecast/<externalId-copiato>
+```
+
+- Il DB è ancora vuoto per quella location → il sistema scarica i dati dall'API esterna e li salva su MongoDB.
+- Nella risposta: `meta.fromCache` sarà `false`.
+
+### Passo 3 — Verifica la cache
+
+Ripeti la stessa richiesta entro un'ora:
+
+```
+GET /weather/forecast/<externalId-copiato>
+```
+
+- Questa volta: `meta.fromCache` sarà `true` (dati serviti dal DB, nessuna chiamata esterna).
+
+### Passo 4 — Forza un aggiornamento
+
+```
+POST /weather/forecast/<externalId-copiato>/refresh
+```
+
+- Ignora la cache, scarica dati freschi e sovrascrive il documento su MongoDB.
+
+### Passo 5 — Test con un POI
+
+Cerca un POI vicino a una coordinata:
+
+```
+GET /weather/locations/nearby?lon=11.35&lat=46.50&type=poi&limit=3
+```
+
+Poi richiedi il forecast del POI trovato:
+
+```
+GET /weather/forecast/<externalId-poi>
+```
+
+- Il campo `referenceTown` nella risposta mostra la Town da cui sono stati risolti i dati meteo.
+
+---
+
+## 🔍 Verifica su MongoDB (VS Code)
+
+Per ispezionare i dati salvati direttamente nel DB:
+
+1. Apri la barra laterale **MongoDB** in VS Code.
+2. Clicca su **Refresh** (icona freccia circolare) sulla collection `locations`.
+3. Usa un Playground per cercare le location che hanno già forecast:
+
+```javascript
+/* global use, db */
+use("trento_smart_mountain");
+
+db.locations.find({ "forecasts.fetchedAt": { $exists: true } });
+```
+
+Per leggere i dati meteo di una specifica città in modo leggibile:
+
+```javascript
+/* global use, db */
+use("trento_smart_mountain");
+
+const citta = db.locations.findOne({ name: "Laives" });
+
+if (!citta?.forecasts) {
+  print("ERRORE: Dati non trovati o forecast non ancora caricato.");
+} else {
+  const stampa = (slot, tipo) => {
+    const data = slot.validFrom
+      .toISOString()
+      .replace("T", " ")
+      .substring(0, 16);
+    const temp =
+      slot.temperature != null
+        ? `${slot.temperature}°C`
+        : `${slot.temperatureMin}–${slot.temperatureMax}°C`;
+    print(
+      `[${tipo}] ${data} | Temp: ${temp} | Neve: ${slot.freshSnow}cm | Vento: ${slot.windSpeed}km/h | Sky: ${slot.skyCondition}`,
+    );
+  };
+
+  print(`=== ${citta.name} — Forecast 3h (prime 3 slot) ===`);
+  citta.forecasts.slots3h.slice(0, 3).forEach((s) => stampa(s, "3h"));
+
+  print(`\n=== ${citta.name} — Forecast 24h (prime 3 slot) ===`);
+  citta.forecasts.slots24h.slice(0, 3).forEach((s) => stampa(s, "24h"));
+}
+```
+
+---
+
+## 📦 Note Tecniche
+
+- **Indice 2dsphere**: richiesto sul campo `location` per le query geospaziali (`$near`). Viene creato automaticamente dallo schema Mongoose.
+- **Idempotenza del seed**: usa `bulkWrite` con `upsert: true`, quindi non duplica i dati.
+- **`markModified`**: Mongoose richiede `location.markModified('forecasts')` per rilevare modifiche a oggetti annidati — già gestito nel service.
+- **Fonte dati esterna**: towns e POI da [gitlab.com/tinia-euregio](https://gitlab.com/tinia-euregio/tinia-website/-/raw/main/data/venues/it/); forecast da `meteo.report`.

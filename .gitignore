@@ -103,18 +103,33 @@ local.properties
 # Android Studio Navigation editor temp files
 .navigation/
 
+# XML in progetto Android: i file sotto mobile/app/src/ (AndroidManifest, res/values/*.xml,
+# layout, drawable, xml/…) sono SORGENTE e vanno committati. Non usare qui `*.xml` globale.
+# File XML solo cache IDE (es. device streaming): già esclusi tramite .idea/caches e regole .idea sotto.
+# Eccezioni esplicite (restano tracciati anche se comparisse un ignore `*.xml` più sopra nel file):
+!/mobile/app/src/main/AndroidManifest.xml
+!/mobile/app/src/main/res/**/*.xml
+# PROJECT_OVERVIEW.md
 # Android Studio captures folder
 captures/
 
-# IntelliJ
+# IntelliJ / Android Studio (usa sempre / nei pattern, non \)
 *.iml
 .idea/workspace.xml
 .idea/tasks.xml
-.idea/gradle.xml
 .idea/assetWizardSettings.xml
 .idea/dictionaries
 .idea/libraries
-.idea/caches
+# File IDE solo locali — qualsiasi modulo (es. mobile/.idea/)
+**/.idea/workspace.xml
+**/.idea/deploymentTargetSelector.xml
+**/.idea/caches/
+**/.idea/deviceManager.xml
+**/.idea/planningMode.xml
+**/.idea/appInsightsSettings.xml
+**/.idea/shelf/
+mobile/.idea/workspace.xml
+mobile/.idea/deploymentTargetSelector.xml
 
 # Keystore files
 *.jks
@@ -140,6 +155,12 @@ project.freetime
 *.out
 *.log
 
+# Excel (backlog, fogli locali)
+*.xlsx
+
 # System Files
 .DS_Store
 Thumbs.db
+.claude
+
+PROJECT_OVERVIEW.md

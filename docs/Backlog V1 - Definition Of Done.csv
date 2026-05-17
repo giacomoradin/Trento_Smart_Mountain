@@ -1,0 +1,8 @@
+Check,#,TITOLO,CRITERIO
+FALSE,1,Completamento funzionale,Il comportamento descritto della user story è implementato ed è verificabile sul ramo di integrazione.
+FALSE,2,Commenti,"Il codice è completo di commenti dove servono (logica non ovvia, scelte importanti, edge case)."
+FALSE,3,Integrazione nel repository,"Il lavoro è integrato nel codice condiviso (merge nel branch di sviluppo), senza conflitti non risolti."
+FALSE,4,Build e qualità minima,Mobile: il progetto Android compila senza errori. Backend (se coinvolto): comandi npm/build/dev previsti dal progetto senza errori bloccati.
+FALSE,5,Verifica manuale,È stata eseguita una prova del flusso principale della story (chi ha sviluppato o un altro membro del team). Bug evidenti al primo utilizzo => la story non è Done.
+,6,Tracciabilità,La story è aggiornata nello strumento di sprint (backlog/board): stato Done.
+FALSE,7,Documentazione leggera,"Se la story introduce setup nuovo o variabili d’ambiente, è aggiornato almeno un punto concorde col team (README del modulo o docs/setup_mobile.md), senza testi lunghi o duplicati."

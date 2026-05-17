@@ -1,0 +1,144 @@
+2026-05-17 | giacomoradin | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into develop
+2026-05-17 | giacomoradin | Add Swagger documentation for Trento Smart Mountain API
+2026-05-17 | giacomoradin | feat: add background location permission and wake lock for GPS updates
+2026-05-16 | giacomoradin | Merge branch 'UI' of https://github.com/giacomoradin/Trento_Smart_Mountain into UI
+2026-05-16 | giacomoradin | feat: add ActivityListScreen and ViewModel for managing activity data
+2026-05-16 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into API-Meteo
+2026-05-16 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into develop
+2026-05-16 | STUSSY-user | modified comments in userService.js and added swagger-output.json to the commit.
+2026-05-16 | federicoca | feat: improved UI in Registra Screen and removed SOS and GPS fix animation
+2026-05-16 | federicoca | feat: Add detailed documentation comments across various classes and functions
+2026-05-16 | giacomoradin | Refactor API response handling in TsmApiService to use ApiMessageBody for updateSession and updateSessionStatus methods; enhance SessionDetailScreen with error handling via Toast notifications; implement confirmation dialog for session start in SessionHubScreen; improve saveEdit method in SessionDetailViewModel with silent session reload and error reporting.
+2026-05-15 | giacomoradin | Merge branch 'UI' of https://github.com/giacomoradin/Trento_Smart_Mountain into UI
+2026-05-15 | giacomoradin | Refactor session code input and improve weather data handling
+2026-05-15 | federicoca | again fixing gitignore
+2026-05-15 | federicoca | feat:  hope to have fixed .gitignore
+2026-05-15 | giacomoradin | feat: Enhance session management and tracking features
+2026-05-15 | giacomoradin | Merge branch 'API-Meteo' of https://github.com/giacomoradin/Trento_Smart_Mountain into UI
+2026-05-15 | federicoca | Merge branch 'UI' of https://github.com/giacomoradin/Trento_Smart_Mountain into UI
+2026-05-15 | federicoca | feat: Update UI components and color scheme for improved aesthetics
+2026-05-15 | giacomoradin | feat: Improve session management messages and normalize join code format
+2026-05-15 | giacomoradin | feat: Implement GPS tracking functionality with auto-pause feature
+2026-05-15 | giacomoradin | feat: enhance session management with improved error handling and participant roles
+2026-05-15 | federicoca | Merge branch 'UI' of https://github.com/giacomoradin/Trento_Smart_Mountain into UI
+2026-05-15 | federicoca | feat: Implement hike tracking functionality with auto-pause and metrics display - Added `HikeTrackingEngine` to manage tracking state and metrics. - Introduced `StationaryDetector` to determine if the user isn't moving. - Developed UI components for tracking controls, metrics display, and auto-pause notifications. - Integrated tracking status management in `RegistraViewModel`. - Enhanced `TsmMapView` to visualize the user's track on the map. - Added notification handling for foreground service during tracking. - Updated string resources for new UI elements and tracking features.
+2026-05-15 | STUSSY-user | updated:   README.md updated:   backend/src/app.js update:  backend/src/models/location.js
+2026-05-15 | STUSSY-user | modified:   README.md
+2026-05-15 | giacomoradin | feat: merge Integrate GPS functionality and map features in Registra screen
+2026-05-15 | giacomoradin | feat: Add session detail screen and navigation
+2026-05-15 | federicoca | update gitignore (exluded deploymentTargetSelector and workspace
+2026-05-15 | federicoca | removed zoom buttons visibility from TsmMapView.kt
+2026-05-15 | federicoca | Implement location tracking and map integration in Registra screen. Added UserLocationTracker. Integrated OSMdroid for displaying maps. Created TsmMapView to manage map lifecycle and user location markers. Added GpsSignalIndicator. Added necessary permissions in AndroidManifest.xml.
+2026-05-15 | STUSSY-user | Merge branch 'API-Meteo' of https://github.com/giacomoradin/Trento_Smart_Mountain into API-Meteo
+2026-05-15 | STUSSY-user | Rifattorizzazione backend per integrazione meteo
+2026-05-15 | giacomoradin | Sry I forgot to push my work for the past days I'm now working on section UNISCITI. I need the API-Meteo and the map logic to be up asap.  GN see u tomorow during meeting. Recap of edit we discused togheder. feat: Add ViewModels for session management and registration
+2026-05-14 | federicoca | Merge branch 'API-Meteo-Integration' of https://github.com/giacomoradin/Trento_Smart_Mountain into API-Meteo-Integration
+2026-05-14 | federicoca | fix gitignore
+2026-05-14 | STUSSY-user | Merge branch 'API-Meteo-Integration' of https://github.com/giacomoradin/Trento_Smart_Mountain into API-Meteo-Integration
+2026-05-14 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into API-Meteo-Integration
+2026-05-14 | federicoca | Recupero ./mobile/ corretto alla versione 0 e recupero deep tree per accesso mail
+2026-05-14 | federicoca | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into API-Meteo-Integration
+2026-05-14 | federicoca | chore: update .gitignore and remove mobile/.idea/.gitignore
+2026-05-14 | giacomoradin | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into develop
+2026-05-14 | giacomoradin | refactor: enhance email verification flow with deep link redirects and improved error handling
+2026-05-14 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into API-Meteo-Integration
+2026-05-14 | federicoca | feat: add deploymentTargetSelector.xml to .gitignore
+2026-05-14 | federicoca | feat: add fast-xml-parser dependency to package.json and package-lock.json, removed fast-xml-parser from androidManifest.xml temporary
+2026-05-14 | STUSSY-user | added command line to set up the "ours" merge driver for the README.md file, ensuring that during merges, the current branch's version of README.md is kept.
+2026-05-14 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into API-Meteo-Integration
+2026-05-14 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into develop
+2026-05-14 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into API-Meteo-Integration
+2026-05-14 | STUSSY-user | modified README.md
+2026-05-14 | STUSSY-user | added .gitattributes to keep the current branch's version of README.md during merges, and updated stationRegistry.service.js, station.js, meteo.service.js, meteoRoutes.js, and stationRoutes.js to reflect the renaming of the Station model to TemperatureList.
+2026-05-14 | STUSSY-user | Deined and tested all CRUD methods for station registry, including the refresh function that updates station data by fetching the latest information from the external API. Updated the station model to reflect the correct collection name and ensured all routes and services are consistent with these changes.
+2026-05-14 | STUSSY-user | Integrated CRUD operations for meteo.service.js, stationRegistry.service.js, and renamed temperatureList.js to station.js. Updated all relevant imports and references accordingly. Tested and working as expected. Still need to implemente CRUD for meteo.service.js, but this is a good starting point for the integration of the Meteo API with our local database. I want meteoRoutes to be able to call fetchMeteoAndPersist and have it update the local DB with the latest data from the Meteo API, using the station metadata from the registry. This will allow us to keep our local data in sync with the remote source and provide up-to-date information to our users.
+2026-05-14 | federicoca | fix: correct application manifest structure and intent filters
+2026-05-14 | federicoca | feat: update adb reverse script and modify deployment target settings
+2026-05-14 | federicoca | Refactor authentication and navigation flow for user roles
+2026-05-14 | STUSSY-user | Added global error middleware for better error handling and refactored station route to use meteo service for fetching and persisting data.
+2026-05-14 | STUSSY-user | Integrazione meteo API e parsing XML, con persistenza su MongoDB. Aggiunta endpoint per ricerca stazioni meteo. Mancano operazioni CRUD per le temperature, ma è possibile estenderle in futuro. Testato con Postman, tutto funziona correttamente.
+2026-05-13 | federicoca | feat: integrate Room database for local user profile caching
+2026-05-13 | STUSSY-user | Merge branch 'Swagger-setup' into develop
+2026-05-13 | STUSSY-user | corrected restored hikesessionRoutes.
+2026-05-13 | STUSSY-user | working on Swagger setup and documentation for API endpoints. Updated package.json scripts and added Swagger comments to hike session routes. Removed authMiddleware as it's no longer needed with the new authentication approach.
+2026-05-13 | STUSSY | Merge pull request #11 from giacomoradin/Swagger-setup
+2026-05-13 | STUSSY-user | swagger setted up again
+2026-05-13 | STUSSY-user | deleted package.json file in backend directory
+2026-05-13 | STUSSY | Merge pull request #10 from giacomoradin/Reorganizatio-Repo-Structure
+2026-05-13 | STUSSY-user | syncing branches ig
+2026-05-13 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into Reorganizatio-Repo-Structure
+2026-05-13 | giacomoradin | Refactor authentication and authorization middleware; remove unused Swagger files and update package.json dependencies
+2026-05-13 | STUSSY-user | cors correction
+2026-05-13 | STUSSY-user | import cors
+2026-05-13 | STUSSY-user | Cors setup and email service configuration updates to ensure proper environment variable loading and debugging for SMTP settings.
+2026-05-13 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into Reorganizatio-Repo-Structure
+2026-05-13 | STUSSY-user | commit
+2026-05-13 | STUSSY-user | im getting mad
+2026-05-13 | giacomoradin | Add coments to code
+2026-05-13 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into Reorganizatio-Repo-Structure
+2026-05-13 | STUSSY-user | commented by stussy on 2024-06-20 17:45:00
+2026-05-13 | STUSSY-user | changed color
+2026-05-13 | giacomoradin | Updated roles name into user.js. We now have rigugio, groupLeader and admin. We have keept the virtualization towards the hikeSession instead of stacking on the user
+2026-05-13 | STUSSY-user | updated: backend/src/server.js
+2026-05-13 | STUSSY-user | solved email service issue and updated server.js to use app.js for better modularity.
+2026-05-13 | STUSSY | modified readme
+2026-05-13 | STUSSY-user | Added CONTRUBUTING.md file.
+2026-05-13 | STUSSY-user | Modified package.json and backend/src/apiTracker/swagger.js to reflect the new repository structure. Deleted backend/package-lock.json and backend/package.json as they are no longer needed in the new structure.
+2026-05-13 | STUSSY-user | Middlewares folder
+2026-05-13 | giacomoradin | Removed '.xml' from loaded files
+2026-05-13 | giacomoradin | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into develop
+2026-05-13 | federicoca | Complete encrypted JWT storage and session restore on app startup.
+2026-05-13 | federicoca | migration JWT to EncryptedSharedPreferences, validation session token, clean logout (clear all user auth data when logout), update documentation
+2026-05-12 | giacomoradin | Enhance email service configuration with TLS patch and update deployment target settings
+2026-05-12 | federicoca | update documentation and added a better user registation experience
+2026-05-12 | giacomoradin | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into develop
+2026-05-12 | giacomoradin | Add role field to participants in hikeSession schema and clean up user schema to avoid heaviness in user document in case of many sessions we'll not go over the 16MB archive limit of mongo.  We can still recal the info virtually using e.g.  User.findById(id).populate('mySessions').  We aso need to do this to prevent data drifting and de-syncing since we have to update just one place instead of 2 while !wb from the firmware to db have to do 1 iteraction. This makes hikeSession a SSoT
+2026-05-12 | federicoca | added documentation (android_server_communication.md
+2026-05-12 | federicoca | added UI navigation bar on app, google access demo and updated mobile_app_base
+2026-05-12 | giacomoradin | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into develop
+2026-05-12 | Giacomo Radin | Update Swagger output file path and regenerate API documentation
+2026-05-12 | STUSSY-user | updated swagger output and server.js to reflect new location of swagger output
+2026-05-12 | STUSSY-user | swagger-output.json
+2026-05-12 | STUSSY-user | idk actually, I just want to test the commit message
+2026-05-12 | Giacomo Radin | Implement email verification process and update user model
+2026-05-12 | STUSSY | Merge pull request #9 from giacomoradin/18-gestione-sessione-escursione
+2026-05-12 | STUSSY-user | vincolo partecipazione utente a una sola sessione attiva alla volta
+2026-05-12 | federicoca | added UI navigation bar on app and updated mobile_app_base
+2026-05-12 | federicoca | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into develop
+2026-05-12 | federicoca | Merge branch 'origin/develop' into develop
+2026-05-12 | STUSSY-user | updated package.json with the new swagger path
+2026-05-12 | federicoca | Add navigation menù on app (Sessione, Mappa, Profilo)
+2026-05-12 | STUSSY | Merge pull request #8 from giacomoradin/18-gestione-sessione-escursione
+2026-05-12 | STUSSY-user | correzione generale commenti
+2026-05-12 | STUSSY-user | Logica di associazione Capogruppo-Sessione.
+2026-05-12 | STUSSY | Merge pull request #7 from giacomoradin/Auth-RequireAdminToDelete
+2026-05-12 | STUSSY-user | included authorization middleware to the user routes, ensuring that only users with the "admin" role can update or delete user information. This enhances the security of our application by restricting sensitive operations to authorized personnel only.
+2026-05-11 | STUSSY-user | Merge branch 'develop' of https://github.com/giacomoradin/Trento_Smart_Mountain into develop
+2026-05-11 | STUSSY-user | WIP: Login functionality
+2026-05-11 | Giacomo Radin | Corretto errore di double index piloting in hikeSession
+2026-05-11 | Giacomo Radin | Ho sistemato i percorsi...
+2026-05-11 | Giacomo Radin | Refactoring cartelle e hikeSession.js
+2026-05-11 | Giacomo Radin | "feat(sessions): add HikeSession model, service and REST endpoints
+2026-05-11 | Giacomo Radin | feat(sessions): aggiungi modello HikeSession, servizio ed endpoint REST
+2026-05-11 | Federico Cattelan | Add .env file update instructions
+2026-05-11 | Giacomo Radin | feat(sessions): aggiungi modello HikeSession, servizio ed endpoint REST
+2026-05-11 | federicoca | feat(mobile): integrate auth APIs with login and registration flow
+2026-05-11 | STUSSY | Update server.js
+2026-05-10 | federicoca | commented base app code
+2026-05-10 | federicoca | added a base app explaning temp file (mobile_app_base)
+2026-05-10 | STUSSY | Merge branch 'develop' into auth-login-jwt
+2026-05-10 | STUSSY | Merge pull request #6 from giacomoradin/develop
+2026-05-10 | STUSSY | Merge pull request #3 from giacomoradin/crud-mongodb
+2026-05-10 | STUSSY-user | feat: implement login and JWT authentication
+2026-05-09 | federicoca | Merge branch 'feature/android-setup-login-wip' into develop
+2026-05-10 | STUSSY | Remove duplicate import of userRoutes
+2026-05-10 | STUSSY | Merge pull request #5 from giacomoradin/auth-login-jwt
+2026-05-09 | federicoca | feat(mobile): Gradle app module, Compose shell, email/password login
+2026-05-09 | federicoca | aggiunta esclusione .xlsx
+2026-05-09 | STUSSY-user | feat: implement user management with CRUD operations and MongoDB integration
+2026-05-07 | STUSSY-user | feat: add MongoDB connection with dotenv configuration
+2026-05-06 | giacomoradin | Merge pull request #1 from giacomoradin/develop
+2026-05-06 | Giacomo Radin | Update VS Code extensions: clarify MQTT recommendation
+2026-05-05 | Giacomo Radin | Initialize project structures: Node.js backend boilerplate, Android MVVM folders, and IoT gateway skeleton
+2026-05-05 | Giacomo Radin | Add project setup: .vscode configs, docker-compose for infrastructure, and mobile setup guide
+2026-05-05 | Giacomo Radin | Initial commit: Repository setup with Monorepo structure, GitFlow rules and documentation

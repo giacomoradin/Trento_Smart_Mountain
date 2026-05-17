@@ -377,15 +377,31 @@ mobile/app/src/main/java/it/trentosmartmountain/app/
 | ProfileScreen avatar + livello + badge | Mobile | HOME SOCIAL non implementata |
 | MQTT IoT gateway rifugio | Backend | Installato, non integrato |
 
-### Debito tecnico noto
+### Debito tecnico — risolto in audit 17/05
+
+| Problema | File | Risolto |
+|----------|------|---------|
+| `userSchema.sessionRoles` non nello schema | `user.js` | ✅ Campo aggiunto con subdocument ref |
+| `POST /weather/seed` e `/refresh` non protetti | `weatherRoutes.js` | ✅ `authenticate + requireRoles("admin")` |
+| `ACCESS_BACKGROUND_LOCATION` mancante dal manifest | `AndroidManifest.xml` | ✅ Aggiunto + `WAKE_LOCK` |
+| AVVIA visibile a tutti (403 silent per non-creator) | `SessionDetailScreen.kt` | ✅ Gating `isCreator`; partecipanti vedono info-chip |
+| `joinSession` ritorna doc non-populated | `hikeSessionService.js` | ✅ `session.populate([creatorId, participants.userId])` |
+| `activityDetailRoute(id, null)` → URL malformato | `Routes.kt` | ✅ Rimosso `?sessionId=` vuoto |
+| `startPoint.coordinates default [0,0]` inquina 2dsphere | `hikeSession.js` | ✅ Rimosso default, indice `sparse: true` |
+| `AppRepository.kt` interfaccia vuota (dead code) | mobile | ✅ File cancellato |
+| `LocalDataSource.kt` singleton vuoto (dead code) | mobile | ✅ File cancellato |
+| Endpoint debug `GET /weather/test` esposto | `weatherRoutes.js` | ✅ Rimosso |
+
+### Debito tecnico residuo (Sprint 2)
 
 | Problema | File | Severità |
 |----------|------|----------|
-| `userSchema.sessionRoles` referenziato in service ma non nello schema | `user.js` / `hikeSessionService.js` | Media |
-| `leaveSession` restituisce doc non-populated (route usa `ApiMessageBody` → ok) | `hikeSessionService.js` | Bassa |
-| `POST /weather/seed` non ha middleware admin | `weatherRoutes.js` | Media — da proteggere |
-| WorkManager Store-and-Forward (sync batch offline) | Mobile | Alta — richiede dipendenza WorkManager |
-| `joinSession` non popola il response | `hikeSessionService.js` | Media — crash se client legge body |
+| `meetingDate` come `String` invece di `Date` (sort lessicografico) | `hikeSession.js` | 🟠 Media — richiede backfill MongoDB |
+| Pattern Repository violato in 4 ViewModel | mobile | 🟠 Media — testabilità |
+| `leaveSession` restituisce doc non-populated (route usa `ApiMessageBody` → ok per ora) | `hikeSessionService.js` | 🟡 Bassa |
+| WorkManager Store-and-Forward (sync batch offline) | Mobile | 🟠 Alta — richiede dipendenza WorkManager |
+| KDoc stale in `TsmApplication.kt` e `TsmApiService.kt` | mobile | 🟡 Cosmetic |
+| Zero unit test (JUnit ViewModel + Jest hikeSessionService) | tutto | 🟠 Sprint 2 priority |
 
 ---
 
@@ -422,7 +438,7 @@ Weather:      GET /weather/locations/nearby, /locations/search, /forecast/:id
 
 ---
 
-*Documento aggiornato il 2026-05-16 — Fine Sprint 1. Branch: `UI` (ultimo merge: 2026-05-16). Prossima milestone: Sprint 2 — SOS backend + HomeScreen feed + BLE planning.*
+*Documento aggiornato il 2026-05-17 — Fine Sprint 1. Tutti i bug critici (C1/C2/C3) fixati. Branch: `UI` (ultimo merge: 2026-05-17). Prossima milestone: Sprint 2 — SOS backend + HomeScreen feed + BLE planning.*
 
 ---
 
@@ -664,16 +680,69 @@ Story nuove o ri-prioritizzate emerse durante Sprint 1:
 
 ---
 
-## 12. Quick-reference: cosa preparare per il 17/05
+## 12. Quick-reference: stato consegna 17/05
 
-| Output | Dove | Stato |
+| Output | File | Stato |
 |--------|------|-------|
-| Documento D3 (PDF/DOCX) seguendo §11 | da scrivere in `docs/D3_Sprint1.pdf` | ⏳ Da redigere |
-| Burndown chart PNG | `docs/sprint1_burndown.png` | ⏳ Generare da §11.3 |
-| Screenshot branch graph GitHub | `docs/branches.png` | ⏳ Da catturare |
-| Swagger snapshot (pdf o link Apiary) | `swagger-output.json` già nel repo | ✅ |
-| Tabella test cases (§11.3) | dentro il D3 | ✅ Design pronto |
-| Link repo + Apiary | nella sezione introduttiva del D3 | ⏳ Inserire URL definitivi |
-| Eventuale fix dei 3 bug critici prima della consegna | branch `bugfix/sprint1-critical` | ⏳ Decisione team |
+| Documento D3 LaTeX | `docs/T6_D3_Ingegneria_Del_Software.md` | ✅ Completo (vedere §13 per 4 correzioni da fare) |
+| Burndown Chart | integrato come TikZ nel D3 (dati da CSV) | ✅ Già nel LaTeX |
+| Product Backlog CSV | `docs/Backlog V1 - Product Backlog.csv` | ✅ Nel repo |
+| Sprint 1 Backlog CSV | `docs/Backlog V1 - Sprint 1 Backlog.csv` | ✅ Nel repo |
+| Definition of Done CSV | `docs/Backlog V1 - Definition Of Done.csv` | ✅ Nel repo |
+| Test Cases CSV | in lavorazione dal team | ⏳ Da aggiungere quando pronto |
+| swagger-output.json | `swagger-output.json` in root | ✅ |
+| Apiary link | `https://trentosmartmountain.docs.apiary.io` | ✅ nel D3 |
+| Bug critici C1/C2/C3 | fixati nel codice il 17/05 | ✅ Fix applicati |
 
-> **Raccomandazione finale**: se il tempo prima del 17/05 è limitato, lascia i 3 bug critici a Sprint 2 ma cita esplicitamente nel D3 (sezione Sprint Retrospective + Backlog Refinement) che sono stati identificati durante un audit interno di fine sprint — è esattamente ciò che la metodologia Scrum si aspetta e dimostra maturità di processo.
+---
+
+## 13. Stato documento D3 (17/05/2026)
+
+### Valutazione `docs/T6_D3_Ingegneria_Del_Software.md`
+
+**Qualità globale: 🟢 Eccellente — 90% pronto per la consegna.**
+
+Il documento è un file LaTeX completo con stile coerente a D1/D2 (colori primary/secondary, fancyhdr, tcolorbox, tabularx, longtable, TikZ burndown). Contiene tutte le sezioni richieste dal docente.
+
+#### Correzioni da fare prima della consegna
+
+| # | Problema | Dove nel LaTeX | Fix |
+|---|----------|----------------|-----|
+| 1 | Bug C1/C2/C3: descritti come "Fix: Sprint 2" ma **già fixati** | Retrospective + Refinement | ✅ Aggiornati come "Fix applicato il 17/05 durante audit interno" |
+| 2 | Action items retrospective (cancella dead code) già eseguiti | `\subsubsection*{Action items}` | ✅ Marcati come completati |
+
+> **Nota T6**: il prefisso `T6_` nel nome file è corretto per la consegna del gruppo 6, Milestone 3.
+> **Nota durata sprint**: 1 settimana (09/05–17/05) con ~70h/sett è conforme alla realtà del team (~12h/giorno × 3 membri).
+
+#### Sezioni già corrette e complete
+
+- ✅ Team Members con GitHub account corretti (`@federicocattelan`, `@STUSSY-user`, `@giacomoradin`)
+- ✅ Project idea (3-5 righe)
+- ✅ Links (GitHub + Swagger + Apiary)
+- ✅ Branching table con tutti i branch reali + nota "non cancellati per docenti"
+- ✅ Product Backlog US-01→US-15 con stati reali
+- ✅ Definition of Done 8 criteri
+- ✅ Sprint Goal in tcolorbox
+- ✅ Sprint Backlog longtable con volunteer + stima + status
+- ✅ Burndown Chart TikZ con dati reali dal CSV (effort iniziale 252 → normalizzato 200)
+- ✅ Test Cases TC-01→TC-13 (inclusi bug espliciti TC-07/08/11)
+- ✅ Sprint Review (demo 6 punti, 15 minuti)
+- ✅ Backlog Refinement US-16→US-23
+- ✅ Retrospective: what worked / bug critici / debito tecnico / action items
+- ✅ Appendice A con tutti gli endpoint API (21 route)
+
+### Statistiche commit GitHub (17/05/2026)
+
+| Membro | GitHub | Commit |
+|--------|--------|--------|
+| Marco Christian Stoica | `@STUSSY-user` | ~66 |
+| Federico Cattelan | `@federicoca` | ~38 |
+| Giacomo Radin | `@giacomoradin` | ~40 |
+
+**Tutti e tre i componenti hanno contribuito attivamente** (commit visibili su GitHub → Insights → Contributors). Il D3 già lo dichiara correttamente a §1.
+
+### Come mostrare i commit al docente
+
+1. **GitHub web** → repository → `Insights` → `Contributors` → screenshot del grafico
+2. **GitHub web** → repository → `Commits` → mostra lista per branch
+3. **Comando locale** per PDF/report: `git log --all --format="%ad | %an | %s" --date=short > docs/commit_log.txt`

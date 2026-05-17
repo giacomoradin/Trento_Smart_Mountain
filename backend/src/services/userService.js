@@ -4,11 +4,7 @@ import crypto from "crypto"; //SMTP/mail verification token generation
 import { sendVerificationEmail } from "./emailService.js"; //SMTP/mail verification
 
 export const createUser = async (req, res) => {
-  /* 
-     #swagger.tags = ['Auth']
-     #swagger.description = 'Registra un nuovo utente e invia l'email di verifica.'
-     #swagger.security = [] 
-  */
+  
   try {
     const { username, email, password, role, rifugioDetails } = req.body;
 

@@ -1,0 +1,136 @@
+,,,,,Estimated Effort Remaining,,,,,,,STATUS
+ID,Product Backlog Item,Sprint Task,Volunteer,Initial Estimate of Effort,1,2,3,4,5,6,7,
+3,"Come utente voglio poter creare un account inserendo i miei dati, cosi da accedere alla piattaforma usufruire dei suoi servizi.",1. Sviluppo UI registrazione utente con validazione input.,Federico,2,2,1,,,,,,DONE
+,,2. Setup endpoint API per registrazione e hashing password.,Marco,2,2,2,2,2,,,,DONE
+,,3. Implementazione invio email di verifica.,Giacomo,3,3,2,1,,,,,DONE
+,,4. Integrazione DB per persistenza dati utente.,Marco,2,2,2,2,,,,,DONE
+,,5. Progettazione e implementazione collezione utente nel DataBase,Marco,3,3,3,3,,,,,DONE
+,,6. Deep link e flusso verifica email (tsm://auth).,Giacomo,2,2,2,2,2,,,,DONE
+,,7. Registrazione rifugio (UI campi CAI e coordinate).,Giacomo,2,2,1,,,,,,DONE
+,,8. Documentazione comunicazione Android-server.,Federico,1,1,1,1,1,,,,DONE
+,,9. Testing & debugging,Marco,1,2,2,2,1,,,,DONE
+,,10. Documentazione API,Marco,1,1,1,1,,,,,DONE
+,,11. Deploy,Federico,1,1,1,1,1,1,,,DONE
+1,Come utente voglio poter effettuare login con le mie credenziali cosi da accedere alle funzionalita del sistema in al mio account,1. Progettazione e implementazione collezione utente nel DataBase (MongoDB).,Marco,3,3,2,,,,,,DONE
+,,2. Sviluppo UI form di login.,Federico,2,2,2,,,,,,DONE
+,,3. Integrazione login/registrazione con API backend (Retrofit).,Federico,2,2,1,,,,,,IN PROGRESS
+,,5. Implementazione gestione token JWT in Local Storage/Keychain.,Federico,1,1,1,1,1,,,,DONE
+,,6. Implementazione gestione Token Backend server.,Marco,2,2,2,,,,,,DONE
+,,7. AuthInterceptor Bearer JWT su chiamate protette.,Federico,1,1,1,1,,,,,DONE
+,,8. Reset password via email (forgot/reset flow).,Giacomo,2,2,2,2,1,,,,IN PROGRESS
+,,9. Testing del flusso di login.,Giacomo,1,1,,,,,,,IN PROGRESS
+,,10. Documentazione,Giacomo,1,1,1,1,1,,,,DONE
+,,11. Deploy,Giacomo,1,1,1,1,1,,,,IN PROGRESS
+4,"Come utente autenticato voglio poter effettuare il logout dall'app, così da proteggere i miei dati su dispositivi condivisi.",1. UI pulsante Logout in ProfileScreen e RefugeMainScreen.,Federico,1,1,1,1,1,1,,,DONE
+,,"2. Pulizia TokenStorage, cache Room profilo e navigazione verso auth.",Federico,2,2,2,2,2,,,,DONE
+,,4. Testing flusso logout.,Giacomo,1,1,,,,,,,DONE
+,,5. Documentazione,Federico,1,1,,,,,,,DONE
+,,6. Deploy,Federico,1,1,,,,,,,DONE
+2,"Come utente già autenticato, voglio poter accedere all'app anche senza connessione internet, cosi da usare le funzionalità anche in montagna.",1. Caching stato autenticazione e token validi in EncryptedSharedPreferences.,Federico,3,3,3,3,,,,,DONE
+,,2. Ripristino sessione JWT all'avvio app (AuthSession).,Federico,2,2,2,2,2,,,,DONE
+,,3. Interceptor HTTP e gestione errori offline.,Federico,2,2,2,2,2,1,,,IN PROGRESS
+,,4. Cache profilo utente con Room.,Federico,2,2,2,2,2,2,1,,IN PROGRESS
+,,5. Gestione state-machine dell'app offline/online.,,2,,,,,,,,TO DO
+,,6. Testing,Federico,1,1,1,1,1,1,1,,IN PROGRESS
+,,7. Documentazione,Federico,1,1,1,1,1,1,1,,IN PROGRESS
+,,8. Deploy,Federico,1,1,1,1,1,1,1,,IN PROGRESS
+18,"Come Capogruppo, voglio poter creare nuova sessione di escursione, parametri del percorso e coordinare il gruppo avviare tracciamento","1. Progettazione schema DB (Collezione Sessione, Route, Partecipante).",Giacomo,3,3,2,,,,,,DONE
+,,2. Sviluppo endpoint REST per inizializzazione sessione.,Giacomo,2,2,2,,,,,,DONE
+,,3. Logica di associazione Capogruppo-Sessione.,Marco,2,2,2,2,,,,,DONE
+,,4. Vincolo una sola sessione ACTIVE per utente.,Marco,1,1,1,1,1,,,,DONE
+,,5. Import e parsing file GPX (stats e profilo altimetrico).,Giacomo,3,3,3,3,2,,,,DONE
+,,"6. UI form PIANIFICA (data, ora, partecipanti, anteprima codice).",Giacomo,3,3,3,3,3,2,,,DONE
+,,7. Flusso AVVIA escursione e PATCH status ACTIVE.,Giacomo,2,2,2,2,2,2,,,DONE
+,,8. Coordinamento AVVIA -> tab Registra (SessionStartCoordinator).,Federico,1,1,1,1,1,1,,,DONE
+,,9. Testing API,Marco,1,1,,,,,,,DONE
+,,10. Documentazione,Giacomo,1,1,,,,,,,DONE
+,,11. Deploy,Federico,1,1,1,1,1,1,,,DONE
+6,"Come capogruppo voglio poter aggiornare i parametri della sessione (nome, data, ora, partecipanti), così da adattare il piano escursione.",1. Endpoint PATCH /api/v1/sessions/:id.,Marco,3,3,3,2,,,,,DONE
+,,2. UI edit mode in SessionDetailScreen (solo creator).,Giacomo,3,3,3,3,3,2,,,DONE
+,,3. SessionDetailViewModel saveEdit con reload.,Giacomo,2,2,2,2,2,1,1,,DONE
+,,4. Testing permessi e validazione campi.,Marco,1,1,1,1,1,1,1,,DONE
+,,5. Documentazione,Giacomo,1,1,1,1,1,1,1,,DONE
+,,6. Deploy,Federico,1,1,1,1,1,1,1,,DONE
+15,"Come capogruppo voglio poter eliminare una sessione che ho creato, così da annullare l'escursione per tutto il gruppo.",1. Endpoint DELETE /sessions/:id (solo creator).,Marco,2,2,2,2,,,,,DONE
+,,2. UI dialog Elimina vs Abbandona (RemovalMode).,Giacomo,2,2,2,2,2,,,,DONE
+,,3. Propagazione rimozione su lista partecipanti.,Giacomo,1,1,1,1,1,1,,,DONE
+,,4. Testing autorizzazioni 403 per non-creator.,Marco,1,1,1,1,1,1,,,DONE
+,,5. Documentazione,Giacomo,1,1,1,1,1,1,,,DONE
+,,6. Deploy,Giacomo,1,1,1,1,1,1,,,DONE
+33,"Come Amministratore, voglio poter gestire le registrazioni degli utenti (assegnare/modificare ruoli), cosi da controllare i privilegi di accesso al sistema",1. Implementazione middleware RBAC (Role-Based Access Control).,Marco,4,4,4,3,,,,,DONE
+,,"2. Modelli ruoli (rifugio, groupLeader, admin).",Giacomo,2,2,2,2,2,,,,DONE
+,,3. Endpoint CRUD utenti con requireRoles admin.,Marco,3,3,3,3,2,,,,DONE
+,,5. Testing,Marco,1,1,,,,,,,DONE
+,,6. Documentazione,Marco,1,1,1,1,1,1,1,,DONE
+,,7. Deploy,Marco,1,1,1,1,1,1,1,,DONE
+7,"Come escursionista voglio ricevere una checklist dell'equipaggiamento necessaria basata sull'itinerario e sulle condizioni meteo (durante i giorni precedenti alla partenza), cosi da prepararmi adeguatamente",1. Integrazione API meteo TINIA/meteo.report con persistenza MongoDB.,Marco,4,4,2,,,,,,DONE
+,,2. Modello Location GeoJSON e endpoint forecast 3h/24h.,Marco,3,3,3,3,,,,,DONE
+,,3. Integrazione meteo reale in SessionDetailScreen.,Giacomo,2,2,2,2,2,1,,,IN PROGRESS
+,,4. Sviluppo UI checklist con drag-and-drop e spunta.,Giacomo,2,2,2,2,2,2,1,,IN PROGRESS
+,,5. Sviluppo algoritmo di mappatura meteo/altitudine -> equipaggiamento.,,4,,,,,,,,TO DO
+,,6. Testing API,Marco,1,1,1,1,1,,,,IN PROGRESS
+,,7. Documentazione,,1,,,,,,,,TO DO
+,,8. Deploy,Marco,1,1,1,1,1,1,,,IN PROGRESS
+19,"Come Capogruppo, voglio poter generare un codice invito alfanumerico e un QR Code per gruppo, cosi da permettere ai partecipanti di unirsi facilmente",1. Endpoint generazione hash invito univoco (TSM-XXXX).,Giacomo,2,2,2,,,,,,DONE
+,,2. Integrazione libreria generazione QR Code a schermo (ZXing).,Giacomo,2,2,2,2,,,,,DONE
+,,3. UI InviteCodeCard con copia negli appunti.,Giacomo,1,1,1,1,1,,,,DONE
+,,4. Sviluppo logica per lettura QR tramite fotocamera.,,4,,,,,,,,TO DO
+,,5. Testing,Giacomo,1,1,,,,,,,DONE
+,,6. Documentazione,Giacomo,1,,,,,,,,DONE
+,,7. Deploy,Federico,1,,,,,,,,DONE
+9,"Come escursionista, voglio poter unirmi a un'escursione di gruppo inserendo il codice invito fornito dal Capogruppo, cosi da partecipare all'escursione in modo coordinato",1. UI input codice invito (OTP boxes tab UNISCITI).,Giacomo,2,2,2,2,2,,,,DONE
+,,2. Validazione codice lato server e join tabella Partecipanti.,Marco,2,2,2,2,2,,,,DONE
+,,3. Lista sessioni utente con leave/delete (creator vs partecipante).,Giacomo,2,2,2,2,2,2,,,DONE
+,,4. Download configurazione e mappa sessione in dettaglio.,Federico,2,2,2,2,2,2,1,,IN PROGRESS
+,,5. Testing,Giacomo,1,1,1,1,1,1,,,IN PROGRESS
+,,6. Documentazione,Giacomo,1,1,1,1,1,1,1,,IN PROGRESS
+,,7. Deploy,Federico,1,,,,,,,,IN PROGRESS
+12,"Come escursionista, voglio poter consultare una mappa offline con la mia posizione e una bussola cosi da orientarmi anche senza copertura internet",1. Integrazione OSMDroid per rendering mappa e marker utente.,Federico,5,5,5,5,5,3,,,DONE
+,,2. UserLocationTracker e indicatore segnale GPS.,Federico,2,2,2,2,2,2,,,DONE
+,,3. Centratura mappa e lifecycle TsmMapView.,Federico,2,2,2,2,2,2,1,,IN PROGRESS
+,,4. Lettura SensorManager (Magnetometro/Accelerometro) per bussola.,Federico,4,4,4,4,4,4,,,IN PROGRESS
+,,5. Binding sensori-UI per rotazione mappa.,,3,,,,,,,,TO DO
+,,6. Download e cache Map Tiles OSM offline.,,4,,,,,,,,TO DO
+,,7. Testing,Federico,1,1,1,1,1,1,1,,IN PROGRESS
+,,8. Documentazione,Federico,1,1,1,1,1,1,1,,IN PROGRESS
+,,9. Deploy,Federico,1,1,1,1,1,1,1,,IN PROGRESS
+10,"voglio che la mia posizione GPS venga tracciata automaticamente in background durante l'escursione, cosi da garantire la mia sicurezza e quella del gruppo",1. Integrazione FusedLocationProviderClient.,Federico,4,4,4,4,4,2,,,DONE
+,,2. HikeTrackingEngine e visualizzazione traccia su mappa.,Federico,3,3,3,3,3,3,,,DONE
+,,3. Sviluppo logica di caching locale offline (Room/SQLite telemetria).,Federico,3,3,3,3,3,3,2,,IN PROGRESS
+,,4. Worker periodico per invio batch coordinate al server.,,3,,,,,,,,TO DO
+,,5. Testing,Federico,1,1,1,1,1,1,1,,IN PROGRESS
+,,6. Documentazione,,1,,,,,,,,TO DO
+,,7. Deploy,,1,,,,,,,,TO DO
+13,"escursionista, voglio che il tracciamento GPS si riduca automaticamente quando sono fermo, cosi da risparmiare la batteria del dispositivo",1. StationaryDetector e logica auto-pause.,Federico,3,3,3,3,3,3,,,DONE
+,,2. UI notifiche e metriche durante auto-pausa.,Federico,2,2,2,2,2,2,2,,DONE
+,,3. Integrazione Activity Recognition API.,Federico,3,3,3,3,3,3,2,,IN PROGRESS
+,,4. Profilazione consumo batteria (Android Profiler).,,2,,,,,,,,TO DO
+,,5. Testing,Federico,1,1,1,1,1,1,1,,IN PROGRESS
+,,6. Documentazione,,1,,,,,,,,TO DO
+,,7. Deploy,,1,,,,,,,,TO DO
+42,Come sistema voglio mantenere attivo tracciamento GPS tramite Foreground Services cosi da evitare che Android interrompa i processi (Doze Mode),1. Implementazione Android Foreground Service con notifica persistente.,Federico,4,4,4,4,4,4,2,,DONE
+,,2. Richiesta permessi a runtime (Location).,Federico,2,2,2,2,2,2,,,DONE
+,,3. Configurazione WakeLock e ottimizzazione Doze Mode.,Federico,3,3,3,3,3,3,2,,IN PROGRESS
+,,4. Test del ciclo di vita del servizio in background.,,3,,,,,,,,TO DO
+,,5. Documentazione,,1,,,,,,,,TO DO
+,,6. Deploy,,1,,,,,,,,TO DO
+11,Come escursionista in difficoltà voglio poter inviare un segnale SOS con le mie coordinate GPS cosi da ricevere soccorso il prima possibile.,1. UI pulsante SOS (dialog conferma in RegistraScreen).,Giacomo,2,2,2,2,2,2,1,,IN PROGRESS
+,,2. Sviluppo logica di invio payload BLE e HTTP/MQTT.,,3,,,,,,,,TO DO
+,,3. Endpoint POST /api/v1/emergencies backend.,,2,,,,,,,,TO DO
+,,4. Gestione accodamento invio in assenza di rete.,,1,,,,,,,,TO DO
+,,5. Testing,,1,,,,,,,,TO DO
+,,6. Documentazione,,1,,,,,,,,TO DO
+,,7. Deploy,,1,,,,,,,,TO DO
+34,"Come sistema voglio che le query geospaziali vengano elaborate in meno di 500 ms al 95 percentile (condizioni 4G), cosi da garantire un'esperienza utente fluida",1. Creazione indici spaziali MongoDB (sessions/locations).,Marco,3,3,2,,,,,,IN PROGRESS
+,,2. Ottimizzazione query di prossimità.,,4,,,,,,,,TO DO
+,,3. Load testing e profiling DB.,,3,,,,,,,,TO DO
+,,4. Testing,,1,,,,,,,,TO DO
+,,5. Documentazione,,1,,,,,,,,TO DO
+,,6. Deploy,,1,,,,,,,,TO DO
+—,"Setup progetto e infrastruttura condivisa (monorepo, CI, documentazione)","1. Setup monorepo, GitFlow e documentazione iniziale.",Giacomo,3,3,2,,,,,,DONE
+,,2. Docker Compose MongoDB e Mosquitto.,Giacomo,2,2,2,,,,,,DONE
+,,3. Boilerplate backend Express e struttura mobile MVVM.,Giacomo,2,2,2,2,,,,,DONE
+,,"4. Bottom navigation app (Sessione, Mappa, Profilo).",Federico,2,2,2,2,2,,,,DONE
+,,5. Setup Swagger e documentazione endpoint API.,Marco,2,2,2,2,2,,,,DONE
+,,"6. Ristrutturazione repository backend (app.js, middleware).",Marco,3,3,3,3,3,,,,DONE
+,,,TOTALE :,252,199,181,155,124,79,30,,

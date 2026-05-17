@@ -1,0 +1,1520 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Trento Smart Mountain API",
+    "description": "Documentazione API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000/"
+    }
+  ],
+  "paths": {
+    "/users/": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "description": "Registra un nuovo utente e invia l",
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": []
+      },
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "description": "Ottiene la lista di tutti gli utenti.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "description": "Recupera i dettagli di un singolo utente.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "description": "Aggiorna i dati di un utente.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "description": "Elimina un utente dal database.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "example": "any"
+                  },
+                  "password": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/verify/{token}": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "description": "Verifica l",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": ""
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/sessions/": {
+      "post": {
+        "description": "",
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "routeDetails": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/join": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "inviteCode": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/my": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "delete": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/status": {
+      "patch": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/remote/search": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Cerca stazioni su MeteoTrentino (API Esterna)",
+        "description": "Interroga l",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Parte del nome della stazione da cercare",
+            "required": true,
+            "example": "Trento",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista di stazioni remote trovate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "example": "TRENTO LARGERI"
+                      },
+                      "code": {
+                        "type": "string",
+                        "example": "T0129"
+                      },
+                      "altitude": {
+                        "type": "number",
+                        "example": 204
+                      },
+                      "latitude": {
+                        "type": "number",
+                        "example": 46.06
+                      },
+                      "longitude": {
+                        "type": "number",
+                        "example": 11.12
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "example": "TRENTO LARGERI"
+                      },
+                      "code": {
+                        "type": "string",
+                        "example": "T0129"
+                      },
+                      "altitude": {
+                        "type": "number",
+                        "example": 204
+                      },
+                      "latitude": {
+                        "type": "number",
+                        "example": 46.06
+                      },
+                      "longitude": {
+                        "type": "number",
+                        "example": 11.12
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parametro mancante",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Parametro ?name= obbligatorio"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Parametro ?name= obbligatorio"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Nessun risultato trovato",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Nessuna stazione trovata esternamente"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Nessuna stazione trovata esternamente"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/remote/{code}": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Dettaglio stazione da MeteoTrentino per codice",
+        "description": "Recupera i metadati completi di una singola stazione direttamente dal fornitore esterno.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Codice identificativo della stazione (es. T0129)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dati tecnici della stazione remota",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "example": "TRENTO LARGERI"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "shortname": {
+                      "type": "string",
+                      "example": "Trento"
+                    },
+                    "altitude": {
+                      "type": "number",
+                      "example": 204
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "example": 46.06
+                    },
+                    "longitude": {
+                      "type": "number",
+                      "example": 11.12
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "example": "TRENTO LARGERI"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "shortname": {
+                      "type": "string",
+                      "example": "Trento"
+                    },
+                    "altitude": {
+                      "type": "number",
+                      "example": 204
+                    },
+                    "latitude": {
+                      "type": "number",
+                      "example": 46.06
+                    },
+                    "longitude": {
+                      "type": "number",
+                      "example": 11.12
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stazione non trovata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione remota non trovata"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione remota non trovata"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/local/search": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Recupera stazioni dal DB locale",
+        "description": "Recupera tutte le stazioni salvate nel database. Se viene fornito il parametro \"name\", filtra i risultati tramite regex.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Nome o parte del nome della stazione (opzionale)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista di stazioni recuperate dal database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_id": {
+                        "type": "string",
+                        "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                      },
+                      "name": {
+                        "type": "string",
+                        "example": "TRENTO LARGERI"
+                      },
+                      "code": {
+                        "type": "string",
+                        "example": "T0129"
+                      },
+                      "stationInfo": {
+                        "type": "object",
+                        "properties": {
+                          "altitude": {
+                            "type": "number",
+                            "example": 204
+                          },
+                          "latitude": {
+                            "type": "number",
+                            "example": 46.06
+                          },
+                          "longitude": {
+                            "type": "number",
+                            "example": 11.12
+                          }
+                        }
+                      },
+                      "fetchedAt": {
+                        "type": "string",
+                        "example": "2023-09-01T10:00:00.000Z"
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "_id": {
+                        "type": "string",
+                        "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                      },
+                      "name": {
+                        "type": "string",
+                        "example": "TRENTO LARGERI"
+                      },
+                      "code": {
+                        "type": "string",
+                        "example": "T0129"
+                      },
+                      "stationInfo": {
+                        "type": "object",
+                        "properties": {
+                          "altitude": {
+                            "type": "number",
+                            "example": 204
+                          },
+                          "latitude": {
+                            "type": "number",
+                            "example": 46.06
+                          },
+                          "longitude": {
+                            "type": "number",
+                            "example": 11.12
+                          }
+                        }
+                      },
+                      "fetchedAt": {
+                        "type": "string",
+                        "example": "2023-09-01T10:00:00.000Z"
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/local/{code}": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Dettaglio stazione salvata nel DB per codice",
+        "description": "Recupera il record locale di una stazione tramite il suo codice identificativo.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Codice stazione (es. T0129)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dati della stazione trovati nel DB locale",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string",
+                      "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "TRENTO LARGERI"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "stationInfo": {
+                      "type": "object",
+                      "properties": {
+                        "altitude": {
+                          "type": "number",
+                          "example": 204
+                        },
+                        "latitude": {
+                          "type": "number",
+                          "example": 46.06
+                        },
+                        "longitude": {
+                          "type": "number",
+                          "example": 11.12
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string",
+                      "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "TRENTO LARGERI"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "stationInfo": {
+                      "type": "object",
+                      "properties": {
+                        "altitude": {
+                          "type": "number",
+                          "example": 204
+                        },
+                        "latitude": {
+                          "type": "number",
+                          "example": 46.06
+                        },
+                        "longitude": {
+                          "type": "number",
+                          "example": 11.12
+                        }
+                      }
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stazione non presente nel database locale",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione non presente nel database"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione non presente nel database"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/": {
+      "post": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Importa stazione da remoto a locale",
+        "description": "Recupera i dati aggiornati da MeteoTrentino e crea un nuovo record persistente nel database MongoDB, mappando correttamente i campi tecnici.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Codice della stazione da importare",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "example": "T0129"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Stazione importata e salvata con successo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string",
+                      "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "TRENTO LARGERI"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "stationInfo": {
+                      "type": "object",
+                      "properties": {
+                        "altitude": {
+                          "type": "number",
+                          "example": 204
+                        },
+                        "latitude": {
+                          "type": "number",
+                          "example": 46.06
+                        },
+                        "longitude": {
+                          "type": "number",
+                          "example": 11.12
+                        }
+                      }
+                    },
+                    "fetchedAt": {
+                      "type": "string",
+                      "example": "2023-09-01T10:00:00.000Z"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string",
+                      "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "TRENTO LARGERI"
+                    },
+                    "code": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "stationInfo": {
+                      "type": "object",
+                      "properties": {
+                        "altitude": {
+                          "type": "number",
+                          "example": 204
+                        },
+                        "latitude": {
+                          "type": "number",
+                          "example": 46.06
+                        },
+                        "longitude": {
+                          "type": "number",
+                          "example": 11.12
+                        }
+                      }
+                    },
+                    "fetchedAt": {
+                      "type": "string",
+                      "example": "2023-09-01T10:00:00.000Z"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body della richiesta non valido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Il campo code è obbligatorio"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Il campo code è obbligatorio"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflitto: stazione già esistente nel DB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione già presente nel database"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione già presente nel database"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/{id}": {
+      "put": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Forza sincronizzazione metadati",
+        "description": "Ricarica i metadati tecnici (quota, coordinate) dalla sorgente remota e aggiorna il DB locale.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Elimina una stazione dal database locale",
+        "description": "Rimuove permanentemente il record di una stazione dal database locale tramite il suo ID MongoDB.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID univoco del documento MongoDB"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Stazione eliminata con successo (nessun contenuto restituito)"
+          },
+          "404": {
+            "description": "ID non trovato nel database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione non trovata nel DB"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Stazione non trovata nel DB"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meteo/": {
+      "get": {
+        "tags": [
+          "Meteo"
+        ],
+        "summary": "Sincronizza ultima temperatura per codice stazione",
+        "description": "Recupera i dati meteo più recenti da una stazione specifica e li salva nel database. Se non viene fornito un codice, usa quello di default.",
+        "parameters": [
+          {
+            "name": "codice",
+            "in": "query",
+            "description": "Codice della stazione meteo (es. T0129)",
+            "required": false,
+            "example": "T0129",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sincronizzazione completata con successo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                    },
+                    "stationCode": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "count": {
+                      "type": "number",
+                      "example": 1
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "64f1a2b3c4d5e6f7g8h9i0j1"
+                    },
+                    "stationCode": {
+                      "type": "string",
+                      "example": "T0129"
+                    },
+                    "count": {
+                      "type": "number",
+                      "example": 1
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Codice stazione mancante",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Codice mancante (query ?codice= o METEO_STATION_CODE)"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Codice mancante (query ?codice= o METEO_STATION_CODE)"
+                    }
+                  },
+                  "xml": {
+                    "name": "main"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/weather/test": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/weather/locations/search": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/weather/locations/nearby": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "maxDistance",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request"
+          }
+        }
+      }
+    },
+    "/weather/forecast/{externalId}": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "externalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "forceRefresh",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/weather/forecast/{externalId}/refresh": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "externalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/weather/seed": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}

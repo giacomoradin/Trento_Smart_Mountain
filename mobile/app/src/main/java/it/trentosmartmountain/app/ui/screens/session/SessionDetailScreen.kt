@@ -391,18 +391,50 @@ fun SessionDetailScreen(
 
             ParticipantsCard(session = session)
 
-            Button(
-                onClick = {
-                    viewModel.onAvviaClick(todayFormatted) {
+            // Il pulsante AVVIA è riservato al Capogruppo (creator).
+            // Solo lui può cambiare lo stato della sessione a ACTIVE sul server
+            // (PATCH /sessions/:id/status è protetto da controllo creatorId).
+            if (isCreator && session.status == "PLANNED") {
+                Button(
+                    onClick = {
+                        viewModel.onAvviaClick(todayFormatted) {
+                            SessionStartCoordinator.requestStart(sessionId)
+                            onAvviaConfirmed(sessionId)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text("▶ AVVIA ESCURSIONE", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                }
+            } else if (!isCreator && session.status == "PLANNED") {
+                // Partecipante: avvisare che l'avvio spetta al Capogruppo
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = TsmSurfaceVariant,
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text(
+                        text = "⏳  In attesa che il Capogruppo avvii la sessione",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
+                    )
+                }
+            } else if (session.status == "ACTIVE") {
+                Button(
+                    onClick = {
                         SessionStartCoordinator.requestStart(sessionId)
                         onAvviaConfirmed(sessionId)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
-                shape = RoundedCornerShape(8.dp),
-            ) {
-                Text("▶ AVVIA ESCURSIONE", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text("▶ UNISCITI AL TRACKING", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

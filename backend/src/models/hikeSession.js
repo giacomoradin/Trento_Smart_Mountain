@@ -13,12 +13,15 @@ const hikSessionSchema = new Schema({
   routeDetails: {
     name: { type: String, required: true },
     startPoint: {
-      type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: { type: [Number], default: [0, 0] }, // [lng, lat]
+      // GeoJSON Point — popolato solo se il GPX viene importato.
+      // NESSUN default: i documenti senza GPX non entrano nell'indice 2dsphere
+      // (grazie a sparse:true sull'indice, vedi sotto) ed evitano il rumore a Null Island.
+      type: { type: String, enum: ["Point"] },
+      coordinates: { type: [Number] }, // [lng, lat]
     },
     endPoint: {
-      type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: { type: [Number], default: [0, 0] },
+      type: { type: String, enum: ["Point"] },
+      coordinates: { type: [Number] },
     },
     difficultyLevel: {
       type: String,
@@ -82,8 +85,10 @@ const hikSessionSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-// Indice geospaziale per query di prossimità
-hikSessionSchema.index({ "routeDetails.startPoint": "2dsphere" }); // Permette di cercare sessioni vicine a una posizione geografica
+// Indice geospaziale per query di prossimità.
+// sparse:true → i documenti senza startPoint (es. sessioni senza GPX) non vengono
+// indicizzati, evitando coordinate [0,0] a Null Island e errori 16755 di MongoDB.
+hikSessionSchema.index({ "routeDetails.startPoint": "2dsphere" }, { sparse: true });
 
 const HikeSession = mongoose.model("HikeSession", hikSessionSchema);
 export default HikeSession;

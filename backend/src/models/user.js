@@ -22,6 +22,19 @@ const userSchema = new Schema(
       posti: { type: Number },
       coordinates: { type: String },
     },
+    /**
+     * Ruoli per-sessione dell'utente.
+     * Aggiornato da hikeSessionService alla creazione/join di ogni sessione.
+     * Usato per la futura dashboard gamification e il controllo OCL
+     * "una sola sessione ACTIVE per utente".
+     */
+    sessionRoles: [
+      {
+        groupId: { type: Schema.Types.ObjectId, ref: "HikeSession" },
+        role: { type: String, enum: ["groupLeader", "hiker"] },
+        createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+      },
+    ],
     createdAt: { type: Date, default: Date.now },
   },
   {

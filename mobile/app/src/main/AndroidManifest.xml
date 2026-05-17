@@ -5,9 +5,14 @@
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <!-- Richiesto su Android 10+ per ricevere update GPS a schermo spento (D2 RNF9).
+       Va richiesto runtime DOPO aver già ottenuto ACCESS_FINE_LOCATION. -->
+  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Evita che il CPU si spenga durante un'escursione lunga con schermo spento. -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
 
   <application
     android:name=".TsmApplication"

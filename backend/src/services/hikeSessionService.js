@@ -95,7 +95,12 @@ export async function joinSession(userId, inviteCode) {
     },
   });
 
-  return session;
+  // Populate simmetrico (come getSessionById) per evitare che il client Kotlin
+  // riceva ObjectId raw nei campi ref → potenziale Gson IllegalStateException.
+  return session.populate([
+    { path: "creatorId", select: "username email" },
+    { path: "participants.userId", select: "username email" },
+  ]);
 }
 
 /**

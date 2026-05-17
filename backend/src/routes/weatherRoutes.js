@@ -10,6 +10,8 @@
  */
 
 import { Router } from "express";
+import { authenticate } from "../middleware/authMiddleware.js";
+import { requireRoles } from "../middleware/authorizationMiddleware.js";
 // import corretto
 import {
   getLocationForecast,
@@ -27,8 +29,7 @@ const router = Router();
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
-router.get('/test', (req, res) => res.json({ ok: true }));
+// ─── Routes ───────────────────────────────────────────────────────────────────;
 /**
  * GET /weather/locations/search
  * Query: q (required), type? ('town'|'poi'), limit? (default 10)
@@ -135,10 +136,12 @@ router.get(
  * Forza il refresh del forecast ignorando la cache.
  * Solo per towns (i POI non hanno forecast propri).
  *
- * Utile per endpoint admin o job cron.
+ * Richiede autenticazione admin (JWT Bearer + role="admin").
  */
 router.post(
   "/forecast/:externalId/refresh",
+  authenticate,
+  requireRoles("admin"),
   asyncHandler(async (req, res) => {
     const { externalId } = req.params;
 
@@ -160,10 +163,12 @@ router.post(
  * Popola il DB con tutte le towns e i POI dall'API.
  * Da chiamare una volta allo startup o tramite script di init.
  *
- * Da porteggere questa route con middleware di autenticazione admin.
+ * Richiede autenticazione admin (JWT Bearer + role="admin").
  */
 router.post(
   "/seed",
+  authenticate,
+  requireRoles("admin"),
   asyncHandler(async (req, res) => {
     const result = await seedLocations();
     res.json({

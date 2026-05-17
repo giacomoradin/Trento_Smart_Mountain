@@ -28,8 +28,8 @@ object Routes {
   /** Route concreta per il dettaglio sessione (argomento `sessionId`). */
   fun sessionDetailRoute(sessionId: String) = "session_detail/$sessionId"
   fun activityDetailRoute(activityId: String, sessionId: String? = null): String =
-    if (sessionId != null) "activity_detail/$activityId?sessionId=$sessionId"
-    else "activity_detail/$activityId?sessionId="
+    if (!sessionId.isNullOrBlank()) "activity_detail/$activityId?sessionId=$sessionId"
+    else "activity_detail/$activityId"
 
   /** Route login con email opzionale in query (post verifica account). */
   fun loginRoute(pendingEmail: String = ""): String =

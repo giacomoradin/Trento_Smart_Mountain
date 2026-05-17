@@ -1,0 +1,259 @@
+User story ,N, Description ,Test case data, Preconditions ,Dependencies ,Expected result ,Actual result ,Notes
+"Come utente voglio poter creare un account inserendo i miei dati, cosi da accedere alla piattaforma usufruire dei suoi servizi.",1,"Registration of a new user with valid username, email, password and role","POST `<URL>/users`, body (JSON):
+
+- `username`: glenmyers
+- `email`: glenmyers@gmail.com
+- `password`: pwd
+- `role`: groupLeader",Account with email glenmyers@gmail.com and username glenmyers not registered.,,"HTTP 201. The user is stored in the database with isVerified: false, passwordHash (bcrypt) and a verificationToken. The response body contains the message ""Allocazione completata. Attesa verifica email."" and the user object (without passwordHash, verificationToken, __v). A verification email is sent to glenmyers@gmail.com.",,"If the role is omitted, the schema applies the default groupLeader."
+,2,Registration of a new user with an email address already registered,"POST `<URL>/users`, body:
+
+- `username`: glenmyers2
+- `email`: glenmyers@gmail.com
+- `password`: pwd
+- `role`: groupLeader",Account with email glenmyers@gmail.com already registered.,,"HTTP 409 with body `{ ""message"": ""Collisione rilevata: Email o Username già utilizzati."" }`. No new user is created and no email is sent.",,Triggered by MongoDB duplicate key error (`error.code === 11000`).
+,3,Registration of a new user without specifying a role (defaults applied),"POST `<URL>/users`, body:
+
+- `username`: glenmyers
+- `email`: glenmyers@gmail.com
+- `password`: pwd",Account glenmyers@gmail.com / glenmyers not registered.,,"HTTP 201. The user is saved with role = ""groupLeader"" (schema default). Same response payload as the standard success case.",,
+,4,Registration of a new user with a username already registered,"POST `<URL>/users`, body:
+
+- `username`: glenmyers
+- `email`: another@gmail.com
+- `password`: pwd
+- `role`: groupLeader",Account with username `glenmyers` already registered.,,"HTTP 409 with body `{ ""message"": ""Collisione rilevata: Email o Username già utilizzati."" }`. No new user is created.",,Same duplicate-key path as the duplicate email case (the `unique` constraint covers both fields).
+,5,Registration of a new user with the field username empty/missing,"POST `<URL>/users`, body:
+
+- `username`: _(empty / not provided)_
+- `email`: glenmyers@gmail.com
+- `password`: pwd
+- `role`: groupLeader",,,"
+HTTP 500 with body `{ ""message"": ""<mongoose validation error: Path` username `is required."" }`. No user is created.",,"`username` is `required: true` in the schema. The controller does not pre-validate fields, so the failure surfaces from Mongoose and is returned by the generic `catch` as 500."
+,6,Registration of a new user with the field `email` empty/missing,"POST `<URL>/users`, body:
+
+- `username`: glenmyers
+- `email`: _(empty / not provided)_
+- `password`: pwd
+- `role`: groupLeader",,,HTTP 500 with body containing the Mongoose validation error `Path` email `is required`. No user is created.,,`email` is `required: true` in the schema. No verification email is sent.
+,7,Registration of a new user with the field password empty/missing,"POST `<URL>/users`, body:
+
+- `username`: glenmyers
+- `email`: glenmyers@gmail.com
+- `password`: _(empty / not provided)_
+- `role`: groupLeader",,,"HTTP 500. `bcrypt.hash(undefined, 10)` throws (`data and salt arguments required`); the error is caught and returned by the generic 500 handler. No user is created.",,The password is required by the controller flow (bcrypt) even though the schema stores only passwordHash.
+,8,Registration of a new user with an invalid role value,"POST `<URL>/users`, body:
+
+- `username`: glenmyers
+- `email`: glenmyers@gmail.com
+- `password`: pwd
+- `role`: superuser",,,"HTTP 500 with body containing the Mongoose enum validation error (`role` must be one of `groupLeader`, `rifugio`, `admin`). No user is created.",,Role is constrained by the schema `enum`.
+,9,Registration succeeds even if the verification email cannot be sent (SMTP failure),POST `<URL>/users` with valid body (as in the success case).,SMTP transport is unavailable / misconfigured. Account not already registered.,,"HTTP 201 — the user is still created and persisted (`isVerified: false`, with `verificationToken`). The SMTP error is logged on the server (`""Fallimento Transport SMTP""`) but does NOT propagate to the client.",,This is an explicit design choice in `createUser`: the `sendVerificationEmail` call is wrapped in its own try/catch and only logged. A retry mechanism is mentioned as TODO in the code comments.
+Come utente voglio poter effettuare login con le mie credenziali (o tramite Google/Facebook) cosi da accedere alle funzionalita del sistema in al mio account,10,Successful login,"POST /auth/login, body: { ""email"": ""glenmyers@gmail.com"", ""password"": ""pwd"" }",Account `glenmyers@gmail.com` is already registered and email-verified (`isVerified: true`),,Login is successful. The server responds with HTTP 200 and returns a JWT token in the response body.,,
+,11,Login with an email not registered,"POST /auth/login, body: { ""email"": ""notexisting@gmail.com"", ""password"": ""pwd"" }",No account with the provided email exists in the database,,"Login fails. The server responds with HTTP 401 and the message `""Invalid email""`.",,
+,12,Login with correct email but wrong password,"`POST /auth/login`, body: `{ ""email"": ""glenmyers@gmail.com"", ""password"": ""wrongpwd"" }`",Account glenmyers@gmail.com is already registered with a different password,,"Login fails. The server responds with HTTP 401 and the message `""password is invalid""`.",,
+,13,Login with correct credentials but unverified account,"`POST /auth/login`, body: `{ ""email"": ""glenmyers@gmail.com"", ""password"": ""pwd"" }`",Account `glenmyers@gmail.com` is registered but the email verification step has not been completed (`isVerified: false`),,"Login fails. The server responds with HTTP 403 and the message `""Accesso negato. Eseguire la verifica SMTP inviata via email.""`.",,
+,14,Login with empty email field,"POST /auth/login, body: { ""email"": """", ""password"": ""pwd"" }",,,"Login fails. The server responds with HTTP 401 and the message `""Invalid email""`.",,"The `User.findOne({ email: """" })` call will return `null`, so the existing null-check on the user object handles this case, returning the same 401 as a non-existing email. No dedicated empty-field validation is present in the current code."
+,15,Login with empty password field,"POST /auth/login, body: { ""email"": ""glenmyers@gmail.com"", ""password"": """" }",Account `glenmyers@gmail.com` is already registered and email-verified,,"Login fails. `bcrypt.compare("""", storedHash)` will return `false`, so the server responds with HTTP 401 and the message `""password is invalid""`.",,
+"Come utente autenticato voglio poter effettuare il logout dall'app, così da proteggere i miei dati su dispositivi condivisi.",16,User logs out while a valid token is stored locally on the device.,User taps the logout button. A valid JWT is present in local storage (issued less than 24h ago),User is authenticated. A valid JWT is stored locally on the device.,,The JWT is cleared from local storage. The app redirects the user to the login screen. No further authenticated requests can be made until a new login.,,Logout is handled entirely client-side. No API call is made. A backend /auth/logout endpoint is planned for Sprint #2 (e.g. token blacklisting).
+,17,User attempts to logout when no token is present in local storage," User navigates to the logout action. No JWT is present in local storage (either never logged in, or token already cleared).",No JWT stored locally on the device.,,The app redirects the user to the login screen (or is already there). No error is thrown. No API call is made.,,This covers both the case where the token was manually cleared and where the 24h expiry caused the app to discard it.
+Come sistema voglio mantenere attivo tracciamento GPS,18,locally debugged with android studio (will be documented in the next sprint),,,,,,
+"Come Capogruppo, voglio poter creare nuova sessione di escursione, parametri del percorso e coordinare il gruppo avviare tracciamento",19,Description: Create a new session with valid data (happy path)," `POST /api/v1/sessions`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{
+  ""routeDetails"": {
+    ""name"": ""Sentiero delle Dolomiti"",
+    ""difficultyLevel"": ""E""
+  },
+  ""meetingDate"": ""2026-06-01"",
+  ""meetingTime"": ""08:00"",
+  ""meetingLocation"": ""Parcheggio Rifugio Auronzo"",
+  ""maxParticipants"": 10,
+  ""minExperienceLevel"": ""E""
+}",User is authenticated (valid JWT). User has no session currently in `ACTIVE` status,User exists and is verified in the database.,"HTTP 201. A new `HikeSession` is created with `status: ""PLANNED""`, a unique `inviteCode` in format `""TSM-XXXX""`, and the creator added to `participants` with `role: ""groupLeader""`. The creator's `sessionRoles` array is updated. Response body contains the full session object.",,"All `sessionMeta` fields (meetingDate, meetingTime, etc.) are optional."
+,,Create a session without the required `routeDetails.name` field.,"`POST /api/v1/sessions`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{
+  ""routeDetails"": { ""difficultyLevel"": ""E"" }
+}
+```",User is authenticated.,,"HTTP 400 with body `{ ""error"": ""routeDetails.name obbligatorio"" }`. No session is created.",,Guard `if (!routeDetails || !routeDetails.name)` is evaluated in the route handler before any service call.
+,,"Create a session when the user is already in a session with `status: ""ACTIVE""`.","**Test case data:** `POST /api/v1/sessions`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{
+  ""routeDetails"": { ""name"": ""Secondo Sentiero"" }
+}
+```","User is authenticated. User is already a participant in a session with `status: ""ACTIVE""`.","An existing `HikeSession` with `status: ""ACTIVE""` containing the user in `participants`.","HTTP 409 with body `{ ""error"": ""Hai una sessione attualmente in corso (tracciamento ATTIVO). Concludila prima di crearne un'altra."" }`. No new session is created",,Multiple PLANNED sessions in parallel are allowed; only ACTIVE is blocked.
+,,Create a session passing a `difficultyLevel` value not in the schema enum,"`POST /api/v1/sessions`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{
+  ""routeDetails"": {
+    ""name"": ""Sentiero X"",
+    ""difficultyLevel"": ""EXTREME""
+  }
+}
+```",User is authenticated. User has no ACTIVE session.,,"HTTP 500 with body containing a Mongoose enum validation error (`difficultyLevel` must be one of `T`, `E`, `EE`, `EEA`). No session is created.",," `difficultyLevel` is constrained by the schema enum. The route handler has no pre-validation for this field, so the error surfaces from Mongoose via the generic `catch`."
+,,Attempt to create a session without an Authorization header.,"`POST /api/v1/sessions`, no `Authorization` header, body:
+
+```json
+{
+  ""routeDetails"": { ""name"": ""Sentiero Senza Auth"" }
+}
+```",,,HTTP 401 (or the status code returned by the `authenticate` middleware). No session is created.,,All routes under `/api/v1/sessions` apply `router.use(authenticate)`. Exact response body depends on `authMiddleware.js`.
+"Come escursionista, voglio poter unirmi a un'escursione di gruppo inserendo il codice invito fornito dal Capogruppo, cosi da partecipare all'escursione in modo coordinato",,Join an existing PLANNED session using a valid invite code.,"`POST /api/v1/sessions/join`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{ ""inviteCode"": ""TSM-7A4F"" }
+```","User is authenticated. Session `TSM-7A4F` exists with `status: ""PLANNED""`. User is not yet a participant. User has no ACTIVE session.","An existing `HikeSession` with the given `inviteCode` and `status: ""PLANNED""`.","HTTP 200. User is added to participants with role: ""hiker"". User's sessionRoles is updated. Response body is the updated session object.",,
+,,Attempt to join a session using an invite code that matches no document,"`POST /api/v1/sessions/join`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{ ""inviteCode"": ""TSM-0000"" }
+```","User is authenticated. No session with `inviteCode: ""TSM-0000""` exists.",,"HTTP 404 with body `{ ""error"": ""Codice invito non valido"" }`",,"Service throws `""SESSION_NOT_FOUND""` when `HikeSession.findOne({ inviteCode })` returns `null`."
+,,"Attempt to join a session whose status is ACTIVE, COMPLETED, or CANCELLED"," `POST /api/v1/sessions/join`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{ ""inviteCode"": ""TSM-7A4F"" }
+```","User is authenticated. Session TSM-7A4F exists with status: ""ACTIVE""", An existing `HikeSession` with the given code and a non-PLANNED status,"HTTP 409 with body `{ ""error"": ""La sessione non è più aperta"" }`.",,"Service throws `""SESSION_NOT_JOINABLE""` when `session.status !== ""PLANNED""`"
+,,Attempt to join a session the authenticated user already belongs to.,"`POST /api/v1/sessions/join`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{ ""inviteCode"": ""TSM-7A4F"" }
+```",User is authenticated. Session TSM-7A4F is PLANNED. User is already listed in participants.,An existing HikeSession with the user already in participants,"HTTP 409 with body `{ ""error"": ""Sei già in questa sessione"" }`.",," Service throws `""ALREADY_IN_SESSION""`"
+,,Attempt to join a session with an empty body (missing inviteCode).,"`POST /api/v1/sessions/join`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{}
+```",User is authenticated.,,"HTTP 400 with body { ""error"": ""inviteCode mancante nel body"" }",,** Guard `if (!inviteCode)` is evaluated in the route handler before any service call.
+,, Attempt to join when the user is currently tracking an active session," `POST /api/v1/sessions/join`, headers: `Authorization: Bearer <validJWT>`, body:
+
+```json
+{ ""inviteCode"": ""TSM-7A4F"" }
+```","User is authenticated. User is a participant in a session with `status: ""ACTIVE""`. Target session exists and is PLANNED.","An existing ACTIVE session containing the user, and the target PLANNED session.","HTTP 409 with body `{ ""error"": ""Hai una sessione attualmente in corso (tracciamento ATTIVO). Concludila prima di unirti a una nuova."" }`.",,"`checkUserAlreadyInActiveSession` is called first in `joinSession`, before any other logic."
+"Come escursionista voglio poter visualizzare le informazioni 
+aggiornate delle sessioni a cui mi sono unito",,"Fetch all sessions where the user is creator or participant.
+","GET /api/v1/sessions/my, headers: Authorization: Bearer <validJWT>",User is authenticated. User is creator or participant in at least one session.,One or more `HikeSession` documents where `creatorId` or `participants.userId` matches the user.,"HTTP 200. Response is an array of session objects populated with `username` and `email` for `creatorId` and `participants.userId`, sorted by `meetingDate` ascending. Returns `[]` if the user has no sessions.",,Uses `$or` query covering both creator and participant roles.
+,,Fetch full details of an existing session by its `_id`,"`GET /api/v1/sessions/<validSessionId>`, headers: `Authorization: Bearer <validJWT>`", User is authenticated. A session with the given ID exists., An existing `HikeSession` document., HTTP 200. Response body is the full session object with `creatorId` and `participants.userId` populated with `username` and `email`.,,
+,, Fetch a session using a valid ObjectId format that matches no document.,"`GET /api/v1/sessions/000000000000000000000000`, headers: `Authorization: Bearer <validJWT>`",User is authenticated. No session with the given ID exists.,,"HTTP 404 with body `{ ""error"": ""Sessione non trovata"" }`",,`getSessionById` returns `null`; the route handler checks `!session`
+,, Fetch a session using an ID string that cannot be cast to `ObjectId`,"`GET /api/v1/sessions/not-a-valid-id`, headers: `Authorization: Bearer <validJWT>`",User is authenticated.,," HTTP 400 with body `{ ""error"": ""ID non valido"" }`",,Mongoose throws a `CastError`; the route catches it and returns 400.
+"Come utente voglio poter aggiornare la sessione 
+(data,nome,etc.)",,Transition a session from PLANNED to ACTIVE as the creator.,"`PATCH /api/v1/sessions/<validSessionId>/status`, headers: `Authorization: Bearer <creatorJWT>`, body:
+
+```json
+{ ""status"": ""ACTIVE"" }
+```","User is authenticated and is the `creatorId`. Session has `status: ""PLANNED""`.
+", An existing `HikeSession` owned by the user.,"HTTP 200. `status` is updated to `""ACTIVE""` and `startTime` is set to the current timestamp. Response body is the updated session object.",,`startTime` is only populated on transition to ACTIVE; `endTime` only on COMPLETED.
+,, Transition a session from ACTIVE to COMPLETED as the creator," `PATCH /api/v1/sessions/<validSessionId>/status`, headers: `Authorization: Bearer <creatorJWT>`, body:
+
+```json
+{ ""status"": ""COMPLETED"" }
+```","User is authenticated and is the creator. Session has `status: ""ACTIVE""`.",An existing ACTIVE `HikeSession` owned by the user,"HTTP 200. `status` is updated to `""COMPLETED""` and `endTime` is set to the current timestamp",,
+,,Attempt to update status as a hiker participant (not the creator).,"`PATCH /api/v1/sessions/<validSessionId>/status`, headers: `Authorization: Bearer <hikerJWT>`, body:
+
+```json
+{ ""status"": ""ACTIVE"" }
+```","""Come utente voglio poter aggiornare la sessione 
+(data,nome,etc.)""",An existing `HikeSession` where the user is a participant but not the creator.," HTTP 403 with body `{ ""error"": ""Solo il Capogruppo può modificare la sessione"" }`.",,"Service throws `""FORBIDDEN""`"
+,,Send a status value not in the accepted enum.," `PATCH /api/v1/sessions/<validSessionId>/status`, headers: `Authorization: Bearer <creatorJWT>`, body:
+
+```json
+{ ""status"": ""PAUSED"" }
+```",User is authenticated,,"HTTP 400 with body `{ ""error"": ""Status non valido. Valori accettati: PLANNED, ACTIVE, COMPLETED, CANCELLED"" }`.",, Validation is performed in the route handler before the service call.
+,,Send a PATCH status request with an empty body (missing status field).,"`PATCH /api/v1/sessions/<validSessionId>/status`, headers: `Authorization: Bearer <creatorJWT>`, body:
+
+```json
+{}
+```",User is authenticated,,"HTTP 400 with body `{ ""error"": ""Status non valido. Valori accettati: PLANNED, ACTIVE, COMPLETED, CANCELLED"" }`.",,"`validStatuses.includes(undefined)` returns `false`, hitting the same 400 guard as an invalid value."
+,,"Update mutable fields (name, meetingDate, etc.) as the session creator.","`PATCH /api/v1/sessions/<validSessionId>`, headers: `Authorization: Bearer <creatorJWT>`, body:
+
+```json
+{
+  ""routeDetails"": { ""name"": ""Nuovo Nome"", ""difficultyLevel"": ""EE"" },
+  ""meetingDate"": ""2026-07-15"",
+  ""meetingTime"": ""07:30"",
+  ""meetingLocation"": ""Piazzale Roma"",
+  ""maxParticipants"": 8,
+  ""minExperienceLevel"": ""EE""
+}
+```",User is authenticated and is the `creatorId` of the session,An existing `HikeSession` owned by the user,HTTP 200. Specified fields are updated. `inviteCode` is NOT changed. Response body is the updated session with `creatorId` and `participants.userId` populated.,,Only fields present in the body are updated (patch semantics). `inviteCode` is intentionally immutable.
+,,Attempt to update session details as a hiker participant,"`PATCH /api/v1/sessions/<validSessionId>`, headers: `Authorization: Bearer <hikerJWT>`, body:
+
+```json
+{ ""meetingDate"": ""2026-08-01"" }
+```",User is authenticated but is NOT the creator of the session,An existing `HikeSession` where the user is a participant but not the creator.,"HTTP 403 with body `{ ""error"": ""Solo il Capogruppo può modificare la sessione"" }`",,"Service throws `""FORBIDDEN""`"
+"Come partecipante voglio poter uscire da una sessione alla 
+quale mi sono unito",,A hiker participant voluntarily leaves a session,"`POST /api/v1/sessions/<validSessionId>/leave`, headers: `Authorization: Bearer <hikerJWT>`", User is authenticated. User is a participant (not the creator) in the target session,An existing `HikeSession` with the user in `participants` but not as `creatorId`.,HTTP 200. User is removed from `participants`. Response body is the updated session object,,Service filters with .filter(p => p.userId.toString() !== userId.toString()).
+,,The creator attempts to leave their own session,"`POST /api/v1/sessions/<validSessionId>/leave`, headers: `Authorization: Bearer <creatorJWT>`", User is authenticated and is the `creatorId` of the session., An existing `HikeSession` owned by the user,"HTTP 403 with body `{ ""error"": ""Il Capogruppo non può abbandonare la sessione. Eliminala se vuoi rimuoverla."" }`.",,"Service throws `""CREATOR_CANNOT_LEAVE""`"
+"Come capogrupppo voglio poter cancellare/eliminare una
+ sessione",,The creator permanently deletes their session,"`DELETE /api/v1/sessions/<validSessionId>`, headers: `Authorization: Bearer <creatorJWT>`",User is authenticated and is the creatorId of the session., An existing `HikeSession` owned by the user.,"HTTP 200 with body `{ ""message"": ""Sessione eliminata"" }`. The session document is permanently removed from the database.",,Uses `session.deleteOne()`.
+,,A hiker participant attempts to delete a session,"`DELETE /api/v1/sessions/<validSessionId>`, headers: `Authorization: Bearer <hikerJWT>`", User is authenticated but is NOT the creator of the session.,An existing `HikeSession` where the user is a participant but not the creator.,"HTTP 403 with body { ""error"": ""Solo il Capogruppo può eliminare la sessione"" }.",,"Service throws `""FORBIDDEN""`."
+"escursionista, voglio che il tracciamento GPS si riduca automaticamente quando sono fermo, cosi da risparmiare la batteria del dispositivo",,locally debugged with android studio (will be documented in the next sprint),,,,,,
+"Come escursionista voglio visualizzare una checklist dell'equipaggiamento necessaria basata sull'itinerario e sulle condizioni meteo (durante i giorni precedenti alla partenza), cosi da prepararmi adeguatamente",,locally debugged with android studio (will be documented in the next sprint),,,,,,
+,,,,,,,,
+,,,,,,,,
+"voglio che la mia posizione GPS venga tracciata automaticamente in background durante l'escursione, cosi da garantire la mia sicurezza e quella del gruppo",,locally debugged with android studio (will be documented in the next sprint),,,,,,
+,,,,,,,,
+,,,,,,,,
+,,,,,,,,
+,,,,,,,,
+,,,,,,,,
+,,,,,,,,
+,,,,,,,,
+"escursionista, voglio che il tracciamento GPS si riduca automaticamente quando sono fermo, cosi da risparmiare la batteria del dispositivo",,locally debugged with android studio (will be documented in the next sprint),,,,,,
+,,,,,,,,
+"Come Amministratore, voglio poter gestire le registrazioni degli utenti (assegnare/modificare ruoli), cosi da controllare i privilegi di accesso al sistema",,"An authenticated admin updates the role field of an existing user to a valid enum value. The endpoint PUT /users/:id is guarded by authenticate then requireRoles(""admin""); both pass, and updateUser applies the change via findByIdAndUpdate with runValidators: true.","`PUT /users/<validUserId>`, headers: `Authorization: Bearer <adminJWT>`, body:
+
+```json
+{ ""role"": ""rifugio"" }"," Authenticated user holds the `admin` role (JWT payload contains `role: ""admin""`). Target user exists in the database with a different role (e.g. `""groupLeader""`).",An existing User document with the given ID.,"HTTP 200. Response body is the updated user object with role: ""rifugio"". Fields passwordHash and __v are excluded from the response (.select(""-passwordHash -__v"")).",,"The allowedUpdates whitelist in updateUser explicitly includes ""role"", so the field is applied. runValidators: true enforces the schema enum on update."
+,,"An admin sends a PUT /users/:id request with a role value outside the schema enum ([""groupLeader"", ""rifugio"", ""admin""]). Because findByIdAndUpdate is called with runValidators: true, Mongoose raises a ValidatorError which surfaces as a 500.","`PUT /users/<validUserId>`, headers: `Authorization: Bearer <adminJWT>`, body:
+
+```json
+{ ""role"": ""superadmin"" }",Authenticated user has admin role. Target user exists.,An existing `User` document.,"HTTP 500. Response body contains the Mongoose enum validation error message (`role` must be one of `groupLeader`, `rifugio`, `admin`). The user's role is not changed in the database.",,The `updateUser` handler catches the error in its generic `catch` and returns `res.status(500).json({ message: error.message })`. No pre-validation of the `role` field is performed in the route handler itself.
+,,"A user with role `groupLeader` attempts to call `PUT /users/:id`. The `requireRoles(""admin"")` middleware checks `req.user.role` (decoded from the JWT by `authenticate`) and rejects the request before `updateUser` is ever invoked.","`PUT /users/<validUserId>`, headers: `Authorization: Bearer <groupLeaderJWT>`, body:
+
+```json
+{ ""role"": ""admin"" }
+```",Authenticated user has role `groupLeader` (or `rifugio`). Target user exists.,,"HTTP 403 with body { ""message"": ""Forbidden."" }. The user's role is not changed.",,"requireRoles evaluates allowedRoles.includes(req.user.role); any role other than ""admin"" fails this check."
+,, A request to `PUT /users/:id` is made without an `Authorization` header. The `authenticate` middleware finds no token and rejects the request immediately.," `PUT /users/<validUserId>`, no `Authorization` header, body:
+
+```json
+{ ""role"": ""rifugio"" }
+```",,," HTTP 401 with body `{ ""message"": ""No token provided."" }`. Neither `requireRoles` nor `updateUser` is reached.",,Any JsonWebTokenError or TokenExpiredError thrown by jwt.verify is caught by the try/catch in authenticate
+,,"An admin sends a valid `PUT /users/:id` request, but the ID is a correctly-formatted ObjectId that matches no document. `findByIdAndUpdate` returns `null`; the handler returns 404.","`PUT /users/000000000000000000000000`, headers: `Authorization: Bearer <adminJWT>`, body:
+
+```json
+{ ""role"": ""rifugio"" }
+```",Admin is authenticated. No user with the given ID exists.,,"HTTP 404 with body `{ ""message"": ""User not found."" }`.",,`findByIdAndUpdate` with `{ new: true }` returns `null` when no document matches; the `!updatedUser` guard fires.
+,, The `:id` path parameter cannot be cast to a MongoDB ObjectId. Mongoose throws a `CastError` which the handler catches and maps to a 400.,"`PUT /users/not-a-valid-id`, headers: `Authorization: Bearer <adminJWT>`, body:
+
+```json
+{ ""role"": ""rifugio"" }
+```",Admin is authenticated.,," HTTP 400 with body `{ ""message"": ""Invalid user ID format."" }`.",," `error.name === ""CastError""` is checked before the generic 500 fallback."
+,,An admin attempts to change a user's `username` or `email` to a value already held by another user. MongoDB raises a duplicate-key error (code `11000`).,"`PUT /users/<validUserId>`, headers: `Authorization: Bearer <adminJWT>`, body:
+
+```json
+{ ""username"": ""existingusername"" }","Admin is authenticated. Another user already has `username: ""existingusername""`",Two existing `User` documents.," HTTP 409 with body `{ ""message"": ""Username or email already in use."" }`. The target user is not modified.",,`error.code === 11000` is checked in the `updateUser` catch block.
+,,"An admin sends `PUT /users/:id` with an empty JSON body or with keys that are not in the `allowedUpdates` whitelist. The update object is built as `{}`, so `findByIdAndUpdate` is called with no changes.","`PUT /users/<validUserId>`, headers: `Authorization: Bearer <adminJWT>`, body:
+
+```json
+{}
+```",Admin is authenticated. Target user exists.,An existing `User` document.,HTTP 200. Response body is the user object unchanged (no fields are modified). `passwordHash` and `__v` are excluded.,,"The `for (const key of allowedUpdates)` loop skips all keys when none are present in `req.body`, resulting in an empty `updates` object. Mongoose does not consider this an error."
+,,"An authenticated admin calls `DELETE /users/:id` for an existing user. The `requireRoles(""admin"")` guard passes, `findByIdAndDelete` removes the document, and the handler returns a success message.","`DELETE /users/<validUserId>`, headers: `Authorization: Bearer <adminJWT>`",Admin is authenticated. Target user exists.,An existing `User` document.,"HTTP 200 with body { ""message"": ""User deleted successfully."" }. The user document is permanently removed from the database.",,
+,,"A `groupLeader` or `rifugio` user calls `DELETE /users/:id`. The `requireRoles(""admin"")` middleware rejects the request before `deleteUser` is invoked.","DELETE /users/<validUserId>, headers: Authorization: Bearer <groupLeaderJWT>",Authenticated user has role groupLeader. Target user exists.,,"HTTP 403 with body `{ ""message"": ""Forbidden."" }`. The user is not deleted.",,"Symmetric to TC2 — same `requireRoles` guard, different route handler."
+,,Admin calls `DELETE /users/:id` with a valid ObjectId that matches no document. `findByIdAndDelete` returns `null`; the handler returns 404.," `DELETE /users/000000000000000000000000`, headers: `Authorization: Bearer <adminJWT>`",Admin is authenticated. No user with the given ID exists.,," HTTP 404 with body `{ ""message"": ""User not found."" }`.",,`!deletedUser` guard fires when `findByIdAndDelete` returns `null`.
+,,The :id path parameter is not a valid ObjectId. Mongoose throws a CastError which deleteUser maps to a 400.,"DELETE /users/not-a-valid-id, headers: Authorization: Bearer <adminJWT>",Admin is authenticated.,," HTTP 400 with body `{ ""message"": ""Invalid user ID format."" }`.",,"`error.name === ""CastError""` is checked before the generic 500 fallback, mirroring the same pattern used in `getUserById` and `updateUser`."
+"Come Capogruppo, voglio poter generare un codice invito alfanumerico e un QR Code per gruppo, cosi da permettere ai partecipanti di unirsi facilmente",,"When a group leader creates a new session, the inviteCode returned in the response is a non-null string matching the pattern TSM-[0-9A-F]{4} (the prefix TSM- followed by exactly 4 uppercase hexadecimal characters).","POST /api/v1/sessions, headers: Authorization: Bearer <validJWT>, body:
+json{
+  ""routeDetails"": {
+    ""name"": ""Sentiero delle Dolomiti""
+  }
+}",User is authenticated. User has no session currently in ACTIVE status.,,"HTTP 201. Response body contains an inviteCode field that is a non-null string matching the regex ^TSM-[0-9A-F]{4}$ (e.g. ""TSM-7A4F""). The code is stored uppercase due to both the generator (crypto.randomBytes(2).toString(""hex"").toUpperCase()) and the schema-level uppercase: true modifier.",,"generateInviteCode() uses crypto.randomBytes(2) — 2 random bytes produce exactly 4 hex characters, giving 65 536 possible codes in the TSM-XXXX space."
+,, Two sessions created independently receive different inviteCode values. The service enforces uniqueness via a while (!isUnique) retry loop that queries the database for collisions before saving; the schema also declares unique: true as a safety net at the MongoDB level,"POST /api/v1/sessions, headers: Authorization: Bearer <JWT_A>, body: { ""routeDetails"": { ""name"": ""Sessione Alpha"" } }
+POST /api/v1/sessions, headers: Authorization: Bearer <JWT_B>, body: { ""routeDetails"": { ""name"": ""Sessione Beta"" } }", Both users are authenticated. Neither has a session currently in ACTIVE status., Two distinct user accounts exist and are verified.,"Both requests return HTTP 201. The inviteCode values in the two response bodies are different strings (e.g. ""TSM-7A4F"" vs ""TSM-3C12""). The uniqueness loop guarantees no collision is persisted even if crypto.randomBytes produces the same output twice in a row.",,"Because the space is 65 536 codes and the retry loop aborts only on a true DB miss, the probability of collision is negligible in practice, but the loop makes correctness deterministic regardless."
+,," Attempt to change the inviteCode of an existing session by including it in the PATCH body. The updateSessionDetails service function only processes an explicit whitelist of fields (routeDetails.name, difficultyLevel, meetingDate, meetingTime, meetingLocation, maxParticipants, minExperienceLevel); any inviteCode key in the body is silently ignored","PATCH /api/v1/sessions/<validSessionId>, headers: Authorization: Bearer <creatorJWT>, body:
+json{
+  ""inviteCode"": ""TSM-0000"",
+  ""meetingLocation"": ""Piazzale Roma""
+}","User is authenticated and is the creatorId of the session. Session exists with an original inviteCode different from ""TSM-0000""",An existing HikeSession owned by the user.,"HTTP 200. meetingLocation is updated to ""Piazzale Roma"". The inviteCode in the response body is unchanged from the original value generated at creation time — ""TSM-0000"" is not persisted.",," The comment // inviteCode is never updated in updateSessionDetails (hikeSessionService.js) documents this as an intentional design constraint, not an oversight"

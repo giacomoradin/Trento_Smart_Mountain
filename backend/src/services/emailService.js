@@ -45,7 +45,7 @@ export const sendVerificationEmail = async (targetEmail, token) => {
   const verificationUrl = `${BASE_URL}/auth/verify/${token}`;
   
   await sendMailWithRetry({
-    from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`,
+    from: `"Trento Smart Mountain" <notjustauser0@gmail.com>`,
     to: targetEmail,
     subject: "Inizializzazione Account - Verifica Richiesta",
     html: `
@@ -64,7 +64,7 @@ export const sendPasswordResetEmail = async (targetEmail, token) => {
   const resetUrl = `${BASE_URL}/auth/reset-password/${token}`;
   
   await sendMailWithRetry({
-    from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`,
+    from: `"Trento Smart Mountain" <notjustauser0@gmail.com>`,
     to: targetEmail,
     subject: "Reset Password - Trento Smart Mountain",
     html: `

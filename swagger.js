@@ -5,7 +5,7 @@ const doc = {
     title: 'Trento Smart Mountain API',
     description: 'Documentazione API',
   },
-  host: 'trento-smart-mountain.onrender.com/',
+  host: 'trento-smart-mountain.onrender.com',
   schemes: ['https'],
   components: {
     securitySchemes: {

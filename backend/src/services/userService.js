@@ -23,13 +23,13 @@ export const createUser = async (req, res) => {
 
     const savedUser = await user.save();
 
-    try {
-      await sendVerificationEmail(email, verificationToken);
-    } catch (emailError) {
-      console.error("Fallimento Transport SMTP:", emailError);
-      // Probabilmente va implementato un sistema di retry.
-      // Per ora logghiamo l'errore senza far crashare la registrazione.
-    }
+    
+       // ✅ INVIO EMAIL ASINCRONO (senza await, senza try-catch)
+    sendVerificationEmail(email, verificationToken)
+      .catch(emailError => {
+        console.error("❌ Fallimento Transport SMTP:", emailError);
+        // TODO: implementare sistema di retry
+      });
 
     const {
       passwordHash: _,

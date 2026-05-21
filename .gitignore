@@ -150,13 +150,18 @@ project.freetime
 *.fdb_latexmk
 *.fls
 *.gz
-*.pdf
 *.toc
 *.out
 *.log
+T6_D3_Ingegneria_Del_Software.md
 
-# Excel (backlog, fogli locali)
+# Ignora tutti i file Excel
 *.xlsx
+
+# Eccezioni da mantenere nel repository
+!Product_Backlog.xlsx
+!Sprint_1_Backlog.xlsx
+!Test_Cases.xlsx
 
 # System Files
 .DS_Store

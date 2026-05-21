@@ -6,7 +6,9 @@ import nodemailer from "nodemailer";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+//for debugging purposes only
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config(); // Carica anche le variabili d'ambiente standard
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,

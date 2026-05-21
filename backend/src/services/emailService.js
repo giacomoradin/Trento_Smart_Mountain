@@ -18,7 +18,9 @@
  *   EMAIL_FROM_ADDRESS=SmartMountain.FMG@gmail.com
  */
 
-const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
+// Normalizza il BASE_URL rimuovendo eventuali slash finali per evitare
+// doppi slash nelle URL (es. "https://app.com/" + "/auth/..." → "//auth/...")
+const BASE_URL = (process.env.BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
 
 /**
  * Invia una singola email tramite Brevo REST API.
@@ -35,6 +37,26 @@ function extractEmail(raw) {
   if (!raw) return null;
   const match = String(raw).match(/<([^>]+)>/);  // formato "Nome <email>"
   return (match ? match[1] : String(raw)).trim();
+}
+
+/**
+ * Estrae il testo plain da un body HTML in modo grezzo (rimuove tag).
+ * Brevo usa la versione plain come fallback per i client email che non
+ * rendono HTML, e migliora il punteggio anti-spam dei filtri Gmail/Outlook.
+ */
+function htmlToPlainText(html) {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<head[\s\S]*?<\/head>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6])>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n\s*\n\s*\n/g, "\n\n")
+    .trim();
 }
 
 async function sendEmail(toEmail, subject, htmlContent) {
@@ -58,9 +80,19 @@ async function sendEmail(toEmail, subject, htmlContent) {
 
   const payload = {
     sender: { name: "Trento Smart Mountain", email: fromAddress },
+    // replyTo aiuta i filtri anti-spam: i messaggi con reply-to valido
+    // hanno un punteggio migliore in Gmail/Outlook
+    replyTo: { name: "Trento Smart Mountain", email: fromAddress },
     to: [{ email: toEmail }],
     subject,
     htmlContent,
+    // textContent migliora drasticamente il punteggio anti-spam:
+    // i client che non rendono HTML lo mostrano, e i filtri lo valutano positivamente
+    textContent: htmlToPlainText(htmlContent),
+    // Headers RFC 8058 per l'unsubscribe — riduce ulteriormente lo spam score
+    headers: {
+      "X-Mailer": "TSM-Backend/1.0",
+    },
   };
 
   let response;
@@ -98,28 +130,59 @@ export const sendVerificationEmail = async (targetEmail, token) => {
 
   await sendEmail(
     targetEmail,
-    "Inizializzazione Account - Verifica Richiesta",
+    "Conferma il tuo indirizzo email - Trento Smart Mountain",
     `<!DOCTYPE html>
 <html lang="it">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:24px;background:#121212;font-family:sans-serif">
-  <div style="max-width:480px;margin:0 auto;background:#1e1e1e;padding:32px;border-radius:12px;border-left:4px solid #2E5A27">
-    <h2 style="color:#4FC3F7;margin-top:0">Trento Smart Mountain 🏔️</h2>
-    <h3 style="color:#ffffff;margin-top:0">Verifica il tuo account</h3>
-    <p style="color:#aaaaaa;line-height:1.6">
-      Il tuo account è stato creato. Clicca il pulsante qui sotto per verificare la tua
-      identità e sbloccare l'accesso alla piattaforma.
-    </p>
-    <a href="${verificationUrl}"
-       style="display:inline-block;background:#2E5A27;color:#ffffff;padding:14px 28px;
-              text-decoration:none;border-radius:8px;font-weight:bold;font-size:15px;margin:16px 0">
-      ✓ Verifica Account
-    </a>
-    <p style="color:#555555;font-size:12px;margin-top:28px;border-top:1px solid #333;padding-top:16px">
-      Se non hai creato un account su Trento Smart Mountain, ignora questa email.<br>
-      Il link è valido per 24 ore.
-    </p>
-  </div>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Conferma indirizzo email</title>
+</head>
+<body style="margin:0;padding:24px;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#333">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px">
+    <tr>
+      <td style="padding:32px 32px 16px 32px;border-bottom:1px solid #eeeeee">
+        <h1 style="margin:0;color:#2E5A27;font-size:22px">Trento Smart Mountain</h1>
+        <p style="margin:4px 0 0 0;color:#888888;font-size:13px">Progetto universitario di Ingegneria del Software - Università di Trento</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:32px">
+        <h2 style="margin:0 0 16px 0;color:#222222;font-size:18px">Ciao,</h2>
+        <p style="margin:0 0 16px 0;line-height:1.6;color:#444444">
+          Grazie per esserti registrato a Trento Smart Mountain. Per completare la registrazione
+          e accedere alla piattaforma, conferma il tuo indirizzo email cliccando sul pulsante qui sotto.
+        </p>
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0">
+          <tr>
+            <td>
+              <a href="${verificationUrl}"
+                 style="display:inline-block;background:#2E5A27;color:#ffffff;padding:12px 24px;
+                        text-decoration:none;border-radius:6px;font-weight:bold;font-size:15px">
+                Conferma indirizzo email
+              </a>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:0 0 8px 0;color:#666666;font-size:13px">
+          Se il pulsante non funziona, copia e incolla questo link nel browser:
+        </p>
+        <p style="margin:0 0 24px 0;color:#2E5A27;font-size:13px;word-break:break-all">
+          ${verificationUrl}
+        </p>
+        <p style="margin:0;color:#888888;font-size:13px;line-height:1.6">
+          Il link è valido per 24 ore. Se non hai effettuato tu la registrazione, puoi
+          ignorare questa email — il tuo indirizzo non verrà aggiunto al servizio.
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:16px 32px 24px 32px;border-top:1px solid #eeeeee;color:#999999;font-size:12px">
+        Trento Smart Mountain - Università di Trento<br>
+        Per assistenza: rispondi a questa email.
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`,
   );
@@ -133,27 +196,60 @@ export const sendPasswordResetEmail = async (targetEmail, token) => {
 
   await sendEmail(
     targetEmail,
-    "Reset Password - Trento Smart Mountain",
+    "Reimpostazione password - Trento Smart Mountain",
     `<!DOCTYPE html>
 <html lang="it">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:24px;background:#121212;font-family:sans-serif">
-  <div style="max-width:480px;margin:0 auto;background:#1e1e1e;padding:32px;border-radius:12px;border-left:4px solid #2E5A27">
-    <h2 style="color:#4FC3F7;margin-top:0">Trento Smart Mountain 🏔️</h2>
-    <h3 style="color:#ffffff;margin-top:0">Reset Password</h3>
-    <p style="color:#aaaaaa;line-height:1.6">
-      Hai richiesto il reset della password. Clicca il pulsante per impostare una nuova password.
-    </p>
-    <a href="${resetUrl}"
-       style="display:inline-block;background:#2E5A27;color:#ffffff;padding:14px 28px;
-              text-decoration:none;border-radius:8px;font-weight:bold;font-size:15px;margin:16px 0">
-      🔑 Reimposta Password
-    </a>
-    <p style="color:#555555;font-size:12px;margin-top:28px;border-top:1px solid #333;padding-top:16px">
-      ⚠️ Il link scade tra <strong>1 ora</strong>.<br>
-      Se non hai richiesto questo reset, ignora l'email — la tua password rimane invariata.
-    </p>
-  </div>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Reimpostazione password</title>
+</head>
+<body style="margin:0;padding:24px;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#333">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px">
+    <tr>
+      <td style="padding:32px 32px 16px 32px;border-bottom:1px solid #eeeeee">
+        <h1 style="margin:0;color:#2E5A27;font-size:22px">Trento Smart Mountain</h1>
+        <p style="margin:4px 0 0 0;color:#888888;font-size:13px">Progetto universitario di Ingegneria del Software - Università di Trento</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:32px">
+        <h2 style="margin:0 0 16px 0;color:#222222;font-size:18px">Reimpostazione password</h2>
+        <p style="margin:0 0 16px 0;line-height:1.6;color:#444444">
+          Abbiamo ricevuto una richiesta di reset password per il tuo account.
+          Clicca sul pulsante qui sotto per impostare una nuova password.
+        </p>
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0">
+          <tr>
+            <td>
+              <a href="${resetUrl}"
+                 style="display:inline-block;background:#2E5A27;color:#ffffff;padding:12px 24px;
+                        text-decoration:none;border-radius:6px;font-weight:bold;font-size:15px">
+                Reimposta password
+              </a>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:0 0 8px 0;color:#666666;font-size:13px">
+          Se il pulsante non funziona, copia e incolla questo link nel browser:
+        </p>
+        <p style="margin:0 0 24px 0;color:#2E5A27;font-size:13px;word-break:break-all">
+          ${resetUrl}
+        </p>
+        <p style="margin:0;color:#888888;font-size:13px;line-height:1.6">
+          <strong>Importante:</strong> il link è valido per <strong>1 ora</strong>.
+          Se non hai richiesto tu il reset della password, ignora questa email — la tua password
+          rimarrà invariata e l'account resterà sicuro.
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:16px 32px 24px 32px;border-top:1px solid #eeeeee;color:#999999;font-size:12px">
+        Trento Smart Mountain - Università di Trento<br>
+        Per assistenza: rispondi a questa email.
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`,
   );

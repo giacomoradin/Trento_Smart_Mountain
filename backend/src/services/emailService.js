@@ -37,9 +37,12 @@ async function sendMailWithRetry(mailOptions, maxRetries = 3) {
 }
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-
+//for debugging purposes only
+console.log('🔗 BASE_URL configurato:', BASE_URL);
 export const sendVerificationEmail = async (targetEmail, token) => {
   const verificationUrl = `${BASE_URL}/auth/verify/${token}`;
+  //for debugging purposes only
+  console.log(`📧 Inizio invio email a: ${targetEmail}`);
   await sendMailWithRetry({
     from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`,
     to: targetEmail,
@@ -54,6 +57,8 @@ export const sendVerificationEmail = async (targetEmail, token) => {
       <p><small>Ignora questa email se non hai richiesto l'accesso.</small></p>
     `,
   });
+  //for debugging purposes only
+  console.log(`✅ Email verification completata per: ${targetEmail}`);
 };
 
 export const sendPasswordResetEmail = async (targetEmail, token) => {

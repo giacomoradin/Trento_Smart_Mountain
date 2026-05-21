@@ -1,38 +1,51 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+// dotenv viene già caricato globalmente da server.js (`import "dotenv/config"`).
+// Su Render le env var sono iniettate direttamente nel process: nessun file .env.
+// Su locale, il file backend/.env viene caricato all'avvio.
 import nodemailer from "nodemailer";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// Trim difensivo: protegge da spazi/newline incollati per errore nel dashboard Render
+const trim = (v) => (typeof v === "string" ? v.trim() : v);
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_SECURE === "true",
+  host: trim(process.env.SMTP_HOST),
+  port: Number(trim(process.env.SMTP_PORT)) || 587,
+  secure: trim(process.env.SMTP_SECURE) === "true",
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: trim(process.env.SMTP_USER),
+    pass: trim(process.env.SMTP_PASS),
   },
   tls: { rejectUnauthorized: false },
+});
+
+// Verifica all'avvio che il transporter sia configurato correttamente.
+// Esegui in background — non blocca il server, ma logga eventuali problemi di auth.
+transporter.verify((err) => {
+  if (err) {
+    console.error("[emailService] SMTP verify FAILED:", err.message);
+    console.error("  → controlla SMTP_USER/SMTP_PASS su Render (no newline/spazi)");
+    console.error("  → SMTP_USER attuale:", JSON.stringify(process.env.SMTP_USER));
+  } else {
+    console.log("[emailService] SMTP transporter OK, ready to send emails");
+  }
 });
 
 async function sendMailWithRetry(mailOptions, maxRetries = 3) {
   let lastError;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      await transporter.sendMail(mailOptions);
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`[emailService] Email sent to ${mailOptions.to} (messageId: ${info.messageId})`);
       return;
     } catch (err) {
       lastError = err;
-      console.warn(`SMTP attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+      console.warn(`[emailService] SMTP attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+      console.warn(`  → to: ${mailOptions.to}, subject: ${mailOptions.subject}`);
       if (attempt < maxRetries) {
         await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
       }
     }
   }
+  console.error(`[emailService] Email definitively failed after ${maxRetries} attempts:`, lastError.message);
   throw lastError;
 }
 

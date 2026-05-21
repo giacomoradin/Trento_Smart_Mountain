@@ -1,95 +1,140 @@
-// dotenv viene già caricato globalmente da server.js (`import "dotenv/config"`).
-// Su Render le env var sono iniettate direttamente nel process: nessun file .env.
-// Su locale, il file backend/.env viene caricato all'avvio.
-import nodemailer from "nodemailer";
+/**
+ * emailService.js
+ *
+ * Invia email transazionali tramite Brevo (ex Sendinblue) HTTP API.
+ *
+ * Vantaggi rispetto a SMTP Gmail su Render:
+ *  - Usa fetch HTTPS (porta 443) → nessun blocco firewall PaaS
+ *  - Nessun problema IPv6 (era la causa del ENETUNREACH)
+ *  - Free tier: 300 email/giorno, 9.000/mese — più che sufficiente
+ *  - NON richiede un dominio personalizzato: basta verificare l'email mittente
+ *
+ * Setup Render (aggiungi queste 2 env var nel dashboard):
+ *   BREVO_API_KEY      → API key da https://app.brevo.com/settings/keys/api
+ *   EMAIL_FROM_ADDRESS → indirizzo verificato (es. SmartMountain.FMG@gmail.com)
+ *
+ * Setup locale (aggiungi in backend/.env):
+ *   BREVO_API_KEY=xkeysib-...
+ *   EMAIL_FROM_ADDRESS=SmartMountain.FMG@gmail.com
+ */
 
-// Trim difensivo: protegge da spazi/newline incollati per errore nel dashboard Render
-const trim = (v) => (typeof v === "string" ? v.trim() : v);
+const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
-// Render Free tier non ha routing IPv6 in egress: smtp.gmail.com risolve sia
-// AAAA (IPv6) che A (IPv4) e nodemailer di default preferisce IPv6 → ENETUNREACH.
-// Forziamo IPv4 con `family: 4` per evitare il problema.
-const transporter = nodemailer.createTransport({
-  host: trim(process.env.SMTP_HOST),
-  port: Number(trim(process.env.SMTP_PORT)) || 587,
-  secure: trim(process.env.SMTP_SECURE) === "true",
-  auth: {
-    user: trim(process.env.SMTP_USER),
-    pass: trim(process.env.SMTP_PASS),
-  },
-  tls: { rejectUnauthorized: false },
-  family: 4,             // forza IPv4 (fix ENETUNREACH su Render)
-  connectionTimeout: 20_000,
-  greetingTimeout: 20_000,
-  socketTimeout: 30_000,
-});
+/**
+ * Invia una singola email tramite Brevo REST API.
+ * Usa fetch nativo (Node 18+, disponibile su Render) — nessuna dipendenza extra.
+ */
+async function sendEmail(toEmail, subject, htmlContent) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS;
 
-// Verifica all'avvio che il transporter sia configurato correttamente.
-// Esegui in background — non blocca il server, ma logga eventuali problemi di auth.
-transporter.verify((err) => {
-  if (err) {
-    console.error("[emailService] SMTP verify FAILED:", err.message);
-    console.error("  → controlla SMTP_USER/SMTP_PASS su Render (no newline/spazi)");
-    console.error("  → SMTP_USER attuale:", JSON.stringify(process.env.SMTP_USER));
-  } else {
-    console.log("[emailService] SMTP transporter OK, ready to send emails");
+  // Fail fast con messaggi diagnostici chiari nei log Render
+  if (!apiKey) {
+    throw new Error("[emailService] BREVO_API_KEY non configurata. Aggiungila su Render > Environment.");
   }
-});
-
-async function sendMailWithRetry(mailOptions, maxRetries = 3) {
-  let lastError;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const info = await transporter.sendMail(mailOptions);
-      console.log(`[emailService] Email sent to ${mailOptions.to} (messageId: ${info.messageId})`);
-      return;
-    } catch (err) {
-      lastError = err;
-      console.warn(`[emailService] SMTP attempt ${attempt}/${maxRetries} failed: ${err.message}`);
-      console.warn(`  → to: ${mailOptions.to}, subject: ${mailOptions.subject}`);
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
-      }
-    }
+  if (!fromAddress) {
+    throw new Error("[emailService] EMAIL_FROM_ADDRESS non configurata. Aggiungila su Render > Environment.");
   }
-  console.error(`[emailService] Email definitively failed after ${maxRetries} attempts:`, lastError.message);
-  throw lastError;
+
+  const payload = {
+    sender: { name: "Trento Smart Mountain", email: fromAddress },
+    to: [{ email: toEmail }],
+    subject,
+    htmlContent,
+  };
+
+  let response;
+  try {
+    response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (networkErr) {
+    console.error("[emailService] Errore di rete verso Brevo API:", networkErr.message);
+    throw networkErr;
+  }
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error(`[emailService] Brevo API ${response.status}: ${body}`);
+    throw new Error(`Brevo API error ${response.status}: ${body}`);
+  }
+
+  const data = await response.json();
+  console.log(`[emailService] Email inviata ✓ → to: ${toEmail} | messageId: ${data.messageId}`);
 }
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-
+/**
+ * Invia l'email di verifica account.
+ * Il link porta a GET /auth/verify/:token → redirect a tsm://auth/success?jwt=...
+ */
 export const sendVerificationEmail = async (targetEmail, token) => {
   const verificationUrl = `${BASE_URL}/auth/verify/${token}`;
-  await sendMailWithRetry({
-    from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`,
-    to: targetEmail,
-    subject: "Inizializzazione Account - Verifica Richiesta",
-    html: `
-      <h3>Inizializzazione Nodo Operativa</h3>
-      <p>Il tuo account è stato allocato nel cluster Trento Smart Mountain.</p>
-      <p>Per completare l'handshake e sbloccare l'accesso, clicca sul link:</p>
-      <a href="${verificationUrl}" style="background:#2E5A27;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
-        Verifica Identità
-      </a>
-      <p><small>Ignora questa email se non hai richiesto l'accesso.</small></p>
-    `,
-  });
+
+  await sendEmail(
+    targetEmail,
+    "Inizializzazione Account - Verifica Richiesta",
+    `<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:24px;background:#121212;font-family:sans-serif">
+  <div style="max-width:480px;margin:0 auto;background:#1e1e1e;padding:32px;border-radius:12px;border-left:4px solid #2E5A27">
+    <h2 style="color:#4FC3F7;margin-top:0">Trento Smart Mountain 🏔️</h2>
+    <h3 style="color:#ffffff;margin-top:0">Verifica il tuo account</h3>
+    <p style="color:#aaaaaa;line-height:1.6">
+      Il tuo account è stato creato. Clicca il pulsante qui sotto per verificare la tua
+      identità e sbloccare l'accesso alla piattaforma.
+    </p>
+    <a href="${verificationUrl}"
+       style="display:inline-block;background:#2E5A27;color:#ffffff;padding:14px 28px;
+              text-decoration:none;border-radius:8px;font-weight:bold;font-size:15px;margin:16px 0">
+      ✓ Verifica Account
+    </a>
+    <p style="color:#555555;font-size:12px;margin-top:28px;border-top:1px solid #333;padding-top:16px">
+      Se non hai creato un account su Trento Smart Mountain, ignora questa email.<br>
+      Il link è valido per 24 ore.
+    </p>
+  </div>
+</body>
+</html>`,
+  );
 };
 
+/**
+ * Invia l'email di reset password con link one-time (scadenza 1 ora).
+ */
 export const sendPasswordResetEmail = async (targetEmail, token) => {
   const resetUrl = `${BASE_URL}/auth/reset-password/${token}`;
-  await sendMailWithRetry({
-    from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`,
-    to: targetEmail,
-    subject: "Reset Password - Trento Smart Mountain",
-    html: `
-      <h3>Reset Password</h3>
-      <p>Hai richiesto il reset della password per il tuo account TSM.</p>
-      <p>Il link scade tra 1 ora.</p>
-      <a href="${resetUrl}" style="background:#2E5A27;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
-        Reimposta Password
-      </a>
-      <p><small>Se non hai richiesto questo reset, ignora questa email.</small></p>
-    `,
-  });
+
+  await sendEmail(
+    targetEmail,
+    "Reset Password - Trento Smart Mountain",
+    `<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:24px;background:#121212;font-family:sans-serif">
+  <div style="max-width:480px;margin:0 auto;background:#1e1e1e;padding:32px;border-radius:12px;border-left:4px solid #2E5A27">
+    <h2 style="color:#4FC3F7;margin-top:0">Trento Smart Mountain 🏔️</h2>
+    <h3 style="color:#ffffff;margin-top:0">Reset Password</h3>
+    <p style="color:#aaaaaa;line-height:1.6">
+      Hai richiesto il reset della password. Clicca il pulsante per impostare una nuova password.
+    </p>
+    <a href="${resetUrl}"
+       style="display:inline-block;background:#2E5A27;color:#ffffff;padding:14px 28px;
+              text-decoration:none;border-radius:8px;font-weight:bold;font-size:15px;margin:16px 0">
+      🔑 Reimposta Password
+    </a>
+    <p style="color:#555555;font-size:12px;margin-top:28px;border-top:1px solid #333;padding-top:16px">
+      ⚠️ Il link scade tra <strong>1 ora</strong>.<br>
+      Se non hai richiesto questo reset, ignora l'email — la tua password rimane invariata.
+    </p>
+  </div>
+</body>
+</html>`,
+  );
 };

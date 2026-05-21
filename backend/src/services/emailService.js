@@ -6,6 +6,9 @@ import nodemailer from "nodemailer";
 // Trim difensivo: protegge da spazi/newline incollati per errore nel dashboard Render
 const trim = (v) => (typeof v === "string" ? v.trim() : v);
 
+// Render Free tier non ha routing IPv6 in egress: smtp.gmail.com risolve sia
+// AAAA (IPv6) che A (IPv4) e nodemailer di default preferisce IPv6 → ENETUNREACH.
+// Forziamo IPv4 con `family: 4` per evitare il problema.
 const transporter = nodemailer.createTransport({
   host: trim(process.env.SMTP_HOST),
   port: Number(trim(process.env.SMTP_PORT)) || 587,
@@ -15,6 +18,10 @@ const transporter = nodemailer.createTransport({
     pass: trim(process.env.SMTP_PASS),
   },
   tls: { rejectUnauthorized: false },
+  family: 4,             // forza IPv4 (fix ENETUNREACH su Render)
+  connectionTimeout: 20_000,
+  greetingTimeout: 20_000,
+  socketTimeout: 30_000,
 });
 
 // Verifica all'avvio che il transporter sia configurato correttamente.

@@ -1,10 +1,9 @@
 import User from "../models/user.js";
 import bcrypt from "bcrypt";
-import crypto from "crypto"; //SMTP/mail verification token generation
-import { sendVerificationEmail } from "./emailService.js"; //SMTP/mail verification
+import crypto from "crypto";
+import { sendVerificationEmail } from "./emailService.js";
 
 export const createUser = async (req, res) => {
-  
   try {
     const { username, email, password, role, rifugioDetails } = req.body;
 
@@ -23,12 +22,10 @@ export const createUser = async (req, res) => {
 
     const savedUser = await user.save();
 
-    
-       // ✅ INVIO EMAIL ASINCRONO (senza await, senza try-catch)
+    // ✅ INVIO EMAIL ASINCRONO (non blocca la risposta)
     sendVerificationEmail(email, verificationToken)
       .catch(emailError => {
         console.error("❌ Fallimento Transport SMTP:", emailError);
-        // TODO: implementare sistema di retry
       });
 
     const {
@@ -37,6 +34,7 @@ export const createUser = async (req, res) => {
       __v: ___,
       ...userWithoutPassword
     } = savedUser.toObject();
+    
     res.status(201).json({
       message: "Allocazione completata. Attesa verifica email.",
       user: userWithoutPassword,
@@ -50,34 +48,18 @@ export const createUser = async (req, res) => {
   }
 };
 
-// GET /users — Get all users
 export const getAllUsers = async (req, res) => {
-  /* 
-     #swagger.tags = ['Users']
-     #swagger.description = 'Ottiene la lista di tutti gli utenti.'
-  */
   try {
-    // Exclude passwordHash from results — never expose it
     const users = await User.find().select("-passwordHash -__v");
-
     res.status(200).json(users);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// GET /users/:id — Get a single user by ID
 export const getUserById = async (req, res) => {
-  /* 
-     #swagger.tags = ['Users']
-     #swagger.description = 'Recupera i dettagli di un singolo utente.'
-  */
   try {
-    //https://mongoosejs.com/docs/api/query.html#Query.prototype.select()
-    //exclude not wanted fields
-    const user = await User.findById(req.params.id).select(
-      "-passwordHash -__v",
-    );
+    const user = await User.findById(req.params.id).select("-passwordHash -__v");
 
     if (!user) {
       return res.status(404).json({ message: "User not found." });
@@ -85,7 +67,6 @@ export const getUserById = async (req, res) => {
 
     res.status(200).json(user);
   } catch (error) {
-    // Malformed MongoDB ObjectId
     if (error.name === "CastError") {
       return res.status(400).json({ message: "Invalid user ID format." });
     }
@@ -93,12 +74,7 @@ export const getUserById = async (req, res) => {
   }
 };
 
-// PUT /users/:id — Update a user by ID
 export const updateUser = async (req, res) => {
-  /* 
-     #swagger.tags = ['Users']
-     #swagger.description = 'Aggiorna i dati di un utente.'
-  */
   try {
     const allowedUpdates = [
       "username",
@@ -109,7 +85,6 @@ export const updateUser = async (req, res) => {
     ];
     const updates = {};
 
-    // Only pick fields that are actually allowed to be updated
     for (const key of allowedUpdates) {
       if (req.body[key] !== undefined) {
         updates[key] = req.body[key];
@@ -117,8 +92,8 @@ export const updateUser = async (req, res) => {
     }
 
     const updatedUser = await User.findByIdAndUpdate(req.params.id, updates, {
-      new: true, // return the updated document
-      runValidators: true, // enforce schema rules on update
+      new: true,
+      runValidators: true,
     }).select("-passwordHash -__v");
 
     if (!updatedUser) {
@@ -139,12 +114,7 @@ export const updateUser = async (req, res) => {
   }
 };
 
-// DELETE /users/:id — Delete a user by ID
 export const deleteUser = async (req, res) => {
-  /* 
-     #swagger.tags = ['Users']
-     #swagger.description = 'Elimina un utente dal database.'
-  */
   try {
     const deletedUser = await User.findByIdAndDelete(req.params.id);
 

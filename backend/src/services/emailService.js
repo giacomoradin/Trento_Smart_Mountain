@@ -1,37 +1,38 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import nodemailer from "nodemailer";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let transporter = null;
 
-//for debugging purposes only
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-dotenv.config(); // Carica anche le variabili d'ambiente standard
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_SECURE === "true",
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  tls: { rejectUnauthorized: false },
-});
+function getTransporter() {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      secure: process.env.SMTP_SECURE === "true",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+      tls: { rejectUnauthorized: false },
+    });
+  }
+  return transporter;
+}
 
 async function sendMailWithRetry(mailOptions, maxRetries = 3) {
+  const transporter = getTransporter();
+  
   let lastError;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       await transporter.sendMail(mailOptions);
+      console.log(`✅ Email inviata con successo al tentativo ${attempt}`);
       return;
     } catch (err) {
       lastError = err;
-      console.warn(`SMTP attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+      console.warn(`❌ SMTP attempt ${attempt}/${maxRetries} failed: ${err.message}`);
       if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(r => setTimeout(r, delay));
       }
     }
   }
@@ -39,12 +40,10 @@ async function sendMailWithRetry(mailOptions, maxRetries = 3) {
 }
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-//for debugging purposes only
-console.log('🔗 BASE_URL configurato:', BASE_URL);
+
 export const sendVerificationEmail = async (targetEmail, token) => {
   const verificationUrl = `${BASE_URL}/auth/verify/${token}`;
-  //for debugging purposes only
-  console.log(`📧 Inizio invio email a: ${targetEmail}`);
+  
   await sendMailWithRetry({
     from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`,
     to: targetEmail,
@@ -59,12 +58,11 @@ export const sendVerificationEmail = async (targetEmail, token) => {
       <p><small>Ignora questa email se non hai richiesto l'accesso.</small></p>
     `,
   });
-  //for debugging purposes only
-  console.log(`✅ Email verification completata per: ${targetEmail}`);
 };
 
 export const sendPasswordResetEmail = async (targetEmail, token) => {
   const resetUrl = `${BASE_URL}/auth/reset-password/${token}`;
+  
   await sendMailWithRetry({
     from: `"Trento Smart Mountain" <${process.env.SMTP_USER}>`,
     to: targetEmail,

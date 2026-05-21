@@ -36,6 +36,9 @@ async function sendEmail(toEmail, subject, htmlContent) {
     throw new Error("[emailService] EMAIL_FROM_ADDRESS non configurata. Aggiungila su Render > Environment.");
   }
 
+  // Log diagnostico — visibile nei log Render per verificare i valori
+  console.log(`[emailService] Invio email → from: "${fromAddress}" | to: "${toEmail}"`);
+
   const payload = {
     sender: { name: "Trento Smart Mountain", email: fromAddress },
     to: [{ email: toEmail }],

@@ -12,6 +12,18 @@ import weatherRoutes from "./routes/weatherRoutes.js";
 const swaggerDocument = JSON.parse(readFileSync(new URL('../../swagger-output.json', import.meta.url)));
 const app = express();
 
+// Normalizza il path collassando slash multipli (es. //auth/verify → /auth/verify).
+// Robustezza per i vecchi link email che potrebbero contenere doppi slash
+// se BASE_URL aveva un trailing slash quando l'email è stata inviata.
+app.use((req, res, next) => {
+  if (req.url.match(/\/{2,}/)) {
+    const cleanUrl = req.url.replace(/\/{2,}/g, "/");
+    console.log(`[app] Path normalizzato: "${req.url}" → "${cleanUrl}"`);
+    return res.redirect(301, cleanUrl);
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());

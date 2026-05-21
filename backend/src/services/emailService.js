@@ -24,9 +24,23 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
  * Invia una singola email tramite Brevo REST API.
  * Usa fetch nativo (Node 18+, disponibile su Render) — nessuna dipendenza extra.
  */
+/**
+ * Estrae l'email "pulita" da una stringa che può essere:
+ *  - "user@example.com"                       → "user@example.com"
+ *  - "Nome Cognome <user@example.com>"        → "user@example.com"
+ *  - "  user@example.com  "                   → "user@example.com"
+ * Brevo richiede SOLO l'email nel campo `sender.email`.
+ */
+function extractEmail(raw) {
+  if (!raw) return null;
+  const match = String(raw).match(/<([^>]+)>/);  // formato "Nome <email>"
+  return (match ? match[1] : String(raw)).trim();
+}
+
 async function sendEmail(toEmail, subject, htmlContent) {
   const apiKey = process.env.BREVO_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS;
+  const rawFrom = process.env.EMAIL_FROM_ADDRESS;
+  const fromAddress = extractEmail(rawFrom);
 
   // Fail fast con messaggi diagnostici chiari nei log Render
   if (!apiKey) {
@@ -36,7 +50,10 @@ async function sendEmail(toEmail, subject, htmlContent) {
     throw new Error("[emailService] EMAIL_FROM_ADDRESS non configurata. Aggiungila su Render > Environment.");
   }
 
-  // Log diagnostico — visibile nei log Render per verificare i valori
+  // Log diagnostico — utile se l'utente ha incollato un formato sbagliato nella env var
+  if (rawFrom !== fromAddress) {
+    console.log(`[emailService] EMAIL_FROM_ADDRESS contiene metadata, estratta email: "${fromAddress}" (originale: "${rawFrom}")`);
+  }
   console.log(`[emailService] Invio email → from: "${fromAddress}" | to: "${toEmail}"`);
 
   const payload = {

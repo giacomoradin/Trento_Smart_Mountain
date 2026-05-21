@@ -41,14 +41,38 @@ interface TsmApiService {
   @POST("auth/forgot-password")
   suspend fun forgotPassword(@Body body: ForgotPasswordRequest): Response<ApiMessageBody>
 
-  // ── Users ──
+  // ── Registrazione per ruolo (post-refactor discriminator) ──
+  // Endpoints semantici sotto /auth/register/* preferiti rispetto a /hikers e /refuges
+  // perché tengono il flusso "registrazione" raccolto sotto la categoria auth in Swagger.
 
-  @POST("users")
+  /** POST /auth/register/hiker → crea un account escursionista (groupLeader). */
+  @POST("auth/register/hiker")
   suspend fun register(@Body body: RegisterRequest): Response<RegisterResponse>
 
-  @POST("users")
+  /** POST /auth/register/refuge → crea un account rifugio con metadati flat. */
+  @POST("auth/register/refuge")
   suspend fun registerRifugio(@Body body: RegisterRifugioRequest): Response<RegisterResponse>
 
+  // ── Hiker (profilo escursionista) ──
+
+  /** GET /hikers/:id → profilo escursionista (richiede JWT). */
+  @GET("hikers/{id}")
+  suspend fun getHikerById(@Path("id") id: String): Response<UserResponse>
+
+  // ── Refuge (profilo rifugio) ──
+
+  /** GET /refuges/:id → profilo rifugio con metadati struttura. */
+  @GET("refuges/{id}")
+  suspend fun getRefugeById(@Path("id") id: String): Response<UserResponse>
+
+  /**
+   * GET /users/{id} — alias retro-compatibile.
+   *
+   * Mantenuto temporaneamente per non rompere il [ProfileViewModel] che legge il
+   * profilo senza conoscere a priori il ruolo dell'utente. In Sprint 2 verrà
+   * sostituito da una chiamata a `/hikers/{id}` o `/refuges/{id}` in base al ruolo
+   * decodificato dal JWT. Il backend mantiene un'alias route per smistare.
+   */
   @GET("users/{id}")
   suspend fun getUserById(@Path("id") id: String): Response<UserResponse>
 

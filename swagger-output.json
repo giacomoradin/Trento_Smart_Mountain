@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://trento-smart-mountain.onrender.com/"
+      "url": "https://trento-smart-mountain.onrender.com/trento_smart_mountain/"
     }
   ],
   "paths": {
@@ -53,10 +53,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Users"
-        ],
-        "description": "Ottiene la lista di tutti gli utenti.",
+        "description": "",
         "responses": {
           "200": {
             "description": "OK"
@@ -72,10 +69,7 @@
     },
     "/users/{id}": {
       "get": {
-        "tags": [
-          "Users"
-        ],
-        "description": "Recupera i dettagli di un singolo utente.",
+        "description": "",
         "parameters": [
           {
             "name": "id",
@@ -105,10 +99,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Users"
-        ],
-        "description": "Aggiorna i dati di un utente.",
+        "description": "",
         "parameters": [
           {
             "name": "id",
@@ -144,10 +135,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Users"
-        ],
-        "description": "Elimina un utente dal database.",
+        "description": "",
         "parameters": [
           {
             "name": "id",

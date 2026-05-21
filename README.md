@@ -77,15 +77,20 @@ In D2 è stata **rimossa** la raccolta fisica dei rifiuti (RF15-RF18 di D1) per 
 
 ### 4.1 Backend Node.js
 
-#### Modelli MongoDB
+#### Modelli MongoDB — refactor 2026-05 con discriminator Mongoose
 
-| Modello         | File                    | Campi chiave                                                                                                                                                                                                                                                                                                                                                                  |
-| --------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **User**        | `models/user.js`        | username, email, passwordHash, role, isVerified, verificationToken, passwordResetToken/Expires, rifugioDetails, **sessionRoles[]** (groupId/role/createdBy — ora dichiarato nello schema ✅ fix M1), virtual **mySessions**                                                                                                                                                   |
-| **HikeSession** | `models/hikeSession.js` | creatorId, routeDetails (name/startPoint/endPoint senza default ✅ fix M3 + indice 2dsphere `sparse:true`/difficultyLevel/elevationGain), inviteCode (TSM-XXXX), participants[], status lifecycle, meetingDate/Time, maxParticipants, gpxStats (distanceKm/elevationGainM/trackPoints/**elevationProfile**/estimatedPoints), statoFailover, lastHeartbeat, startTime, endTime |
-| **Location**    | `models/location.js`    | externalId, type (town/poi), name, elevation, location (GeoJSON), regionId, forecasts (slots3h/slots24h) — modulo meteo                                                                                                                                                                                                                                                       |
+> **Refactor 2026-05**: il modello `User` monolitico è stato suddiviso in **3 discriminatori** (Hiker, Refuge, Admin) su **1 sola collection** `users`. Il login, populate (`HikeSession.creatorId`) e middleware auth restano invariati, ma ogni ruolo ha ora il proprio schema specializzato.
 
-#### Endpoint implementati e funzionanti
+| Modello | File | Discriminator key | Campi specifici |
+|---------|------|-------------------|----------------|
+| **User** (base) | `models/user.js` | — | username, email, passwordHash, isVerified, verificationToken, passwordResetToken/Expires, **sessionRoles[]** (groupId/role/createdBy), virtual **mySessions**, `discriminatorKey: "role"`, collection comune `users` |
+| **Hiker** | `models/hiker.js` | `groupLeader` | (nessuno per ora — predisposto per saldoSc, badges, livelloEsperienza in Sprint 3) |
+| **Refuge** | `models/refuge.js` | `rifugio` | **rifugioName** (required), caiCode, quota, posti, coordinates — **flat sul documento** (no più subdocument `rifugioDetails`) |
+| **Admin** | `models/admin.js` | `admin` | (nessuno per ora — predisposto per permissions, auditLog) |
+| **HikeSession** | `models/hikeSession.js` | — | creatorId, routeDetails (startPoint/endPoint senza default ✅ M3 + 2dsphere `sparse:true`/difficultyLevel/elevationGain), inviteCode (TSM-XXXX), participants[], status lifecycle, meetingDate/Time, maxParticipants, gpxStats (distanceKm/elevationGainM/trackPoints/elevationProfile/estimatedPoints), statoFailover, lastHeartbeat, startTime, endTime |
+| **Location** | `models/location.js` | — | externalId, type (town/poi), name, elevation, location (GeoJSON), regionId, forecasts (slots3h/slots24h) |
+
+#### Endpoint implementati e funzionanti — post-refactor 2026-05
 
 | Metodo   | Route                                   | Auth               | Descrizione                                                                                                                                                                              |
 | -------- | --------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -94,10 +99,22 @@ In D2 è stata **rimossa** la raccolta fisica dei rifiuti (RF15-RF18 di D1) per 
 | `POST`   | `/auth/forgot-password`                 | No                 | Reset password (email link)                                                                                                                                                              |
 | `GET`    | `/auth/reset-password/:token`           | No                 | Form HTML reset                                                                                                                                                                          |
 | `POST`   | `/auth/reset-password/:token`           | No                 | Salva nuova password (JSON o form)                                                                                                                                                       |
-| `POST`   | `/users`                                | No                 | Registrazione utente/rifugio (con rifugioDetails)                                                                                                                                        |
-| `GET`    | `/users/:id`                            | JWT                | Profilo utente                                                                                                                                                                           |
-| `PUT`    | `/users/:id`                            | JWT+admin          | Aggiorna utente                                                                                                                                                                          |
-| `DELETE` | `/users/:id`                            | JWT+admin          | Elimina utente                                                                                                                                                                           |
+| `POST`   | `/auth/register/hiker`                  | No                 | **NUOVO** — Registra un escursionista (groupLeader)                                                                                                                                      |
+| `POST`   | `/auth/register/refuge`                 | No                 | **NUOVO** — Registra un rifugio (campi struttura flat)                                                                                                                                   |
+| `POST`   | `/hikers`                               | No                 | Alias: registra escursionista                                                                                                                                                            |
+| `GET`    | `/hikers/:id`                           | JWT                | Profilo escursionista                                                                                                                                                                    |
+| `PUT`    | `/hikers/:id`                           | JWT                | Aggiorna profilo escursionista                                                                                                                                                           |
+| `POST`   | `/refuges`                              | No                 | Alias: registra rifugio                                                                                                                                                                  |
+| `GET`    | `/refuges`                              | No                 | **NUOVO** — Lista pubblica rifugi (per ricerca/mappa futura)                                                                                                                             |
+| `GET`    | `/refuges/:id`                          | JWT                | Profilo rifugio con metadati struttura                                                                                                                                                   |
+| `PUT`    | `/refuges/:id`                          | JWT                | Aggiorna metadati struttura                                                                                                                                                              |
+| `POST`   | `/admin/users`                          | JWT + admin        | **NUOVO** — Crea nuovo admin                                                                                                                                                             |
+| `GET`    | `/admin/users`                          | JWT + admin        | Lista tutti gli utenti                                                                                                                                                                   |
+| `GET`    | `/admin/users/:id`                      | JWT + admin        | Dettaglio qualsiasi utente                                                                                                                                                               |
+| `PUT`    | `/admin/users/:id`                      | JWT + admin        | Aggiorna utente (incluso role e tutti i campi rifugio)                                                                                                                                   |
+| `DELETE` | `/admin/users/:id`                      | JWT + admin        | Elimina utente                                                                                                                                                                           |
+| `POST`   | `/users` _(deprecato)_                  | No                 | Shim retro-compatibile: smista a hiker/refuge in base a `role` nel body                                                                                                                  |
+| `GET`    | `/users/:id` _(alias)_                  | JWT                | Alias: ritorna qualsiasi utente (compat client mobile pre-refactor)                                                                                                                      |
 | `POST`   | `/api/v1/sessions`                      | JWT                | Crea sessione (con GPX stats + estimatedPoints)                                                                                                                                          |
 | `GET`    | `/api/v1/sessions/my`                   | JWT                | Le mie sessioni (populate creator + participants)                                                                                                                                        |
 | `GET`    | `/api/v1/sessions/stats?year=YYYY`      | JWT                | **NUOVO** — Statistiche aggregate annuali per "Le Mie Attività" (totalActivities, totalDistanceKm, totalElevationGainM, totalPoints, monthlyActivityCount[12], monthlyAvgDifficulty[12]) |
@@ -255,7 +272,24 @@ TsmNavHost:
 
 ---
 
-## 5. Bug Risolti nel Sprint 1
+## 5. Refactor & Bug Risolti nel Sprint 1
+
+### Refactor 2026-05 — Schema User → Discriminator Mongoose
+
+| Area | Prima | Dopo |
+|------|-------|------|
+| **Modelli** | 1 modello `User` monolitico con campo `role` e subdocument opzionale `rifugioDetails` | 4 file: `user.js` (base) + `hiker.js`/`refuge.js`/`admin.js` (discriminator); campi rifugio FLAT |
+| **Routes** | 1 file `userRoutes.js` per tutto | 3 file role-specific: `hikerRoutes.js`, `refugeRoutes.js`, `adminRoutes.js` + alias semantici `/auth/register/{hiker,refuge}` |
+| **Services** | 1 file `userService.js` con switch interno sul ruolo | 3 file: `hikerService.js`, `refugeService.js`, `adminService.js` |
+| **Collection MongoDB** | `users` | `users` (invariata — discriminator usano una sola collection) |
+| **Login + JWT + populate** | OK | OK invariato (nessuna migrazione dati) |
+| **Mobile DTO `RegisterRifugioRequest`** | Annidato `{rifugioDetails: {...}}` + campo `role` | Flat, no campo `role` |
+| **Mobile endpoint** | `POST /users` per entrambi | `POST /auth/register/hiker` e `POST /auth/register/refuge` |
+| **Compat backward** | — | `POST /users` mantenuto come shim deprecato che smista in base a `role`; `GET /users/:id` mantenuto come alias |
+
+**Motivazione**: separazione dei concerns, schema più snelli per ruolo, route più scopribili in Swagger, predisposizione per estensioni future role-specific (Hiker: saldoSc/badges; Admin: permissions/audit).
+
+### Bug Risolti durante lo Sprint
 
 | Bug                                                | Root Cause                                                           | Fix                                                                                            |
 | -------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -272,31 +306,46 @@ TsmNavHost:
 
 ## 6. Struttura File Corrente
 
-### Backend
+### Backend — post-refactor 2026-05 (discriminator Mongoose)
 
 ```
 backend/src/
-├── app.js                          → Express, CORS, routes: /users /auth /api/v1/sessions /weather
+├── app.js                          → Express, CORS, normalizzazione path,
+│                                     routes: /auth /hikers /refuges /admin
+│                                            /api/v1/sessions /weather
+│                                     + shim deprecato /users
 ├── server.js                       → MongoDB connect :3000
 ├── middleware/
 │   ├── authMiddleware.js           → JWT Bearer → req.user
 │   ├── authorizationMiddleware.js  → requireRoles(...)
 │   └── errorMiddleware.js
-├── models/
-│   ├── user.js                     → +passwordResetToken/Expires, +rifugioDetails
-│   ├── hikeSession.js              → +meetingDate/Time, +gpxStats.elevationProfile/estimatedPoints
-│   └── location.js                 → NUOVO: town/poi, GeoJSON 2dsphere, forecasts slots3h/24h
-├── routes/
-│   ├── authRoutes.js               → login, verify, forgot-password, reset-password
-│   ├── userRoutes.js               → CRUD /users
-│   ├── hikeSessionRoutes.js        → sessioni: create/join/leave/delete/status/update
-│   └── weatherRoutes.js            → NUOVO: locations/nearby/search, forecast/:id
-└── services/
-    ├── authService.js              → +forgotPassword, +resetPassword (form HTML + JSON)
-    ├── userService.js              → +rifugioDetails passthrough
-    ├── hikeSessionService.js       → +leaveSession, +updateSessionDetails (populate fix), codice TSM-XXXX
-    ├── emailService.js             → +sendPasswordResetEmail, +sendMailWithRetry (backoff 3x)
-    └── weatherService.js           → NUOVO: TINIA API, fetchVenues, findNearbyVenues, getLocationForecast
+├── models/                         → ⚠️ REFACTOR 2026-05: discriminator pattern
+│   ├── user.js                     → schema BASE con discriminatorKey: "role"
+│   ├── hiker.js                    → NUOVO: discriminator groupLeader
+│   ├── refuge.js                   → NUOVO: discriminator rifugio (campi flat)
+│   ├── admin.js                    → NUOVO: discriminator admin
+│   ├── hikeSession.js              → invariato (compatibile con discriminator User)
+│   └── location.js                 → modulo meteo (town/poi, GeoJSON 2dsphere)
+├── routes/                         → ⚠️ REFACTOR 2026-05: route per ruolo
+│   ├── authRoutes.js               → login, verify, forgot/reset-password,
+│   │                                 + register/hiker, register/refuge (alias)
+│   ├── hikerRoutes.js              → NUOVO: POST/GET/PUT /hikers
+│   ├── refugeRoutes.js             → NUOVO: POST/GET/PUT /refuges + lista pubblica
+│   ├── adminRoutes.js              → NUOVO: CRUD /admin/users (admin-only)
+│   ├── hikeSessionRoutes.js        → sessioni invariato
+│   └── weatherRoutes.js            → meteo invariato
+└── services/                       → ⚠️ REFACTOR 2026-05: services per ruolo
+    ├── authService.js              → login, verify email, forgot/reset password
+    ├── hikerService.js             → NUOVO: createHiker, getHikerById, updateHiker
+    ├── refugeService.js            → NUOVO: createRefuge, getRefugeById, listRefuges, updateRefuge
+    ├── adminService.js             → NUOVO: createAdmin, listAllUsers, get/update/deleteAnyUser
+    ├── hikeSessionService.js       → sessioni: createSession, joinSession, ...
+    ├── emailService.js             → Brevo HTTP API (no più SMTP)
+    └── weatherService.js           → TINIA API, fetchVenues, findNearbyVenues, getLocationForecast
+
+→ rimossi:
+   • routes/userRoutes.js  (sostituito da hiker/refuge/admin)
+   • services/userService.js (sostituito da hiker/refuge/admin)
 ```
 
 ### Mobile

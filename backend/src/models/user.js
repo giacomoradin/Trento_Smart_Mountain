@@ -1,32 +1,37 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+/**
+ * Schema BASE per tutti gli utenti del sistema.
+ *
+ * Usa il pattern Mongoose discriminator: una sola collection MongoDB (`users`)
+ * contiene documenti di tipi diversi distinti dal campo `role`. Ogni ruolo
+ * specifico aggiunge i propri campi tramite il discriminatore:
+ *   - Hiker  (role: "groupLeader") → models/hiker.js
+ *   - Refuge (role: "rifugio")      → models/refuge.js
+ *   - Admin  (role: "admin")        → models/admin.js
+ *
+ * Vantaggi del discriminator vs collection separate:
+ *  - Login, populate (HikeSession.creatorId), JWT auth restano semplici
+ *    (una sola query, una sola collection da cercare)
+ *  - Nessuna migrazione dati dagli utenti esistenti
+ *  - Ogni schema specifico contiene solo i campi rilevanti per quel ruolo
+ *    (no `rifugioDetails: null` per gli escursionisti)
+ */
 const userSchema = new Schema(
   {
     username: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
     passwordHash: { type: String, required: true },
-    role: {
-      type: String,
-      enum: ["groupLeader", "rifugio", "admin"],
-      default: "groupLeader",
-    },
     isVerified: { type: Boolean, default: false },
     verificationToken: { type: String },
     passwordResetToken: { type: String },
     passwordResetExpires: { type: Date },
-    rifugioDetails: {
-      rifugioName: { type: String },
-      caiCode: { type: String },
-      quota: { type: Number },
-      posti: { type: Number },
-      coordinates: { type: String },
-    },
+
     /**
-     * Ruoli per-sessione dell'utente.
-     * Aggiornato da hikeSessionService alla creazione/join di ogni sessione.
-     * Usato per la futura dashboard gamification e il controllo OCL
-     * "una sola sessione ACTIVE per utente".
+     * Ruoli per-sessione dell'utente (popolati da hikeSessionService).
+     * Mantenuti nello schema base perché un utente di qualunque tipo
+     * (escursionista, rifugio admin) può creare/partecipare a sessioni.
      */
     sessionRoles: [
       {
@@ -35,21 +40,25 @@ const userSchema = new Schema(
         createdBy: { type: Schema.Types.ObjectId, ref: "User" },
       },
     ],
+
     createdAt: { type: Date, default: Date.now },
   },
   {
-    // Abilita l'inclusione dei virtuals quando converti in JSON/Object
+    // Il campo `role` distingue i discriminatori (Hiker/Refuge/Admin)
+    discriminatorKey: "role",
+    // Tutti i sotto-tipi finiscono nella stessa collection "users"
+    collection: "users",
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   },
 );
 
-// VIRTUAL POPULATE: Permette di fare User.find().populate('mySessions')
-// Senza salvare nulla fisicamente nel documento User.
+// Virtual populate: User.find().populate('mySessions')
 userSchema.virtual("mySessions", {
-  ref: "HikeSession", // Modello target
-  localField: "_id", // Campo in User
-  foreignField: "participants.userId", // Campo in HikeSession
+  ref: "HikeSession",
+  localField: "_id",
+  foreignField: "participants.userId",
 });
 
-export default mongoose.model("User", userSchema);
+const User = mongoose.model("User", userSchema);
+export default User;

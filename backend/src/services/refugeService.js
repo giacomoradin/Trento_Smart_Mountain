@@ -132,9 +132,16 @@ export const listRefuges = async (req, res) => {
 export const updateRefuge = async (req, res) => {
   /*
      #swagger.tags = ['Refuges']
-     #swagger.description = 'Aggiorna i metadati di un rifugio.'
+     #swagger.description = 'Aggiorna i metadati di un rifugio (solo self o admin).'
   */
   try {
+    // Authorization: solo il proprietario o un admin può modificare un rifugio.
+    const isSelf = req.user?.userId?.toString() === req.params.id;
+    const isAdmin = req.user?.role === "admin";
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ message: "Non sei autorizzato a modificare questo profilo." });
+    }
+
     const allowedUpdates = [
       "username",
       "email",

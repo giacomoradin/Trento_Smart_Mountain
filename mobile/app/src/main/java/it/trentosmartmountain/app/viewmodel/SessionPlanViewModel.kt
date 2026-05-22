@@ -280,12 +280,12 @@ class SessionPlanViewModel : ViewModel() {
             "yyyy-MM-dd'T'HH:mm:ssXXX",
         )
         for (fmt in formats) {
-            runCatching {
-                val sdf = java.text.SimpleDateFormat(fmt, java.util.Locale.US).apply {
+            val parsed = runCatching {
+                java.text.SimpleDateFormat(fmt, java.util.Locale.US).apply {
                     timeZone = java.util.TimeZone.getTimeZone("UTC")
-                }
-                return sdf.parse(s)?.time
-            }
+                }.parse(s)?.time
+            }.getOrNull()
+            if (parsed != null) return parsed
         }
         return null
     }

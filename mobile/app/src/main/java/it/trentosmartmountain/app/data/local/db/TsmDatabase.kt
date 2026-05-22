@@ -12,7 +12,9 @@ import androidx.room.RoomDatabase
     CachedUserProfileEntity::class,
     CompletedActivityEntity::class,
   ],
-  version = 3,
+  // v4: aggiunti retry_count, last_retry_at_ms, remote_id per il sync incrementale
+  // (sync libere → POST /activities, sync sessioni → PATCH /complete).
+  version = 4,
   exportSchema = false,
 )
 abstract class TsmDatabase : RoomDatabase() {

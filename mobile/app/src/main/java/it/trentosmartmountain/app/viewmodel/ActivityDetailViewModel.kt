@@ -155,10 +155,17 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    /** Elimina l'attività dal Room locale e naviga via. */
+    /**
+     * Elimina l'attività da Room e, se è un'attività libera sincronizzata, anche dal backend.
+     * Per le sessioni di gruppo non tocca il server (la sessione appartiene anche agli altri).
+     */
     fun deleteActivity(onDeleted: () -> Unit) {
         val id = _uiState.value.activityId
         viewModelScope.launch {
+            val entity = dao.getById(id)
+            if (entity?.sessionId == null && entity?.remoteId != null) {
+                runCatching { TsmApiClient.service().deleteActivity(entity.remoteId) }
+            }
             dao.deleteById(id)
             onDeleted()
         }

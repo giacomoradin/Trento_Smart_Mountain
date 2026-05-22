@@ -215,6 +215,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         trackingStatus = TrackingStatus.IDLE,
         isAutoPaused = false,
         showStopConfirm = false,
+        shortActivityConfirm = false,
         trackGeoPoints = emptyList(),
         elapsedSeconds = 0,
         distanceMeters = 0.0,

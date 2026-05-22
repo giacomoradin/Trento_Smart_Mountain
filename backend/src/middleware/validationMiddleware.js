@@ -46,10 +46,10 @@ export const registerRefugeSchema = Joi.object({
   email: emailField.required(),
   password: passwordField.required(),
   rifugioName: Joi.string().min(2).max(120).trim().required(),
-  address: Joi.string().max(250).trim().allow(""),
-  altitudeMeters: Joi.number().integer().min(0).max(5000),
-  capacity: Joi.number().integer().min(1).max(2000),
-  phone: Joi.string().max(40).trim().allow(""),
+  caiCode: Joi.string().max(40).trim().allow("", null),
+  quota: Joi.number().integer().min(0).max(5000),
+  posti: Joi.number().integer().min(1).max(2000),
+  coordinates: Joi.string().max(100).trim().allow("", null),
 });
 
 export const forgotPasswordSchema = Joi.object({
@@ -118,9 +118,11 @@ export const updateSessionStatusSchema = Joi.object({
 });
 
 export const joinSessionSchema = Joi.object({
-  inviteCode: Joi.string().pattern(/^TSM-[A-F0-9]{4}$/).required(),
+  inviteCode: Joi.string().trim().uppercase().pattern(/^TSM-[A-F0-9]{4}$/).required(),
 });
 
+// Stats opzionali — usate in PATCH /sessions/:id/complete: il client può
+// completare una sessione anche senza metriche (fallback CAI server-side).
 const actualStatsSchema = Joi.object({
   movingSeconds: Joi.number().integer().min(0).max(7 * 24 * 3600),
   totalSeconds: Joi.number().integer().min(0).max(7 * 24 * 3600),
@@ -130,6 +132,13 @@ const actualStatsSchema = Joi.object({
   estimatedCalories: Joi.number().integer().min(0).max(50000),
   currentAltitudeM: Joi.number().integer().min(-500).max(10000),
 });
+
+// Stats obbligatorie — per le attività libere POST /activities la persistenza
+// senza metriche non ha senso (allinea con required del modello Mongoose).
+const actualStatsRequiredSchema = actualStatsSchema.fork(
+  ["movingSeconds", "totalSeconds", "distanceMeters", "elevationGainM"],
+  (s) => s.required(),
+);
 
 export const completeSessionSchema = Joi.object({
   actualStats: actualStatsSchema,
@@ -141,8 +150,8 @@ export const createActivitySchema = Joi.object({
   name: Joi.string().min(1).max(120).trim().required(),
   activityType: Joi.string().valid("hiking", "trail", "skitouring", "trekking").default("hiking"),
   startTimeMs: Joi.number().integer().min(0).required(),
-  endTimeMs: Joi.number().integer().min(0).required(),
-  actualStats: actualStatsSchema.required(),
+  endTimeMs: Joi.number().integer().min(0).greater(Joi.ref("startTimeMs")).required(),
+  actualStats: actualStatsRequiredSchema.required(),
   difficultyLevel: difficultyField,
   elevationProfile: Joi.array().items(Joi.number()).max(200),
 });

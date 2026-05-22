@@ -84,7 +84,7 @@ Il client mobile NON parla mai direttamente con Brevo, MongoDB o le API meteo. T
 
 - **Brute force**: rate limiter login + skip successful (gli errori contano, i success no).
 - **Account enumeration**: forgot-password risponde sempre 200 anche se l'email non esiste — evita di rivelare l'esistenza dell'account.
-- **Email verification**: account creato con `isEmailVerified=false`; login bloccato finché non confermato.
+- **Email verification**: account creato con `isVerified=false`; login bloccato finché non confermato.
 - **Token reset**: monouso, scadenza 1h, generato con `crypto.randomBytes(32)`.
 
 ### A08:2021 — Software and Data Integrity Failures

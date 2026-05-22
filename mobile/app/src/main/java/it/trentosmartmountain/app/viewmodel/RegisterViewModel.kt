@@ -93,7 +93,7 @@ class RegisterViewModel : ViewModel() {
     val passwordError =
       when {
         password.isEmpty() -> "Inserisci la password"
-        password.length < 6 -> "Minimo 6 caratteri"
+        password.length < 8 -> "Minimo 8 caratteri"
         else -> null
       }
 

@@ -114,12 +114,25 @@ router.get("/my", async (req, res) => {
   }
 });
 
-// GET /api/v1/sessions/:id — dettaglio singola sessione
+// GET /api/v1/sessions/:id — dettaglio singola sessione (solo partecipanti o admin)
 router.get("/:id", validate(idParamSchema, "params"), async (req, res) => {
   try {
     const session = await getSessionById(req.params.id);
     if (!session)
       return res.status(404).json({ error: "Sessione non trovata" });
+
+    // Restringi la lettura ai partecipanti (creator incluso) e agli admin.
+    // Evita che chiunque con un ObjectId valido possa leggere sessioni altrui.
+    const userId = req.user.userId.toString();
+    const isAdmin = req.user.role === "admin";
+    const creatorId = (session.creatorId?._id || session.creatorId)?.toString();
+    const isParticipant = (session.participants || []).some((p) => {
+      const pid = (p.userId?._id || p.userId)?.toString();
+      return pid === userId;
+    });
+    if (!isAdmin && creatorId !== userId && !isParticipant) {
+      return res.status(403).json({ error: "Non sei autorizzato a vedere questa sessione" });
+    }
     res.status(200).json(session);
   } catch (err) {
     res.status(400).json({ error: "ID non valido" });

@@ -50,6 +50,11 @@ interface CompletedActivityDao {
     @Query("DELETE FROM completed_activities WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    // Wipe completo della tabella. Usato al logout per evitare che un secondo
+    // utente sullo stesso device veda le attività dell'utente precedente.
+    @Query("DELETE FROM completed_activities")
+    suspend fun deleteAll()
+
     /** Conta le attività per mese (1-12) in un dato anno, sulla base di completed_at. */
     @Query("""
         SELECT strftime('%m', datetime(completed_at/1000, 'unixepoch')) AS month,

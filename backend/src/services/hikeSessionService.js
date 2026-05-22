@@ -1,5 +1,6 @@
 import HikeSession from "../models/hikeSession.js";
 import User from "../models/user.js";
+import { getCombinedActivityStats } from "./activityService.js";
 import crypto from "crypto";
 
 // Genera codice invito nel formato "TSM-XXXX" (4 hex uppercase)
@@ -141,15 +142,22 @@ export async function getActivityStats(userId, year) {
     const m = d.getMonth(); // 0-11
     monthlyCount[m]++;
     yearCount++;
-    totalDist += s.gpxStats?.distanceKm || 0;
-    totalElev += s.gpxStats?.elevationGainM || 0;
-    totalPoints += s.gpxStats?.estimatedPoints || 0;
+    // Preferisci sempre i dati REALI registrati dal client (actualStats);
+    // fallback alle stime CAI del GPX quando il client non li ha caricati.
+    const actualDistKm = s.actualStats?.distanceMeters != null
+      ? s.actualStats.distanceMeters / 1000.0
+      : s.gpxStats?.distanceKm || 0;
+    const actualElev = s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
+    const actualPts = s.actualStats?.finalPoints ?? s.gpxStats?.estimatedPoints ?? 0;
+    totalDist += actualDistKm;
+    totalElev += actualElev;
+    totalPoints += actualPts;
     const score = diffScore[s.routeDetails?.difficultyLevel] ?? 0.5;
     monthlyDiffSum[m] += score;
     monthlyDiffN[m]++;
   });
 
-  return {
+  const sessionStats = {
     year,
     totalActivities: yearCount,
     totalDistanceKm: Math.round(totalDist * 10) / 10,
@@ -160,6 +168,10 @@ export async function getActivityStats(userId, year) {
       monthlyDiffN[i] > 0 ? monthlyDiffSum[i] / monthlyDiffN[i] : 0,
     ),
   };
+
+  // Unifica con le attività libere (Activity collection): le card "Le Mie Attività"
+  // mostrano un totale che include sia le sessioni di gruppo che le escursioni personali.
+  return getCombinedActivityStats(userId, year, sessionStats);
 }
 
 // Recupera una sessione per ID
@@ -219,6 +231,45 @@ export async function updateSessionDetails(sessionId, userId, updates) {
     { path: "creatorId", select: "username email" },
     { path: "participants.userId", select: "username email" },
   ]);
+}
+
+/**
+ * Marca la sessione come COMPLETED e persiste le metriche reali registrate dal client.
+ *
+ * Accetta il payload opzionale `actualStats` (movingSeconds, totalSeconds, distanceMeters,
+ * elevationGainM, finalPoints, estimatedCalories, currentAltitudeM). Se assente, la
+ * sessione viene completata con la sola transizione di stato (fallback CAI sul client).
+ *
+ * Autorizzato sia per il creator che per i partecipanti — un utente che si è unito
+ * con codice invito deve poter chiudere il proprio tracking anche se il creator è offline.
+ */
+export async function completeSession(sessionId, userId, actualStats = null) {
+  const session = await HikeSession.findById(sessionId);
+  if (!session) throw new Error("SESSION_NOT_FOUND");
+
+  const isCreator = session.creatorId.toString() === userId.toString();
+  const isParticipant = session.participants.some(
+    (p) => p.userId.toString() === userId.toString(),
+  );
+  if (!isCreator && !isParticipant) throw new Error("FORBIDDEN");
+
+  session.status = "COMPLETED";
+  session.endTime = new Date();
+
+  if (actualStats && typeof actualStats === "object") {
+    session.actualStats = {
+      movingSeconds: actualStats.movingSeconds,
+      totalSeconds: actualStats.totalSeconds,
+      distanceMeters: actualStats.distanceMeters,
+      elevationGainM: actualStats.elevationGainM,
+      finalPoints: actualStats.finalPoints,
+      estimatedCalories: actualStats.estimatedCalories,
+      currentAltitudeM: actualStats.currentAltitudeM,
+    };
+  }
+
+  await session.save();
+  return session;
 }
 
 // Aggiorna lo stato della sessione (es. PLANNED → ACTIVE)

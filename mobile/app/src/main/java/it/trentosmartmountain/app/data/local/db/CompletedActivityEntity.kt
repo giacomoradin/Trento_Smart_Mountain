@@ -74,4 +74,17 @@ data class CompletedActivityEntity(
 
     @ColumnInfo(name = "completed_at", defaultValue = "0")
     val completedAt: Long = 0L,
+
+    // Contatore dei tentativi di sync falliti — usato da SyncManager per il backoff.
+    @ColumnInfo(name = "retry_count", defaultValue = "0")
+    val retryCount: Int = 0,
+
+    // Epoch ms dell'ultimo tentativo di sync (riuscito o fallito).
+    @ColumnInfo(name = "last_retry_at_ms", defaultValue = "0")
+    val lastRetryAtMs: Long = 0L,
+
+    // ID assegnato dal backend dopo il primo upload riuscito.
+    // Null finché non è stato sincronizzato almeno una volta.
+    @ColumnInfo(name = "remote_id")
+    val remoteId: String? = null,
 )

@@ -1,6 +1,9 @@
 package it.trentosmartmountain.app.data.remote
 
+import it.trentosmartmountain.app.data.remote.dto.ActivityResponse
 import it.trentosmartmountain.app.data.remote.dto.ApiMessageBody
+import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.ForgotPasswordRequest
 import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
@@ -112,6 +115,30 @@ interface TsmApiService {
     @Path("id") id: String,
     @Body body: UpdateSessionStatusRequest,
   ): Response<ApiMessageBody>
+
+  /**
+   * Marca la sessione COMPLETED e persiste le metriche reali del tracking.
+   * Usato da [RegistraViewModel.confirmStopTracking] al termine di una sessione live.
+   */
+  @PATCH("api/v1/sessions/{id}/complete")
+  suspend fun completeSession(
+    @Path("id") id: String,
+    @Body body: CompleteSessionRequest,
+  ): Response<ApiMessageBody>
+
+  // ── Activity (attività libere senza sessione di gruppo) ──
+
+  /** Crea una nuova attività libera sul server. Usato dal sync worker dopo il tracking. */
+  @POST("api/v1/activities")
+  suspend fun createActivity(@Body body: CreateActivityRequest): Response<ActivityResponse>
+
+  /** Lista delle attività libere dell'utente loggato (sync cloud → locale). */
+  @GET("api/v1/activities")
+  suspend fun getMyActivities(): Response<List<ActivityResponse>>
+
+  /** Elimina un'attività libera. Solo il proprietario è autorizzato (verificato lato server). */
+  @DELETE("api/v1/activities/{id}")
+  suspend fun deleteActivity(@Path("id") id: String): Response<ApiMessageBody>
 
   // ── Weather (implementazione di Marco via meteo.report / TINIA) ──
 

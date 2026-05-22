@@ -14,7 +14,11 @@ import it.trentosmartmountain.app.TsmApplication
 import it.trentosmartmountain.app.data.estimation.HikeEstimation
 import it.trentosmartmountain.app.data.local.db.CompletedActivityEntity
 import it.trentosmartmountain.app.data.remote.TsmApiClient
+import it.trentosmartmountain.app.data.remote.dto.ActualStats
+import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
+import it.trentosmartmountain.app.data.sync.SyncManager
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.service.ForegroundTrackingService
 import java.text.SimpleDateFormat
@@ -63,6 +67,13 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val activityNameDraft: String = "",
     /** true dopo che il salvataggio in Room è completato → mostra feedback all'utente. */
     val activitySaved: Boolean = false,
+    /**
+     * Mostrato quando l'utente termina un'attività libera (no sessionId) con
+     * distanza < 50m: chiede conferma esplicita ("vuoi salvarla comunque?")
+     * per evitare avvii accidentali silenziosi. Per le sessioni con sessionId
+     * NON viene mostrato (il backend è già stato avvisato della partenza).
+     */
+    val shortActivityConfirm: Boolean = false,
   )
 
   private val app = getApplication<Application>()
@@ -226,7 +237,27 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     }
   }
 
-  fun confirmStopTracking() {
+  fun confirmShortActivity() {
+    _uiState.update { it.copy(shortActivityConfirm = false) }
+    confirmStopTracking(force = true)
+  }
+
+  fun dismissShortActivity() {
+    _uiState.update { it.copy(shortActivityConfirm = false) }
+  }
+
+  /**
+   * Termina e salva il tracking. Per attività libere < 50m mostra prima il
+   * dialog di conferma; le sessioni di gruppo non hanno soglia minima.
+   */
+  fun confirmStopTracking(force: Boolean = false) {
+    val current = _uiState.value
+    val isFreeShort = current.activeSessionId == null && current.distanceMeters < 50.0
+    if (isFreeShort && !force) {
+      // Mostra dialog "Attività troppo corta". Hardware ancora attivo, può cancellare.
+      _uiState.update { it.copy(shortActivityConfirm = true, showStopConfirm = false) }
+      return
+    }
     stopHardware()
     val snapState = _uiState.value
 
@@ -247,21 +278,59 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       )
     }
 
-    // 2. Tutto il lavoro asincrono in sequenza:
-    //    a) PATCH backend (fire-and-forget, non blocca il salvataggio locale)
-    //    b) INSERT in Room (await — solo dopo mostra il Toast)
+    // Salva in Room e poi tenta il sync immediato. Se fallisce, SyncManager
+    // riproverà automaticamente con backoff incrementale.
     viewModelScope.launch {
-      val sessionId = snapState.activeSessionId
+      val savedId = saveCompletedActivity(snapState)
+      attemptImmediateSync(savedId, snapState)
+    }
+  }
+
+  private suspend fun attemptImmediateSync(localId: String, state: UiState) {
+    val dao = (app as TsmApplication).database.completedActivityDao()
+    val distKm = state.distanceMeters / 1000.0
+    val actualH = state.elapsedSeconds / 3600.0
+    val finalPts = HikeEstimation.finalPoints(distKm, state.elevationGainMeters, actualH)
+    val payload = ActualStats(
+      movingSeconds = state.elapsedSeconds,
+      totalSeconds = state.elapsedSeconds,
+      distanceMeters = state.distanceMeters,
+      elevationGainM = state.elevationGainMeters,
+      finalPoints = finalPts,
+      estimatedCalories = (70 * distKm * 0.85).toInt(),
+      currentAltitudeM = state.currentAltitudeMeters,
+    )
+
+    val sessionId = state.activeSessionId
+    runCatching {
       if (sessionId != null) {
-        runCatching {
-          TsmApiClient.service().updateSessionStatus(
-            sessionId,
-            UpdateSessionStatusRequest(status = "COMPLETED"),
-          )
+        val resp = TsmApiClient.service().completeSession(
+          sessionId,
+          CompleteSessionRequest(actualStats = payload),
+        )
+        if (resp.isSuccessful) {
+          dao.markSynced(localId, sessionId)
+        } else {
+          SyncManager.enqueueImmediate(app)
+        }
+      } else {
+        val req = CreateActivityRequest(
+          name = state.activityNameDraft.trim().ifBlank { "Escursione" },
+          activityType = "hiking",
+          startTimeMs = if (state.trackStartTimeMs > 0) state.trackStartTimeMs else System.currentTimeMillis() - state.elapsedSeconds * 1000L,
+          endTimeMs = System.currentTimeMillis(),
+          actualStats = payload,
+        )
+        val resp = TsmApiClient.service().createActivity(req)
+        if (resp.isSuccessful) {
+          val remoteId = resp.body()?._id
+          dao.markSynced(localId, remoteId)
+        } else {
+          SyncManager.enqueueImmediate(app)
         }
       }
-      // saveCompletedActivity imposta activitySaved = true dopo l'insert Room confermato
-      saveCompletedActivity(snapState)
+    }.onFailure {
+      SyncManager.enqueueImmediate(app)
     }
   }
 
@@ -270,14 +339,10 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   }
 
   /**
-   * Persiste il tracciato e le metriche in Room al termine di ogni sessione GPS.
-   * Le attività salvate qui appariranno nella schermata "Le Mie Attività" (HomeScreen).
-   *
-   * Il tracciato [GeoPoint] viene serializzato come JSON [[lat, lon, alt], ...].
-   * I punti vengono campionati a max 200 per non superare i limiti di SQLite (~1MB per riga).
+   * Salva il tracciato GPS e le metriche in Room al termine del tracking.
+   * I punti vengono campionati a max 200 per non superare i limiti di SQLite.
    */
-  private suspend fun saveCompletedActivity(state: UiState) {
-    if (state.distanceMeters < 50.0) return // ignora avvii accidentali < 50m
+  private suspend fun saveCompletedActivity(state: UiState): String {
     val dao = (app as TsmApplication).database.completedActivityDao()
     val gson = Gson()
 
@@ -300,9 +365,10 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     // Usa il nome che l'utente ha scelto nel dialog; fallback su default se vuoto
     val dateSuffix = SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date(now))
     val activityName = state.activityNameDraft.trim().ifBlank { "Escursione – $dateSuffix" }
+    val newId = UUID.randomUUID().toString()
 
     dao.upsert(CompletedActivityEntity(
-      id = UUID.randomUUID().toString(),
+      id = newId,
       sessionId = state.activeSessionId,
       name = activityName,
       activityType = "hiking",
@@ -321,8 +387,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       completedAt = now,
     ))
 
-    // Insert Room confermato → ora il Toast ha senso + il Flow in ActivityListViewModel emette
     _uiState.update { it.copy(activitySaved = true) }
+    return newId
   }
 
   fun centerOnUser() {

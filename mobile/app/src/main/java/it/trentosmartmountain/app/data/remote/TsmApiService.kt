@@ -1,6 +1,7 @@
 package it.trentosmartmountain.app.data.remote
 
 import it.trentosmartmountain.app.data.remote.dto.ActivityResponse
+import it.trentosmartmountain.app.data.remote.dto.ActivityStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.ApiMessageBody
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
@@ -135,6 +136,10 @@ interface TsmApiService {
   /** Lista delle attività libere dell'utente loggato (sync cloud → locale). */
   @GET("api/v1/activities")
   suspend fun getMyActivities(): Response<List<ActivityResponse>>
+
+  /** Statistiche aggregate annuali/mensili per l'utente loggato. */
+  @GET("api/v1/activities/stats")
+  suspend fun getActivityStats(@Query("year") year: Int): Response<ActivityStatsResponse>
 
   /** Elimina un'attività libera. Solo il proprietario è autorizzato (verificato lato server). */
   @DELETE("api/v1/activities/{id}")

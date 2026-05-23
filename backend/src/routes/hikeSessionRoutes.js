@@ -23,6 +23,7 @@ import {
   joinSession,
   leaveSession,
   completeSession,
+  getActivityStats,
 } from "../services/hikeSessionService.js";
 
 const router = express.Router();
@@ -91,8 +92,6 @@ router.post("/join", validate(joinSessionSchema), async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
-=======
 // GET /api/v1/sessions/stats — statistiche aggregate attività completate (per anno)
 // Query: ?year=2026 (default: anno corrente)
 router.get("/stats", validate(statsQuerySchema, "query"), async (req, res) => {
@@ -105,7 +104,6 @@ router.get("/stats", validate(statsQuerySchema, "query"), async (req, res) => {
   }
 });
 
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
 // GET /api/v1/sessions/my — sessioni dell'utente loggato
 router.get("/my", async (req, res) => {
   try {

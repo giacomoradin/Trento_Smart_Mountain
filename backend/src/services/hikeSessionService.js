@@ -96,9 +96,6 @@ export async function joinSession(userId, inviteCode) {
     },
   });
 
-<<<<<<< HEAD
-  return session;
-=======
   // Populate simmetrico (come getSessionById) per evitare che il client Kotlin
   // riceva ObjectId raw nei campi ref → potenziale Gson IllegalStateException.
   return session.populate([
@@ -175,7 +172,6 @@ export async function getActivityStats(userId, year) {
   // Unifica con le attività libere (Activity collection): le card "Le Mie Attività"
   // mostrano un totale che include sia le sessioni di gruppo che le escursioni personali.
   return getCombinedActivityStats(userId, year, sessionStats);
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
 }
 
 // Recupera una sessione per ID

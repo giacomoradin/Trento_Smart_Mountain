@@ -27,20 +27,15 @@ const userSchema = new Schema(
     verificationToken: { type: String },
     passwordResetToken: { type: String },
     passwordResetExpires: { type: Date },
-<<<<<<< HEAD
-    rifugioDetails: {
-      rifugioName: { type: String },
-      caiCode: { type: String },
-      quota: { type: Number },
-      posti: { type: Number },
-      coordinates: { type: String },
-    },
-=======
 
     /**
      * Ruoli per-sessione dell'utente (popolati da hikeSessionService).
      * Mantenuti nello schema base perché un utente di qualunque tipo
      * (escursionista, rifugio admin) può creare/partecipare a sessioni.
+     *
+     * NOTA: i campi rifugioDetails (rifugioName, caiCode, quota, posti, coordinates)
+     * sono stati spostati nel discriminator Refuge (vedi models/refuge.js) dopo il
+     * refactor 2026-05 split User → Hiker/Refuge/Admin. Non vanno reintrodotti qui.
      */
     sessionRoles: [
       {
@@ -50,7 +45,6 @@ const userSchema = new Schema(
       },
     ],
 
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
     createdAt: { type: Date, default: Date.now },
   },
   {

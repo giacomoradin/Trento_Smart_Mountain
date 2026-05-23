@@ -3,6 +3,10 @@ package it.trentosmartmountain.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.estimation.HikeEstimation
+import it.trentosmartmountain.app.data.local.db.CompletedActivityEntity
 import it.trentosmartmountain.app.data.location.HikeTrackingEngine
 import it.trentosmartmountain.app.data.location.LocationSnapshot
 import it.trentosmartmountain.app.data.location.StationaryDetector
@@ -14,8 +18,8 @@ import it.trentosmartmountain.app.data.remote.dto.ActualStats
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
-import it.trentosmartmountain.app.data.sync.SyncManager
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
+import it.trentosmartmountain.app.data.sync.SyncManager
 import it.trentosmartmountain.app.service.ForegroundTrackingService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,6 +30,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 
 /**
  * Logica della tab **Registra**: permessi GPS, tracking escursione, metriche e traccia su mappa OSMdroid.
@@ -53,8 +61,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val showStopConfirm: Boolean = false,
     /** Sessione attiva collegata al tracking (null = sessione libera). */
     val activeSessionId: String? = null,
-<<<<<<< HEAD
-=======
     /** Epoch ms di inizio tracking (per salvare start time su Room). */
     val trackStartTimeMs: Long = 0L,
     /** Nome bozza dell'attività che l'utente può modificare nel dialog di salvataggio. */
@@ -68,7 +74,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
      * NON viene mostrato (il backend è già stato avvisato della partenza).
      */
     val shortActivityConfirm: Boolean = false,
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
   )
 
   private val app = getApplication<Application>()
@@ -157,6 +162,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     ForegroundTrackingService.start(app)
     stationaryDetector.start()
     startTimer()
+    val now = System.currentTimeMillis()
     _uiState.update {
       it.copy(
         trackingStatus = TrackingStatus.RECORDING,
@@ -165,6 +171,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         distanceMeters = 0.0,
         elevationGainMeters = 0,
         trackGeoPoints = emptyList(),
+        trackStartTimeMs = now,
       )
     }
     lastSnapshot?.let { applyLocation(it) }
@@ -192,9 +199,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     _uiState.update { it.copy(showStopConfirm = false) }
   }
 
-<<<<<<< HEAD
-  fun confirmStopTracking() {
-=======
   /**
    * Scarta il tracciato senza salvare e termina il tracking.
    * Usato dal bottone "Scarta" nel dialog di salvataggio.
@@ -219,7 +223,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   }
 
   private fun stopHardware() {
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
     trackingEngine.stop()
     stationaryDetector.stop()
     ForegroundTrackingService.stop(app)
@@ -228,21 +231,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     if (_uiState.value.hasLocationPermission) {
       locationTracker.start()
     }
-<<<<<<< HEAD
-    // Se il tracking era collegato a una sessione, segnala COMPLETED sul backend.
-    // (in futuro: salvataggio activity in Home → "LE MIE ATTIVITÀ" come da requisito utente)
-    val sessionId = _uiState.value.activeSessionId
-    if (sessionId != null) {
-      viewModelScope.launch {
-        runCatching {
-          TsmApiClient.service().updateSessionStatus(
-            sessionId,
-            UpdateSessionStatusRequest(status = "COMPLETED"),
-          )
-        }
-      }
-    }
-=======
   }
 
   fun confirmShortActivity() {
@@ -270,7 +258,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val snapState = _uiState.value
 
     // 1. Resetta subito lo state UI (nasconde i controlli di tracking)
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
     _uiState.update {
       it.copy(
         trackingStatus = TrackingStatus.IDLE,
@@ -283,8 +270,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         activeSessionId = null,
       )
     }
-<<<<<<< HEAD
-=======
 
     // Salva in Room e poi tenta il sync immediato. Se fallisce, SyncManager
     // riproverà automaticamente con backoff incrementale.
@@ -397,7 +382,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
 
     _uiState.update { it.copy(activitySaved = true) }
     return newId
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
   }
 
   fun centerOnUser() {

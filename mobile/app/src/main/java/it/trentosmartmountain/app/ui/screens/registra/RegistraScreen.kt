@@ -5,9 +5,17 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -23,14 +31,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.location.TrackingStatus
+import it.trentosmartmountain.app.ui.theme.TsmPrimary
+import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.viewmodel.RegistraViewModel
 
 /**
@@ -227,8 +240,6 @@ fun RegistraScreen(
     )
   }
 
-<<<<<<< HEAD
-=======
   // ── Dialog "Attività troppo corta" — chiede conferma per attività libere < 50m ──
   if (uiState.shortActivityConfirm) {
     AlertDialog(
@@ -257,7 +268,6 @@ fun RegistraScreen(
   }
 
   // ── Dialog "Salva Attività" — sostituisce il vecchio stop confirm ──
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
   if (uiState.showStopConfirm) {
     AlertDialog(
       onDismissRequest = viewModel::dismissStopConfirm,

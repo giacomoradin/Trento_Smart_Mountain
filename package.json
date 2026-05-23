@@ -4,12 +4,13 @@
   "description": "Trento Smart Mountain Backend - Modular Monolith",
   "main": "backend/src/server.js",
   "type": "module",
-  "scripts": {
+   "scripts": {
     "start": "node backend/src/server.js",
     "adb:reverse": "node scripts/adb-reverse.mjs",
     "dev": "node scripts/adb-reverse.mjs && nodemon backend/src/server.js",
     "dev:no-adb": "nodemon backend/src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage --verbose",
+    "test:watch": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "swagger": "node swagger.js"
   },
   "keywords": [],
@@ -33,7 +34,14 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/supertest": "^7.2.0",
+    "cross-env": "^10.1.0",
+    "jest": "^30.4.2",
+    "mongodb-memory-server": "^10.4.3",
     "nodemon": "^3.1.0",
+    "supertest": "^7.2.2",
     "swagger-autogen": "^2.23.7"
   }
+ 
 }

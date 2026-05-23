@@ -334,14 +334,31 @@ fun SessionDetailScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    val estDurationLabel = if (dist != null && elev != null) {
-                        it.trentosmartmountain.app.data.estimation.HikeEstimation.formatHours(
-                            it.trentosmartmountain.app.data.estimation.HikeEstimation.caiTimeHours(dist, elev),
+                    // Priorità durata: actualStats.movingSeconds (post-completamento) →
+                    //                  gpxStats.gpxDurationSec (file con timestamp) →
+                    //                  stima CAI sintetica
+                    val actualSec = session.actualStats?.movingSeconds
+                    val gpxSec = session.gpxStats?.gpxDurationSec
+                    val (durationLabel, durationSource) = when {
+                        actualSec != null -> Pair(
+                            it.trentosmartmountain.app.data.estimation.HikeEstimation.formatHours(actualSec / 3600.0),
+                            "REALE",
                         )
-                    } else "—"
+                        gpxSec != null -> Pair(
+                            it.trentosmartmountain.app.data.estimation.HikeEstimation.formatHours(gpxSec / 3600.0),
+                            "GPX",
+                        )
+                        dist != null && elev != null -> Pair(
+                            it.trentosmartmountain.app.data.estimation.HikeEstimation.formatHours(
+                                it.trentosmartmountain.app.data.estimation.HikeEstimation.caiTimeHours(dist, elev),
+                            ),
+                            "CAI",
+                        )
+                        else -> Pair("—", "CAI")
+                    }
                     StatCell("DISTANZA", dist?.let { "%.1f km".format(it) } ?: "—", TsmBorder, Modifier.weight(1f))
                     StatCell("DISLIVELLO", elev?.let { "+$it m" } ?: "—", TsmAccent, Modifier.weight(1f))
-                    StatCell("DURATA CAI", estDurationLabel, TsmPrimary, Modifier.weight(1f))
+                    StatCell("DURATA $durationSource", durationLabel, TsmPrimary, Modifier.weight(1f))
                 }
 
                 if (dist != null && elev != null && dist > 0.0) {

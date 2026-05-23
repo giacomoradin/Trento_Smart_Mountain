@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import swaggerUI from "swagger-ui-express";
 import { readFileSync } from "fs";
 
@@ -9,6 +8,7 @@ import hikerRoutes from "./routes/hikerRoutes.js";
 import refugeRoutes from "./routes/refugeRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import hikeSessionRoutes from "./routes/hikeSessionRoutes.js";
+import activityRoutes from "./routes/activityRoutes.js";
 import weatherRoutes from "./routes/weatherRoutes.js";
 
 // IMPORTANTE: importa i discriminator models per registrarli con Mongoose
@@ -18,12 +18,31 @@ import "./models/refuge.js";
 import "./models/admin.js";
 
 import { globalErrorHandler, notFoundHandler } from "./middleware/errorMiddleware.js";
+import {
+  helmetMiddleware,
+  mongoSanitizeMiddleware,
+  hppMiddleware,
+  corsOptions,
+  requestSizeLimit,
+} from "./middleware/securityMiddleware.js";
+import { globalLimiter, authenticatedLimiter, writeLimiter } from "./middleware/rateLimitMiddleware.js";
 
 const swaggerDocument = JSON.parse(
   readFileSync(new URL("../../swagger-output.json", import.meta.url)),
 );
 
 const app = express();
+
+// L'app gira dietro al proxy di Render → fidati di X-Forwarded-For per
+// avere l'IP del client (altrimenti rate limiter vede sempre l'IP del proxy).
+// Limitato al numero di hop reale per evitare spoofing dell'header.
+app.set("trust proxy", 1);
+
+// ─── Security middleware (devono essere il PRIMO layer) ──────────────────────
+//   Ordine: helmet (header) → sanitize NoSQL → HPP (query) → CORS → rate limit
+//   Tutti applicati globalmente prima di qualsiasi parser/route.
+app.use(helmetMiddleware);
+app.use(corsOptions);
 
 // Normalizza il path collassando slash multipli (es. //auth/verify → /auth/verify).
 // Difesa contro link email con BASE_URL trailing slash.
@@ -36,9 +55,19 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+// Body parser con limite di size (anti-DoS payload bomb)
+app.use(express.json({ limit: requestSizeLimit }));
+app.use(express.urlencoded({ extended: true, limit: requestSizeLimit }));
+
+// Sanitization NoSQL e HPP devono venire DOPO i body parser
+app.use(mongoSanitizeMiddleware);
+app.use(hppMiddleware);
+
+// Rate limiter globale per IP (applica a tutte le rotte, anche pubbliche)
+app.use(globalLimiter);
+
+// Limite scritture (POST/PATCH/DELETE) per utente — più stretto del read rate
+app.use(writeLimiter);
 
 // Swagger UI pubblico per l'esplorazione delle API
 app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
@@ -49,6 +78,7 @@ app.use("/hikers", hikerRoutes);
 app.use("/refuges", refugeRoutes);
 app.use("/admin", adminRoutes);
 app.use("/api/v1/sessions", hikeSessionRoutes);
+app.use("/api/v1/activities", activityRoutes);
 app.use("/weather", weatherRoutes);
 
 // ─── Compatibility shim: /users (deprecato, mantenuto per backward-compat) ───

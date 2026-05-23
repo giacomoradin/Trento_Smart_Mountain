@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,18 +85,23 @@ fun ActivityListScreen(
     ),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-    val years = (currentYear downTo currentYear - 4).toList()
+    val years = remember(currentYear) { (currentYear downTo currentYear - 4).toList() }
+    // initialPage 0 = anno corrente (years è ordinato dal più recente al più vecchio).
     val pagerState = rememberPagerState(initialPage = 0) { years.size }
 
     // Refresh esplicito ogni volta che la schermata entra in composizione
     // (es. utente torna da RegistraScreen dopo aver salvato un'attività).
     LaunchedEffect(Unit) { viewModel.onTabEntered() }
 
-    // Quando swipe card, aggiorna anno selezionato e carica stats
-    LaunchedEffect(pagerState) {
+    // Quando swipe card, aggiorna anno selezionato e carica stats. snapshotFlow su pagerState
+    // emette anche al primo collect (con initialPage = 0), allineando subito il selectedYear
+    // del ViewModel al currentYear visibile — evita il flicker iniziale di YearlyStatsCard.
+    LaunchedEffect(pagerState, years) {
         snapshotFlow { pagerState.currentPage }.collect { page ->
-            viewModel.onYearChanged(years[page])
+            val targetYear = years.getOrNull(page) ?: currentYear
+            viewModel.onYearChanged(targetYear)
         }
     }
 
@@ -105,17 +111,48 @@ fun ActivityListScreen(
     ) {
         // ── Header ──
         item {
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                Text(
-                    "LE MIE ATTIVITÀ",
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
-                    color = Color.Gray,
-                )
-                Text(
-                    "${uiState.filteredActivities.size} escursioni",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White,
-                )
+            Row(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "LE MIE ATTIVITÀ",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
+                        color = Color.Gray,
+                    )
+                    Text(
+                        "${uiState.filteredActivities.size} escursioni",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                    )
+                }
+                val unsyncedCount = uiState.activities.count { !it.isSynced }
+                if (unsyncedCount > 0) {
+                    Surface(
+                        color = Color(0xFFFF9800).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.clickable {
+                            it.trentosmartmountain.app.data.sync.SyncManager.enqueueImmediate(
+                                (context.applicationContext as android.app.Application),
+                            )
+                            viewModel.refreshFromNetwork()
+                        },
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(Icons.Outlined.Sync, null, tint = Color(0xFFFF9800), modifier = Modifier.size(14.dp))
+                            Text(
+                                "Risincronizza ($unsyncedCount)",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFFFF9800),
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -233,7 +270,16 @@ fun ActivityListScreen(
                 }
             }
         } else if (uiState.filteredActivities.isEmpty()) {
-            item { EmptyActivitiesState() }
+            item {
+                // Empty state contestuale: se ci sono attività totali ma il filtro
+                // anno/mese non matcha → messaggio specifico; altrimenti onboarding.
+                val hasAnyActivity = uiState.activities.isNotEmpty()
+                if (hasAnyActivity) {
+                    EmptyPeriodState(year = uiState.selectedYear, month = uiState.selectedMonth)
+                } else {
+                    EmptyActivitiesState()
+                }
+            }
         } else {
             items(uiState.filteredActivities, key = { it.id }) { activity ->
                 ActivityListItem(
@@ -242,6 +288,23 @@ fun ActivityListScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun EmptyPeriodState(year: Int, month: Int?) {
+    val monthName = month?.let {
+        java.text.DateFormatSymbols(java.util.Locale.ITALIAN).months.getOrNull(it)
+            ?.replaceFirstChar { c -> c.uppercase() }
+    }
+    val label = if (monthName != null) "Nessuna attività in $monthName $year" else "Nessuna attività nel $year"
+    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Outlined.DirectionsWalk, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(label, style = MaterialTheme.typography.titleSmall, color = Color.White)
+            Text("Scorri sulle card sopra per cambiare periodo.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         }
     }
 }
@@ -273,7 +336,15 @@ private fun YearlyStatsCard(
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = TsmAccent,
                 )
-                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = TsmAccent)
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = TsmAccent)
+                } else if (totalActivities == 0) {
+                    Text(
+                        "nessuna attività",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(14.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -297,6 +368,17 @@ private fun StatCell(label: String, value: String, valueColor: Color) {
 
 // ── Monthly Bar Chart (Canvas) ──
 
+/**
+ * Bar chart mensile con barre cliccabili (filtro mese) e label conteggio in cima.
+ *
+ * Fix rispetto alla versione precedente:
+ *  - Top padding di 14dp dentro al canvas → il testo "count" non viene clippato
+ *    quando la barra raggiunge il maxCount (prima usciva fuori dal canvas).
+ *  - Hit-test cliccabile = barra + label mese (overlay Row), prima il click sulla
+ *    barra non era catturato (modifier .clickable {} con lambda vuota).
+ *  - Empty state: se tutti i count sono 0, mostriamo placeholder grigio coerente
+ *    invece di un canvas vuoto.
+ */
 @Composable
 private fun MonthlyBarChart(
     counts: List<Int>,
@@ -304,52 +386,71 @@ private fun MonthlyBarChart(
     selectedMonth: Int?,
     onMonthClick: (Int) -> Unit,
 ) {
+    val totalActivities = counts.sum()
     val maxCount = counts.maxOrNull()?.coerceAtLeast(1) ?: 1
-    val chartHeight = 90.dp
-    val labelHeight = 20.dp
+    val chartHeight = 100.dp
+    val labelHeight = 22.dp
+    val topPaddingDp = 14.dp
     val barColor1 = TsmPrimary
-    val barColor2 = Color(0xFFFF5722) // rosso per difficoltà alta
+    val barColor2 = Color(0xFFFF5722)
 
-    Column {
-        Canvas(
+    if (totalActivities == 0) {
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(chartHeight)
-                .clickable { },
+                .height(chartHeight + labelHeight),
+            contentAlignment = Alignment.Center,
         ) {
+            Text(
+                "Nessuna attività completata in questo anno",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray,
+            )
+        }
+        return
+    }
+
+    Column {
+        Canvas(modifier = Modifier.fillMaxWidth().height(chartHeight)) {
+            val topPaddingPx = topPaddingDp.toPx()
+            val drawableH = size.height - topPaddingPx
             val barWidth = (size.width - 4.dp.toPx() * 11) / 12
             val spacing = (size.width - barWidth * 12) / 11
 
             counts.forEachIndexed { i, count ->
                 val x = i * (barWidth + spacing)
                 val ratio = count.toFloat() / maxCount.toFloat()
-                val barH = ratio * size.height
+                val barH = ratio * drawableH
+                val barTop = size.height - barH
                 val diff = avgDifficulties.getOrElse(i) { 0.5 }
                 val barCol = lerp(barColor1, barColor2, diff.toFloat().coerceIn(0f, 1f))
                 val isSelected = selectedMonth == i
                 val barAlpha = if (selectedMonth == null || isSelected) 1f else 0.35f
 
-                // Bar fill
                 drawRect(
-                    brush = Brush.verticalGradient(listOf(barCol.copy(alpha = barAlpha), barCol.copy(alpha = barAlpha * 0.6f))),
-                    topLeft = Offset(x, size.height - barH),
+                    brush = Brush.verticalGradient(
+                        listOf(barCol.copy(alpha = barAlpha), barCol.copy(alpha = barAlpha * 0.6f)),
+                    ),
+                    topLeft = Offset(x, barTop),
                     size = Size(barWidth, barH),
                 )
-                // Count label
                 if (count > 0) {
                     val canvas = drawContext.canvas.nativeCanvas
                     val paint = android.graphics.Paint().apply {
                         color = android.graphics.Color.WHITE
-                        textSize = 11.dp.toPx()
+                        textSize = 10.dp.toPx()
                         textAlign = android.graphics.Paint.Align.CENTER
+                        isAntiAlias = true
                         alpha = (barAlpha * 255).toInt()
                     }
-                    canvas.drawText(count.toString(), x + barWidth / 2, size.height - barH - 4.dp.toPx(), paint)
+                    // Posizione del testo: 4dp sopra la barra, ma minimo 2dp dal top del canvas
+                    val labelY = (barTop - 4.dp.toPx()).coerceAtLeast(10.dp.toPx())
+                    canvas.drawText(count.toString(), x + barWidth / 2, labelY, paint)
                 }
             }
         }
 
-        // Month labels
+        // Month labels — sono il hit-target principale (la barra cliccabile sotto è scomoda).
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             MONTH_LABELS.forEachIndexed { i, label ->
                 Box(
@@ -361,7 +462,9 @@ private fun MonthlyBarChart(
                 ) {
                     Text(
                         label,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = if (selectedMonth == i) FontWeight.Bold else FontWeight.Normal,
+                        ),
                         color = if (selectedMonth == i) TsmAccent else Color.Gray,
                     )
                 }

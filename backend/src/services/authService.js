@@ -77,6 +77,11 @@ export const forgotPassword = async (req, res) => {
 
 export const getResetPasswordForm = (req, res) => {
   const { token } = req.params;
+  // Il token deve essere solo hex (output di crypto.randomBytes(...).toString('hex')).
+  // Rifiutiamo qualsiasi altra forma per evitare reflected XSS nell'HTML.
+  if (!/^[a-f0-9]{64}$/.test(token || "")) {
+    return res.status(400).send('<p style="color:red">Token non valido.</p>');
+  }
   res.send(`<!DOCTYPE html>
 <html><head><title>Reset Password - TSM</title>
 <style>

@@ -69,6 +69,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     viewModelScope.launch {
       tokenStorage.clearToken()
       profileRepository.clearLocalCache()
+      // Wipe delle attività locali: evita che un secondo utente sullo stesso
+      // device veda lo storico del precedente. Le attività non sincronizzate
+      // andranno perse — è il prezzo per la privacy fra utenti.
+      app.database.completedActivityDao().deleteAll()
       _uiState.value = ProfileUiState()
       onDone()
     }

@@ -381,26 +381,48 @@ fun ActivityDetailScreen(
             if (uiState.elevationProfile.isNotEmpty()) {
                 Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = TsmSurface) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        // Header: titolo a sinistra, "+dislivello positivo" a destra (singola label).
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
                                 "PROFILO ALTIMETRICO",
                                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
                                 color = Color.Gray,
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text("+${uiState.elevationGainM} m sal.", style = MaterialTheme.typography.labelSmall, color = TsmPrimary)
-                                Text("~${uiState.elevationMaxM.roundToInt()} m max", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = Color.Gray)
-                            }
+                            Text(
+                                "+${uiState.elevationGainM} m D+",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = TsmPrimary,
+                            )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        // Grafico — height contiene anche lo spazio per gli assi (riservato dentro la Canvas).
                         ElevationProfileChart(
                             profile = uiState.elevationProfile,
                             distanceKm = uiState.distanceKm,
-                            modifier = Modifier.fillMaxWidth().height(120.dp),
+                            minAltM = uiState.elevationMinM,
+                            maxAltM = uiState.elevationMaxM,
+                            modifier = Modifier.fillMaxWidth().height(140.dp),
                         )
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("• ${uiState.elevationMaxM.roundToInt()} m max", style = MaterialTheme.typography.labelSmall, color = Color(0xFFFFD700))
-                            Text("• ${uiState.elevationMinM.roundToInt()} m min", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        // Footer: min/max altitudine reali (separati dal canvas, niente overlap).
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                "MIN ${uiState.elevationMinM.roundToInt()} m",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray,
+                            )
+                            Text(
+                                "MAX ${uiState.elevationMaxM.roundToInt()} m",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFFFFD700),
+                            )
                         }
                     }
                 }
@@ -493,80 +515,103 @@ private fun MetricCell(
 
 // ── Elevation Profile Chart ──
 
+/**
+ * Profilo altimetrico con asse X (distanza km) reso DENTRO al canvas e clipping safe.
+ *
+ * Layout interno:
+ *   [paddingTop]  area chart (curva + fill + marker max)
+ *   [paddingBot]  asse X con label "0", "D/2", "D km"
+ *
+ * I label X sono disegnati con textAlign LEFT / CENTER / RIGHT in modo coerente,
+ * così non straripano oltre i bordi (era il bug visivo della versione precedente).
+ *
+ * [profile] valori normalizzati 0..1 dalla ViewModel. [minAltM]/[maxAltM] sono
+ * le altitudini assolute in metri usate solo per il colore della curva (gradiente
+ * proporzionato all'altitudine media reale, non al valore normalizzato).
+ */
 @Composable
 private fun ElevationProfileChart(
     profile: List<Double>,
     distanceKm: Double,
+    minAltM: Double,
+    maxAltM: Double,
     modifier: Modifier = Modifier,
 ) {
     if (profile.isEmpty()) return
     val green = TsmPrimary
     val red = Color(0xFFFF5722)
+    // Indice di "alpinismo" basato sull'altitudine media reale (0 = pianura, 1 = vetta alpina).
+    val avgAltM = (minAltM + maxAltM) / 2.0
+    val altIntensity = ((avgAltM - 500.0) / 2000.0).coerceIn(0.0, 1.0).toFloat()
+    val lineColor = lerp(green, red, altIntensity)
 
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
         val n = profile.size
+        val axisHeight = 16.dp.toPx()     // riservato per i label X in fondo al canvas
+        val topPadding = 6.dp.toPx()      // spazio per il marker max
+        val chartH = h - axisHeight - topPadding
 
-        // Compute slope segments for gradient coloring
         val path = Path()
         val fillPath = Path()
 
         profile.forEachIndexed { i, v ->
             val x = i / (n - 1).toFloat() * w
-            val y = h - v.toFloat() * (h - 8.dp.toPx())
+            // Inverte v ∈ [0,1]: 0 = base chart, 1 = top chart.
+            val y = topPadding + (1f - v.toFloat()) * chartH
             if (i == 0) {
                 path.moveTo(x, y)
-                fillPath.moveTo(x, h)
+                fillPath.moveTo(x, topPadding + chartH)
                 fillPath.lineTo(x, y)
             } else {
                 path.lineTo(x, y)
                 fillPath.lineTo(x, y)
             }
         }
-        fillPath.lineTo(w, h)
+        fillPath.lineTo(w, topPadding + chartH)
         fillPath.close()
 
-        // Gradient fill (green → orange based on avg elevation)
-        val avgNorm = profile.average().toFloat()
         drawPath(
             fillPath,
             brush = Brush.verticalGradient(
                 colors = listOf(
-                    lerp(green, red, avgNorm).copy(alpha = 0.5f),
-                    lerp(green, red, avgNorm).copy(alpha = 0.15f),
+                    lineColor.copy(alpha = 0.5f),
+                    lineColor.copy(alpha = 0.15f),
                 ),
+                startY = topPadding,
+                endY = topPadding + chartH,
             ),
         )
 
-        // Line on top
         drawPath(
             path,
-            color = lerp(green, red, avgNorm),
+            color = lineColor,
             style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
 
-        // Distance axis labels (0, D/2, D)
-        val labelPaint = android.graphics.Paint().apply {
-            color = android.graphics.Color.GRAY
-            textSize = 10.dp.toPx()
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-
-        // Risolto con l'import nativo
-        drawContext.canvas.nativeCanvas.apply {
-            drawText("0", 0f, h + 12.dp.toPx(), labelPaint)
-            drawText("%.0f km".format(distanceKm / 2), w / 2, h + 12.dp.toPx(), labelPaint)
-            drawText("%.0f km".format(distanceKm), w, h + 12.dp.toPx(), labelPaint)
-        }
-
-        // Max point marker (peak marker — blue dot)
-        // Corretto per risolvere "Cannot infer type for type parameter 'T'" deprecato
+        // Marker del punto massimo del profilo
         val maxVal = profile.maxOrNull() ?: 0.0
         val maxIdx = profile.indexOf(maxVal)
         val maxX = maxIdx / (n - 1).toFloat() * w
-        val maxY = h - profile[maxIdx].toFloat() * (h - 8.dp.toPx())
-        drawCircle(color = TsmAccent, radius = 5.dp.toPx(), center = Offset(maxX, maxY))
+        val maxY = topPadding + (1f - profile[maxIdx].toFloat()) * chartH
+        drawCircle(color = TsmAccent, radius = 4.dp.toPx(), center = Offset(maxX, maxY))
+
+        // Asse X dentro al canvas con allineamento coerente (no overflow).
+        val labelY = topPadding + chartH + 12.dp.toPx()
+        val basePaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.GRAY
+            textSize = 9.dp.toPx()
+            isAntiAlias = true
+        }
+        val leftPaint = android.graphics.Paint(basePaint).apply { textAlign = android.graphics.Paint.Align.LEFT }
+        val centerPaint = android.graphics.Paint(basePaint).apply { textAlign = android.graphics.Paint.Align.CENTER }
+        val rightPaint = android.graphics.Paint(basePaint).apply { textAlign = android.graphics.Paint.Align.RIGHT }
+        drawContext.canvas.nativeCanvas.apply {
+            drawText("0 km", 0f, labelY, leftPaint)
+            drawText("%.1f km".format(distanceKm / 2), w / 2, labelY, centerPaint)
+            drawText("%.1f km".format(distanceKm), w, labelY, rightPaint)
+        }
     }
 }
 

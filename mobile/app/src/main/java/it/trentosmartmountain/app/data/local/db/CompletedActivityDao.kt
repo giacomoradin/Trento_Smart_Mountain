@@ -33,11 +33,27 @@ interface CompletedActivityDao {
     @Query("SELECT * FROM completed_activities WHERE is_synced = 0")
     suspend fun getUnsynced(): List<CompletedActivityEntity>
 
+    @Query("UPDATE completed_activities SET is_synced = 1, remote_id = :remoteId WHERE id = :id")
+    suspend fun markSynced(id: String, remoteId: String?)
+
+    /** Variante backward-compatible per le sessioni dove l'id locale = sessionId. */
     @Query("UPDATE completed_activities SET is_synced = 1 WHERE id = :id")
     suspend fun markSynced(id: String)
 
+    /**
+     * Registra un tentativo di sync fallito: incrementa retry_count e aggiorna il timestamp.
+     * Usato dal [SyncWorker] per gestire backoff incrementale.
+     */
+    @Query("UPDATE completed_activities SET retry_count = retry_count + 1, last_retry_at_ms = :nowMs WHERE id = :id")
+    suspend fun bumpRetry(id: String, nowMs: Long)
+
     @Query("DELETE FROM completed_activities WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    // Wipe completo della tabella. Usato al logout per evitare che un secondo
+    // utente sullo stesso device veda le attività dell'utente precedente.
+    @Query("DELETE FROM completed_activities")
+    suspend fun deleteAll()
 
     /** Conta le attività per mese (1-12) in un dato anno, sulla base di completed_at. */
     @Query("""

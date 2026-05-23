@@ -1,8 +1,10 @@
 package it.trentosmartmountain.app.ui.screens.registra
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -16,10 +18,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -99,7 +104,8 @@ fun RegistraScreen(
   }
 
   // Se c'è una sessione pendente da SessionDetail e ora abbiamo i permessi GPS,
-  // avvia il tracking automaticamente. Notification permission segue lo stesso flow del bottone REC.
+  // avvia il tracking automaticamente. Notification permission segue lo stesso
+  // flow del bottone REC. Il controllo GPS hardware è dentro RegistraViewModel.startTracking().
   LaunchedEffect(uiState.activeSessionId, uiState.hasLocationPermission) {
     if (uiState.activeSessionId != null &&
       uiState.hasLocationPermission &&
@@ -267,15 +273,46 @@ fun RegistraScreen(
     )
   }
 
-  // ── Dialog "Salva Attività" — sostituisce il vecchio stop confirm ──
+  if (uiState.gpsDisabledWarning) {
+    AlertDialog(
+      onDismissRequest = viewModel::dismissGpsWarning,
+      title = { Text("GPS spento") },
+      text = { Text("Per registrare l'escursione devi attivare il GPS dalle impostazioni del dispositivo.") },
+      confirmButton = {
+        Button(
+          onClick = {
+            viewModel.dismissGpsWarning()
+            context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+          },
+        ) { Text("Apri impostazioni") }
+      },
+      dismissButton = {
+        TextButton(onClick = viewModel::dismissGpsWarning) { Text("Annulla") }
+      },
+    )
+  }
+
   if (uiState.showStopConfirm) {
     AlertDialog(
       onDismissRequest = viewModel::dismissStopConfirm,
       title = { Text(stringResource(R.string.registra_stop_dialog_title)) },
-      text = { Text(stringResource(R.string.registra_stop_dialog_body)) },
+      text = {
+        Column {
+          Text(stringResource(R.string.registra_stop_dialog_body))
+          Spacer(Modifier.height(12.dp))
+          OutlinedTextField(
+            value = uiState.activityNameDraft,
+            onValueChange = viewModel::updateActivityNameDraft,
+            label = { Text("Nome attività") },
+            placeholder = { Text("Es. Cima Tosa") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+          )
+        }
+      },
       confirmButton = {
         Button(
-          onClick = viewModel::confirmStopTracking,
+          onClick = { viewModel.confirmStopTracking() },
           colors =
             ButtonDefaults.buttonColors(
               containerColor = MaterialTheme.colorScheme.error,

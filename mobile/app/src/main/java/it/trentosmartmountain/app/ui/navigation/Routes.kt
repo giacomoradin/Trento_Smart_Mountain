@@ -23,8 +23,18 @@ object Routes {
   /** Dettaglio sessione escursione (modale sul nav principale). */
   const val SESSION_DETAIL = "session_detail/{sessionId}"
 
+  /** Dettaglio attività completata (modale sul nav principale). `sessionId` opzionale come query. */
+  const val ACTIVITY_DETAIL = "activity_detail/{activityId}?sessionId={sessionId}"
+
   /** Route concreta per il dettaglio sessione (argomento `sessionId`). */
   fun sessionDetailRoute(sessionId: String) = "session_detail/$sessionId"
+
+  /** Route concreta per il dettaglio attività; `sessionId` è opzionale (attività libere = null). */
+  fun activityDetailRoute(activityId: String, sessionId: String?): String {
+    val base = "activity_detail/${Uri.encode(activityId)}"
+    val sid = sessionId?.takeIf { it.isNotBlank() } ?: return base
+    return "$base?sessionId=${Uri.encode(sid)}"
+  }
 
   /** Route login con email opzionale in query (post verifica account). */
   fun loginRoute(pendingEmail: String = ""): String =

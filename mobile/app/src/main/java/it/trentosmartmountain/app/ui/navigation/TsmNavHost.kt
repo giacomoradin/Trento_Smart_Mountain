@@ -19,6 +19,7 @@ import it.trentosmartmountain.app.ui.screens.register.EmailVerificationPendingSc
 import it.trentosmartmountain.app.ui.screens.register.ForgotPasswordScreen
 import it.trentosmartmountain.app.ui.screens.register.RegisterRifugioScreen
 import it.trentosmartmountain.app.ui.screens.register.RegisterScreen
+import it.trentosmartmountain.app.ui.screens.home.ActivityDetailScreen
 import it.trentosmartmountain.app.ui.screens.session.SessionDetailScreen
 
 /**
@@ -137,6 +138,9 @@ fun TsmNavHost() {
                 onNavigateToSessionDetail = { sessionId ->
                     navController.navigate(Routes.sessionDetailRoute(sessionId))
                 },
+                onNavigateToActivityDetail = { activityId, sessionId ->
+                    navController.navigate(Routes.activityDetailRoute(activityId, sessionId))
+                },
             )
         }
 
@@ -160,6 +164,23 @@ fun TsmNavHost() {
                     // quando RegistraScreen sarà completamente implementato con GPS tracking.
                     navController.popBackStack(Routes.MAIN_HIKER, inclusive = false)
                 },
+            )
+        }
+
+        // Dettaglio attività completata — full-screen sopra HikerMainScreen
+        composable(
+            route = Routes.ACTIVITY_DETAIL,
+            arguments = listOf(
+                navArgument("activityId") { type = NavType.StringType },
+                navArgument("sessionId") { type = NavType.StringType; nullable = true; defaultValue = null },
+            ),
+        ) { backStackEntry ->
+            val activityId = backStackEntry.arguments?.getString("activityId").orEmpty()
+            val sessionId = backStackEntry.arguments?.getString("sessionId")?.takeIf { it.isNotBlank() }
+            ActivityDetailScreen(
+                activityId = activityId,
+                sessionId = sessionId,
+                onBack = { navController.popBackStack() },
             )
         }
     }

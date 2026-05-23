@@ -5,8 +5,16 @@ const doc = {
     title: 'Trento Smart Mountain API',
     description: 'Documentazione API',
   },
-  host: 'trento-smart-mountain.onrender.com',
+  host: 'trento-smart-mountain-xz7u.onrender.com',
   schemes: ['https'],
+  tags: [
+    { name: 'Auth', description: 'Login, registrazione e gestione email verification / reset password' },
+    { name: 'Hikers', description: 'Endpoint dedicati agli escursionisti (groupLeader)' },
+    { name: 'Refuges', description: 'Endpoint dedicati agli account rifugio' },
+    { name: 'Admin', description: 'Gestione utenti riservata agli amministratori' },
+    { name: 'Sessions', description: 'Sessioni escursione: creazione, join, tracking, stats' },
+    { name: 'Weather', description: 'Previsioni meteo TINIA con cache MongoDB 1h' },
+  ],
   components: {
     securitySchemes: {
       bearerAuth: {

@@ -28,12 +28,15 @@ object TsmApiClient {
 
   private fun buildRetrofit(tokenStorage: TokenStorage): Retrofit {
     // OkHttp: prima il Bearer (se presente), poi log di base per debug.
+    // Timeout estesi a 90s perché Render Free tier va in sleep dopo 15 min di
+    // inattività: la prima request dopo lo sleep impiega 30-60s per il cold start.
     val client =
       OkHttpClient.Builder()
         .addInterceptor(AuthInterceptor(tokenStorage))
         .addInterceptor(logging)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(90, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(90, TimeUnit.SECONDS)
         .build()
 
     return Retrofit.Builder()

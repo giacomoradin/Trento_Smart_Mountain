@@ -1,9 +1,29 @@
 # API Reference — Trento Smart Mountain
 
-> Reference human-readable degli endpoint REST del backend TSM, complementare al Swagger autogenerato (`swagger-output.json` → UI su `http://<host>:3000/api-docs`).
+> Reference human-readable degli endpoint REST del backend TSM, complementare al Swagger autogenerato (`swagger-output.json` → UI su `/api-docs`).
 >
-> **Ultima revisione**: 17/05/2026 — Fine Sprint 1.
+> **Ultima revisione**: 17/05/2026 — Post-refactor discriminator Mongoose (user → hiker/refuge/admin).
+> **Base URL produzione**: `https://trento-smart-mountain-xz7u.onrender.com`
 > **Base URL dev**: `http://10.0.2.2:3000` (emulator) / `http://localhost:3000` (Postman dev).
+
+---
+
+## ⚠️ Breaking change refactor 2026-05
+
+Il modello `User` è stato suddiviso in **3 discriminatori Mongoose** (Hiker, Refuge, Admin) su **1 sola collection** `users`. Le route sono state riorganizzate per ruolo:
+
+| Vecchio endpoint | Nuovo endpoint | Note |
+|---|---|---|
+| `POST /users` con `role=groupLeader` | `POST /auth/register/hiker` | Body senza campo `role` |
+| `POST /users` con `role=rifugio` + `rifugioDetails` | `POST /auth/register/refuge` | Campi rifugio **flat** (no più subdocument) |
+| — (non esisteva) | `POST /admin/users` | Solo admin autenticati |
+| `GET /users` | `GET /admin/users` | Solo admin |
+| `GET /users/:id` | `GET /hikers/:id` o `GET /refuges/:id` o `GET /admin/users/:id` | Resta `GET /users/:id` come alias backward-compat |
+| `PUT /users/:id` (admin) | `PUT /admin/users/:id` | Solo admin |
+| `DELETE /users/:id` (admin) | `DELETE /admin/users/:id` | Solo admin |
+| — | `GET /refuges` | Lista pubblica rifugi (nuovo) |
+
+Il vecchio `POST /users` è mantenuto come **shim deprecato** che smista internamente (logga un warning). Verrà rimosso in Sprint 3.
 
 ---
 
@@ -144,7 +164,134 @@ Salva la nuova password. Accetta JSON (API) o form-urlencoded (HTML form).
 
 ---
 
-## 3. Utenti (`/users`)
+## 3. Registrazione utenti (post-refactor 2026-05)
+
+Tre route distinte, una per ruolo. Tutte pubbliche (no auth richiesta per registrazione hiker/refuge).
+
+### `POST /auth/register/hiker`
+
+Registra un nuovo **escursionista** (groupLeader).
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | — | Pubblico |
+| **Body** | JSON | `{ username, email, password }` |
+| **Response 201** | JSON | `{ message, user: { _id, username, email, role:"groupLeader", isVerified:false, ... } }` |
+| **Response 400** | JSON | Campi obbligatori mancanti o password < 8 caratteri |
+| **Response 409** | JSON | Email o username già in uso |
+
+---
+
+### `POST /auth/register/refuge`
+
+Registra un nuovo **rifugio** con metadati struttura (campi flat).
+
+#### Body
+
+```json
+{
+  "username": "rifugio.bicchiere@example.com",
+  "email": "rifugio.bicchiere@example.com",
+  "password": "password123",
+  "rifugioName": "Rifugio Bolzano al Bicchiere",
+  "caiCode": "B046",
+  "quota": 2541,
+  "posti": 30,
+  "coordinates": "46.6231 11.4583"
+}
+```
+
+#### Response 201
+
+```json
+{
+  "message": "Account rifugio creato. Verifica la tua email per attivare l'account.",
+  "user": {
+    "_id": "...",
+    "username": "...",
+    "email": "...",
+    "role": "rifugio",
+    "isVerified": false,
+    "rifugioName": "Rifugio Bolzano al Bicchiere",
+    "caiCode": "B046",
+    "quota": 2541,
+    "posti": 30,
+    "coordinates": "46.6231 11.4583"
+  }
+}
+```
+
+> **Cambio rispetto al pre-refactor**: i campi rifugio sono ora **flat** sul documento, non più in un subdocument `rifugioDetails`. Il vecchio `POST /users` con formato annidato è ancora accettato come compatibility shim.
+
+---
+
+## 4. Hikers (`/hikers`)
+
+### `GET /hikers/:id`
+
+Profilo escursionista.
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT | — |
+| **Response 200** | JSON | User document senza `passwordHash` |
+| **Response 404** | JSON | Escursionista non trovato |
+
+### `PUT /hikers/:id`
+
+Aggiorna profilo escursionista (campi base: `username`, `email`).
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT | — |
+| **Body** | JSON | Campi da aggiornare |
+
+---
+
+## 5. Refuges (`/refuges`)
+
+### `GET /refuges`
+
+Lista pubblica di tutti i rifugi registrati (dati pubblici: nome, CAI, quota, posti, coordinate).
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | — | Pubblico |
+| **Response 200** | JSON | Array di rifugi ordinato per `rifugioName` |
+
+### `GET /refuges/:id`
+
+Dettaglio rifugio.
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT | — |
+
+### `PUT /refuges/:id`
+
+Aggiorna metadati struttura (`username`, `email`, `rifugioName`, `caiCode`, `quota`, `posti`, `coordinates`).
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT | — |
+
+---
+
+## 6. Admin (`/admin`)
+
+Tutte le route richiedono **JWT + role=admin**.
+
+| Method | Path | Note |
+|--------|------|------|
+| `POST` | `/admin/users` | Crea un nuovo admin (`isVerified:true` automatico) |
+| `GET` | `/admin/users` | Lista tutti gli utenti (qualunque ruolo) |
+| `GET` | `/admin/users/:id` | Dettaglio qualsiasi utente |
+| `PUT` | `/admin/users/:id` | Aggiorna qualsiasi utente (incluso `role`, `isVerified` e tutti i campi rifugio) |
+| `DELETE` | `/admin/users/:id` | Elimina qualsiasi utente |
+
+---
+
+## 7. Compatibility shim `/users` (deprecato)
 
 ### `POST /users`
 

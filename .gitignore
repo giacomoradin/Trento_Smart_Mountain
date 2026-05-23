@@ -155,6 +155,7 @@ project.freetime
 *.log
 T6_D3_Ingegneria_Del_Software.md
 
+
 # Ignora tutti i file Excel
 *.xlsx
 

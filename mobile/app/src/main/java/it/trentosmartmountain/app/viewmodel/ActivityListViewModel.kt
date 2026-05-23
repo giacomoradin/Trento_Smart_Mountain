@@ -81,8 +81,9 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
         }
         // 2. Carica le stats dal backend
         loadStats(Calendar.getInstance().get(Calendar.YEAR))
-        // 3. Sync sessioni COMPLETED dal backend → il Flow sopra vedrà i nuovi record
+        // 3. Sync cloud → Room: sessioni di gruppo + attività libere
         syncCompletedSessionsToRoom()
+        syncFreeActivitiesToRoom()
     }
 
     /**
@@ -122,15 +123,25 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
                         val existing = dao.getBySessionId(session._id)
                         if (existing == null) {
                             val endMs = parseIsoToMs(session.endTime ?: session.createdAt)
-                            val distKm = session.gpxStats?.distanceKm ?: 0.0
-                            val elevM = session.gpxStats?.elevationGainM ?: 0
-                            val movingSec = estimateMovingSeconds(
-                                session.gpxStats?.distanceKm,
-                                session.gpxStats?.elevationGainM,
-                            )
-                            val cals = estimateCalories(distKm)
-                            val pts = session.gpxStats?.estimatedPoints
+                            // Priorità: actualStats (registrati dal client) → gpxStats (file)
+                            val actual = session.actualStats
+                            val distKm = actual?.distanceMeters?.let { it / 1000.0 }
+                                ?: session.gpxStats?.distanceKm ?: 0.0
+                            val elevM = actual?.elevationGainM
+                                ?: session.gpxStats?.elevationGainM ?: 0
+                            // Durata effettiva con triplo fallback:
+                            //   1. actualStats.movingSeconds (registrato live dal device)
+                            //   2. gpxStats.gpxDurationSec  (timestamp del file GPX)
+                            //   3. HikeEstimation.caiTimeHours (stima sintetica CAI)
+                            val movingSec = actual?.movingSeconds
+                                ?: session.gpxStats?.gpxDurationSec
+                                ?: estimateMovingSeconds(distKm, elevM)
+                            val totalSec = actual?.totalSeconds ?: movingSec
+                            val cals = actual?.estimatedCalories ?: estimateCalories(distKm)
+                            val pts = actual?.finalPoints
+                                ?: session.gpxStats?.estimatedPoints
                                 ?: HikeEstimation.estimatedPoints(distKm, elevM)
+                            val curAlt = actual?.currentAltitudeM
 
                             dao.upsert(
                                 it.trentosmartmountain.app.data.local.db.CompletedActivityEntity(
@@ -141,10 +152,10 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
                                     startTimeMs = endMs - movingSec * 1000L,
                                     endTimeMs = endMs,
                                     movingSeconds = movingSec,
-                                    totalSeconds = movingSec,
-                                    distanceMeters = distKm * 1000.0,
+                                    totalSeconds = totalSec,
+                                    distanceMeters = (distKm * 1000.0),
                                     elevationGainMeters = elevM,
-                                    currentAltitudeMeters = null,
+                                    currentAltitudeMeters = curAlt,
                                     difficultyLevel = session.routeDetails?.difficultyLevel,
                                     trackLatLng = "[]",  // nessun tracciato locale
                                     estimatedCalories = cals,
@@ -161,10 +172,58 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    /** Chiamata esplicita di refresh dal network (usata per pull-to-refresh futuro). */
     fun refreshFromNetwork() {
         syncCompletedSessionsToRoom()
+        syncFreeActivitiesToRoom()
         loadStats(_uiState.value.selectedYear)
+    }
+
+    // Importa in Room le attività libere dal backend. Idempotente: skip se l'id esiste già.
+    private fun syncFreeActivitiesToRoom() {
+        viewModelScope.launch {
+            try {
+                val resp = TsmApiClient.service().getMyActivities()
+                if (!resp.isSuccessful) return@launch
+                val activities = resp.body() ?: return@launch
+                activities.forEach { remote ->
+                    // L'id locale per le attività libere è il remoteId stesso (idempotenza)
+                    val existing = dao.getById(remote._id)
+                    if (existing == null) {
+                        val distM = remote.actualStats?.distanceMeters ?: 0.0
+                        val movingSec = remote.actualStats?.movingSeconds ?: 0L
+                        val totalSec = remote.actualStats?.totalSeconds ?: movingSec
+                        val elevM = remote.actualStats?.elevationGainM ?: 0
+                        val pts = remote.actualStats?.finalPoints
+                            ?: HikeEstimation.finalPoints(distM / 1000.0, elevM, movingSec / 3600.0)
+                        val cals = remote.actualStats?.estimatedCalories ?: ((70 * (distM / 1000.0) * 0.85).toInt())
+                        dao.upsert(
+                            it.trentosmartmountain.app.data.local.db.CompletedActivityEntity(
+                                id = remote._id,
+                                sessionId = null,
+                                name = remote.name,
+                                activityType = remote.activityType,
+                                startTimeMs = remote.startTimeMs,
+                                endTimeMs = remote.endTimeMs,
+                                movingSeconds = movingSec,
+                                totalSeconds = totalSec,
+                                distanceMeters = distM,
+                                elevationGainMeters = elevM,
+                                currentAltitudeMeters = remote.actualStats?.currentAltitudeM,
+                                difficultyLevel = remote.difficultyLevel,
+                                trackLatLng = "[]",
+                                estimatedCalories = cals,
+                                points = pts,
+                                isSynced = true,
+                                completedAt = remote.endTimeMs,
+                                remoteId = remote._id,
+                            ),
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                // Silenzioso — la lista locale rimane visibile
+            }
+        }
     }
 
     fun loadStats(year: Int) {
@@ -214,10 +273,14 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /**
-     * Applica filtri anno/mese + ordinamento.
-     * Se il filtro anno dà zero risultati (e la lista non è vuota), restituisce
-     * TUTTI gli elementi senza filtro anno — evita che la schermata sembri vuota
-     * a causa di una race condition sullo state del Pager.
+     * Applica filtri anno/mese + ordinamento. Restituisce esattamente le attività
+     * che ricadono nel periodo selezionato: se nessuna corrisponde, restituisce
+     * la lista vuota (la UI gestisce esplicitamente l'empty state).
+     *
+     * NOTA — vecchio comportamento: in caso di filtro vuoto restituiva l'intera
+     * lista per "evitare schermata vuota" durante la race del Pager. Risultato:
+     * l'utente cliccava 2023 ma vedeva le attività del 2026 → bug confusionario.
+     * Ora il filtro è esatto e l'empty state è messo a posto.
      */
     private fun applyFiltersWithFallback(
         list: List<ActivityItem>,
@@ -226,7 +289,7 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
         year: Int,
     ): List<ActivityItem> {
         val cal = Calendar.getInstance()
-        val yearFiltered = list.filter { item ->
+        val filtered = list.filter { item ->
             cal.timeInMillis = item.dateMs
             val itemYear = cal.get(Calendar.YEAR)
             val itemMonth = cal.get(Calendar.MONTH)
@@ -234,9 +297,6 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
             val monthMatch = month == null || itemMonth == month
             yearMatch && monthMatch
         }
-        // Se il filtro anno ha prodotto una lista vuota ma la lista master non lo è,
-        // ignora il filtro anno (es. prima attività salvata, Pager non ancora stabile).
-        val filtered = if (yearFiltered.isEmpty() && list.isNotEmpty()) list else yearFiltered
         return when (sort) {
             ActivitySort.MOST_RECENT -> filtered.sortedByDescending { it.dateMs }
             ActivitySort.OLDEST -> filtered.sortedBy { it.dateMs }
@@ -271,9 +331,9 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
         "T" -> 1; "E" -> 2; "EE" -> 3; "EEA" -> 4; else -> 0
     }
 
-    private fun estimateMovingSeconds(distanceKm: Double?, elevationGainM: Int?): Long {
-        if (distanceKm == null || distanceKm <= 0) return 0L
-        val hours = HikeEstimation.caiTimeHours(distanceKm, elevationGainM ?: 0)
+    private fun estimateMovingSeconds(distanceKm: Double, elevationGainM: Int): Long {
+        if (distanceKm <= 0) return 0L
+        val hours = HikeEstimation.caiTimeHours(distanceKm, elevationGainM)
         return (hours * 3600).toLong()
     }
 

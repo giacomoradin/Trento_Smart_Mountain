@@ -21,3 +21,22 @@ data class UpdateRouteDetails(
     val name: String? = null,
     val difficultyLevel: String? = null,
 )
+
+/**
+ * Statistiche reali del tracking GPS inviate al backend al termine di una sessione.
+ *
+ * Inviate via `PATCH /api/v1/sessions/{id}/complete`. Sostituiscono ovunque le stime
+ * CAI nella UI cross-device (es. utente cambia telefono → vede comunque i dati reali).
+ */
+data class ActualStats(
+    val movingSeconds: Long,
+    val totalSeconds: Long,
+    val distanceMeters: Double,
+    val elevationGainM: Int,
+    val finalPoints: Int?,
+    val estimatedCalories: Int?,
+    val currentAltitudeM: Int?,
+)
+
+/** Body per `PATCH /api/v1/sessions/{id}/complete`. */
+data class CompleteSessionRequest(val actualStats: ActualStats)

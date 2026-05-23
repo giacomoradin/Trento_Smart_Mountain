@@ -100,6 +100,13 @@ export const updateHiker = async (req, res) => {
      #swagger.description = 'Aggiorna i dati di un escursionista (solo self o admin).'
   */
   try {
+    // Authorization: solo il proprietario o un admin può modificare un profilo.
+    const isSelf = req.user?.userId?.toString() === req.params.id;
+    const isAdmin = req.user?.role === "admin";
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ message: "Non sei autorizzato a modificare questo profilo." });
+    }
+
     // Campi ammessi: nessun campo specifico Hiker per ora, solo base
     const allowedUpdates = ["username", "email"];
     const updates = {};

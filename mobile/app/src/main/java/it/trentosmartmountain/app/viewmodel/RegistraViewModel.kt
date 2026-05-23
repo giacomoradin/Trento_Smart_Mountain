@@ -1,6 +1,8 @@
 package it.trentosmartmountain.app.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.location.LocationManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
@@ -74,6 +76,13 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
      * NON viene mostrato (il backend è già stato avvisato della partenza).
      */
     val shortActivityConfirm: Boolean = false,
+    /**
+     * true quando un tentativo di avviare il tracking è stato bloccato perché
+     * il GPS hardware del dispositivo è spento. La UI mostra un dialog con
+     * link a Settings.ACTION_LOCATION_SOURCE_SETTINGS. Viene resettato a false
+     * appena il tracking parte o l'utente chiude il dialog.
+     */
+    val gpsDisabledWarning: Boolean = false,
   )
 
   private val app = getApplication<Application>()
@@ -104,15 +113,32 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       }
     }
     // Auto-start tracking quando SessionDetail.AVVIA emette un sessionId.
-    // Lo consumiamo subito per evitare retrigger su recomposition/rotation.
+    // Consumiamo SEMPRE il segnale per evitare che resti stale e blocchi
+    // i prossimi AVVIA. Se non possiamo partire subito (tracking già attivo),
+    // marchiamo activeSessionId per consentire il start manuale via UI.
     viewModelScope.launch {
       SessionStartCoordinator.pendingSessionStart.collect { sessionId ->
-        if (sessionId != null && _uiState.value.trackingStatus == TrackingStatus.IDLE) {
+        if (sessionId == null) return@collect
+        if (_uiState.value.trackingStatus == TrackingStatus.IDLE) {
           autoStartFromSession(sessionId)
-          SessionStartCoordinator.consume()
+        } else {
+          // Tracking già in corso → memorizziamo l'ID ma non interrompiamo
+          _uiState.update { it.copy(activeSessionId = sessionId) }
         }
+        SessionStartCoordinator.consume()
       }
     }
+  }
+
+  /** True solo se il GPS hardware è attivo nelle impostazioni del dispositivo. */
+  private fun isGpsHardwareEnabled(): Boolean {
+    val lm = app.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+    return lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
+  }
+
+  /** Chiamato dalla UI quando l'utente chiude il dialog "GPS spento". */
+  fun dismissGpsWarning() {
+    _uiState.update { it.copy(gpsDisabledWarning = false) }
   }
 
   /**
@@ -135,9 +161,17 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         )
       }
     }
+    // Avvia solo se permessi GPS + GPS hardware acceso; altrimenti
+    // startTracking() stesso setterà i flag di warning corretti e la UI
+    // chiederà permessi o di accendere il GPS.
     if (_uiState.value.hasLocationPermission) {
       startTracking()
     }
+  }
+
+  /** Aggiorna il nome bozza dell'attività che l'utente sta editando nel dialog di salvataggio. */
+  fun updateActivityNameDraft(name: String) {
+    _uiState.update { it.copy(activityNameDraft = name) }
   }
 
   fun onLocationPermissionResult(granted: Boolean) {
@@ -156,6 +190,11 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
 
   fun startTracking() {
     if (!_uiState.value.hasLocationPermission) return
+    // GPS hardware acceso? Se no, non avviamo: la UI mostra il dialog di warning.
+    if (!isGpsHardwareEnabled()) {
+      _uiState.update { it.copy(gpsDisabledWarning = true) }
+      return
+    }
     trackingEngine.start()
     stillSinceMs = null
     locationTracker.stop()
@@ -192,7 +231,14 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   }
 
   fun requestStopTracking() {
-    _uiState.update { it.copy(showStopConfirm = true) }
+    val dateSuffix = SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
+    val default = "Escursione – $dateSuffix"
+    _uiState.update {
+      it.copy(
+        showStopConfirm = true,
+        activityNameDraft = it.activityNameDraft.ifBlank { default },
+      )
+    }
   }
 
   fun dismissStopConfirm() {

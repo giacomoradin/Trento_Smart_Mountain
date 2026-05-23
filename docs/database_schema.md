@@ -11,34 +11,41 @@
 
 Database: `tsm` (configurabile via `MONGO_URI` in `.env`).
 
-### 1.1 Collezione `users`
+### 1.1 Collezione `users` — pattern Discriminator
 
-**Modello**: `backend/src/models/user.js`
-**Collection MongoDB**: `users` (default plurale Mongoose)
+**Modelli**:
+- `backend/src/models/user.js` — schema BASE condiviso (con `discriminatorKey: "role"`)
+- `backend/src/models/hiker.js` — discriminator `groupLeader`
+- `backend/src/models/refuge.js` — discriminator `rifugio` (con campi struttura)
+- `backend/src/models/admin.js` — discriminator `admin`
 
-#### Schema
+**Collection MongoDB**: `users` (unica, condivisa da tutti e 3 i discriminatori)
+
+#### Refactor 2026-05: perché discriminator
+
+Prima del refactor lo schema User era "fat" e conteneva `rifugioDetails: null` anche per gli escursionisti. Con i discriminator Mongoose:
+- Una sola collection MongoDB → login, populate, JWT auth invariati
+- Schema specializzato per ruolo → no campi inutili nei documenti
+- Route separate (`/hikers`, `/refuges`, `/admin`) → API pulite
+- Nessuna migrazione dati: documenti esistenti restano compatibili
+
+#### Schema BASE (`user.js`)
+
+Tutti i discriminatori ereditano questi campi:
 
 ```javascript
 {
-  _id: ObjectId,                      // PK auto-generata Mongoose
+  _id: ObjectId,
   username: String,                   // unique, required
   email: String,                      // unique, required
   passwordHash: String,               // bcrypt cost 10, required
-  role: String,                       // enum ["groupLeader", "rifugio", "admin"], default "groupLeader"
-  isVerified: Boolean,                // default false → true dopo verify email
-  verificationToken: String,          // random 32-byte hex, scadenza implicita 24h via app logic
-  passwordResetToken: String,         // random 32-byte hex
-  passwordResetExpires: Date,         // TTL 1h dal generazione
+  role: String,                       // discriminator key → "groupLeader" | "rifugio" | "admin"
+  isVerified: Boolean,                // default false
+  verificationToken: String,
+  passwordResetToken: String,
+  passwordResetExpires: Date,
 
-  rifugioDetails: {                   // popolato solo se role = "rifugio"
-    rifugioName: String,
-    caiCode: String,                  // es. "B046"
-    quota: Number,                    // metri s.l.m.
-    posti: Number,                    // posti letto
-    coordinates: String,              // "lat lng" stringa human-readable
-  },
-
-  sessionRoles: [                     // ⚠️ Aggiunto 17/05 (fix M1)
+  sessionRoles: [
     {
       groupId: ObjectId,              // ref HikeSession
       role: String,                   // enum ["groupLeader", "hiker"]
@@ -46,8 +53,37 @@ Database: `tsm` (configurabile via `MONGO_URI` in `.env`).
     }
   ],
 
-  createdAt: Date,                    // default Date.now
+  createdAt: Date,
 }
+```
+
+#### Discriminator `Hiker` (`role: "groupLeader"`)
+
+Nessun campo extra (Sprint 1). Estensioni future:
+- `saldoSc: Number` — saldo Social Credits
+- `badges: [String]` — gamification
+- `livelloEsperienza: String` — T/E/EE/EEA
+
+#### Discriminator `Refuge` (`role: "rifugio"`)
+
+Campi specifici **flat sul documento** (non più subdocument):
+
+```javascript
+{
+  // ... tutti i campi base User, e in più:
+  rifugioName: String,                // required per Refuge
+  caiCode: String,                    // es. "B046"
+  quota: Number,                      // metri s.l.m.
+  posti: Number,                      // capienza posti letto
+  coordinates: String,                // "lat lng" testuale
+}
+```
+
+#### Discriminator `Admin` (`role: "admin"`)
+
+Nessun campo extra. Estensioni future:
+- `permissions: [String]` — permessi granulari
+- `auditLog: [...]` — tracciamento azioni
 
 // Virtual populate (NON salvato sul documento):
 userSchema.virtual("mySessions", {

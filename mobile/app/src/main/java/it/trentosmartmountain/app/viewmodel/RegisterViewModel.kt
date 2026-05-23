@@ -31,7 +31,7 @@ data class RegisterUiState(
 
 /**
  * Presentazione del flusso registrazione (MVVM): validazione locale + [RegistrationRepositoryImpl]
- * verso `POST /users`.
+ * verso `POST /auth/register/hiker` (refactor 2026-05, post-discriminator Mongoose).
  */
 class RegisterViewModel : ViewModel() {
 

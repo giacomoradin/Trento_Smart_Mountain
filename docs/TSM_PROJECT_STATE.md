@@ -1,340 +1,260 @@
-# Trento Smart Mountain — Stato del Progetto e Piano Implementativo
+# Trento Smart Mountain — Stato del progetto
 
-> Documento di riferimento per lo sviluppo. Descrive la codebase attuale, gli obiettivi da D1/D2, il gap tra progettazione e implementazione, e il piano delle modifiche.
->
-> **Ultimo aggiornamento: 2026-05-16 — Fine Sprint 1**
+> Snapshot dell'architettura, codebase e implementazione corrente. Aggiornato al **22 maggio 2026** (Sprint 2, dopo il batch sicurezza + sync attività libere).
 
 ---
 
-## 1. Visione e Obiettivi del Progetto
+## 1. Identità progetto
 
-Trento Smart Mountain (TSM) è un ecosistema digitale per l'ambiente montano trentino. Supera le app di navigazione passiva (Komoot, AllTrails) integrando **sicurezza attiva dei gruppi** (mesh BLE offline, SOS), **gamification educativa** (quiz, NFC checkpoint vetta, crediti sociali) e **gestione rifugi** (IoT, telemetria).
-
-**Gruppo:** ID-6 — Federico Cattelan (242111), Marco Christian Stoica (246443), Giacomo Radin (242907)
-
-### 1.1 Macro-obiettivi (D1 §1)
-
-| ID | Obiettivo | Descrizione |
-|----|-----------|-------------|
-| O1 | Ecosistema digitale a valore aggiunto | Aggregatore community per tutte le stagioni |
-| O2 | Sicurezza proattiva | Tracciamento e coordinamento gruppi escursione |
-| O3 | Resilienza comunicativa | Comunicazione tra dispositivi in assenza di rete (BLE Mesh) |
-| O4 | Sostenibilità ed Economia Circolare | Gamification educativa, NFC checkpoint, crediti sociali |
-| O5 | Coinvolgimento multisettoriale | Cittadini, turisti, guide, gestori rifugi, operatori ecologici |
-
-### 1.2 Pivot D2 rispetto a D1
-
-In D2 è stata **rimossa** la raccolta fisica dei rifiuti (RF15-RF18 di D1) per ragioni di sicurezza. Il framework di sostenibilità si concentra ora su:
-
-- **Gamification educativa** (Sustainability Paths): quiz su flora, fauna, sicurezza
-- **Certificazione di vetta via NFC**: totem fisici ai checkpoint, scansione per crediti
-- **Crowdsourcing segnalazioni**: manutenzione sentieri
+- **Corso**: Ingegneria del Software, UniTrento
+- **Gruppo**: ID-6
+  - Giacomo Radin (242907) — backend + mobile + lead
+  - Federico Cattelan (242111)
+  - Marco Christian Stoica (246443) — weather integration
+- **Deliverable**: D1 (requisiti, 27/03/2026) ✅ — D2 (architettura, 26/04/2026) ✅ — D3 in progress
+- **Stack**:
+  - Backend: Node.js 18+, Express 4, Mongoose 8, MongoDB Atlas
+  - Mobile: Kotlin 2.0.21, Compose BOM 2024.12.01, Room 2.6.1, Retrofit, OSMdroid
+  - IoT: Mosquitto MQTT + Python gateway (placeholder)
+- **Hosting**: Backend su Render Free tier (cold start ~30-60s); MongoDB Atlas free
 
 ---
 
-## 2. Stack Tecnologico
-
-| Layer | Tecnologia | Note |
-|-------|-----------|------|
-| **Mobile** | Kotlin 2.0.21, Jetpack Compose (BOM 2024.12), Material3 | minSdk 28, targetSdk 35 |
-| **Mobile DB** | Room 2.6.1 + KSP | Cache profilo, sessioni, telemetria offline |
-| **Mobile Networking** | Retrofit 2.11 + OkHttp 4.12 | AuthInterceptor con Bearer JWT |
-| **Mobile Security** | EncryptedSharedPreferences | JWT cifrato localmente |
-| **Mappa Mobile** | OSMdroid 6.1.20 | Tracking GPS con FusedLocationProvider |
-| **QR Code** | ZXing Core 3.5.3 | Generazione QR sessione |
-| **Drag-and-Drop** | sh.calvin.reorderable 2.4.3 | Checklist riordinabile |
-| **Backend** | Node.js + Express 4 | Monolite modulare |
-| **Backend DB** | MongoDB (Mongoose 8) | GeoJSON 2dsphere, TTL indexes |
-| **Meteo** | meteo.report / TINIA API | Forecast 3h e 24h via weatherService di Marco |
-| **Autenticazione** | JWT (bcrypt hash) | Deep link `tsm://auth` per verifica email |
-| **Email** | Nodemailer (Gmail SMTP, retry 3x esponenziale) | Verifica email + reset password |
-| **Infra** | Docker Compose | MongoDB + Mosquitto (MQTT) |
-
----
-
-## 3. Requisiti Funzionali — Stato di Copertura Sprint 1
-
-### RF coperti dal codice
-
-| RF | Descrizione | Stato Sprint 1 |
-|----|-------------|----------------|
-| RF0 | Autenticazione | ✅ Completo (register → SMTP verify → login JWT) |
-| RF7 | Unirsi a escursione tramite codice invito | ✅ Completo (codice TSM-XXXX + UNISCITI tab) |
-| RF8 | Tracciamento GPS in background | ✅ Completo (ForegroundService + HikeTrackingEngine + auto-pause) |
-| RF9 | Invio SOS con coordinate GPS | ✅ Parziale (UI SOS dialog in RegistraScreen; backend POST /emergencies non implementato) |
-| RF10 | Mappa offline con posizione utente | ✅ Completo (OSMdroid con tracking live in RegistraScreen) |
-| RF11 | Creare escursione con codice invito univoco | ✅ Completo (PIANIFICA tab, GPX import, generazione TSM-XXXX) |
-| RF14 | Allerte push pericoli (Rifugio) | 🟡 Parziale (RegisterRifugio funzionante, dashboard placeholder) |
-
-### RF non ancora coperti
-
-| RF | Descrizione | Note |
-|----|-------------|------|
-| RF1-RF6 | Itinerari, difficoltà, equipaggiamento, BitChat, Auto-Pause meteo | RF6 auto-pause GPS implementato |
-| RF12 | Dashboard tracking real-time capogruppo | Richiede Socket.io (installato, non integrato) |
-| RF13 | Broadcast allarmi emergenza | Richiede BLE Mesh (architettura pianificata) |
-| RF15-RF18 | (Soppressi in D2) | — |
-| RF19 | Promozioni admin + crediti sociali | Backend DTO creato, UI non implementata |
-
----
-
-## 4. Deliverable Sprint 1 — Cosa è stato Implementato
-
-### 4.1 Backend Node.js
-
-#### Modelli MongoDB
-
-| Modello | File | Campi chiave |
-|---------|------|--------------|
-| **User** | `models/user.js` | username, email, passwordHash, role, isVerified, verificationToken, passwordResetToken/Expires, rifugioDetails |
-| **HikeSession** | `models/hikeSession.js` | routeDetails (name/startPoint/endPoint/difficultyLevel/elevationGain), inviteCode (TSM-XXXX), participants[], status lifecycle, meetingDate/Time, maxParticipants, gpxStats (distanceKm/elevationGainM/trackPoints/**elevationProfile**/estimatedPoints), statoFailover |
-| **Location** | `models/location.js` | externalId, type (town/poi), name, elevation, location (GeoJSON), regionId, forecasts (slots3h/slots24h) — **nuovo, per meteo** |
-
-#### Endpoint implementati e funzionanti
-
-| Metodo | Route | Auth | Descrizione |
-|--------|-------|------|-------------|
-| `POST` | `/auth/login` | No | Login → JWT |
-| `GET` | `/auth/verify/:token` | No | Verifica email → deep link tsm:// |
-| `POST` | `/auth/forgot-password` | No | Reset password (email link) |
-| `GET` | `/auth/reset-password/:token` | No | Form HTML reset |
-| `POST` | `/auth/reset-password/:token` | No | Salva nuova password (JSON o form) |
-| `POST` | `/users` | No | Registrazione utente/rifugio (con rifugioDetails) |
-| `GET` | `/users/:id` | JWT | Profilo utente |
-| `PUT` | `/users/:id` | JWT+admin | Aggiorna utente |
-| `DELETE` | `/users/:id` | JWT+admin | Elimina utente |
-| `POST` | `/api/v1/sessions` | JWT | Crea sessione (con GPX stats + estimatedPoints) |
-| `GET` | `/api/v1/sessions/my` | JWT | Le mie sessioni (populate creator + participants) |
-| `GET` | `/api/v1/sessions/:id` | JWT | Dettaglio sessione (fully populated) |
-| `POST` | `/api/v1/sessions/join` | JWT | Unisciti con codice TSM-XXXX |
-| `POST` | `/api/v1/sessions/:id/leave` | JWT | Abbandona sessione (non-creator) |
-| `DELETE` | `/api/v1/sessions/:id` | JWT (creator) | Elimina sessione (rimuove anche per i partecipanti) |
-| `PATCH` | `/api/v1/sessions/:id` | JWT (creator) | Modifica dettagli (populate entrambi i campi → fix crash Gson) |
-| `PATCH` | `/api/v1/sessions/:id/status` | JWT (creator) | PLANNED→ACTIVE→COMPLETED |
-| `GET` | `/weather/locations/nearby` | No | Stazioni meteo per coordinate (2dsphere) |
-| `GET` | `/weather/locations/search` | No | Cerca stazioni per nome |
-| `GET` | `/weather/forecast/:externalId` | No | Forecast 3h + 24h (cache 1h MongoDB) |
-| `POST` | `/weather/forecast/:externalId/refresh` | No | Forza refresh forecast |
-| `POST` | `/weather/seed` | No | Popola DB con towns + POI da TINIA API |
-
-#### Logica business implementata
-
-- **checkUserAlreadyInActiveSession**: blocca solo sessioni `ACTIVE` (non PLANNED) — un utente può pianificare più escursioni future
-- **generateInviteCode**: formato `TSM-XXXX` (4 hex uppercase)
-- **updateSessionDetails**: populate simmetrico (`creatorId` + `participants.userId`) per evitare crash Gson su client Kotlin
-- **SMTP retry**: `sendMailWithRetry` con backoff esponenziale (3 tentativi: 2s, 4s, 8s)
-- **Password reset**: token monouso con scadenza 1h, form HTML risponsivo
-
-#### Endpoint non ancora implementati (Sprint 2+)
-
-| Metodo | Route | Priorità |
-|--------|-------|----------|
-| `POST` | `/api/v1/emergencies` | Alta — SOS con firma ECC |
-| `POST` | `/api/v1/sessions/:id/telemetry` | Alta — GPS batch upload |
-| `GET` | `/api/v1/sessions/:id/positions` | Alta — Posizioni live gruppo |
-| `POST` | `/api/v1/users/:id/gamification/sync` | Media — Event Sourcing crediti |
-| `GET/POST` | `/api/v1/quiz/...` | Media — Quiz educativi |
-| `GET/POST` | `/api/v1/nfc/checkpoint/...` | Bassa — NFC totem |
-
----
-
-### 4.2 Mobile Kotlin/Compose
-
-#### Architettura delle dipendenze (build.gradle.kts)
+## 2. Struttura monorepo
 
 ```
-Compose BOM 2024.12 + Material3 + Material Icons Extended
-Navigation Compose 2.8.5
-Retrofit 2.11 + OkHttp 4.12 + Gson
-Room 2.6.1 + KSP
-EncryptedSharedPreferences (security-crypto 1.1)
-OSMdroid 6.1.20
-FusedLocationProvider (play-services-location 21.3)
-ZXing Core 3.5.3
-sh.calvin.reorderable 2.4.3
+trento-smart-mountain/
+├─ backend/src/
+│  ├─ app.js                # bootstrap Express + security stack
+│  ├─ server.js             # avvio + assertEnvironment fail-fast
+│  ├─ middleware/
+│  │  ├─ authMiddleware.js          # JWT verify
+│  │  ├─ authorizationMiddleware.js # role check (Admin only)
+│  │  ├─ errorMiddleware.js
+│  │  ├─ rateLimitMiddleware.js     # 5 limiter differenziati
+│  │  ├─ securityMiddleware.js      # helmet, mongo-sanitize, hpp, CORS
+│  │  └─ validationMiddleware.js    # Joi schemas + factory
+│  ├─ models/
+│  │  ├─ user.js                    # discriminator base
+│  │  ├─ hiker.js / refuge.js / admin.js
+│  │  ├─ hikeSession.js             # sessioni di gruppo (gpxStats + actualStats)
+│  │  ├─ activity.js                # attività libere personali (nuovo)
+│  │  └─ location.js                # weather venues (towns/POI)
+│  ├─ routes/                       # mapping URL → service
+│  │  ├─ authRoutes.js              # rate limit + validate per ogni endpoint sensibile
+│  │  ├─ hikerRoutes.js / refugeRoutes.js / adminRoutes.js
+│  │  ├─ hikeSessionRoutes.js
+│  │  ├─ activityRoutes.js          # nuovo: CRUD attività libere
+│  │  └─ weatherRoutes.js
+│  └─ services/                     # logica business
+│
+├─ mobile/app/src/main/java/it/trentosmartmountain/app/
+│  ├─ TsmApplication.kt             # DI manuale: TokenStorage, Room, Retrofit, SyncManager
+│  ├─ data/
+│  │  ├─ estimation/HikeEstimation.kt   # CAI/Naismith formulas
+│  │  ├─ local/
+│  │  │  ├─ TokenStorage.kt              # EncryptedSharedPreferences (JWT)
+│  │  │  └─ db/                          # Room v4 (con retry fields)
+│  │  ├─ location/                       # GPS tracking engine
+│  │  ├─ remote/
+│  │  │  ├─ TsmApiClient.kt / TsmApiService.kt
+│  │  │  └─ dto/                         # CreateActivityRequest, ActualStats, ...
+│  │  ├─ session/SessionStartCoordinator.kt
+│  │  └─ sync/SyncManager.kt             # poll loop 60s + backoff 1m→5m→30m→1h
+│  ├─ service/ForegroundTrackingService.kt
+│  ├─ ui/
+│  │  ├─ navigation/
+│  │  ├─ screens/{auth,home,login,main,profile,refuge,register,registra,session}
+│  │  └─ theme/
+│  └─ viewmodel/
+│
+├─ docs/
+│  ├─ SECURITY.md           # nuovo: threat model, OWASP, ACM
+│  ├─ TSM_PROJECT_STATE.md  # questo file
+│  ├─ D1_*.pdf / D2_*.pdf
+│  ├─ api_reference.md / architecture.md / database_schema.md
+│  ├─ mobile_app_base.md / setup_backend.md / setup_mobile.md
+│  ├─ android_server_communication.md
+│  ├─ sprint2_plan.md
+│  └─ test_cases_sprint1.md
+│
+├─ iot/                              # placeholder Python gateway
+├─ scripts/                          # adb-reverse, ecc.
+├─ docker-compose.yml                # MongoDB + Mosquitto locali
+├─ swagger.js / swagger-output.json
+├─ .env.example                      # nuovo: template variabili
+└─ .gitignore                        # .env già escluso
 ```
-
-#### Schermate implementate
-
-| Schermata | File | Stato | Note |
-|-----------|------|-------|------|
-| **AuthEntryScreen** | `auth/AuthEntryScreen.kt` | ✅ Completo | Logo TSM Canvas (montagna + dot ciano), tagline, 3 bottoni |
-| **LoginScreen** | `login/LoginScreen.kt` | ✅ Completo | Icone campi, toggle password, "Password dimenticata?", offline badge, link Registrati |
-| **RegisterScreen** | `register/RegisterScreen.kt` | ✅ Completo | Step indicator, checkbox ToS GPS, validazione |
-| **RegisterRifugioScreen** | `register/RegisterRifugioScreen.kt` | ✅ Completo | Info box, campi rifugio (nome/CAI/quota/posti/coordinate), disclaimer verifica manuale |
-| **ForgotPasswordScreen** | `register/ForgotPasswordScreen.kt` | ✅ Completo | Email input + stato "email inviata" |
-| **EmailVerificationPendingScreen** | `register/EmailVerificationPendingScreen.kt` | ✅ Completo | Istruzioni verifica |
-| **HikerMainScreen** | `main/HikerMainScreen.kt` | ✅ Completo | Bottom nav 4 tab, auto-switch a Registra via SessionStartCoordinator |
-| **HomeScreen** | `home/HomeScreen.kt` | 🟡 Placeholder | Tab Social + Attività, layout base |
-| **SessionHubScreen — PIANIFICA** | `session/SessionHubScreen.kt` | ✅ Completo | GPX import (XmlPullParser), form sessione, DatePicker/TimePicker, QR preview (ZXing), inviteCode TSM-XXXX |
-| **SessionHubScreen — UNISCITI** | `session/SessionHubScreen.kt` | ✅ Completo | Code boxes OTP (TextFieldValue), lista sessioni ordinata, AVVIA/Elimina/Abbandona |
-| **SessionDetailScreen** | `session/SessionDetailScreen.kt` | ✅ Completo | Profilo altimetrico GPX reale (Canvas), stima CAI, meteo reale TINIA, checklist drag-and-drop, partecipanti avatar, edit mode creator, codice invito copyable |
-| **RegistraScreen** | `registra/RegistraScreen.kt` | ✅ Completo | OSMdroid + GPS tracking live, metriche (distanza/dislivello/quota/tempo), FAB SOS, auto-pause |
-| **ProfileScreen** | `profile/ProfileScreen.kt` | ✅ Completo | Username da Room+API, hint offline, logout |
-| **RefugeMainScreen** | `refuge/RefugeMainScreen.kt` | 🟡 Placeholder | Dashboard rifugista |
-
-#### ViewModels implementati
-
-| ViewModel | Responsabilità |
-|-----------|---------------|
-| `LoginViewModel` | Validazione + login via AuthRepository |
-| `RegisterViewModel` | Registrazione utente |
-| `RegisterRifugioViewModel` | Registrazione rifugio con campi specifici |
-| `ForgotPasswordViewModel` | Richiesta reset password via email |
-| `ProfileViewModel` | Profilo da Room + API, logout |
-| `SessionPlanViewModel` | GPX parsing (smoothing+valley-peak+sampling), form sessione, generazione preview code |
-| `SessionJoinViewModel` | Lista sessioni, join codice, leave/delete con rilevamento creator/partecipante |
-| `SessionDetailViewModel` | Dettaglio sessione, checklist, edit mode, meteo TINIA, salvataggio modifhe |
-| `RegistraViewModel` | GPS tracking engine, auto-pause accelerometro, metriche live, auto-start da SessionDetail |
-
-#### Data layer — DTOs principali
-
-| DTO | Campi chiave |
-|-----|-------------|
-| `SessionResponse` | _id, inviteCode, status, routeDetails, meetingDate/Time, gpxStats, creatorId (populated), participants (populated), maxParticipants |
-| `GpxStats` | distanceKm, elevationGainM, trackPoints, **elevationProfile** (max 50 punti), **estimatedPoints** |
-| `WeatherForecastResponse` | location, forecast3h (List\<Slot>), forecast24h (List\<Slot>) |
-| `WeatherForecastSlot` | validFrom/To, temperature, temperatureMin/Max, rainProbability, windSpeed/Direction, skyCondition |
-
-#### Modulo di stima escursione (HikeEstimation.kt)
-
-| Funzione | Formula |
-|----------|---------|
-| `caiTimeHours(D, H)` | Polinomio CAI su pendenza P=(H/M)×100 → min/km × distKm / 60 |
-| `equivalentDistance(D, H)` | D + H/100 (100m salita ≡ 1km piano) |
-| `naismithTimeHours(D, H)` | D/4 + H/300 |
-| `estimatedPoints(D, H, K=10)` | round(K × D_eq) — pianificazione, μ=1.0 |
-| `finalPoints(D, H, T_reale, K=10)` | round(K × D_eq × clip(T_nom/T_reale, 0.8, 1.2)) |
-
-#### Navigazione
-
-```
-TsmNavHost:
-  AUTH_ENTRY → REGISTER / REGISTER_RIFUGIO / LOGIN
-  LOGIN      → FORGOT_PASSWORD
-  LOGIN      → MAIN_HIKER (role: groupLeader) | MAIN_RIFUGIO (role: rifugio)
-  MAIN_HIKER → SESSION_DETAIL (full-screen sopra bottom nav)
-  SESSION_DETAIL (AVVIA) → SessionStartCoordinator → HikerMainScreen switcha a Registra tab
-                                                    → RegistraViewModel auto-start tracking
-                                                    → PATCH /sessions/:id/status = ACTIVE
-```
-
-#### Feature trasversali implementate
-
-| Feature | Descrizione |
-|---------|-------------|
-| **Dark Theme completo** | darkColorScheme Material3, TsmBackground #121212 |
-| **Token design** | TsmPrimary #3F7020, TsmAccent #4FC3F7, TsmSos #6B0D0D, TsmSurface #1E1E1E, TsmBorder #5D4037 |
-| **Offline badge** | Login mostra info su token locale se offline |
-| **Codice invito sempre visibile** | SessionCard + SessionDetail con copia in clipboard |
-| **GPX parser robusto** | Smoothing moving-average (w=5), valley-peak threshold 10m, interpolazione null, campionamento 50 punti |
-| **Profilo altimetrico reale** | Canvas normalizzato min/max dal GPX, area fill gradient |
-| **Meteo reale TINIA** | Nearest town via 2dsphere + forecast 3h+24h, skyCondition emoji mapper |
-| **Checklist drag-and-drop** | ReorderableColumn (sh.calvin.reorderable), toggle check, add/remove |
-| **Edit mode sessione** | Solo creator (check JWT userId), PATCH con populate fix, auto-close su successo |
-| **AVVIA → Registra** | SessionStartCoordinator bus singleton, HikerMainScreen LaunchedEffect, RegistraViewModel auto-start |
-| **PATCH Gson crash fix** | `updateSession` ora usa `Response<ApiMessageBody>` (backend popola entrambi i campi ref) |
 
 ---
 
-## 5. Bug Risolti nel Sprint 1
-
-| Bug | Root Cause | Fix |
-|-----|-----------|-----|
-| SessionCreatedDialog OK non chiudeva | `onDismiss` no-op; state `sessionCreated` non resettata | `resetAfterCreation()` + callback `onSessionCreated` → `subTab = 1` |
-| "Sei già in una sessione attiva" alla creazione | `checkUserAlreadyInActiveSession` bloccava anche sessioni PLANNED | Cambiato a `status: "ACTIVE"` only |
-| Code box codice: cursore sbagliato + history ghost | `BasicTextField(value: String)` non sincronizzato con state esterno | `TextFieldValue` con `LaunchedEffect(code)` per riallineamento esplicito |
-| Tab UNISCITI non si aggiornava dopo join | `loadSessions()` chiamato solo in `init {}` | `LaunchedEffect(Unit)` + `DisposableEffect(ON_RESUME)` |
-| Dislivello GPX sovrastimato (2-3×) | Parser sommava tutte le variazioni positive (noise GPS) | Smoothing MA(5) + valley-peak threshold 10m |
-| Edit mode non si chiudeva dopo save | `saveEdit` non ricaricava la sessione; dropdown locale non resettato | `loadSession(id)` dopo save + `LaunchedEffect(uiState.editMode)` per picker locali |
-| `updateSession` crash `IllegalStateException` | Gson deserializzazione eager: `participants.userId` era ObjectId raw | Backend: populate doppio (creatorId + participants.userId); Kotlin: `Response<ApiMessageBody>` |
-| UNISCITI: host non poteva eliminare | `leaveSession` restituiva 403 per il creator | `RemovalMode.DELETE` vs `LEAVE` basato su `creatorId._id == currentUserId` |
-
----
-
-## 6. Struttura File Corrente
+## 3. Cosa è implementato
 
 ### Backend
 
-```
-backend/src/
-├── app.js                          → Express, CORS, routes: /users /auth /api/v1/sessions /weather
-├── server.js                       → MongoDB connect :3000
-├── middleware/
-│   ├── authMiddleware.js           → JWT Bearer → req.user
-│   ├── authorizationMiddleware.js  → requireRoles(...)
-│   └── errorMiddleware.js
-├── models/
-│   ├── user.js                     → +passwordResetToken/Expires, +rifugioDetails
-│   ├── hikeSession.js              → +meetingDate/Time, +gpxStats.elevationProfile/estimatedPoints
-│   └── location.js                 → NUOVO: town/poi, GeoJSON 2dsphere, forecasts slots3h/24h
-├── routes/
-│   ├── authRoutes.js               → login, verify, forgot-password, reset-password
-│   ├── userRoutes.js               → CRUD /users
-│   ├── hikeSessionRoutes.js        → sessioni: create/join/leave/delete/status/update
-│   └── weatherRoutes.js            → NUOVO: locations/nearby/search, forecast/:id
-└── services/
-    ├── authService.js              → +forgotPassword, +resetPassword (form HTML + JSON)
-    ├── userService.js              → +rifugioDetails passthrough
-    ├── hikeSessionService.js       → +leaveSession, +updateSessionDetails (populate fix), codice TSM-XXXX
-    ├── emailService.js             → +sendPasswordResetEmail, +sendMailWithRetry (backoff 3x)
-    └── weatherService.js           → NUOVO: TINIA API, fetchVenues, findNearbyVenues, getLocationForecast
-```
+#### Auth
+- ✅ POST `/auth/register/hiker` — schema Joi, rate limit 5/h, bcrypt
+- ✅ POST `/auth/register/refuge` — flat schema con rifugioName/address/altitudeMeters
+- ✅ POST `/auth/login` — rate limit 10/15min (skip success)
+- ✅ GET `/auth/verify/:token` — deep link `tsm://` con auto-login
+- ✅ POST `/auth/forgot-password` — email link via Brevo, rate limit 5/h
+- ✅ GET / POST `/auth/reset-password/:token` — form HTML + JSON, token monouso 1h
+
+#### Sessions (gruppo)
+- ✅ CRUD sessione + invite code TSM-XXXX univoco
+- ✅ Join via codice invito (vincolo: una sola ACTIVE per utente)
+- ✅ PATCH `/status` per lifecycle PLANNED→ACTIVE→COMPLETED
+- ✅ PATCH `/complete` con actualStats (movingSec, distMeters, finalPoints, ecc.)
+- ✅ GET `/stats?year=N` aggregate annuali (unifica HikeSession.COMPLETED + Activity libere)
+- ✅ Modello gpxStats con gpxDurationSec (durata effettiva dal `<time>` GPX)
+- ✅ Modello actualStats per dati registrati live
+
+#### Activities (libere)
+- ✅ POST `/api/v1/activities` — creazione attività personale
+- ✅ GET `/api/v1/activities` — lista per utente
+- ✅ GET `/api/v1/activities/:id` — dettaglio con check owner
+- ✅ DELETE `/api/v1/activities/:id` — solo proprietario
+- ✅ Indici `(userId, completedAt)` + 2dsphere sparse su startPoint
+
+#### Weather
+- ✅ GET `/weather/locations/nearby?lon=&lat=&maxDistance=&type=` (2dsphere)
+- ✅ GET `/weather/locations/search?q=&type=&limit=` (regex case-insensitive)
+- ✅ GET `/weather/forecast/:externalId?forceRefresh=` (cache 1h)
+- ✅ Seed automatico da meteo.report + gitlab tinia-euregio
+
+#### Security
+- ✅ helmet (CSP custom per Swagger UI, HSTS in prod)
+- ✅ CORS allow-list via `ALLOWED_ORIGINS` env
+- ✅ express-mongo-sanitize (NoSQL injection)
+- ✅ hpp (HTTP Parameter Pollution)
+- ✅ Body size 100 KB
+- ✅ Rate limit a 5 livelli (global, login, register, password reset, authenticated, write)
+- ✅ Joi validation su tutti gli endpoint POST/PATCH/DELETE
+- ✅ fail-fast su env vars mancanti / JWT_SECRET debole
+- ✅ `trust proxy = 1` per IP corretto dietro Render
 
 ### Mobile
 
-```
-mobile/app/src/main/java/it/trentosmartmountain/app/
-├── data/
-│   ├── estimation/
-│   │   └── HikeEstimation.kt       → NUOVO: formule CAI, Naismith, modello punti TSM
-│   ├── location/                   → HikeTrackingEngine, UserLocationTracker, TrackingLocationBus,
-│   │                                  StationaryDetector, ForegroundTrackingService
-│   ├── remote/
-│   │   ├── TsmApiService.kt        → 20 endpoint; PATCH usa ApiMessageBody (Gson safe)
-│   │   └── dto/
-│   │       ├── SessionResponse.kt  → +GpxStatsResponse.elevationProfile/estimatedPoints
-│   │       ├── CreateSessionRequest.kt → +GpxStats.elevationProfile/estimatedPoints
-│   │       ├── MeteoResponse.kt    → RISCRITTO: WeatherForecastResponse/Slot/LocationResult
-│   │       ├── JoinSessionRequest.kt → +UpdateSessionStatusRequest, +UpdateSessionRequest
-│   │       └── [altri DTO invariati]
-│   ├── session/
-│   │   └── SessionStartCoordinator.kt → NUOVO: bus singleton AVVIA→Registra
-│   └── local/                       → TokenStorage, AuthSession, Room DB, ProfileDao
-├── ui/
-│   ├── theme/
-│   │   ├── Color.kt                 → Tutti i token TSM (TsmPrimary/Accent/Sos/Surface/Border/Background)
-│   │   └── Theme.kt                 → darkColorScheme completo
-│   ├── navigation/
-│   │   ├── Routes.kt                → +FORGOT_PASSWORD, +SESSION_DETAIL + helper sessionDetailRoute()
-│   │   └── TsmNavHost.kt            → +ForgotPassword, +SessionDetail, +SessionStartCoordinator
-│   └── screens/
-│       ├── auth/AuthEntryScreen.kt  → RISCRITTO: logo Canvas, dark theme, 3 bottoni
-│       ├── login/LoginScreen.kt     → RISCRITTO: icone, forgot password, offline badge
-│       ├── register/
-│       │   ├── RegisterScreen.kt    → RISCRITTO: step indicator, ToS checkbox
-│       │   ├── RegisterRifugioScreen.kt → RISCRITTO: form completo con ViewModel
-│       │   └── ForgotPasswordScreen.kt  → NUOVO
-│       ├── main/HikerMainScreen.kt  → +SessionStartCoordinator observer
-│       ├── session/
-│       │   ├── SessionHubScreen.kt  → RISCRITTO: PIANIFICA + UNISCITI completi
-│       │   └── SessionDetailScreen.kt → NUOVO: elevation chart, meteo TINIA, checklist D&D
-│       ├── registra/RegistraScreen.kt → RISCRITTO: OSMdroid + tracking GPS + auto-start
-│       └── [HomeScreen/ProfileScreen/RefugeMainScreen: parziali]
-├── viewmodel/
-│   ├── [Login/Register/Profile ViewModels: invariati]
-│   ├── RegisterRifugioViewModel.kt  → NUOVO
-│   ├── ForgotPasswordViewModel.kt   → NUOVO
-│   ├── SessionPlanViewModel.kt      → +GPX parser robusto, +elevationProfile, +estimatedPoints
-│   ├── SessionJoinViewModel.kt      → RISCRITTO: AndroidViewModel, RemovalMode LEAVE/DELETE
-│   ├── SessionDetailViewModel.kt    → NUOVO: edit mode, meteo TINIA, checklist, AVVIA
-│   └── RegistraViewModel.kt         → RISCRITTO: HikeTrackingEngine, auto-start da Coordinator
-└── service/
-    └── ForegroundTrackingService.kt  → Foreground GPS service funzionante
-```
+#### Auth
+- ✅ AuthEntry → Login / Register / RegisterRifugio / ForgotPassword
+- ✅ JWT in EncryptedSharedPreferences (TokenStorage)
+- ✅ Deep link auto-login post email verify
+
+#### Sessions
+- ✅ SessionHubScreen: tab PIANIFICA (GPX import + form + QR) / UNISCITI (code box + lista)
+- ✅ SessionDetailScreen: elevation chart, meteo reale TINIA, checklist drag-and-drop, partecipanti, edit creator
+- ✅ SessionPlanViewModel con parser GPX (haversine + smoothing + valley-peak + `<time>` per durata effettiva)
+- ✅ SessionStartCoordinator: emette pendingSessionStart → switch tab Registra + auto-start tracking
+
+#### Registra (tracking GPS)
+- ✅ TsmMapView (OSMdroid + OpenTopoMap tiles)
+- ✅ HikeTrackingEngine + StationaryDetector (auto-pause)
+- ✅ ForegroundTrackingService (persistenza GPS in background)
+- ✅ Dialog "Salva Attività" con preview metriche + nome editabile
+- ✅ Dialog "Attività troppo corta" per libere < 50m (richiede conferma esplicita)
+- ✅ Upload immediato post-stop (PATCH /complete o POST /activities)
+- ✅ Fallback SyncManager se la rete fallisce
+
+#### Home / Le Mie Attività
+- ✅ ActivityListScreen con yearly stats card (HorizontalPager 5 anni)
+- ✅ MonthlyBarChart cliccabile (filtro mese)
+- ✅ Sort: recente / vecchia / A-Z / distanza / difficoltà / durata
+- ✅ Bottone "Risincronizza ($n)" se ci sono attività non sincronizzate
+- ✅ Empty state contestuale (no attività vs no attività per periodo)
+- ✅ ElevationProfileChart con assi disegnati nel canvas (no più sovrapposizione)
+- ✅ ActivityDetailScreen: metric grid, mappa preview, partecipanti, profilo altimetrico, timeline split km, badge dinamici, export GPX
+- ✅ Delete con cleanup remoto per attività libere (DELETE /activities/:id)
+
+#### Sync engine
+- ✅ SyncManager: coroutine loop 60s + backoff incrementale per record (1m → 5m → 30m → 1h cap)
+- ✅ `enqueueImmediate()` per pull-to-refresh manuale
+- ✅ Room v4 con campi `retry_count`, `last_retry_at_ms`, `remote_id`
+- ✅ Marcatura `isSynced=1` post upload + tracking `remoteId` per delete cross-device
+
+### Convenzioni codice
+
+- Backend: routes → services → models (3 layer); errori business come `throw new Error("CODE")` mappati in HTTP
+- Mobile: MVVM (Compose UI + StateFlow + Repository). DI manuale (no Hilt)
+- JWT payload: `{ userId, role }`
+- ID Mongo serializzati come `_id` (string ObjectId)
 
 ---
 
+## 4. Gap analysis (cosa manca)
+
+### Non ancora implementato
+- ❌ SOS via BLE Mesh — UC4 da D1
+- ❌ NFC check-in vetta — UC5 da D1
+- ❌ Social Credits leaderboard — sezione "Sociale" placeholder
+- ❌ Educational mode + Quiz — schermate non esistono
+- ❌ MQTT mobile client + IoT gateway Python — placeholder
+- ❌ OAuth Google login — solo email/password
+- ❌ Socket.io live tracking partecipanti — dipendenza installata ma non usata
+- ❌ Admin dashboard web — solo API
+- ❌ Refuge dashboard mobile — placeholder
+
+### Tech debt / TODO security
+- ⚠ Logging strutturato + Sentry (oggi solo console)
+- ⚠ Audit trail per azioni admin (chi ha eliminato chi)
+- ⚠ Rotazione automatica JWT secret (oggi manuale)
+- ⚠ Tombstone table per delete offline-first (oggi best-effort)
+- ⚠ Refresh token (oggi JWT singolo con expiry 1d)
+- ⚠ Rate limit con store Redis (oggi in-memory, ok per single-instance)
+- ⚠ CI gate su `npm audit`
+
+### Limiti noti sync mobile
+- ⚠ Senza WorkManager: il sync funziona solo se il process è vivo (foreground o cached background). Se l'OS killa l'app, niente retry finché non si riapre. Workaround: alla riapertura il loop riparte e processa il backlog.
+- ⚠ Niente Redis distribuito: rate limit è per-instance.
+
+---
+
+## 5. Roadmap Sprint 2-3
+
+### Sprint 2 (in corso, deadline ~giugno 2026)
+- [x] Bug fix tempi GPX (durata effettiva da `<time>`)
+- [x] Sync attività locali/cloud con actualStats
+- [x] Profilo altimetrico corretto (no overlap)
+- [x] Bar chart mese + cards anno funzionanti
+- [x] Attività libere collection + endpoint
+- [x] Security hardening completo (rate limit, validation, secrets)
+- [x] Retry incrementale sync (1m → 5m → 30m → 1h)
+- [x] UI re-sync manuale + dialog soglia 50m
+- [ ] Tests Joi schema (Postman/Jest)
+- [ ] D3 documentation (in scrittura)
+
+### Sprint 3 (planned)
+- [ ] BLE Mesh SOS prototype
+- [ ] NFC vetta check-in
+- [ ] Social Credits + leaderboard
+- [ ] OAuth Google
+- [ ] Sentry integration
+- [ ] CI con npm audit gate
+- [ ] Migration Room esplicita (no più fallbackToDestructive)
+
+---
+
+## 6. Setup rapido
+
+### Backend
+```bash
+# Prima volta
+npm install
+cp .env.example .env
+# Edita .env e popola JWT_SECRET, MONGO_URI, BREVO_API_KEY, BASE_URL
+
+# Avvio dev
+docker compose up -d mongodb        # MongoDB locale
+npm run dev                          # nodemon su localhost:3000
+```
+
+### Mobile
+```bash
+cd mobile
+# crea mobile/local.properties:
+#   sdk.dir=/path/to/Android/Sdk
+#   tsm.api.baseUrl=http://10.0.2.2:3000/   (emulatore Android)
+
+<<<<<<< HEAD
 ## 7. Permessi Android (AndroidManifest.xml) — Stato attuale
 
 | Permesso | Stato | Uso |
@@ -408,16 +328,36 @@ Sessions:     POST /api/v1/sessions, GET /my, GET /:id
               DELETE /:id
 Weather:      GET /weather/locations/nearby, /locations/search, /forecast/:id
               POST /weather/seed, /forecast/:id/refresh
+=======
+./gradlew compileDebugKotlin         # check sintassi
+./gradlew installDebug               # deploy su emulatore connesso
+>>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
 ```
 
-### Pattern architetturali da citare nel D3
-
-- **Offline-First parziale**: JWT cifrato in EncryptedSharedPreferences, Room DB per profilo, `TrackingLocationBus` locale
-- **Store-and-Forward**: struttura predisposta (ForegroundService + WorkManager TODO), non ancora operativa per upload batch
-- **MVVM rigoroso**: nessuna chiamata Retrofit dalle Composable; tutte le chiamate passano per ViewModel
-- **Eventual Consistency**: Event Sourcing per crediti sociali progettato in D2 §3.2.1, non ancora implementato
-- **Sicurezza contratti API**: `Response<ApiMessageBody>` per PATCH che non necessita del payload SessionResponse completo (Gson-safe)
+### Variabili env critiche (vedi `.env.example`)
+- `JWT_SECRET` ≥ 32 char random
+- `MONGO_URI` connection string MongoDB
+- `BREVO_API_KEY` per email transazionali
+- `BASE_URL` URL pubblico backend
+- `ALLOWED_ORIGINS` CSV CORS (solo prod)
 
 ---
 
+<<<<<<< HEAD
 *Documento generato il 2026-05-16 — Fine Sprint 1. Branch: `UI` (ultimo merge: 2026-05-16). Prossima milestone: Sprint 2 — SOS backend + HomeScreen feed + BLE planning.*
+=======
+## 7. Riferimenti documenti correlati
+
+- **Sicurezza dettagliata**: [docs/SECURITY.md](SECURITY.md) — threat model, OWASP, ACM, secret management
+- **API endpoint**: [docs/api_reference.md](api_reference.md)
+- **Architettura componenti**: [docs/architecture.md](architecture.md)
+- **MongoDB schema**: [docs/database_schema.md](database_schema.md)
+- **Setup mobile**: [docs/setup_mobile.md](setup_mobile.md)
+- **Setup backend**: [docs/setup_backend.md](setup_backend.md)
+- **Comunicazione client-server**: [docs/android_server_communication.md](android_server_communication.md)
+- **Sprint plan**: [docs/sprint2_plan.md](sprint2_plan.md)
+
+---
+
+_Last update: 2026-05-22 — Giacomo Radin (ID-6)_
+>>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a

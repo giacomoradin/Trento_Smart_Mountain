@@ -37,6 +37,7 @@ router.get('/test', (req, res) => res.json({ ok: true }));
  */
 router.get(
   "/locations/search",
+  authenticate,
   asyncHandler(async (req, res) => {
     const { q, type, limit } = req.query;
 
@@ -64,6 +65,7 @@ router.get(
  */
 router.get(
   "/locations/nearby",
+  authenticate,
   asyncHandler(async (req, res) => {
     const { lon, lat, maxDistance, type, limit } = req.query;
 
@@ -97,6 +99,7 @@ router.get(
  */
 router.get(
   "/forecast/:externalId",
+  authenticate,
   asyncHandler(async (req, res) => {
     const { externalId } = req.params;
     const forceRefresh = req.query.forceRefresh === "true";

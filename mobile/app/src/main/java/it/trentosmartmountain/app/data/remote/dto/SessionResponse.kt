@@ -18,6 +18,12 @@ data class SessionResponse(
     val minExperienceLevel: String?,
     val gpxStats: GpxStatsResponse?,
     val gpxFileName: String?,
+    /**
+     * Statistiche reali registrate dal client al termine di una sessione COMPLETED.
+     * Se presente, ha priorità sulle stime CAI/Naismith per tutte le metriche di durata,
+     * distanza, dislivello e punteggio visualizzate sulle attività in cloud.
+     */
+    val actualStats: ActualStatsResponse? = null,
     val creatorId: SessionUserInfo?,
     val participants: List<SessionParticipant>?,
     val startTime: String?,
@@ -43,6 +49,19 @@ data class GpxStatsResponse(
     val elevationProfile: List<Double>? = null,
     /** Punti stimati col modello CAI. */
     val estimatedPoints: Int? = null,
+    /** Durata effettiva del GPX (differenza primo-ultimo timestamp dei trkpt). */
+    val gpxDurationSec: Long? = null,
+)
+
+/** Statistiche reali registrate al termine di una sessione tracciata. */
+data class ActualStatsResponse(
+    val movingSeconds: Long? = null,
+    val totalSeconds: Long? = null,
+    val distanceMeters: Double? = null,
+    val elevationGainM: Int? = null,
+    val finalPoints: Int? = null,
+    val estimatedCalories: Int? = null,
+    val currentAltitudeM: Int? = null,
 )
 
 /** Utente embedded (creatore o partecipante) nella risposta sessione. */

@@ -1,305 +1,463 @@
-# 🌦️ Weather Service & API (Modulo Meteo)
+# Trento Smart Mountain — Stato del Progetto e Piano Implementativo
 
-Questo branch introduce la gestione completa delle previsioni meteorologiche per **Towns** (Comuni) e **POI** (Punti di Interesse). Il sistema minimizza le chiamate alle API esterne tramite una doppia strategia di caching.
+## 1. Visione e Obiettivi del Progetto
 
-## 🚀 Funzionalità principali
+Trento Smart Mountain (TSM) è un ecosistema digitale per l'ambiente montano trentino. Supera le app di navigazione passiva (Komoot, AllTrails) integrando **sicurezza attiva dei gruppi** (mesh BLE offline, SOS), **gamification educativa** (quiz, NFC checkpoint vetta, crediti sociali) e **gestione rifugi** (IoT, telemetria).
 
-- **Geospatial Search**: ricerca di location vicine tramite coordinate (lon/lat) con indice MongoDB `2dsphere`.
-- **Smart Forecast Association**: i POI non memorizzano previsioni proprie; il sistema risolve automaticamente la Town di riferimento tramite `regionId`.
-- **Dual-Layer Cache**:
-  - **Venues** (towns + POI): dati statici tenuti in RAM per 24 ore.
-  - **Forecasts**: previsioni (3h/24h) salvate su MongoDB, considerate valide per 1 ora.
-- **Lazy Loading**: il forecast viene scaricato dall'API esterna e persistito su MongoDB solo alla prima richiesta (o quando scaduto).
-- **Auto-seed all'avvio**: all'avvio del server, `seedLocations()` viene chiamata automaticamente per popolare il DB con towns e POI (operazione idempotente, sicura da eseguire più volte).
+**Gruppo:** ID-6 — Federico Cattelan (242111), Marco Christian Stoica (246443), Giacomo Radin (242907)
 
----
+### 1.1 Macro-obiettivi (D1 §1)
 
-## 🛠️ Architettura dei Dati
+| ID  | Obiettivo                             | Descrizione                                                    |
+| --- | ------------------------------------- | -------------------------------------------------------------- |
+| O1  | Ecosistema digitale a valore aggiunto | Aggregatore community per tutte le stagioni                    |
+| O2  | Sicurezza proattiva                   | Tracciamento e coordinamento gruppi escursione                 |
+| O3  | Resilienza comunicativa               | Comunicazione tra dispositivi in assenza di rete (BLE Mesh)    |
+| O4  | Sostenibilità ed Economia Circolare   | Gamification educativa, NFC checkpoint, crediti sociali        |
+| O5  | Coinvolgimento multisettoriale        | Cittadini, turisti, guide, gestori rifugi, operatori ecologici |
 
-Il modello Mongoose `Location` gestisce due tipi di entità distinte:
+### 1.2 Pivot D2 rispetto a D1
 
-| Campo | Town | POI |
-|---|---|---|
-| `type` | `"town"` | `"poi"` |
-| `forecasts` | Contiene gli slot meteo reali | Sempre `null` |
-| `regionId` | ID della regione geografica | **`externalId` della Town di riferimento** |
+In D2 è stata **rimossa** la raccolta fisica dei rifiuti (RF15-RF18 di D1) per ragioni di sicurezza. Il framework di sostenibilità si concentra ora su:
 
-Quando si richiede il forecast di un POI, il sistema usa `regionId` per trovare la Town collegata e restituire le sue previsioni.
+- **Gamification educativa** (Sustainability Paths): quiz su flora, fauna, sicurezza
+- **Certificazione di vetta via NFC**: totem fisici ai checkpoint, scansione per crediti
+- **Crowdsourcing segnalazioni**: manutenzione sentieri
 
 ---
 
-## 🛣️ API Endpoints
+## 2. Stack Tecnologico
 
-Il server gira di default su `http://localhost:3000`. La dashboard Swagger è disponibile su `/api-docs`.
-
-> Tutti gli endpoint sono sotto il prefisso `/weather`.
-
----
-
-### `GET /weather/locations/search`
-
-Cerca locations nel DB locale per nome (ricerca case-insensitive, parziale).
-
-**Query parameters:**
-
-| Parametro | Tipo | Obbligatorio | Default | Descrizione |
-|---|---|---|---|---|
-| `q` | string | ✅ | — | Testo da cercare (min. 2 caratteri) |
-| `type` | string | ❌ | tutti | Filtra per tipo: `town` oppure `poi` |
-| `limit` | number | ❌ | `10` | Numero massimo di risultati |
-
-**Esempio:**
-```
-GET /weather/locations/search?q=Merano&type=town&limit=5
-```
-
-**Risposta:**
-```json
-{
-  "count": 1,
-  "results": [
-    {
-      "externalId": "5d9e12bb-...",
-      "type": "town",
-      "name": "Merano",
-      "elevation": 325,
-      "location": { "type": "Point", "coordinates": [11.159, 46.671] },
-      "regionId": "..."
-    }
-  ]
-}
-```
+| Layer                 | Tecnologia                                              | Note                                          |
+| --------------------- | ------------------------------------------------------- | --------------------------------------------- |
+| **Mobile**            | Kotlin 2.0.21, Jetpack Compose (BOM 2024.12), Material3 | minSdk 28, targetSdk 35                       |
+| **Mobile DB**         | Room 2.6.1 + KSP                                        | Cache profilo, sessioni, telemetria offline   |
+| **Mobile Networking** | Retrofit 2.11 + OkHttp 4.12                             | AuthInterceptor con Bearer JWT                |
+| **Mobile Security**   | EncryptedSharedPreferences                              | JWT cifrato localmente                        |
+| **Mappa Mobile**      | OSMdroid 6.1.20                                         | Tracking GPS con FusedLocationProvider        |
+| **QR Code**           | ZXing Core 3.5.3                                        | Generazione QR sessione                       |
+| **Drag-and-Drop**     | sh.calvin.reorderable 2.4.3                             | Checklist riordinabile                        |
+| **Backend**           | Node.js + Express 4                                     | Monolite modulare                             |
+| **Backend DB**        | MongoDB (Mongoose 8)                                    | GeoJSON 2dsphere, TTL indexes                 |
+| **Meteo**             | meteo.report / TINIA API                                | Forecast 3h e 24h via weatherService di Marco |
+| **Autenticazione**    | JWT (bcrypt hash)                                       | Deep link `tsm://auth` per verifica email     |
+| **Email**             | Nodemailer (Gmail SMTP, retry 3x esponenziale)          | Verifica email + reset password               |
+| **Infra**             | Docker Compose                                          | MongoDB + Mosquitto (MQTT)                    |
 
 ---
 
-### `GET /weather/locations/nearby`
+## 3. Requisiti Funzionali — Stato di Copertura Sprint 1
 
-Trova locations vicine a una coordinata geografica.
+### RF coperti dal codice
 
-**Query parameters:**
+| RF      | Descrizione                                            | Stato Sprint 1                                                                                                                                    |
+| ------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RF0     | Autenticazione                                         | ✅ Completo (register → SMTP verify → login JWT)                                                                                                  |
+| RF7     | Unirsi a escursione tramite codice invito              | ✅ Completo (codice TSM-XXXX + UNISCITI tab)                                                                                                      |
+| RF8     | Tracciamento GPS in background                         | ✅ Completo (ForegroundService + HikeTrackingEngine + auto-pause + `ACCESS_BACKGROUND_LOCATION` runtime)                                          |
+| RF9     | Invio SOS con coordinate GPS                           | �� Parziale (UI SOS dialog in RegistraScreen; backend `POST /emergencies` non implementato)                                                       |
+| RF10    | Mappa offline con posizione utente                     | ✅ Completo (OSMdroid + OpenTopoMapTileSource + tracking live)                                                                                    |
+| RF11    | Creare escursione con codice invito univoco            | ✅ Completo (PIANIFICA tab, GPX import, generazione TSM-XXXX)                                                                                     |
+| RF14    | Allerte push pericoli (Rifugio)                        | �� Parziale (RegisterRifugio funzionante, dashboard placeholder)                                                                                  |
+| **NEW** | "Le Mie Attività" — storico locale + aggregato annuale | ✅ Completo (Room `completed_activities` + `GET /api/v1/sessions/stats` aggregato per anno, card metriche, lista, dettaglio con replay tracciato) |
 
-| Parametro | Tipo | Obbligatorio | Default | Descrizione |
-|---|---|---|---|---|
-| `lon` | number | ✅ | — | Longitudine |
-| `lat` | number | ✅ | — | Latitudine |
-| `maxDistance` | number | ❌ | `50000` | Raggio di ricerca in **metri** |
-| `type` | string | ❌ | tutti | Filtra per tipo: `town` oppure `poi` |
-| `limit` | number | ❌ | `5` | Numero massimo di risultati |
+### RF non ancora coperti
 
-**Esempio:**
-```
-GET /weather/locations/nearby?lon=11.35&lat=46.50&maxDistance=20000&type=town
-```
-
-**Risposta:** stessa struttura di `/locations/search`.
-
----
-
-### `GET /weather/forecast/:externalId`
-
-Restituisce il forecast per una location (Town o POI). Se i dati sono assenti o scaduti (>1h), vengono scaricati dall'API esterna e salvati su MongoDB automaticamente.
-
-> Se la location è un **POI**, il forecast viene risolto dalla Town collegata tramite `regionId`. La risposta includerà sia i dati del POI che quelli della Town di riferimento.
-
-**Path parameter:**
-
-| Parametro | Descrizione |
-|---|---|
-| `externalId` | UUID della location (ricavabile da `/locations/search`) |
-
-**Query parameter opzionale:**
-
-| Parametro | Tipo | Default | Descrizione |
-|---|---|---|---|
-| `forceRefresh` | boolean | `false` | Se `true`, ignora la cache e scarica dati freschi |
-
-**Esempio:**
-```
-GET /weather/forecast/5d9e12bb-7274-483e-9acd-44bfdcb916e5
-GET /weather/forecast/5d9e12bb-7274-483e-9acd-44bfdcb916e5?forceRefresh=true
-```
-
-**Risposta:**
-```json
-{
-  "location": {
-    "externalId": "5d9e12bb-...",
-    "type": "town",
-    "name": "Merano",
-    "elevation": 325,
-    "coordinates": [11.159, 46.671]
-  },
-  "referenceTown": { ... },  // presente solo se la location è un POI
-  "meta": {
-    "fetchedAt": "2025-05-15T10:00:00.000Z",
-    "validFrom": "2025-05-15T06:00:00.000Z",
-    "validTo":   "2025-05-22T06:00:00.000Z",
-    "fromCache": true
-  },
-  "forecast3h":  [ /* fino a 16 slot → prossime ~48h */ ],
-  "forecast24h": [ /* fino a 7 slot  → prossimi 7 giorni */ ]
-}
-```
-
-**Campi di ogni slot meteo:**
-
-| Campo | Unità | Descrizione |
-|---|---|---|
-| `validFrom` / `validTo` | ISO 8601 | Intervallo di validità dello slot |
-| `temperature` | °C | Temperatura (solo slot 3h) |
-| `temperatureMin` / `temperatureMax` | °C | Temperatura min/max (solo slot 24h) |
-| `rainFall` | mm | Precipitazioni |
-| `rainProbability` | % | Probabilità pioggia |
-| `freshSnow` | cm | Neve fresca |
-| `snowLevel` | m s.l.m. | Quota neve |
-| `windSpeed` / `windGust` | km/h | Velocità e raffica vento |
-| `windDirection` | 0–360° | Direzione vento |
-| `freezingLevel` | m s.l.m. | Zero termico |
-| `skyCondition` | codice | Condizione cielo (es. `"A"`, `"B"`, `"C"`) |
-| `sunshineDuration` | ore | Ore di sole |
-
-> `meta.fromCache: true` significa che i dati provengono dal DB (< 1h); `false` significa che sono stati appena scaricati dall'API esterna.
+| RF        | Descrizione                                                       | Note                                           |
+| --------- | ----------------------------------------------------------------- | ---------------------------------------------- |
+| RF1-RF6   | Itinerari, difficoltà, equipaggiamento, BitChat, Auto-Pause meteo | RF6 auto-pause GPS implementato                |
+| RF12      | Dashboard tracking real-time capogruppo                           | Richiede Socket.io (installato, non integrato) |
+| RF13      | Broadcast allarmi emergenza                                       | Richiede BLE Mesh (architettura pianificata)   |
+| RF15-RF18 | (Soppressi in D2)                                                 | —                                              |
+| RF19      | Promozioni admin + crediti sociali                                | Backend DTO creato, UI non implementata        |
 
 ---
 
-### `POST /weather/forecast/:externalId/refresh`
+## 4. Deliverable Sprint 1 — Cosa è stato Implementato
 
-Forza il refresh del forecast ignorando completamente la cache. Scarica dati freschi dall'API esterna e li sovrascrive su MongoDB.
+### 4.1 Backend Node.js
 
-> **Solo per Towns.** Chiamare su un POI restituisce errore `400`.
+#### Modelli MongoDB — refactor 2026-05 con discriminator Mongoose
 
-**Esempio:**
+> **Refactor 2026-05**: il modello `User` monolitico è stato suddiviso in **3 discriminatori** (Hiker, Refuge, Admin) su **1 sola collection** `users`. Il login, populate (`HikeSession.creatorId`) e middleware auth restano invariati, ma ogni ruolo ha ora il proprio schema specializzato.
+
+| Modello | File | Discriminator key | Campi specifici |
+|---------|------|-------------------|----------------|
+| **User** (base) | `models/user.js` | — | username, email, passwordHash, isVerified, verificationToken, passwordResetToken/Expires, **sessionRoles[]** (groupId/role/createdBy), virtual **mySessions**, `discriminatorKey: "role"`, collection comune `users` |
+| **Hiker** | `models/hiker.js` | `groupLeader` | (nessuno per ora — predisposto per saldoSc, badges, livelloEsperienza in Sprint 3) |
+| **Refuge** | `models/refuge.js` | `rifugio` | **rifugioName** (required), caiCode, quota, posti, coordinates — **flat sul documento** (no più subdocument `rifugioDetails`) |
+| **Admin** | `models/admin.js` | `admin` | (nessuno per ora — predisposto per permissions, auditLog) |
+| **HikeSession** | `models/hikeSession.js` | — | creatorId, routeDetails (startPoint/endPoint senza default ✅ M3 + 2dsphere `sparse:true`/difficultyLevel/elevationGain), inviteCode (TSM-XXXX), participants[], status lifecycle, meetingDate/Time, maxParticipants, gpxStats (distanceKm/elevationGainM/trackPoints/elevationProfile/estimatedPoints), statoFailover, lastHeartbeat, startTime, endTime |
+| **Location** | `models/location.js` | — | externalId, type (town/poi), name, elevation, location (GeoJSON), regionId, forecasts (slots3h/slots24h) |
+
+#### Endpoint implementati e funzionanti — post-refactor 2026-05
+
+| Metodo   | Route                                   | Auth               | Descrizione                                                                                                                                                                              |
+| -------- | --------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/auth/login`                           | No                 | Login → JWT                                                                                                                                                                              |
+| `GET`    | `/auth/verify/:token`                   | No                 | Verifica email → deep link tsm://                                                                                                                                                        |
+| `POST`   | `/auth/forgot-password`                 | No                 | Reset password (email link)                                                                                                                                                              |
+| `GET`    | `/auth/reset-password/:token`           | No                 | Form HTML reset                                                                                                                                                                          |
+| `POST`   | `/auth/reset-password/:token`           | No                 | Salva nuova password (JSON o form)                                                                                                                                                       |
+| `POST`   | `/auth/register/hiker`                  | No                 | **NUOVO** — Registra un escursionista (groupLeader)                                                                                                                                      |
+| `POST`   | `/auth/register/refuge`                 | No                 | **NUOVO** — Registra un rifugio (campi struttura flat)                                                                                                                                   |
+| `POST`   | `/hikers`                               | No                 | Alias: registra escursionista                                                                                                                                                            |
+| `GET`    | `/hikers/:id`                           | JWT                | Profilo escursionista                                                                                                                                                                    |
+| `PUT`    | `/hikers/:id`                           | JWT                | Aggiorna profilo escursionista                                                                                                                                                           |
+| `POST`   | `/refuges`                              | No                 | Alias: registra rifugio                                                                                                                                                                  |
+| `GET`    | `/refuges`                              | No                 | **NUOVO** — Lista pubblica rifugi (per ricerca/mappa futura)                                                                                                                             |
+| `GET`    | `/refuges/:id`                          | JWT                | Profilo rifugio con metadati struttura                                                                                                                                                   |
+| `PUT`    | `/refuges/:id`                          | JWT                | Aggiorna metadati struttura                                                                                                                                                              |
+| `POST`   | `/admin/users`                          | JWT + admin        | **NUOVO** — Crea nuovo admin                                                                                                                                                             |
+| `GET`    | `/admin/users`                          | JWT + admin        | Lista tutti gli utenti                                                                                                                                                                   |
+| `GET`    | `/admin/users/:id`                      | JWT + admin        | Dettaglio qualsiasi utente                                                                                                                                                               |
+| `PUT`    | `/admin/users/:id`                      | JWT + admin        | Aggiorna utente (incluso role e tutti i campi rifugio)                                                                                                                                   |
+| `DELETE` | `/admin/users/:id`                      | JWT + admin        | Elimina utente                                                                                                                                                                           |
+| `POST`   | `/users` _(deprecato)_                  | No                 | Shim retro-compatibile: smista a hiker/refuge in base a `role` nel body                                                                                                                  |
+| `GET`    | `/users/:id` _(alias)_                  | JWT                | Alias: ritorna qualsiasi utente (compat client mobile pre-refactor)                                                                                                                      |
+| `POST`   | `/api/v1/sessions`                      | JWT                | Crea sessione (con GPX stats + estimatedPoints)                                                                                                                                          |
+| `GET`    | `/api/v1/sessions/my`                   | JWT                | Le mie sessioni (populate creator + participants)                                                                                                                                        |
+| `GET`    | `/api/v1/sessions/stats?year=YYYY`      | JWT                | **NUOVO** — Statistiche aggregate annuali per "Le Mie Attività" (totalActivities, totalDistanceKm, totalElevationGainM, totalPoints, monthlyActivityCount[12], monthlyAvgDifficulty[12]) |
+| `GET`    | `/api/v1/sessions/:id`                  | JWT                | Dettaglio sessione (fully populated)                                                                                                                                                     |
+| `POST`   | `/api/v1/sessions/join`                 | JWT                | Unisciti con codice TSM-XXXX (ora populated ✅ fix M4)                                                                                                                                   |
+| `POST`   | `/api/v1/sessions/:id/leave`            | JWT                | Abbandona sessione (non-creator; `CREATOR_CANNOT_LEAVE` se creator)                                                                                                                      |
+| `DELETE` | `/api/v1/sessions/:id`                  | JWT (creator)      | Elimina sessione (rimuove anche per i partecipanti)                                                                                                                                      |
+| `PATCH`  | `/api/v1/sessions/:id`                  | JWT (creator)      | Modifica dettagli (populate entrambi i campi → fix crash Gson)                                                                                                                           |
+| `PATCH`  | `/api/v1/sessions/:id/status`           | JWT (creator)      | PLANNED→ACTIVE→COMPLETED (vedi C1: solo creator)                                                                                                                                         |
+| `GET`    | `/weather/locations/nearby`             | No                 | Stazioni meteo per coordinate (2dsphere)                                                                                                                                                 |
+| `GET`    | `/weather/locations/search`             | No                 | Cerca stazioni per nome                                                                                                                                                                  |
+| `GET`    | `/weather/forecast/:externalId`         | No                 | Forecast 3h + 24h (cache 1h MongoDB)                                                                                                                                                     |
+| `POST`   | `/weather/forecast/:externalId/refresh` | **JWT + admin** ✅ | Forza refresh forecast (fix C2 parziale)                                                                                                                                                 |
+| `POST`   | `/weather/seed`                         | **JWT + admin** ✅ | Popola DB con towns + POI da TINIA API (fix C2 parziale)                                                                                                                                 |
+
+#### Logica business implementata
+
+- **checkUserAlreadyInActiveSession**: blocca solo sessioni `ACTIVE` (non PLANNED) — un utente può pianificare più escursioni future
+- **generateInviteCode**: formato `TSM-XXXX` (4 hex uppercase)
+- **updateSessionDetails**: populate simmetrico (`creatorId` + `participants.userId`) per evitare crash Gson su client Kotlin
+- **SMTP retry**: `sendMailWithRetry` con backoff esponenziale (3 tentativi: 2s, 4s, 8s)
+- **Password reset**: token monouso con scadenza 1h, form HTML risponsivo
+
+#### Endpoint non ancora implementati (Sprint 2+)
+
+| Metodo           | Route                                 | Priorità                                                                |
+| ---------------- | ------------------------------------- | ----------------------------------------------------------------------- |
+| `POST`           | `/api/v1/emergencies`                 | Alta — SOS con firma ECC                                                |
+| `POST`           | `/api/v1/sessions/:id/telemetry`      | Alta — GPS batch upload                                                 |
+| `GET`            | `/api/v1/sessions/:id/positions`      | Alta — Posizioni live gruppo                                            |
+| `POST`           | `/api/v1/users/:id/gamification/sync` | Media — Event Sourcing crediti                                          |
+| `GET/POST`       | `/api/v1/quiz/...`                    | Media — Quiz educativi                                                  |
+| `GET/POST`       | `/api/v1/nfc/checkpoint/...`          | Bassa — NFC totem                                                       |
+| `WS`/`Socket.io` | `/sessions/:id/live-positions`        | Media — Dashboard real-time gruppo (libreria installata, non integrata) |
+| `MQTT topic`     | `tsm/rifugio/{id}/telemetry`          | Media — IoT gateway (mosquitto in docker, gateway python stub vuoto)    |
+
+---
+
+### 4.2 Mobile Kotlin/Compose
+
+#### Architettura delle dipendenze (build.gradle.kts)
+
 ```
-POST /weather/forecast/5d9e12bb-7274-483e-9acd-44bfdcb916e5/refresh
+Compose BOM 2024.12 + Material3 + Material Icons Extended
+Navigation Compose 2.8.5
+Retrofit 2.11 + OkHttp 4.12 + Gson
+Room 2.6.1 + KSP
+EncryptedSharedPreferences (security-crypto 1.1)
+OSMdroid 6.1.20
+FusedLocationProvider (play-services-location 21.3)
+ZXing Core 3.5.3
+sh.calvin.reorderable 2.4.3
 ```
 
-**Risposta:**
-```json
-{
-  "message": "Forecast aggiornato per Merano",
-  "fetchedAt": "2025-05-15T10:05:00.000Z",
-  "slotsCount": { "3h": 48, "24h": 7 }
-}
+#### Schermate implementate
+
+| Schermata                          | File                                               | Stato          | Note                                                                                                                                                          |
+| ---------------------------------- | -------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AuthEntryScreen**                | `auth/AuthEntryScreen.kt`                          | ✅ Completo    | Logo TSM Canvas (montagna + dot ciano), tagline, 3 bottoni                                                                                                    |
+| **LoginScreen**                    | `login/LoginScreen.kt`                             | ✅ Completo    | Icone campi, toggle password, "Password dimenticata?", offline badge, link Registrati                                                                         |
+| **RegisterScreen**                 | `register/RegisterScreen.kt`                       | ✅ Completo    | Step indicator, checkbox ToS GPS, validazione                                                                                                                 |
+| **RegisterRifugioScreen**          | `register/RegisterRifugioScreen.kt`                | ✅ Completo    | Info box, campi rifugio (nome/CAI/quota/posti/coordinate), disclaimer verifica manuale                                                                        |
+| **ForgotPasswordScreen**           | `register/ForgotPasswordScreen.kt`                 | ✅ Completo    | Email input + stato "email inviata"                                                                                                                           |
+| **EmailVerificationPendingScreen** | `register/EmailVerificationPendingScreen.kt`       | ✅ Completo    | Istruzioni verifica                                                                                                                                           |
+| **HikerMainScreen**                | `main/HikerMainScreen.kt`                          | ✅ Completo    | Bottom nav 4 tab, auto-switch a Registra via SessionStartCoordinator                                                                                          |
+| **HomeScreen**                     | `home/HomeScreen.kt`                               | �� Funzionale  | Tab Sociale (placeholder) + Tab Personale → inietta `ActivityListScreen`                                                                                      |
+| **ActivityListScreen**             | `home/ActivityListScreen.kt` (NUOVO, 495 righe)    | ✅ Completo    | "Le Mie Attività": card statistiche annuali, bar chart mensile, lista cronologica con paginazione                                                             |
+| **ActivityDetailScreen**           | `home/ActivityDetailScreen.kt` (NUOVO, 705 righe)  | ✅ Completo    | Dettaglio attività: replay tracciato OSMdroid, metriche complete, punti CAI finali, link a sessione di origine                                                |
+| **SessionHubScreen — PIANIFICA**   | `session/SessionHubScreen.kt`                      | ✅ Completo    | GPX import (XmlPullParser), form sessione, DatePicker/TimePicker, QR preview (ZXing), inviteCode TSM-XXXX                                                     |
+| **SessionHubScreen — UNISCITI**    | `session/SessionHubScreen.kt`                      | ✅ Completo    | Code boxes OTP (TextFieldValue), lista sessioni ordinata, AVVIA/Elimina/Abbandona                                                                             |
+| **SessionDetailScreen**            | `session/SessionDetailScreen.kt`                   | ✅ Completo    | Profilo altimetrico GPX reale (Canvas), stima CAI, meteo reale TINIA, checklist drag-and-drop, partecipanti avatar, edit mode creator, codice invito copyable |
+| **RegistraScreen**                 | `registra/RegistraScreen.kt` + 10 sotto-componenti | ✅ Completo    | OSMdroid + GPS tracking live, metriche, FAB SOS, auto-pause, OpenTopoMapTileSource, GpsSignalIndicator, salvataggio in Room a STOP                            |
+| **ProfileScreen**                  | `profile/ProfileScreen.kt`                         | ✅ Completo    | Username da Room+API, hint offline, logout                                                                                                                    |
+| **RefugeMainScreen**               | `refuge/RefugeMainScreen.kt`                       | �� Placeholder | Dashboard rifugista                                                                                                                                           |
+
+#### ViewModels implementati
+
+| ViewModel                         | Responsabilità                                                                                                                                                                          |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LoginViewModel`                  | Validazione + login via `AuthRepository`                                                                                                                                                |
+| `RegisterViewModel`               | Registrazione utente via `RegistrationRepository`                                                                                                                                       |
+| `RegisterRifugioViewModel`        | Registrazione rifugio con campi specifici (`RegisterRifugioRequest` DTO dedicato)                                                                                                       |
+| `ForgotPasswordViewModel`         | Richiesta reset password via email                                                                                                                                                      |
+| `ProfileViewModel`                | Profilo da Room + API tramite `ProfileRepository` (offline-first state)                                                                                                                 |
+| `SessionPlanViewModel`            | GPX parsing (smoothing+valley-peak+sampling), form sessione, generazione preview code                                                                                                   |
+| `SessionJoinViewModel`            | Lista sessioni, join codice, leave/delete con rilevamento creator/partecipante                                                                                                          |
+| `SessionDetailViewModel`          | Dettaglio sessione, checklist, edit mode, meteo TINIA, salvataggio modifiche                                                                                                            |
+| `RegistraViewModel`               | `HikeTrackingEngine` + `FusedLocationPublisher`, auto-pause accelerometro, metriche live, auto-start da `SessionStartCoordinator`, salvataggio `CompletedActivityEntity` in Room a STOP |
+| `ActivityListViewModel` (NUOVO)   | Carica `GET /sessions/stats` + Room `completed_activities`; sync sessioni COMPLETED dal backend in Room                                                                                 |
+| `ActivityDetailViewModel` (NUOVO) | Recupera entity Room, decodifica `trackLatLng` JSON in `List<GeoPoint>`, prepara metriche e mappa replay                                                                                |
+
+#### Data layer — DTOs principali
+
+| DTO                              | Campi chiave                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `SessionResponse`                | \_id, inviteCode, status, routeDetails, meetingDate/Time, gpxStats, creatorId (populated), participants (populated), maxParticipants |
+| `GpxStats`                       | distanceKm, elevationGainM, trackPoints, **elevationProfile** (max 50 punti), **estimatedPoints**                                    |
+| `WeatherForecastResponse`        | location, forecast3h (List\<Slot>), forecast24h (List\<Slot>)                                                                        |
+| `WeatherForecastSlot`            | validFrom/To, temperature, temperatureMin/Max, rainProbability, windSpeed/Direction, skyCondition                                    |
+| `ApiMessageBody` (NUOVO)         | `{ message?: String }` — usato come Response body per PATCH/DELETE/leave → evita crash Gson eager su payload non popolato            |
+| `ActivityStatsResponse` (NUOVO)  | year, totalActivities, totalDistanceKm, totalElevationGainM, totalPoints, monthlyActivityCount[12], monthlyAvgDifficulty[12]         |
+| `RegisterRifugioRequest` (NUOVO) | username, email, password, role=`rifugio`, rifugioDetails (rifugioName/caiCode/quota/posti/coordinates)                              |
+| `ForgotPasswordRequest` (NUOVO)  | `{ email }`                                                                                                                          |
+
+#### Persistenza locale — Room v3 (`tsm.db`)
+
+| Entity                            | Tabella                | Note                                                                                                                                                                                                                                                                                                                          |
+| --------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CachedUserProfileEntity`         | `cached_user_profile`  | PK userId, username, updatedAtEpochMs — cache offline ProfileScreen                                                                                                                                                                                                                                                           |
+| `CompletedActivityEntity` (NUOVO) | `completed_activities` | PK id (UUID), sessionId?, name, activityType (default "hiking"), startTimeMs, endTimeMs, movingSeconds, totalSeconds, distanceMeters, elevationGainMeters, currentAltitudeMeters?, difficultyLevel?, **trackLatLng** (JSON array di triplet [lat,lon,alt], max 200 punti), estimatedCalories?, points?, isSynced, completedAt |
+
+Doppia sorgente di scrittura:
+
+- `RegistraViewModel.confirmStopTracking` → attività registrate localmente con tracciato GPS reale
+- `ActivityListViewModel.syncCompletedSessionsToRoom` → sessioni COMPLETED importate dal backend (`trackLatLng="[]"`, `isSynced=true`)
+
+#### Modulo di stima escursione (HikeEstimation.kt)
+
+| Funzione                           | Formula                                                      |
+| ---------------------------------- | ------------------------------------------------------------ |
+| `caiTimeHours(D, H)`               | Polinomio CAI su pendenza P=(H/M)×100 → min/km × distKm / 60 |
+| `equivalentDistance(D, H)`         | D + H/100 (100m salita ≡ 1km piano)                          |
+| `naismithTimeHours(D, H)`          | D/4 + H/300                                                  |
+| `estimatedPoints(D, H, K=10)`      | round(K × D_eq) — pianificazione, μ=1.0                      |
+| `finalPoints(D, H, T_reale, K=10)` | round(K × D_eq × clip(T_nom/T_reale, 0.8, 1.2))              |
+
+#### Navigazione
+
+```
+TsmNavHost:
+  AUTH_ENTRY → REGISTER / REGISTER_RIFUGIO / LOGIN
+  LOGIN      → FORGOT_PASSWORD
+  LOGIN      → MAIN_HIKER (role: groupLeader) | MAIN_RIFUGIO (role: rifugio)
+  MAIN_HIKER → SESSION_DETAIL (full-screen sopra bottom nav)
+  SESSION_DETAIL (AVVIA) → SessionStartCoordinator → HikerMainScreen switcha a Registra tab
+                                                    → RegistraViewModel auto-start tracking
+                                                    → PATCH /sessions/:id/status = ACTIVE
+```
+
+#### Feature trasversali implementate
+
+| Feature                           | Descrizione                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Dark Theme completo**           | darkColorScheme Material3, TsmBackground #121212                                                       |
+| **Token design**                  | TsmPrimary #3F7020, TsmAccent #4FC3F7, TsmSos #6B0D0D, TsmSurface #1E1E1E, TsmBorder #5D4037           |
+| **Offline badge**                 | Login mostra info su token locale se offline                                                           |
+| **Codice invito sempre visibile** | SessionCard + SessionDetail con copia in clipboard                                                     |
+| **GPX parser robusto**            | Smoothing moving-average (w=5), valley-peak threshold 10m, interpolazione null, campionamento 50 punti |
+| **Profilo altimetrico reale**     | Canvas normalizzato min/max dal GPX, area fill gradient                                                |
+| **Meteo reale TINIA**             | Nearest town via 2dsphere + forecast 3h+24h, skyCondition emoji mapper                                 |
+| **Checklist drag-and-drop**       | ReorderableColumn (sh.calvin.reorderable), toggle check, add/remove                                    |
+| **Edit mode sessione**            | Solo creator (check JWT userId), PATCH con populate fix, auto-close su successo                        |
+| **AVVIA → Registra**              | SessionStartCoordinator bus singleton, HikerMainScreen LaunchedEffect, RegistraViewModel auto-start    |
+| **PATCH Gson crash fix**          | `updateSession` ora usa `Response<ApiMessageBody>` (backend popola entrambi i campi ref)               |
+
+---
+
+## 5. Refactor & Bug Risolti nel Sprint 1
+
+### Refactor 2026-05 — Schema User → Discriminator Mongoose
+
+| Area | Prima | Dopo |
+|------|-------|------|
+| **Modelli** | 1 modello `User` monolitico con campo `role` e subdocument opzionale `rifugioDetails` | 4 file: `user.js` (base) + `hiker.js`/`refuge.js`/`admin.js` (discriminator); campi rifugio FLAT |
+| **Routes** | 1 file `userRoutes.js` per tutto | 3 file role-specific: `hikerRoutes.js`, `refugeRoutes.js`, `adminRoutes.js` + alias semantici `/auth/register/{hiker,refuge}` |
+| **Services** | 1 file `userService.js` con switch interno sul ruolo | 3 file: `hikerService.js`, `refugeService.js`, `adminService.js` |
+| **Collection MongoDB** | `users` | `users` (invariata — discriminator usano una sola collection) |
+| **Login + JWT + populate** | OK | OK invariato (nessuna migrazione dati) |
+| **Mobile DTO `RegisterRifugioRequest`** | Annidato `{rifugioDetails: {...}}` + campo `role` | Flat, no campo `role` |
+| **Mobile endpoint** | `POST /users` per entrambi | `POST /auth/register/hiker` e `POST /auth/register/refuge` |
+| **Compat backward** | — | `POST /users` mantenuto come shim deprecato che smista in base a `role`; `GET /users/:id` mantenuto come alias |
+
+**Motivazione**: separazione dei concerns, schema più snelli per ruolo, route più scopribili in Swagger, predisposizione per estensioni future role-specific (Hiker: saldoSc/badges; Admin: permissions/audit).
+
+### Bug Risolti durante lo Sprint
+
+| Bug                                                | Root Cause                                                           | Fix                                                                                            |
+| -------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| SessionCreatedDialog OK non chiudeva               | `onDismiss` no-op; state `sessionCreated` non resettata              | `resetAfterCreation()` + callback `onSessionCreated` → `subTab = 1`                            |
+| "Sei già in una sessione attiva" alla creazione    | `checkUserAlreadyInActiveSession` bloccava anche sessioni PLANNED    | Cambiato a `status: "ACTIVE"` only                                                             |
+| Code box codice: cursore sbagliato + history ghost | `BasicTextField(value: String)` non sincronizzato con state esterno  | `TextFieldValue` con `LaunchedEffect(code)` per riallineamento esplicito                       |
+| Tab UNISCITI non si aggiornava dopo join           | `loadSessions()` chiamato solo in `init {}`                          | `LaunchedEffect(Unit)` + `DisposableEffect(ON_RESUME)`                                         |
+| Dislivello GPX sovrastimato (2-3×)                 | Parser sommava tutte le variazioni positive (noise GPS)              | Smoothing MA(5) + valley-peak threshold 10m                                                    |
+| Edit mode non si chiudeva dopo save                | `saveEdit` non ricaricava la sessione; dropdown locale non resettato | `loadSession(id)` dopo save + `LaunchedEffect(uiState.editMode)` per picker locali             |
+| `updateSession` crash `IllegalStateException`      | Gson deserializzazione eager: `participants.userId` era ObjectId raw | Backend: populate doppio (creatorId + participants.userId); Kotlin: `Response<ApiMessageBody>` |
+| UNISCITI: host non poteva eliminare                | `leaveSession` restituiva 403 per il creator                         | `RemovalMode.DELETE` vs `LEAVE` basato su `creatorId._id == currentUserId`                     |
+
+---
+
+## 6. Struttura File Corrente
+
+### Backend — post-refactor 2026-05 (discriminator Mongoose)
+
+```
+backend/src/
+├── app.js                          → Express, CORS, normalizzazione path,
+│                                     routes: /auth /hikers /refuges /admin
+│                                            /api/v1/sessions /weather
+│                                     + shim deprecato /users
+├── server.js                       → MongoDB connect :3000
+├── middleware/
+│   ├── authMiddleware.js           → JWT Bearer → req.user
+│   ├── authorizationMiddleware.js  → requireRoles(...)
+│   └── errorMiddleware.js
+├── models/                         → ⚠️ REFACTOR 2026-05: discriminator pattern
+│   ├── user.js                     → schema BASE con discriminatorKey: "role"
+│   ├── hiker.js                    → NUOVO: discriminator groupLeader
+│   ├── refuge.js                   → NUOVO: discriminator rifugio (campi flat)
+│   ├── admin.js                    → NUOVO: discriminator admin
+│   ├── hikeSession.js              → invariato (compatibile con discriminator User)
+│   └── location.js                 → modulo meteo (town/poi, GeoJSON 2dsphere)
+├── routes/                         → ⚠️ REFACTOR 2026-05: route per ruolo
+│   ├── authRoutes.js               → login, verify, forgot/reset-password,
+│   │                                 + register/hiker, register/refuge (alias)
+│   ├── hikerRoutes.js              → NUOVO: POST/GET/PUT /hikers
+│   ├── refugeRoutes.js             → NUOVO: POST/GET/PUT /refuges + lista pubblica
+│   ├── adminRoutes.js              → NUOVO: CRUD /admin/users (admin-only)
+│   ├── hikeSessionRoutes.js        → sessioni invariato
+│   └── weatherRoutes.js            → meteo invariato
+└── services/                       → ⚠️ REFACTOR 2026-05: services per ruolo
+    ├── authService.js              → login, verify email, forgot/reset password
+    ├── hikerService.js             → NUOVO: createHiker, getHikerById, updateHiker
+    ├── refugeService.js            → NUOVO: createRefuge, getRefugeById, listRefuges, updateRefuge
+    ├── adminService.js             → NUOVO: createAdmin, listAllUsers, get/update/deleteAnyUser
+    ├── hikeSessionService.js       → sessioni: createSession, joinSession, ...
+    ├── emailService.js             → Brevo HTTP API (no più SMTP)
+    └── weatherService.js           → TINIA API, fetchVenues, findNearbyVenues, getLocationForecast
+
+→ rimossi:
+   • routes/userRoutes.js  (sostituito da hiker/refuge/admin)
+   • services/userService.js (sostituito da hiker/refuge/admin)
+```
+
+### Mobile
+
+```
+mobile/app/src/main/java/it/trentosmartmountain/app/
+├── data/
+│   ├── estimation/
+│   │   └── HikeEstimation.kt       → NUOVO: formule CAI, Naismith, modello punti TSM
+│   ├── location/                   → HikeTrackingEngine, UserLocationTracker, TrackingLocationBus,
+│   │                                  StationaryDetector, ForegroundTrackingService
+│   ├── remote/
+│   │   ├── TsmApiService.kt        → 20 endpoint; PATCH usa ApiMessageBody (Gson safe)
+│   │   └── dto/
+│   │       ├── SessionResponse.kt  → +GpxStatsResponse.elevationProfile/estimatedPoints
+│   │       ├── CreateSessionRequest.kt → +GpxStats.elevationProfile/estimatedPoints
+│   │       ├── MeteoResponse.kt    → RISCRITTO: WeatherForecastResponse/Slot/LocationResult
+│   │       ├── JoinSessionRequest.kt → +UpdateSessionStatusRequest, +UpdateSessionRequest
+│   │       └── [altri DTO invariati]
+│   ├── session/
+│   │   └── SessionStartCoordinator.kt → NUOVO: bus singleton AVVIA→Registra
+│   └── local/                       → TokenStorage, AuthSession, Room DB, ProfileDao
+├── ui/
+│   ├── theme/
+│   │   ├── Color.kt                 → Tutti i token TSM (TsmPrimary/Accent/Sos/Surface/Border/Background)
+│   │   └── Theme.kt                 → darkColorScheme completo
+│   ├── navigation/
+│   │   ├── Routes.kt                → +FORGOT_PASSWORD, +SESSION_DETAIL + helper sessionDetailRoute()
+│   │   └── TsmNavHost.kt            → +ForgotPassword, +SessionDetail, +SessionStartCoordinator
+│   └── screens/
+│       ├── auth/AuthEntryScreen.kt  → RISCRITTO: logo Canvas, dark theme, 3 bottoni
+│       ├── login/LoginScreen.kt     → RISCRITTO: icone, forgot password, offline badge
+│       ├── register/
+│       │   ├── RegisterScreen.kt    → RISCRITTO: step indicator, ToS checkbox
+│       │   ├── RegisterRifugioScreen.kt → RISCRITTO: form completo con ViewModel
+│       │   └── ForgotPasswordScreen.kt  → NUOVO
+│       ├── main/HikerMainScreen.kt  → +SessionStartCoordinator observer
+│       ├── session/
+│       │   ├── SessionHubScreen.kt  → RISCRITTO: PIANIFICA + UNISCITI completi
+│       │   └── SessionDetailScreen.kt → NUOVO: elevation chart, meteo TINIA, checklist D&D
+│       ├── registra/RegistraScreen.kt → RISCRITTO: OSMdroid + tracking GPS + auto-start
+│       └── [HomeScreen/ProfileScreen/RefugeMainScreen: parziali]
+├── viewmodel/
+│   ├── [Login/Register/Profile ViewModels: invariati]
+│   ├── RegisterRifugioViewModel.kt  → NUOVO
+│   ├── ForgotPasswordViewModel.kt   → NUOVO
+│   ├── SessionPlanViewModel.kt      → +GPX parser robusto, +elevationProfile, +estimatedPoints
+│   ├── SessionJoinViewModel.kt      → RISCRITTO: AndroidViewModel, RemovalMode LEAVE/DELETE
+│   ├── SessionDetailViewModel.kt    → NUOVO: edit mode, meteo TINIA, checklist, AVVIA
+│   └── RegistraViewModel.kt         → RISCRITTO: HikeTrackingEngine, auto-start da Coordinator
+└── service/
+    └── ForegroundTrackingService.kt  → Foreground GPS service funzionante
 ```
 
 ---
 
-### `POST /weather/seed`
+## 7. Permessi Android (AndroidManifest.xml) — Stato attuale
 
-Popola (o aggiorna) il DB con tutte le towns e i POI dall'API esterna. Operazione idempotente (usa upsert): sicura da chiamare più volte.
-
-> Il seed viene eseguito automaticamente all'avvio del server. Questo endpoint è utile per forzare un aggiornamento manuale delle anagrafiche.
-
-**Risposta:**
-```json
-{
-  "message": "Seed completato",
-  "towns": 712,
-  "pois": 183
-}
-```
-
----
-
-## 🧪 Come Testare (Flusso Completo)
-
-> **Prerequisito**: server avviato e MongoDB raggiungibile. Il seed delle anagrafiche avviene in automatico all'avvio.
-
-### Passo 1 — Trova l'`externalId` di una location
-
-Cerca una Town per nome:
-```
-GET /weather/locations/search?q=Laives&type=town
-```
-
-Dalla risposta, copia il campo `externalId` del risultato. Ti servirà nei passi successivi.
-
-### Passo 2 — Richiedi il forecast (prima volta)
-
-```
-GET /weather/forecast/<externalId-copiato>
-```
-
-- Il DB è ancora vuoto per quella location → il sistema scarica i dati dall'API esterna e li salva su MongoDB.
-- Nella risposta: `meta.fromCache` sarà `false`.
-
-### Passo 3 — Verifica la cache
-
-Ripeti la stessa richiesta entro un'ora:
-```
-GET /weather/forecast/<externalId-copiato>
-```
-- Questa volta: `meta.fromCache` sarà `true` (dati serviti dal DB, nessuna chiamata esterna).
-
-### Passo 4 — Forza un aggiornamento
-
-```
-POST /weather/forecast/<externalId-copiato>/refresh
-```
-- Ignora la cache, scarica dati freschi e sovrascrive il documento su MongoDB.
-
-### Passo 5 — Test con un POI
-
-Cerca un POI vicino a una coordinata:
-```
-GET /weather/locations/nearby?lon=11.35&lat=46.50&type=poi&limit=3
-```
-
-Poi richiedi il forecast del POI trovato:
-```
-GET /weather/forecast/<externalId-poi>
-```
-- Il campo `referenceTown` nella risposta mostra la Town da cui sono stati risolti i dati meteo.
+| Permesso                      | Stato                    | Uso                                                                                    |
+| ----------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| `INTERNET`                    | ✅                       | Tutte le chiamate di rete                                                              |
+| `ACCESS_NETWORK_STATE`        | ✅                       | Rilevamento connettività (offline badge)                                               |
+| `ACCESS_FINE_LOCATION`        | ✅                       | GPS preciso per tracking                                                               |
+| `ACCESS_COARSE_LOCATION`      | ✅                       | GPS approssimativo                                                                     |
+| `ACCESS_BACKGROUND_LOCATION`  | ✅ **AGGIUNTO** (fix C3) | D2 RNF9: tracking GPS a schermo spento (richiesto runtime DOPO `ACCESS_FINE_LOCATION`) |
+| `FOREGROUND_SERVICE`          | ✅                       | ForegroundTrackingService                                                              |
+| `FOREGROUND_SERVICE_LOCATION` | ✅                       | Tracking GPS foreground                                                                |
+| `POST_NOTIFICATIONS`          | ✅                       | Notifica tracking attivo (Android 13+)                                                 |
+| `WAKE_LOCK`                   | ✅ **AGGIUNTO**          | Evita drop service durante tracking lungo a schermo spento                             |
+| Intent-filter `tsm://auth`    | ✅                       | Deep link verifica email                                                               |
+| `BLUETOOTH_SCAN`              | ❌                       | Futuro: BLE Mesh                                                                       |
+| `BLUETOOTH_ADVERTISE`         | ❌                       | Futuro: BLE Mesh                                                                       |
+| `NFC`                         | ❌                       | Futuro: checkpoint vetta                                                               |
+| `VIBRATE`                     | ❌                       | Futuro: feedback aptico SOS                                                            |
 
 ---
 
-## 🔍 Verifica su MongoDB (VS Code)
+## 8. Gap residui — Da completare nei prossimi Sprint
 
-Per ispezionare i dati salvati direttamente nel DB:
+### Sprint 2 — Priorità Alta
 
-1. Apri la barra laterale **MongoDB** in VS Code.
-2. Clicca su **Refresh** (icona freccia circolare) sulla collection `locations`.
-3. Usa un Playground per cercare le location che hanno già forecast:
+| Feature                                    | Layer            | Dipendenze                               |
+| ------------------------------------------ | ---------------- | ---------------------------------------- |
+| Backend POST /emergencies (SOS con ECC)    | Backend          | ECC key generation                       |
+| GPS telemetry batch upload a fine sessione | Mobile + Backend | POST /sessions/:id/telemetry             |
+| HomeScreen feed + storico attività         | Mobile           | GET /sessions/my già esistente           |
+| Salvataggio attività completata in Home    | Mobile           | `confirmStopTracking` → status COMPLETED |
+| BLE Mesh fallback SOS                      | Mobile           | Hardware + biblioteca BLE                |
 
-```javascript
-/* global use, db */
-use('trento_smart_mountain');
+### Sprint 3 — Priorità Media
 
-db.locations.find({ "forecasts.fetchedAt": { $exists: true } });
-```
+| Feature                                      | Layer            | Note                         |
+| -------------------------------------------- | ---------------- | ---------------------------- |
+| Socket.io real-time posizioni gruppo         | Backend + Mobile | Installato ma non integrato  |
+| EducationalScreen quiz + NFC checkpoint      | Mobile + Backend | Quiz model non ancora creato |
+| Social Credits gamification (Event Sourcing) | Backend          | user_event_store collection  |
+| ProfileScreen avatar + livello + badge       | Mobile           | HOME SOCIAL non implementata |
+| MQTT IoT gateway rifugio                     | Backend          | Installato, non integrato    |
 
-Per leggere i dati meteo di una specifica città in modo leggibile:
+### Debito tecnico noto
 
-```javascript
-/* global use, db */
-use('trento_smart_mountain');
-
-const citta = db.locations.findOne({ name: "Laives" });
-
-if (!citta?.forecasts) {
-    print("ERRORE: Dati non trovati o forecast non ancora caricato.");
-} else {
-    const stampa = (slot, tipo) => {
-        const data = slot.validFrom.toISOString().replace('T', ' ').substring(0, 16);
-        const temp = slot.temperature != null
-            ? `${slot.temperature}°C`
-            : `${slot.temperatureMin}–${slot.temperatureMax}°C`;
-        print(`[${tipo}] ${data} | Temp: ${temp} | Neve: ${slot.freshSnow}cm | Vento: ${slot.windSpeed}km/h | Sky: ${slot.skyCondition}`);
-    };
-
-    print(`=== ${citta.name} — Forecast 3h (prime 3 slot) ===`);
-    citta.forecasts.slots3h.slice(0, 3).forEach(s => stampa(s, "3h"));
-
-    print(`\n=== ${citta.name} — Forecast 24h (prime 3 slot) ===`);
-    citta.forecasts.slots24h.slice(0, 3).forEach(s => stampa(s, "24h"));
-}
-```
+| Problema                                                                       | File                                  | Severità | Stato 17/05                                                                              |
+| ------------------------------------------------------------------------------ | ------------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| `userSchema.sessionRoles` referenziato in service ma non nello schema          | `user.js` / `hikeSessionService.js`   | Media    | �� RISOLTO (M1)                                                                          |
+| `leaveSession` restituisce doc non-populated (route usa `ApiMessageBody` → ok) | `hikeSessionService.js`               | Bassa    | �� Tollerato                                                                             |
+| `POST /weather/seed` non ha middleware admin                                   | `weatherRoutes.js`                    | Media    | �� RISOLTO (C2)                                                                          |
+| WorkManager Store-and-Forward (sync batch offline)                             | Mobile                                | Alta     | �� Aperto — richiede dipendenza WorkManager                                              |
+| `joinSession` non popola il response                                           | `hikeSessionService.js`               | Media    | �� RISOLTO (M4)                                                                          |
+| Pattern Repository non applicato ai ViewModel sessione/attività                | Mobile                                | Media    | �� Aperto — `SessionRepository`/`ActivityRepository` da introdurre                       |
+| `meetingDate` String invece di Date                                            | `hikeSession.js`                      | Media    | �� Aperto                                                                                |
+| Test (Jest backend / JUnit mobile)                                             | tutto                                 | Alta     | �� Aperto — zero test scritti finora                                                     |
+| IoT gateway `iot/gateway/src/main.py` vuoto                                    | `iot/gateway/src/main.py`             | Media    | �� Aperto — bootstrap pronto (docker-compose + mosquitto), implementazione MQTT mancante |
+| `iot/mosquitto/config/mosquitto.conf` vuoto                                    | `iot/mosquitto/config/mosquitto.conf` | Media    | �� Aperto — broker parte con config default, va aggiunta autenticazione/ACL              |
 
 ---
-
-## 📦 Note Tecniche
-
-- **Indice 2dsphere**: richiesto sul campo `location` per le query geospaziali (`$near`). Viene creato automaticamente dallo schema Mongoose.
-- **Idempotenza del seed**: usa `bulkWrite` con `upsert: true`, quindi non duplica i dati.
-- **`markModified`**: Mongoose richiede `location.markModified('forecasts')` per rilevare modifiche a oggetti annidati — già gestito nel service.
-- **Fonte dati esterna**: towns e POI da [gitlab.com/tinia-euregio](https://gitlab.com/tinia-euregio/tinia-website/-/raw/main/data/venues/it/); forecast da `meteo.report`.

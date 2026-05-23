@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.RegisterRifugioRequest
-import it.trentosmartmountain.app.data.remote.dto.RifugioDetails
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,18 +69,17 @@ class RegisterRifugioViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, generalError = null) }
             try {
+                // Post-refactor 2026-05: il backend usa discriminator Mongoose,
+                // niente più sub-document `rifugioDetails`. Campi flat sul body.
                 val body = RegisterRifugioRequest(
                     username = state.rifugioName,
                     email = state.email,
                     password = state.password,
-                    role = "rifugio",
-                    rifugioDetails = RifugioDetails(
-                        rifugioName = state.rifugioName,
-                        caiCode = state.caiCode.ifBlank { null },
-                        quota = state.quota.toIntOrNull(),
-                        posti = state.posti.toIntOrNull(),
-                        coordinates = state.coordinates.ifBlank { null },
-                    ),
+                    rifugioName = state.rifugioName,
+                    caiCode = state.caiCode.ifBlank { null },
+                    quota = state.quota.toIntOrNull(),
+                    posti = state.posti.toIntOrNull(),
+                    coordinates = state.coordinates.ifBlank { null },
                 )
                 val response = TsmApiClient.service().registerRifugio(body)
                 if (response.isSuccessful) {

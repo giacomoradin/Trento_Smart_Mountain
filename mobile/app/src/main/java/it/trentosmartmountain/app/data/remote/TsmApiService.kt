@@ -1,6 +1,9 @@
 package it.trentosmartmountain.app.data.remote
 
+import it.trentosmartmountain.app.data.remote.dto.ActivityResponse
 import it.trentosmartmountain.app.data.remote.dto.ApiMessageBody
+import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.ForgotPasswordRequest
 import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
@@ -41,14 +44,38 @@ interface TsmApiService {
   @POST("auth/forgot-password")
   suspend fun forgotPassword(@Body body: ForgotPasswordRequest): Response<ApiMessageBody>
 
-  // ── Users ──
+  // ── Registrazione per ruolo (post-refactor discriminator) ──
+  // Endpoints semantici sotto /auth/register/* preferiti rispetto a /hikers e /refuges
+  // perché tengono il flusso "registrazione" raccolto sotto la categoria auth in Swagger.
 
-  @POST("users")
+  /** POST /auth/register/hiker → crea un account escursionista (groupLeader). */
+  @POST("auth/register/hiker")
   suspend fun register(@Body body: RegisterRequest): Response<RegisterResponse>
 
-  @POST("users")
+  /** POST /auth/register/refuge → crea un account rifugio con metadati flat. */
+  @POST("auth/register/refuge")
   suspend fun registerRifugio(@Body body: RegisterRifugioRequest): Response<RegisterResponse>
 
+  // ── Hiker (profilo escursionista) ──
+
+  /** GET /hikers/:id → profilo escursionista (richiede JWT). */
+  @GET("hikers/{id}")
+  suspend fun getHikerById(@Path("id") id: String): Response<UserResponse>
+
+  // ── Refuge (profilo rifugio) ──
+
+  /** GET /refuges/:id → profilo rifugio con metadati struttura. */
+  @GET("refuges/{id}")
+  suspend fun getRefugeById(@Path("id") id: String): Response<UserResponse>
+
+  /**
+   * GET /users/{id} — alias retro-compatibile.
+   *
+   * Mantenuto temporaneamente per non rompere il [ProfileViewModel] che legge il
+   * profilo senza conoscere a priori il ruolo dell'utente. In Sprint 2 verrà
+   * sostituito da una chiamata a `/hikers/{id}` o `/refuges/{id}` in base al ruolo
+   * decodificato dal JWT. Il backend mantiene un'alias route per smistare.
+   */
   @GET("users/{id}")
   suspend fun getUserById(@Path("id") id: String): Response<UserResponse>
 
@@ -88,6 +115,30 @@ interface TsmApiService {
     @Path("id") id: String,
     @Body body: UpdateSessionStatusRequest,
   ): Response<ApiMessageBody>
+
+  /**
+   * Marca la sessione COMPLETED e persiste le metriche reali del tracking.
+   * Usato da [RegistraViewModel.confirmStopTracking] al termine di una sessione live.
+   */
+  @PATCH("api/v1/sessions/{id}/complete")
+  suspend fun completeSession(
+    @Path("id") id: String,
+    @Body body: CompleteSessionRequest,
+  ): Response<ApiMessageBody>
+
+  // ── Activity (attività libere senza sessione di gruppo) ──
+
+  /** Crea una nuova attività libera sul server. Usato dal sync worker dopo il tracking. */
+  @POST("api/v1/activities")
+  suspend fun createActivity(@Body body: CreateActivityRequest): Response<ActivityResponse>
+
+  /** Lista delle attività libere dell'utente loggato (sync cloud → locale). */
+  @GET("api/v1/activities")
+  suspend fun getMyActivities(): Response<List<ActivityResponse>>
+
+  /** Elimina un'attività libera. Solo il proprietario è autorizzato (verificato lato server). */
+  @DELETE("api/v1/activities/{id}")
+  suspend fun deleteActivity(@Path("id") id: String): Response<ApiMessageBody>
 
   // ── Weather (implementazione di Marco via meteo.report / TINIA) ──
 

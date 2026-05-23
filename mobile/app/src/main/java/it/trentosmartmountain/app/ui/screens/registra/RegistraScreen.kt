@@ -227,6 +227,37 @@ fun RegistraScreen(
     )
   }
 
+<<<<<<< HEAD
+=======
+  // ── Dialog "Attività troppo corta" — chiede conferma per attività libere < 50m ──
+  if (uiState.shortActivityConfirm) {
+    AlertDialog(
+      onDismissRequest = viewModel::dismissShortActivity,
+      containerColor = TsmSurface,
+      title = { Text("Attività troppo corta", color = Color.White) },
+      text = {
+        Text(
+          "Hai percorso meno di 50 metri. Le attività brevi solitamente sono avvii accidentali. Vuoi salvarla comunque?",
+          color = Color.Gray,
+        )
+      },
+      confirmButton = {
+        Button(
+          onClick = viewModel::confirmShortActivity,
+          colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
+          shape = RoundedCornerShape(8.dp),
+        ) { Text("Salva comunque") }
+      },
+      dismissButton = {
+        TextButton(onClick = viewModel::discardTracking) {
+          Text("Scarta", color = MaterialTheme.colorScheme.error)
+        }
+      },
+    )
+  }
+
+  // ── Dialog "Salva Attività" — sostituisce il vecchio stop confirm ──
+>>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
   if (uiState.showStopConfirm) {
     AlertDialog(
       onDismissRequest = viewModel::dismissStopConfirm,

@@ -137,8 +137,12 @@ interface TsmApiService {
   @GET("api/v1/activities")
   suspend fun getMyActivities(): Response<List<ActivityResponse>>
 
-  /** Statistiche aggregate annuali/mensili per l'utente loggato. */
-  @GET("api/v1/activities/stats")
+  /**
+   * Statistiche aggregate annuali/mensili per l'utente loggato (sessioni completate
+   * + attività libere). L'endpoint è esposto da hikeSessionRoutes (non activityRoutes)
+   * perché aggrega entrambe le sorgenti: vedi backend/src/services/hikeSessionService.js.
+   */
+  @GET("api/v1/sessions/stats")
   suspend fun getActivityStats(@Query("year") year: Int): Response<ActivityStatsResponse>
 
   /** Elimina un'attività libera. Solo il proprietario è autorizzato (verificato lato server). */

@@ -93,6 +93,7 @@ trento-smart-mountain/
 ### Backend
 
 #### Auth
+
 - ✅ POST `/auth/register/hiker` — schema Joi, rate limit 5/h, bcrypt
 - ✅ POST `/auth/register/refuge` — flat schema con rifugioName/address/altitudeMeters
 - ✅ POST `/auth/login` — rate limit 10/15min (skip success)
@@ -101,6 +102,7 @@ trento-smart-mountain/
 - ✅ GET / POST `/auth/reset-password/:token` — form HTML + JSON, token monouso 1h
 
 #### Sessions (gruppo)
+
 - ✅ CRUD sessione + invite code TSM-XXXX univoco
 - ✅ Join via codice invito (vincolo: una sola ACTIVE per utente)
 - ✅ PATCH `/status` per lifecycle PLANNED→ACTIVE→COMPLETED
@@ -110,6 +112,7 @@ trento-smart-mountain/
 - ✅ Modello actualStats per dati registrati live
 
 #### Activities (libere)
+
 - ✅ POST `/api/v1/activities` — creazione attività personale
 - ✅ GET `/api/v1/activities` — lista per utente
 - ✅ GET `/api/v1/activities/:id` — dettaglio con check owner
@@ -117,12 +120,14 @@ trento-smart-mountain/
 - ✅ Indici `(userId, completedAt)` + 2dsphere sparse su startPoint
 
 #### Weather
+
 - ✅ GET `/weather/locations/nearby?lon=&lat=&maxDistance=&type=` (2dsphere)
 - ✅ GET `/weather/locations/search?q=&type=&limit=` (regex case-insensitive)
 - ✅ GET `/weather/forecast/:externalId?forceRefresh=` (cache 1h)
 - ✅ Seed automatico da meteo.report + gitlab tinia-euregio
 
 #### Security
+
 - ✅ helmet (CSP custom per Swagger UI, HSTS in prod)
 - ✅ CORS allow-list via `ALLOWED_ORIGINS` env
 - ✅ express-mongo-sanitize (NoSQL injection)
@@ -136,17 +141,20 @@ trento-smart-mountain/
 ### Mobile
 
 #### Auth
+
 - ✅ AuthEntry → Login / Register / RegisterRifugio / ForgotPassword
 - ✅ JWT in EncryptedSharedPreferences (TokenStorage)
 - ✅ Deep link auto-login post email verify
 
 #### Sessions
+
 - ✅ SessionHubScreen: tab PIANIFICA (GPX import + form + QR) / UNISCITI (code box + lista)
 - ✅ SessionDetailScreen: elevation chart, meteo reale TINIA, checklist drag-and-drop, partecipanti, edit creator
 - ✅ SessionPlanViewModel con parser GPX (haversine + smoothing + valley-peak + `<time>` per durata effettiva)
 - ✅ SessionStartCoordinator: emette pendingSessionStart → switch tab Registra + auto-start tracking
 
 #### Registra (tracking GPS)
+
 - ✅ TsmMapView (OSMdroid + OpenTopoMap tiles)
 - ✅ HikeTrackingEngine + StationaryDetector (auto-pause)
 - ✅ ForegroundTrackingService (persistenza GPS in background)
@@ -156,6 +164,7 @@ trento-smart-mountain/
 - ✅ Fallback SyncManager se la rete fallisce
 
 #### Home / Le Mie Attività
+
 - ✅ ActivityListScreen con yearly stats card (HorizontalPager 5 anni)
 - ✅ MonthlyBarChart cliccabile (filtro mese)
 - ✅ Sort: recente / vecchia / A-Z / distanza / difficoltà / durata
@@ -166,6 +175,7 @@ trento-smart-mountain/
 - ✅ Delete con cleanup remoto per attività libere (DELETE /activities/:id)
 
 #### Sync engine
+
 - ✅ SyncManager: coroutine loop 60s + backoff incrementale per record (1m → 5m → 30m → 1h cap)
 - ✅ `enqueueImmediate()` per pull-to-refresh manuale
 - ✅ Room v4 con campi `retry_count`, `last_retry_at_ms`, `remote_id`
@@ -183,6 +193,7 @@ trento-smart-mountain/
 ## 4. Gap analysis (cosa manca)
 
 ### Non ancora implementato
+
 - ❌ SOS via BLE Mesh — UC4 da D1
 - ❌ NFC check-in vetta — UC5 da D1
 - ❌ Social Credits leaderboard — sezione "Sociale" placeholder
@@ -194,6 +205,7 @@ trento-smart-mountain/
 - ❌ Refuge dashboard mobile — placeholder
 
 ### Tech debt / TODO security
+
 - ⚠ Logging strutturato + Sentry (oggi solo console)
 - ⚠ Audit trail per azioni admin (chi ha eliminato chi)
 - ⚠ Rotazione automatica JWT secret (oggi manuale)
@@ -203,6 +215,7 @@ trento-smart-mountain/
 - ⚠ CI gate su `npm audit`
 
 ### Limiti noti sync mobile
+
 - ⚠ Senza WorkManager: il sync funziona solo se il process è vivo (foreground o cached background). Se l'OS killa l'app, niente retry finché non si riapre. Workaround: alla riapertura il loop riparte e processa il backlog.
 - ⚠ Niente Redis distribuito: rate limit è per-instance.
 
@@ -211,6 +224,7 @@ trento-smart-mountain/
 ## 5. Roadmap Sprint 2-3
 
 ### Sprint 2 (in corso, deadline ~giugno 2026)
+
 - [x] Bug fix tempi GPX (durata effettiva da `<time>`)
 - [x] Sync attività locali/cloud con actualStats
 - [x] Profilo altimetrico corretto (no overlap)
@@ -223,6 +237,7 @@ trento-smart-mountain/
 - [ ] D3 documentation (in scrittura)
 
 ### Sprint 3 (planned)
+
 - [ ] BLE Mesh SOS prototype
 - [ ] NFC vetta check-in
 - [ ] Social Credits + leaderboard
@@ -236,6 +251,7 @@ trento-smart-mountain/
 ## 6. Setup rapido
 
 ### Backend
+
 ```bash
 # Prima volta
 npm install
@@ -248,93 +264,19 @@ npm run dev                          # nodemon su localhost:3000
 ```
 
 ### Mobile
+
 ```bash
 cd mobile
 # crea mobile/local.properties:
 #   sdk.dir=/path/to/Android/Sdk
 #   tsm.api.baseUrl=http://10.0.2.2:3000/   (emulatore Android)
 
-<<<<<<< HEAD
-## 7. Permessi Android (AndroidManifest.xml) — Stato attuale
-
-| Permesso | Stato | Uso |
-|----------|-------|-----|
-| `INTERNET` | ✅ | Tutte le chiamate di rete |
-| `ACCESS_FINE_LOCATION` | ✅ | GPS preciso per tracking |
-| `ACCESS_COARSE_LOCATION` | ✅ | GPS approssimativo |
-| `ACCESS_BACKGROUND_LOCATION` | ✅ | Tracking in background |
-| `FOREGROUND_SERVICE` | ✅ | ForegroundTrackingService |
-| `FOREGROUND_SERVICE_LOCATION` | ✅ | Tracking GPS foreground |
-| `POST_NOTIFICATIONS` | ✅ | Notifica tracking attivo (Android 13+) |
-| `BLUETOOTH_SCAN` | ❌ | Futuro: BLE Mesh |
-| `BLUETOOTH_ADVERTISE` | ❌ | Futuro: BLE Mesh |
-| `NFC` | ❌ | Futuro: checkpoint vetta |
-| `VIBRATE` | ❌ | Futuro: feedback aptico SOS |
-
----
-
-## 8. Gap residui — Da completare nei prossimi Sprint
-
-### Sprint 2 — Priorità Alta
-
-| Feature | Layer | Dipendenze |
-|---------|-------|-----------|
-| Backend POST /emergencies (SOS con ECC) | Backend | ECC key generation |
-| GPS telemetry batch upload a fine sessione | Mobile + Backend | POST /sessions/:id/telemetry |
-| HomeScreen feed + storico attività | Mobile | GET /sessions/my già esistente |
-| Salvataggio attività completata in Home | Mobile | `confirmStopTracking` → status COMPLETED |
-| BLE Mesh fallback SOS | Mobile | Hardware + biblioteca BLE |
-
-### Sprint 3 — Priorità Media
-
-| Feature | Layer | Note |
-|---------|-------|------|
-| Socket.io real-time posizioni gruppo | Backend + Mobile | Installato ma non integrato |
-| EducationalScreen quiz + NFC checkpoint | Mobile + Backend | Quiz model non ancora creato |
-| Social Credits gamification (Event Sourcing) | Backend | user_event_store collection |
-| ProfileScreen avatar + livello + badge | Mobile | HOME SOCIAL non implementata |
-| MQTT IoT gateway rifugio | Backend | Installato, non integrato |
-
-### Debito tecnico noto
-
-| Problema | File | Severità |
-|----------|------|----------|
-| `userSchema.sessionRoles` referenziato in service ma non nello schema | `user.js` / `hikeSessionService.js` | Media |
-| `leaveSession` restituisce doc non-populated (route usa `ApiMessageBody` → ok) | `hikeSessionService.js` | Bassa |
-| `POST /weather/seed` non ha middleware admin | `weatherRoutes.js` | Media — da proteggere |
-| WorkManager Store-and-Forward (sync batch offline) | Mobile | Alta — richiede dipendenza WorkManager |
-| `joinSession` non popola il response | `hikeSessionService.js` | Media — crash se client legge body |
-
----
-
-## 9. Note per la Documentazione D3 (Sprint 1)
-
-### Cosa dimostrare
-
-1. **Flusso auth completo**: register → SMTP verify → login JWT → deep link `tsm://`
-2. **Flusso sessione**: crea con GPX → inviteCode TSM-XXXX → condividi QR → altri si uniscono → AVVIA → tracking GPS → stop → COMPLETED
-3. **Sessione detail**: profilo altimetrico reale, meteo TINIA, checklist drag-and-drop, punti stimati CAI
-4. **Edit mode**: creator modifica sessione → salva → pannello si chiude automaticamente
-5. **Reset password**: forgot password → email → link → nuovo form HTML → login
-
-### API implementate (per la tabella RF→API del D3)
-
-```
-Auth:         POST /auth/login, /auth/forgot-password, /auth/reset-password/:token
-              GET  /auth/verify/:token
-Users:        POST /users, GET /users/:id
-Sessions:     POST /api/v1/sessions, GET /my, GET /:id
-              POST /:id/join, /:id/leave, PATCH /:id, /:id/status
-              DELETE /:id
-Weather:      GET /weather/locations/nearby, /locations/search, /forecast/:id
-              POST /weather/seed, /forecast/:id/refresh
-=======
 ./gradlew compileDebugKotlin         # check sintassi
 ./gradlew installDebug               # deploy su emulatore connesso
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a
 ```
 
 ### Variabili env critiche (vedi `.env.example`)
+
 - `JWT_SECRET` ≥ 32 char random
 - `MONGO_URI` connection string MongoDB
 - `BREVO_API_KEY` per email transazionali
@@ -343,9 +285,6 @@ Weather:      GET /weather/locations/nearby, /locations/search, /forecast/:id
 
 ---
 
-<<<<<<< HEAD
-*Documento generato il 2026-05-16 — Fine Sprint 1. Branch: `UI` (ultimo merge: 2026-05-16). Prossima milestone: Sprint 2 — SOS backend + HomeScreen feed + BLE planning.*
-=======
 ## 7. Riferimenti documenti correlati
 
 - **Sicurezza dettagliata**: [docs/SECURITY.md](SECURITY.md) — threat model, OWASP, ACM, secret management
@@ -360,4 +299,3 @@ Weather:      GET /weather/locations/nearby, /locations/search, /forecast/:id
 ---
 
 _Last update: 2026-05-22 — Giacomo Radin (ID-6)_
->>>>>>> 7c170be742c0ca0f16c4c6df6f5c273d643d4a7a

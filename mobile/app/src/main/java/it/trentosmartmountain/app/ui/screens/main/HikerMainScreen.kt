@@ -46,6 +46,7 @@ private enum class HikerTab { Home, Session, Registra, Profile }
 fun HikerMainScreen(
   onLoggedOut: () -> Unit,
   onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
+  onNavigateToActivityDetail: (activityId: String, sessionId: String?) -> Unit = { _, _ -> },
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
 
@@ -87,7 +88,10 @@ fun HikerMainScreen(
     },
   ) { innerPadding ->
     when (selectedTab) {
-      HikerTab.Home -> HomeScreen(Modifier.padding(innerPadding))
+      HikerTab.Home -> HomeScreen(
+        modifier = Modifier.padding(innerPadding),
+        onActivityClick = onNavigateToActivityDetail,
+      )
       HikerTab.Session -> SessionHubScreen(
         modifier = Modifier.padding(innerPadding),
         onNavigateToDetail = onNavigateToSessionDetail,

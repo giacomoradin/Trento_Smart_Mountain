@@ -35,6 +35,12 @@ data class GpxStats(
     val elevationProfile: List<Double>? = null,
     /** Punti stimati col modello CAI in fase di pianificazione (μ = 1.0). */
     val estimatedPoints: Int? = null,
+    /**
+     * Durata effettiva estratta dai tag <time> dei trkpt del GPX (in secondi).
+     * Null se il GPX non contiene timestamp (file generati senza traccia temporale).
+     * Se presente, sostituisce la stima CAI nella label "DURATA" delle attività.
+     */
+    val gpxDurationSec: Long? = null,
 )
 
 /** Risposta sintetica dopo creazione sessione (id, invite code, stato iniziale). */

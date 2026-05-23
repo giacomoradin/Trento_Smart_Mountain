@@ -43,6 +43,11 @@ class SessionPlanViewModel : ViewModel() {
         val elevationProfile: List<Double> = emptyList(),
         /** Punti stimati con il modello CAI in fase di pianificazione. */
         val estimatedPoints: Int = 0,
+        /**
+         * Durata effettiva del GPX in secondi (differenza fra primo e ultimo timestamp).
+         * Null se nessun trkpt contiene il tag `<time>` (es. tracciati esportati senza traccia temporale).
+         */
+        val gpxDurationSec: Long? = null,
     )
 
     /** Stato del form di pianificazione escursione. */
@@ -127,6 +132,7 @@ class SessionPlanViewModel : ViewModel() {
                             trackPoints = it.trackPoints,
                             elevationProfile = it.elevationProfile.ifEmpty { null },
                             estimatedPoints = it.estimatedPoints.takeIf { p -> p > 0 },
+                            gpxDurationSec = it.gpxDurationSec,
                         )
                     },
                 )
@@ -163,7 +169,7 @@ class SessionPlanViewModel : ViewModel() {
     // Riferimenti: stessa strategia usata da Strava/Komoot/Wikiloc.
 
     private fun parseGpx(stream: InputStream, fileName: String): GpxParseResult {
-        data class TrackPoint(val lat: Double, val lon: Double, val ele: Double?)
+        data class TrackPoint(val lat: Double, val lon: Double, val ele: Double?, val timeMs: Long?)
 
         val points = mutableListOf<TrackPoint>()
         val factory = XmlPullParserFactory.newInstance()
@@ -173,8 +179,10 @@ class SessionPlanViewModel : ViewModel() {
         var lat = 0.0
         var lon = 0.0
         var ele: Double? = null
+        var timeMs: Long? = null
         var inTrkpt = false
         var inEle = false
+        var inTime = false
 
         var eventType = parser.eventType
         while (eventType != XmlPullParser.END_DOCUMENT) {
@@ -184,23 +192,38 @@ class SessionPlanViewModel : ViewModel() {
                         lat = parser.getAttributeValue(null, "lat")?.toDoubleOrNull() ?: 0.0
                         lon = parser.getAttributeValue(null, "lon")?.toDoubleOrNull() ?: 0.0
                         ele = null
+                        timeMs = null
                         inTrkpt = true
                     }
                     "ele" -> if (inTrkpt) inEle = true
+                    "time" -> if (inTrkpt) inTime = true
                 }
-                XmlPullParser.TEXT -> if (inEle) ele = parser.text.toDoubleOrNull()
+                XmlPullParser.TEXT -> {
+                    if (inEle) ele = parser.text.toDoubleOrNull()
+                    if (inTime) timeMs = parseGpxTime(parser.text)
+                }
                 XmlPullParser.END_TAG -> when (parser.name) {
                     "trkpt" -> {
-                        points.add(TrackPoint(lat, lon, ele))
+                        points.add(TrackPoint(lat, lon, ele, timeMs))
                         inTrkpt = false
                     }
                     "ele" -> inEle = false
+                    "time" -> inTime = false
                 }
             }
             eventType = parser.next()
         }
 
         if (points.isEmpty()) throw IllegalStateException("Nessun track point trovato nel file GPX.")
+
+        // Durata effettiva: differenza fra primo e ultimo timestamp valido.
+        // Se il GPX non ha tag <time> (es. tracciato pianificato senza percorrenza),
+        // restituiamo null e la UI ricadrà sulla stima CAI.
+        val firstTime = points.firstOrNull { it.timeMs != null }?.timeMs
+        val lastTime = points.lastOrNull { it.timeMs != null }?.timeMs
+        val gpxDurationSec: Long? = if (firstTime != null && lastTime != null && lastTime > firstTime) {
+            (lastTime - firstTime) / 1000L
+        } else null
 
         // 1) Distanza planimetrica cumulata (Haversine)
         var totalDistanceKm = 0.0
@@ -235,7 +258,36 @@ class SessionPlanViewModel : ViewModel() {
             lastPoint = points.last().let { Pair(it.lat, it.lon) },
             elevationProfile = sampledProfile,
             estimatedPoints = estimated,
+            gpxDurationSec = gpxDurationSec,
         )
+    }
+
+    /**
+     * Parse di un timestamp ISO 8601 GPX (formati tollerati: `2024-05-20T08:30:00Z`,
+     * `2024-05-20T08:30:00.123Z`, `2024-05-20T08:30:00+02:00`).
+     *
+     * Restituisce l'epoch in millisecondi, o null se il formato non è interpretabile.
+     * Il parser GPX standard usa sempre UTC; gestiamo anche il fuso esplicito per file
+     * generati da app non conformi.
+     */
+    private fun parseGpxTime(raw: String?): Long? {
+        if (raw.isNullOrBlank()) return null
+        val s = raw.trim()
+        val formats = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXX",
+        )
+        for (fmt in formats) {
+            val parsed = runCatching {
+                java.text.SimpleDateFormat(fmt, java.util.Locale.US).apply {
+                    timeZone = java.util.TimeZone.getTimeZone("UTC")
+                }.parse(s)?.time
+            }.getOrNull()
+            if (parsed != null) return parsed
+        }
+        return null
     }
 
     /**

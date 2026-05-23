@@ -5,6 +5,7 @@ import androidx.room.Room
 import it.trentosmartmountain.app.data.local.TokenStorage
 import it.trentosmartmountain.app.data.local.db.TsmDatabase
 import it.trentosmartmountain.app.data.remote.TsmApiClient
+import it.trentosmartmountain.app.data.sync.SyncManager
 import org.osmdroid.config.Configuration
 
 /**
@@ -41,5 +42,9 @@ class TsmApplication : Application() {
         .fallbackToDestructiveMigration()
         .build()
     TsmApiClient.init(tokenStorage)
+    // Avvia il poll loop per il sync delle attività con isSynced=0.
+    // Backoff fine (1m → 5m → 30m → 1h) per record. Il loop gira finché il
+    // process è vivo; al riavvio dell'app riparte e processa il backlog.
+    SyncManager.start(this)
   }
 }

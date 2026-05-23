@@ -24,10 +24,16 @@ android {
     versionName = "1.0"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+    // Priorità:
+    //   1) gradle -PTSM_API_BASE_URL=https://...  (CI / build script)
+    //   2) mobile/local.properties → tsm.api.baseUrl=https://...  (dev locale)
+    //   3) default produzione su Render
+    // Per puntare al server locale durante dev, aggiungi a `mobile/local.properties`:
+    //   tsm.api.baseUrl=http://10.0.2.2:3000/
     val baseUrl =
       (project.findProperty("TSM_API_BASE_URL") as String?)
         ?: localProperties.getProperty("tsm.api.baseUrl")
-        ?: "http://10.0.2.2:3000/"
+        ?: "https://trento-smart-mountain-xz7u.onrender.com/"
     buildConfigField("String", "BASE_URL", "\"${baseUrl.trimEnd('/')}/\"")
   }
 

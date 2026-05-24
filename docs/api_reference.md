@@ -581,7 +581,97 @@ Elimina sessione. **Solo creator**. Rimuove anche per tutti i partecipanti.
 
 ---
 
-## 5. Meteo (`/weather`)
+### `PATCH /api/v1/sessions/:id/complete`
+
+Termina la sessione e persiste le statistiche reali del tracking. Chiamato dal mobile (`RegistraViewModel.confirmStopTracking`) al termine di una sessione live.
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT | Partecipante o creator |
+| **Body** | JSON | `{ actualStats?: { movingSeconds, totalSeconds, distanceMeters, elevationGainM, finalPoints?, estimatedCalories?, currentAltitudeM? } }` |
+| **Response 200** | JSON | Sessione aggiornata con `status: "COMPLETED"`, `endTime`, `actualStats` |
+| **Response 403** | JSON | `FORBIDDEN` (non partecipante né creator) |
+| **Response 404** | JSON | Sessione non trovata |
+
+Idempotente: secondo `complete` su sessione già COMPLETED restituisce 200 senza re-incrementare i crediti.
+
+---
+
+## 5. Attività libere (`/api/v1/activities`)
+
+Attività personali senza componente di gruppo (no inviteCode, no participants). Owner singolo.
+
+### `POST /api/v1/activities`
+
+Crea una nuova attività libera (chiamato dal mobile dopo lo stop di un tracking senza sessione collegata).
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT | Owner = `req.user.userId` |
+| **Body** | JSON | `{ name, activityType?, difficultyLevel?, startTimeMs, endTimeMs, actualStats: {movingSeconds, totalSeconds, distanceMeters, elevationGainM, finalPoints?, estimatedCalories?, currentAltitudeM?}, startPoint?, endPoint?, elevationProfile? }` |
+| **Response 201** | JSON | Attività creata, include `_id` Mongo |
+| **Response 422** | JSON | Validation Joi (es. `actualStats` mancante) |
+
+#### Esempio body
+
+```json
+{
+  "name": "Escursione – 24 mag 2026",
+  "activityType": "hiking",
+  "startTimeMs": 1748000000000,
+  "endTimeMs": 1748010000000,
+  "actualStats": {
+    "movingSeconds": 9000,
+    "totalSeconds": 10000,
+    "distanceMeters": 5200,
+    "elevationGainM": 320,
+    "finalPoints": 18,
+    "estimatedCalories": 310,
+    "currentAltitudeM": 1450
+  }
+}
+```
+
+---
+
+### `GET /api/v1/activities`
+
+Lista delle attività libere dell'utente loggato (no leak: il service filtra per `userId === req.user.userId`).
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT | Owner-scoped |
+| **Response 200** | JSON | `Array<Activity>` ordinato per `completedAt` desc |
+
+---
+
+### `GET /api/v1/activities/:id`
+
+Dettaglio di una singola attività libera.
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT | Owner check via service |
+| **Response 200** | JSON | Activity completa con `actualStats` + `elevationProfile` |
+| **Response 403** | JSON | `FORBIDDEN` (non owner) |
+| **Response 404** | JSON | Non trovata |
+
+---
+
+### `DELETE /api/v1/activities/:id`
+
+Elimina un'attività libera.
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT | Solo owner |
+| **Response 200** | JSON | `{ message: "Attività eliminata" }` |
+| **Response 403** | JSON | Non owner |
+| **Response 404** | JSON | Non trovata |
+
+---
+
+## 6. Meteo (`/weather`)
 
 ### `GET /weather/locations/nearby`
 
@@ -589,7 +679,7 @@ Stazioni meteo vicine a una coordinata.
 
 | Campo | Tipo | Note |
 |-------|------|------|
-| **Auth** | — | Pubblico (dati meteo non sensibili) |
+| **Auth** | 🔐 JWT | Da sprint 2: autenticato (no più pubblico) |
 | **Query** | `lon`, `lat`, `maxDistance?` (default 50000m), `type?` (`town`/`poi`), `limit?` (default 5) |
 
 #### Esempio
@@ -624,7 +714,7 @@ Cerca stazioni per nome.
 
 | Campo | Tipo | Note |
 |-------|------|------|
-| **Auth** | — | Pubblico |
+| **Auth** | 🔐 JWT | Da sprint 2: autenticato |
 | **Query** | `q` (min 2 char), `type?`, `limit?` |
 
 ---
@@ -635,7 +725,7 @@ Forecast 3h (16 slot, prossime 48h) + 24h (7 giorni).
 
 | Campo | Tipo | Note |
 |-------|------|------|
-| **Auth** | — | Pubblico |
+| **Auth** | 🔐 JWT | Da sprint 2: autenticato |
 | **Query** | `forceRefresh?` (boolean, default false) |
 | **Param** | `externalId` UUID v4 |
 
@@ -703,7 +793,7 @@ Popola il DB con towns + POI da API TINIA. Da chiamare al primo avvio.
 
 ---
 
-## 6. Errori comuni & troubleshooting
+## 7. Errori comuni & troubleshooting
 
 | Sintomo | Causa probabile | Fix |
 |---------|-----------------|-----|

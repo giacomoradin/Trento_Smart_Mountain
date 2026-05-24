@@ -13,13 +13,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.ui.screens.home.HomeScreen
@@ -40,7 +38,8 @@ private enum class HikerTab { Home, Session, Registra, Profile }
  * - Profilo — dati utente e logout
  *
  * @param onLoggedOut callback dopo logout (navigazione verso auth)
- * @param onNavigateToSessionDetail apre il dettaglio sessione sul grafo root ([Routes.SESSION_DETAIL])
+ * @param onNavigateToSessionDetail apre il dettaglio sessione sul grafo root ([it.trentosmartmountain.app.ui.navigation.Routes.SESSION_DETAIL])
+ * @param onNavigateToActivityDetail apre il dettaglio attività completata sul grafo root ([it.trentosmartmountain.app.ui.navigation.Routes.ACTIVITY_DETAIL])
  */
 @Composable
 fun HikerMainScreen(
@@ -50,11 +49,15 @@ fun HikerMainScreen(
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
 
-  // Quando SessionDetail.AVVIA conferma, il Coordinator emette un sessionId:
-  // switchiamo automaticamente alla tab Registra (RegistraViewModel auto-avvia il tracking).
-  val pendingStart by SessionStartCoordinator.pendingSessionStart.collectAsStateWithLifecycle()
-  LaunchedEffect(pendingStart) {
-    if (pendingStart != null) selectedTab = HikerTab.Registra
+  // Quando SessionDetail / SessionHub.AVVIA conferma, il Coordinator emette un sessionId:
+  // switchiamo automaticamente alla tab Registra. Il consume() avviene nel VM dopo
+  // l'autoStart (vedi RegistraViewModel.init). Usiamo collect su SharedFlow invece
+  // di collectAsStateWithLifecycle: i due osservatori (HikerMainScreen + VM) devono
+  // ricevere ogni emit in modo indipendente, e StateFlow conflated saltava la transizione.
+  LaunchedEffect(Unit) {
+    SessionStartCoordinator.pendingSessionStart.collect {
+      selectedTab = HikerTab.Registra
+    }
   }
 
   Scaffold(

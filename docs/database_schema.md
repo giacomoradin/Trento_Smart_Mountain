@@ -2,7 +2,7 @@
 
 > Documentazione delle collezioni MongoDB e dello schema Room (locale Android).
 >
-> **Ultima revisione**: 17/05/2026 — Fine Sprint 1.
+> **Ultima revisione**: 24/05/2026 — Sprint 2 in corso (aggiunta collezione `activities`).
 > **Riferimenti**: `backend/src/models/`, `mobile/.../data/local/db/`, D2 §4.1.
 
 ---
@@ -273,9 +273,67 @@ locations.type_1                      // filtri type=town
 
 ---
 
+### 1.4 Collezione `activities`
+
+**Modello**: `backend/src/models/activity.js`
+**Collection MongoDB**: `activities`
+
+> Aggiunta in Sprint 2 per le attività "libere" registrate senza una sessione di gruppo.
+> Differenze rispetto a `hikesessions`: owner singolo, no `inviteCode`/`participants`, lifecycle assente (sempre completa al create), nessuna pianificazione GPX preventiva.
+
+#### Schema
+
+```javascript
+{
+  _id: ObjectId,
+  userId: ObjectId,                   // ref User, required, indexed
+  name: String,                       // max 120 char, required
+  activityType: String,               // enum ["hiking", "trail", "skitouring", "trekking"], default "hiking"
+  difficultyLevel: String,            // enum ["T", "E", "EE", "EEA"], opzionale
+
+  startTimeMs: Number,                // epoch ms (coerente col client mobile)
+  endTimeMs: Number,
+  completedAt: Date,                  // default Date.now, indexed
+
+  startPoint: {                       // GeoJSON Point, opzionale
+    type: { type: String, enum: ["Point"] },
+    coordinates: [Number],            // [lon, lat]
+  },
+  endPoint: { /* idem */ },
+
+  actualStats: {                      // sempre presenti (no fase pianificata)
+    movingSeconds: Number,            // required
+    totalSeconds: Number,             // required
+    distanceMeters: Number,           // required
+    elevationGainM: Number,           // required
+    finalPoints: Number,
+    estimatedCalories: Number,
+    currentAltitudeM: Number,
+  },
+
+  elevationProfile: [Number],         // max 200 punti campionati, metri assoluti
+}
+```
+
+#### Indici
+
+```javascript
+activities.userId_1_completedAt_-1     // query "Le mie attività" ordinate per data
+activities.startPoint_2dsphere         // sparse, per query geografiche future
+```
+
+#### Note operative
+
+- **Ownership** verificato esplicitamente nei service (`getActivityById`, `deleteActivity`) tramite `userId === req.user.userId` → 403 altrimenti.
+- **Idempotency**: niente check di duplicate sul backend. Il mobile genera un UUID locale, il backend assegna `_id` Mongo proprio; il client traccia `remoteId` per cross-device delete.
+- **Lifecycle**: niente status. Una attività esiste o non esiste (DELETE hard).
+- **Integrazione con feed Social** (Sprint 2 piano): aggiungerà `sharedAt: Date?` + `likes[]` + denormalizzato `commentsCount` — vedi `docs/sprint2_social.md`.
+
+---
+
 ## 2. Mobile — Room Database
 
-Database: `TsmDatabase` (file `tsm.db`), versione 3.
+Database: `TsmDatabase` (file `tsm.db`), **versione 4** (bump Sprint 2: campi `retry_count`, `last_retry_at_ms`, `remote_id` aggiunti a `completed_activities` per il SyncManager con backoff incrementale).
 **File**: `mobile/.../data/local/db/TsmDatabase.kt`
 
 ### 2.1 Entità `CachedUserProfileEntity`

@@ -412,14 +412,50 @@ node swagger.js          # rigenera swagger-output.json
 
 ---
 
-## 11. Deployment (preview Sprint 3+)
+## 11. Deployment
 
-> Documento ancora informale. Sprint 3 introdurrà:
+### Render (attualmente attivo)
 
-- Dockerfile per il backend
-- Nginx reverse proxy + HTTPS Let's Encrypt
-- MongoDB Atlas (managed) invece di Docker locale
-- CI/CD GitHub Actions: build → test → deploy su VPS
+Backend deployato su Render Free tier:
+
+- **URL pubblico**: `https://trento-smart-mountain-xz7u.onrender.com`
+- **Branch monitorata**: `UI` (auto-deploy su push)
+- **Build command**: `npm install`
+- **Start command**: `npm start` (= `node backend/src/server.js`)
+- **Node version**: 26+ (definita in `package.json` engines)
+- **Persistenza**: MongoDB Atlas (managed) via env `MONGO_URI`
+- **Cold start**: ~30-60s sul tier free (primo hit dopo idle)
+
+#### Env vars richieste su Render → Settings → Environment
+
+| Variabile | Valore |
+|---|---|
+| `JWT_SECRET` | ≥32 char random hex |
+| `JWT_EXPIRES_IN` | `7d` (per offline 3gg con margine) |
+| `MONGO_URI` | Connection string Atlas |
+| `BREVO_API_KEY` | API key transactional emails |
+| `BASE_URL` | `https://trento-smart-mountain-xz7u.onrender.com` |
+| `EMAIL_FROM_ADDRESS` | mittente verificato su Brevo |
+| `ALLOWED_ORIGINS` | CSV CORS, se richiesto |
+| `NODE_ENV` | `production` (abilita HSTS) |
+
+#### Troubleshooting deploy fallito
+
+Se Render → Events mostra "Exited with status 1":
+
+1. Apri "Logs" del deploy fallito → cerca `SyntaxError` o `ReferenceError` lungo lo stack
+2. Errori comuni storici:
+   - **Merge marker non risolto** (`<<<<<<< HEAD`) in file js → grep nel repo prima di pushare
+   - **Import mancante** in route file → `node -e "import('./backend/src/routes/xxx.js')"` come smoke test locale
+   - **Env var mancante** (es. `JWT_SECRET`) → fail-fast su `server.js:assertEnvironment`
+3. Rollback rapido: Render Dashboard → Events → click ⋮ → "Redeploy" su un commit verde precedente
+
+### Roadmap deploy (Sprint 3+)
+
+- Dockerfile per il backend (alternative a Render)
+- Nginx reverse proxy + HTTPS Let's Encrypt (se self-hosted)
+- CI/CD GitHub Actions: build → test → deploy automatico
+- Health check endpoint `GET /healthz` per Render uptime monitor
 
 ---
 
@@ -436,4 +472,4 @@ node swagger.js          # rigenera swagger-output.json
 
 ---
 
-*Setup backend — Sprint 1 chiuso 17/05/2026. Aggiornare quando vengono introdotte nuove env var o dipendenze runtime.*
+*Setup backend — Sprint 2 in corso. Ultimo update 2026-05-24 (sezione 11 Render deploy aggiunta).*

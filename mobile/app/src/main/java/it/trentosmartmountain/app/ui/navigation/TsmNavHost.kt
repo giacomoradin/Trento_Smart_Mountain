@@ -159,9 +159,8 @@ fun TsmNavHost() {
                 currentUserId = currentUserId,
                 onBack = { navController.popBackStack() },
                 onAvviaConfirmed = { _ ->
-                    // Torna a HikerMainScreen (tab Registra sarà avviato dall'utente).
-                    // TODO: In futuro, navigare direttamente al tab Registra passando sessionId
-                    // quando RegistraScreen sarà completamente implementato con GPS tracking.
+                    // Pop a HikerMainScreen: il VM ha già chiamato SessionStartCoordinator.requestStart,
+                    // HikerMainScreen.collect → switch tab Registra, RegistraVM.autoStartFromSession.
                     navController.popBackStack(Routes.MAIN_HIKER, inclusive = false)
                 },
             )

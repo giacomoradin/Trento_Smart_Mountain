@@ -46,9 +46,12 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.data.estimation.HikeEstimation
 import it.trentosmartmountain.app.data.location.TrackingStatus
+import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSurface
+import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.RegistraViewModel
 
 /**
@@ -247,6 +250,11 @@ fun RegistraScreen(
   }
 
   // ── Dialog "Attività troppo corta" — chiede conferma per attività libere < 50m ──
+  // Tre opzioni distinte per evitare che chi vuole solo "chiudere" il dialog cancelli
+  // l'intera registrazione cliccando "Scarta":
+  //   - Salva comunque (verde):    forza save anche sotto i 50m
+  //   - Continua (testo grigio):   chiude il dialog, tracking resta attivo
+  //   - Cancella (testo rosso):    discardTracking, sicuro perché esplicitamente "cancella"
   if (uiState.shortActivityConfirm) {
     AlertDialog(
       onDismissRequest = viewModel::dismissShortActivity,
@@ -254,7 +262,7 @@ fun RegistraScreen(
       title = { Text("Attività troppo corta", color = Color.White) },
       text = {
         Text(
-          "Hai percorso meno di 50 metri. Le attività brevi solitamente sono avvii accidentali. Vuoi salvarla comunque?",
+          "Hai percorso meno di 50 metri. Le attività brevi solitamente sono avvii accidentali. Cosa vuoi fare?",
           color = Color.Gray,
         )
       },
@@ -266,8 +274,13 @@ fun RegistraScreen(
         ) { Text("Salva comunque") }
       },
       dismissButton = {
-        TextButton(onClick = viewModel::discardTracking) {
-          Text("Scarta", color = MaterialTheme.colorScheme.error)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          TextButton(onClick = viewModel::discardTracking) {
+            Text("Cancella", color = MaterialTheme.colorScheme.error)
+          }
+          TextButton(onClick = viewModel::dismissShortActivity) {
+            Text("Continua", color = Color.Gray)
+          }
         }
       },
     )
@@ -293,39 +306,94 @@ fun RegistraScreen(
   }
 
   if (uiState.showStopConfirm) {
+    val distKm = uiState.distanceMeters / 1000.0
+    val movingH = uiState.elapsedSeconds / 3600.0
+    val pts = HikeEstimation.finalPoints(distKm, uiState.elevationGainMeters, movingH)
+    val durationLabel = if (uiState.elapsedSeconds > 0) HikeEstimation.formatHours(movingH) else "0m"
     AlertDialog(
       onDismissRequest = viewModel::dismissStopConfirm,
-      title = { Text(stringResource(R.string.registra_stop_dialog_title)) },
+      containerColor = TsmSurface,
+      title = { Text("Salva Attività", color = Color.White) },
       text = {
-        Column {
-          Text(stringResource(R.string.registra_stop_dialog_body))
-          Spacer(Modifier.height(12.dp))
-          OutlinedTextField(
-            value = uiState.activityNameDraft,
-            onValueChange = viewModel::updateActivityNameDraft,
-            label = { Text("Nome attività") },
-            placeholder = { Text("Es. Cima Tosa") },
-            singleLine = true,
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+          // Riga KPI riepilogo metriche tracking
+          Surface(
             modifier = Modifier.fillMaxWidth(),
-          )
+            color = TsmSurfaceVariant,
+            shape = RoundedCornerShape(12.dp),
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+              SaveKpiCell("Distanza", "%.1f km".format(distKm), TsmAccent, Modifier.weight(1f))
+              SaveKpiCell("Durata", durationLabel, Color.White, Modifier.weight(1f))
+              SaveKpiCell("Dislivello", "+${uiState.elevationGainMeters}m", Color(0xFFFF9800), Modifier.weight(1f))
+              SaveKpiCell("Punti", "$pts pt", Color(0xFFFFC107), Modifier.weight(1f))
+            }
+          }
+          // Campo nome editabile con default Escursione – <data>
+          Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+              "Nome attività",
+              style = MaterialTheme.typography.labelSmall,
+              color = Color.Gray,
+            )
+            OutlinedTextField(
+              value = uiState.activityNameDraft,
+              onValueChange = viewModel::updateActivityNameDraft,
+              placeholder = { Text("Es. Cima Tosa", color = Color.Gray) },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+              shape = RoundedCornerShape(8.dp),
+            )
+          }
         }
       },
       confirmButton = {
         Button(
           onClick = { viewModel.confirmStopTracking() },
-          colors =
-            ButtonDefaults.buttonColors(
-              containerColor = MaterialTheme.colorScheme.error,
-            ),
+          colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
+          shape = RoundedCornerShape(8.dp),
         ) {
-          Text(stringResource(R.string.registra_stop_confirm))
+          Text("Salva", color = Color.White, fontWeight = FontWeight.Bold)
         }
       },
       dismissButton = {
-        TextButton(onClick = viewModel::dismissStopConfirm) {
-          Text(stringResource(R.string.registra_sos_dialog_dismiss))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+          TextButton(onClick = viewModel::discardTracking) {
+            Text("Scarta", color = MaterialTheme.colorScheme.error)
+          }
+          TextButton(onClick = viewModel::dismissStopConfirm) {
+            Text("Annulla", color = Color.Gray)
+          }
         }
       },
+    )
+  }
+}
+
+@Composable
+private fun SaveKpiCell(
+  label: String,
+  value: String,
+  valueColor: Color,
+  modifier: Modifier = Modifier,
+) {
+  Column(
+    modifier = modifier,
+    horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    Text(
+      value,
+      color = valueColor,
+      style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+    )
+    Spacer(Modifier.height(2.dp))
+    Text(
+      label,
+      style = MaterialTheme.typography.labelSmall,
+      color = Color.Gray,
     )
   }
 }

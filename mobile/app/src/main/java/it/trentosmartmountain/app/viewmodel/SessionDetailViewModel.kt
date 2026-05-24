@@ -283,13 +283,14 @@ class SessionDetailViewModel : ViewModel() {
      *   2. GET /weather/locations/nearby?lon=&lat=&type=town&limit=1 → town più vicina
      *   3. GET /weather/forecast/:externalId → slots3h (prossime 48h) + slots24h (7 giorni)
      *
-     * Se il DB non è seedato (POST /weather/seed) o non ci sono stazioni nel raggio,
-     * la MeteoCard mostra un messaggio di errore con bottone Riprova.
+     * Se il DB non ha stazioni nel raggio richiesto, la MeteoCard mostra un messaggio
+     * di errore con bottone Riprova (DB è auto-seedato all'avvio backend con 601 towns
+     * + 108 POI, vedi weatherService.seedLocations).
      *
      * Cache server-side: 1h. Il refresh manuale dalla UI chiama con forceRefresh=true.
      *
-     * TODO — quando il DB è seedato in produzione:
-     *   - Aggiungere polling ogni 5 min con LaunchedEffect + delay(5 * 60_000L)
+     * Enhancements futuri (Sprint 3):
+     *   - Polling ogni 5 min con LaunchedEffect + delay(5 * 60_000L) per sessione attiva
      *   - Storico giorni precedenti via slot24h con filtro su validFrom
      *   - Room cache offline per le sessioni già visualizzate
      */

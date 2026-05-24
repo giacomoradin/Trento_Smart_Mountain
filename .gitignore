@@ -1,3 +1,7 @@
+# Test coverage artefatti (Jest + nyc)
+coverage/
+.nyc_output/
+
 # Logs
 logs
 *.log

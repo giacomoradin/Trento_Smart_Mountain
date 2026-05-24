@@ -47,6 +47,20 @@
     "nodemon": "^3.1.0",
     "supertest": "^7.2.2",
     "swagger-autogen": "^2.23.7"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFilesAfterEach": ["<rootDir>/backend/__tests__/setup.js"],
+    "setupFilesAfterEnv": ["<rootDir>/backend/__tests__/setup.js"],
+    "testMatch": ["**/__tests__/routes/*.test.js"],
+    "collectCoverageFrom": [
+      "backend/src/routes/**/*.js",
+      "backend/src/services/**/*.js",
+      "backend/src/middleware/**/*.js",
+      "!backend/src/server.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov", "html"],
+    "testTimeout": 30000
   }
- 
 }

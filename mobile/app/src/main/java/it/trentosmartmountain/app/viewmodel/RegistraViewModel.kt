@@ -112,13 +112,12 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         }
       }
     }
-    // Auto-start tracking quando SessionDetail.AVVIA emette un sessionId.
-    // Consumiamo SEMPRE il segnale per evitare che resti stale e blocchi
-    // i prossimi AVVIA. Se non possiamo partire subito (tracking già attivo),
-    // marchiamo activeSessionId per consentire il start manuale via UI.
+    // Auto-start tracking quando SessionDetail / SessionHub.AVVIA emette un sessionId.
+    // Consumiamo SEMPRE il segnale dopo aver gestito: il replay cache viene resettato
+    // così non ritriggriamo a recomposition. SharedFlow distribuisce ogni emit anche
+    // a HikerMainScreen (che a sua volta switcha la tab) in modo indipendente.
     viewModelScope.launch {
       SessionStartCoordinator.pendingSessionStart.collect { sessionId ->
-        if (sessionId == null) return@collect
         if (_uiState.value.trackingStatus == TrackingStatus.IDLE) {
           autoStartFromSession(sessionId)
         } else {

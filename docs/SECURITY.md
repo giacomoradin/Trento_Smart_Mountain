@@ -163,6 +163,8 @@ Legenda:
 | `GET /weather/locations/nearby`       |  ❌  |       ✅        |       ✅        |  ✅   |
 | `GET /weather/locations/search`       |  ❌  |       ✅        |       ✅        |  ✅   |
 | `GET /weather/forecast/:externalId`   |  ❌  |       ✅        |       ✅        |  ✅   |
+| `POST /weather/seed`                  |  ❌  |       ❌        |       ❌        |  ✅   |
+| `POST /weather/forecast/:id/refresh`  |  ❌  |       ❌        |       ❌        |  ✅   |
 | `/admin/*`                            |  ❌  |       ❌        |       ❌        |  ✅   |
 | `GET /api-docs`                       |  🅿  |       🅿        |       🅿        |  🅿   |
 
@@ -194,7 +196,7 @@ Header esposti in risposta: `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-Aft
 | Variabile            | Required       | Note                                                              |
 | -------------------- | -------------- | ----------------------------------------------------------------- |
 | `JWT_SECRET`         | ✅ (sempre)    | >= 32 char, generato con `crypto.randomBytes(48).toString('hex')` |
-| `JWT_EXPIRES_IN`     | ⚠ default `1d` | Mai > 7d in produzione                                            |
+| `JWT_EXPIRES_IN`     | ⚠ default `7d` | Calibrato per supportare requisito offline 3 giorni con margine. Sprint 3 → refresh token rotation (access 15min + refresh 30d). Mai > 30d. |
 | `MONGO_URI`          | ✅ (prod)      | Connection string Atlas con credenziali read/write                |
 | `BASE_URL`           | ✅ (prod)      | URL pubblico backend per email link                               |
 | `BREVO_API_KEY`      | ✅ (prod)      | API key Brevo solo "transactional emails"                         |

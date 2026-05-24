@@ -135,9 +135,6 @@
   <string name="registra_metric_altitude">Quota</string>
   <string name="registra_metric_elevation">Dislivello</string>
   <string name="registra_auto_pause_hint">In pausa automatica — riprende al movimento</string>
-  <string name="registra_stop_dialog_title">Terminare l\'escursione?</string>
-  <string name="registra_stop_dialog_body">Il tracciato registrato verrà interrotto. Potrai salvarlo nelle prossime versioni.</string>
-  <string name="registra_stop_confirm">Termina</string>
   <string name="tracking_notification_channel">Tracciamento escursione</string>
   <string name="tracking_notification_title">Registrazione in corso</string>
   <string name="tracking_notification_body">Trento Smart Mountain sta registrando il tuo percorso.</string>

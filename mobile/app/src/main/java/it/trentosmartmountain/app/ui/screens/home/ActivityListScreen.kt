@@ -557,8 +557,9 @@ private fun ActivityListItem(
                 } else {
                     Icon(Icons.Outlined.Sync, contentDescription = "Non sincronizzato", tint = Color.Gray, modifier = Modifier.size(16.dp))
                 }
-                // Share button
-                IconButton(onClick = { /* TODO: condivisione social */ }, modifier = Modifier.size(28.dp)) {
+                // Share button — cablerà POST /activities/:id/share quando il backend
+                // sarà esteso (vedi docs/sprint2_social.md, fase B "Backend social actions").
+                IconButton(onClick = { /* sprint2_social.md fase E4 */ }, modifier = Modifier.size(28.dp)) {
                     Icon(Icons.Outlined.Share, contentDescription = "Condividi", tint = Color.Gray, modifier = Modifier.size(16.dp))
                 }
             }

@@ -13,7 +13,7 @@ export function validate(schema, source = "body") {
       convert: true,
     });
     if (error) {
-      return res.status(400).json({
+      return res.status(422).json({
         error: "Validazione fallita",
         details: error.details.map((d) => ({ path: d.path.join("."), message: d.message })),
       });

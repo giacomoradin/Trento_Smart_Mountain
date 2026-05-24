@@ -157,10 +157,22 @@
 <a name='L92'></a><a href='#L92'>92</a>
 <a name='L93'></a><a href='#L93'>93</a>
 <a name='L94'></a><a href='#L94'>94</a>
-<a name='L95'></a><a href='#L95'>95</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -247,9 +259,21 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import mongoose from "mongoose";
 const { Schema } = mongoose;
@@ -266,15 +290,12 @@ const hikSessionSchema = new Schema({
   routeDetails: {
     name: { type: String, required: true },
     startPoint: {
-      // GeoJSON Point — popolato solo se il GPX viene importato.
-      // NESSUN default: i documenti senza GPX non entrano nell'indice 2dsphere
-      // (grazie a sparse:true sull'indice, vedi sotto) ed evitano il rumore a Null Island.
-      type: { type: String, enum: ["Point"] },
-      coordinates: { type: [Number] }, // [lng, lat]
+      type: { type: String, enum: ["Point"], default: "Point" },
+      coordinates: { type: [Number], default: [0, 0] }, // [lng, lat]
     },
     endPoint: {
-      type: { type: String, enum: ["Point"] },
-      coordinates: { type: [Number] },
+      type: { type: String, enum: ["Point"], default: "Point" },
+      coordinates: { type: [Number], default: [0, 0] },
     },
     difficultyLevel: {
       type: String,
@@ -303,6 +324,23 @@ const hikSessionSchema = new Schema({
     // Stima punti calcolata col modello CAI in fase di pianificazione (μ = 1.0).
     // Verrà sostituita al COMPLETED con il punteggio finale che pesa l'efficienza reale.
     estimatedPoints: { type: Number },
+    // Durata effettiva estratta dai tag &lt;time&gt; dei trkpt del GPX (se presenti).
+    // Differenza fra primo e ultimo timestamp, in secondi. Usata come fallback al
+    // posto della formula CAI per la durata di sessioni non ancora completate.
+    gpxDurationSec: { type: Number },
+  },
+&nbsp;
+  // Statistiche effettive registrate dal client al termine del tracking GPS.
+  // Popolate da PATCH /api/v1/sessions/:id/complete quando la sessione diventa COMPLETED.
+  // Se presenti, sostituiscono completamente le stime CAI nella UI.
+  actualStats: {
+    movingSeconds: { type: Number },       // tempo cronometrato senza pause
+    totalSeconds: { type: Number },        // tempo totale (incluso pause)
+    distanceMeters: { type: Number },      // distanza percorsa effettiva
+    elevationGainM: { type: Number },      // dislivello positivo cumulato reale
+    finalPoints: { type: Number },         // punteggio post-completamento (μ pesato)
+    estimatedCalories: { type: Number },   // kcal stimate
+    currentAltitudeM: { type: Number },    // ultima altitudine registrata
   },
 &nbsp;
   // Codice invito alfanumerico univoco (generato automaticamente)
@@ -338,10 +376,8 @@ const hikSessionSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 &nbsp;
-// Indice geospaziale per query di prossimità.
-// sparse:true → i documenti senza startPoint (es. sessioni senza GPX) non vengono
-// indicizzati, evitando coordinate [0,0] a Null Island e errori 16755 di MongoDB.
-hikSessionSchema.index({ "routeDetails.startPoint": "2dsphere" }, { sparse: true });
+// Indice geospaziale per query di prossimità
+hikSessionSchema.index({ "routeDetails.startPoint": "2dsphere" }); // Permette di cercare sessioni vicine a una posizione geografica
 &nbsp;
 const HikeSession = mongoose.model("HikeSession", hikSessionSchema);
 export default HikeSession;
@@ -352,7 +388,7 @@ export default HikeSession;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-05-23T12:48:42.737Z
+                at 2026-05-24T22:11:54.039Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

@@ -10,7 +10,7 @@
  */
 
 import { Router } from "express";
-// import corretto
+import { authenticate } from "../middleware/authMiddleware.js";
 import {
   getLocationForecast,
   refreshLocationForecast,

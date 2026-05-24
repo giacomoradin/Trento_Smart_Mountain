@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">33.33% </span>
+                <span class="strong">18.18% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>2/6</span>
+                <span class='fraction'>2/11</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>0/8</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">33.33% </span>
+                <span class="strong">20% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>2/6</span>
+                <span class='fraction'>2/10</span>
             </div>
         
             
@@ -80,36 +80,57 @@
 <a name='L15'></a><a href='#L15'>15</a>
 <a name='L16'></a><a href='#L16'>16</a>
 <a name='L17'></a><a href='#L17'>17</a>
-<a name='L18'></a><a href='#L18'>18</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">&nbsp;
 export const globalErrorHandler = <span class="fstat-no" title="function not covered" >(e</span>rr, req, res, next) =&gt; {
-  // Log dell'errore per il developer
+  // Log completo per il developer (sia in dev che prod).
 <span class="cstat-no" title="statement not covered" >  console.error(" [GLOBAL ERROR LOG]:", err.stack);</span>
 &nbsp;
   const statusCode = <span class="cstat-no" title="statement not covered" >err.statusCode || 500;</span>
+  const isProd = <span class="cstat-no" title="statement not covered" >process.env.NODE_ENV === "production";</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  res.status(statusCode).json({</span>
+  // In produzione mascheriamo i 5xx: il messaggio originale può rivelare
+  // dettagli implementativi (path file, query Mongo, ecc.). Per i 4xx
+  // teniamo il messaggio: di solito è un'indicazione utile al client.
+  const exposeMessage = <span class="cstat-no" title="statement not covered" >!isProd || statusCode &lt; 500;</span>
+&nbsp;
+  const payload = <span class="cstat-no" title="statement not covered" >{</span>
     error: "Errore interno del server",
-    message: err.message,
-    // Lo stack compare solo se non siamo in produzione
-    stack: process.env.NODE_ENV === 'development' ? err.stack : {}
-  });
+    message: exposeMessage ? err.message : "Errore imprevisto. Riprova più tardi.",
+  };
+<span class="cstat-no" title="statement not covered" >  if (!isProd) <span class="cstat-no" title="statement not covered" >payload.stack = err.stack;</span></span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  res.status(statusCode).json(payload);</span>
 };
 &nbsp;
 export const notFoundHandler = <span class="fstat-no" title="function not covered" >(r</span>eq, res, next) =&gt; {
@@ -121,7 +142,7 @@ export const notFoundHandler = <span class="fstat-no" title="function not covere
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-05-23T12:48:42.737Z
+                at 2026-05-24T22:11:54.039Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

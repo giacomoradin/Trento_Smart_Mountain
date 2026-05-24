@@ -21,7 +21,7 @@ describe('Authentication Routes', () => {
     
     test('should register a new hiker with valid data', async () => {
       const newHiker = {
-        username: 'mario_rossi',
+        username: 'mariorossi',
         email: 'mario.rossi@example.com',
         password: 'SecurePassword123!',
       };
@@ -38,7 +38,7 @@ describe('Authentication Routes', () => {
       expect(response.body.message).toMatch(/verifica.*email/i);
       
       // Verifica che i dati utente siano corretti
-      expect(response.body.user).toHaveProperty('username', 'mario_rossi');
+      expect(response.body.user).toHaveProperty('username', 'mariorossi');
       expect(response.body.user).toHaveProperty('email', 'mario.rossi@example.com');
       expect(response.body.user).toHaveProperty('role', 'groupLeader');
       expect(response.body.user).toHaveProperty('isVerified', false);
@@ -51,7 +51,7 @@ describe('Authentication Routes', () => {
       // Verifica che l'utente sia stato salvato nel database
       const savedUser = await Hiker.findOne({ email: 'mario.rossi@example.com' });
       expect(savedUser).toBeTruthy();
-      expect(savedUser.username).toBe('mario_rossi');
+      expect(savedUser.username).toBe('mariorossi');
       expect(savedUser.role).toBe('groupLeader');
       expect(savedUser.isVerified).toBe(false);
     });
@@ -66,14 +66,14 @@ describe('Authentication Routes', () => {
         .post('/auth/register/hiker')
         .send(incompleteData);
 
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('message');
+      expect(response.status).toBe(422);
+      expect(response.body).toHaveProperty('error');
     });
 
     test('should fail with duplicate username', async () => {
       // Crea primo utente
       await createTestHiker({
-        username: 'duplicate_user',
+        username: 'duplicateuser',
         email: 'first@example.com',
       });
 
@@ -81,7 +81,7 @@ describe('Authentication Routes', () => {
       const response = await request(app)
         .post('/auth/register/hiker')
         .send({
-          username: 'duplicate_user',
+          username: 'duplicateuser',
           email: 'second@example.com',
           password: 'Password123!',
         });
@@ -133,8 +133,8 @@ describe('Authentication Routes', () => {
           password: '123', // Password troppo debole
         });
 
-      expect(response.status).toBe(400);
-      expect(response.body.message).toMatch(/password/i);
+      expect(response.status).toBe(422);
+      expect(response.body.details[0].path).toBe('password');
     });
   });
 
@@ -208,8 +208,8 @@ describe('Authentication Routes', () => {
           password: 'Password123!',
         });
 
-      expect(response.status).toBe(401);
-      expect(response.body).toHaveProperty('message');
+      expect(response.status).toBe(422);
+      expect(response.body).toHaveProperty('error');
     });
 
     test('should fail with missing password', async () => {
@@ -219,8 +219,8 @@ describe('Authentication Routes', () => {
           email: 'test@example.com',
         });
 
-      expect(response.status).toBe(401);
-      expect(response.body).toHaveProperty('message');
+      expect(response.status).toBe(422);
+      expect(response.body).toHaveProperty('error');
     });
 
     test('should fail for unverified user', async () => {

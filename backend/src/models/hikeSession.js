@@ -94,8 +94,15 @@ const hikSessionSchema = new Schema({
   statoFailover: { type: Boolean, default: false }, //  true se il groupLeader è inattivo e la leadership è passata a un altro partecipante
   lastHeartbeat: { type: Date, default: Date.now }, // timestamp dell'ultimo segnale di vita ricevuto dal groupLeader
 
-  startTime: { type: Date }, // timestamp di inizio sessione (popolato quando lo status diventa ACTIVE)
-  endTime: { type: Date }, // timestamp di fine sessione (popolato quando lo status diventa COMPLETED)
+  startTime: { type: Date },
+  endTime: { type: Date },
+  // Tracking per-utente per evitare doppi accrediti: ogni partecipante che chiama
+  // /complete viene aggiunto qui. Atomic check via $ne nel findOneAndUpdate evita
+  // race condition (doppio tap → singolo accredito).
+  creditsAwardedTo: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  // Manteniamo creditsAwardedAt per documentare il primo completion; non più usato
+  // come idempotency key (sostituito da creditsAwardedTo).
+  creditsAwardedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },
 });
 

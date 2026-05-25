@@ -1,0 +1,58 @@
+[
+  {
+    "tagId": "TSM-NFC-0001-PEDROTTI",
+    "name": "Rifugio Pedrotti - Entrata",
+    "description": "Totem di checkpoint al Rifugio Pedrotti (2491 m), punto di sosta principale nel cuore del Brenta.",
+    "lon": 10.9178, "lat": 46.1764,
+    "altitude": 2491, "radius": 50, "creditsReward": 30, "kind": "refuge"
+  },
+  {
+    "tagId": "TSM-NFC-0002-CIMA-TOSA",
+    "name": "Cima Tosa - Vetta",
+    "description": "Il punto più alto del Gruppo di Brenta (3173 m). Totem di vetta con vista a 360°.",
+    "lon": 10.9042, "lat": 46.1681,
+    "altitude": 3173, "radius": 75, "creditsReward": 75, "kind": "summit"
+  },
+  {
+    "tagId": "TSM-NFC-0003-BOCCHETTE-CENTRALI",
+    "name": "Bocchette Centrali - Inizio Ferrata",
+    "description": "Punto di partenza delle famose Bocchette Centrali, via ferrata iconica del Brenta (EEA).",
+    "lon": 10.9210, "lat": 46.1790,
+    "altitude": 2650, "radius": 50, "creditsReward": 50, "kind": "checkpoint"
+  },
+  {
+    "tagId": "TSM-NFC-0004-GROSTÈ",
+    "name": "Passo del Grostè",
+    "description": "Passo a 2442 m accessibile anche in seggiovia da Madonna di Campiglio, crocevia di sentieri.",
+    "lon": 10.8630, "lat": 46.2330,
+    "altitude": 2442, "radius": 60, "creditsReward": 25, "kind": "checkpoint"
+  },
+  {
+    "tagId": "TSM-NFC-0005-CORNISELLO",
+    "name": "Lago di Cornisello",
+    "description": "Lago alpino a 2120 m con vista sul Brenta meridionale. Meta ideale per escursioni con bambini.",
+    "lon": 10.8421, "lat": 46.1256,
+    "altitude": 2120, "radius": 50, "creditsReward": 20, "kind": "checkpoint"
+  },
+  {
+    "tagId": "TSM-NFC-0006-BONDONE-VETTA",
+    "name": "Monte Bondone - Vetta Palon",
+    "description": "La vetta del Monte Bondone (2180 m), facilmente raggiungibile da Trento con panorama sulla val d'Adige.",
+    "lon": 11.0285, "lat": 45.9896,
+    "altitude": 2180, "radius": 60, "creditsReward": 35, "kind": "summit"
+  },
+  {
+    "tagId": "TSM-NFC-0007-RIFUGIO-VIOZ",
+    "name": "Rifugio Mantova al Vioz",
+    "description": "Rifugio a 3535 m nella Val di Pejo, uno dei più alti del Trentino sul Cevedale.",
+    "lon": 10.6780, "lat": 46.5120,
+    "altitude": 3535, "radius": 80, "creditsReward": 80, "kind": "refuge"
+  },
+  {
+    "tagId": "TSM-NFC-0008-LAGORAI-FORCELLA",
+    "name": "Forcella di Lagorai",
+    "description": "Passo spartiacque nella Catena di Lagorai, ambiente selvaggio tra malghe e laghi alpini.",
+    "lon": 11.4820, "lat": 46.2156,
+    "altitude": 2340, "radius": 50, "creditsReward": 40, "kind": "checkpoint"
+  }
+]

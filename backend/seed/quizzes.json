@@ -1,0 +1,355 @@
+{
+  "categories": [
+    { "slug": "sicurezza-alpina", "name": "Sicurezza Alpina", "description": "Norme di sicurezza in montagna, attrezzatura e comportamento in situazioni di emergenza.", "color": "#FFB74D", "sortOrder": 1, "iconName": "shield" },
+    { "slug": "flora-fauna", "name": "Flora & Fauna", "description": "Conoscenza della flora e fauna alpina trentina: specie protette, habitat e comportamento.", "color": "#81C784", "sortOrder": 2, "iconName": "eco" },
+    { "slug": "regolamenti-cai-sat", "name": "Regolamenti CAI/SAT", "description": "Regolamenti del Club Alpino Italiano e della SAT, classificazione sentieri e segnaletica.", "color": "#4FC3F7", "sortOrder": 3, "iconName": "gavel" },
+    { "slug": "meteorologia", "name": "Meteorologia", "description": "Lettura del tempo in montagna, previsioni e comportamento in caso di maltempo.", "color": "#9575CD", "sortOrder": 4, "iconName": "cloud" },
+    { "slug": "primo-soccorso", "name": "Primo Soccorso", "description": "Manovre di primo soccorso alpino, allerta elisoccorso e gestione delle emergenze.", "color": "#F06292", "sortOrder": 5, "iconName": "local_hospital" }
+  ],
+  "quizzes": [
+    {
+      "categorySlug": "sicurezza-alpina",
+      "title": "Sentieri Attrezzati",
+      "description": "Conoscenza dei sentieri EE e vie ferrate nella classificazione CAI.",
+      "passThreshold": 0.7,
+      "creditsReward": 40,
+      "sortOrder": 1,
+      "questions": [
+        {
+          "text": "Quale simbolo indica ufficialmente un sentiero attrezzato (via ferrata) nelle cartografie CAI?",
+          "choices": ["Triangolo rosso pieno", "Linea tratteggiata rossa", "Puntini gialli", "Croce bianca su sfondo rosso"],
+          "correctIndex": 0,
+          "explanation": "Il triangolo rosso pieno identifica i sentieri attrezzati EE nelle mappe CAI."
+        },
+        {
+          "text": "Cosa significa la sigla EEA nella classificazione CAI?",
+          "choices": ["Escursionisti Esperti Attrezzati", "Escursionismo Estremo Alpino", "Escursioni su Esposizione Alta", "Esperti Escursionisti Alpini"],
+          "correctIndex": 0,
+          "explanation": "EEA = Escursionisti Esperti con Attrezzatura (casco, imbragatura, dissipatore)."
+        },
+        {
+          "text": "In caso di temporale su cresta rocciosa, qual è il comportamento corretto?",
+          "choices": ["Scendere immediatamente evitando creste e punti alti", "Cercare riparo sotto un albero isolato", "Proseguire rapidamente verso la vetta", "Aspettare che il temporale passi in cima"],
+          "correctIndex": 0,
+          "explanation": "Le creste e i punti elevati aumentano il rischio di fulminazione. Scendi in una zona bassa e lontana da alberi isolati."
+        },
+        {
+          "text": "Quale dotazione minima è obbligatoria su una via ferrata?",
+          "choices": ["Imbragatura, longe doppia con dissipatore, casco", "Solo imbragatura", "Casco e guanti", "Moschettoni senza dissipatore"],
+          "correctIndex": 0,
+          "explanation": "La longe doppia con dissipatore è essenziale per assorbire l'energia di caduta in ferrata."
+        },
+        {
+          "text": "Come si segnala un infortunato in montagna al SUEM 118?",
+          "choices": ["Fornendo coordinate GPS o riferimenti topografici precisi", "Dicendo solo il nome dell'escursione", "Chiamando i Carabinieri", "Inviando un SMS con la posizione approssimativa"],
+          "correctIndex": 0,
+          "explanation": "Il SUEM 118 ha bisogno di coordinate precise per inviare l'elisoccorso nel minor tempo possibile."
+        },
+        {
+          "text": "Quanti litri d'acqua è consigliato portare per una gita estiva di 6 ore?",
+          "choices": ["Almeno 2 litri", "0,5 litri", "1 litro", "3 litri solo se fa caldo"],
+          "correctIndex": 0,
+          "explanation": "In estate su percorsi impegnativi si perdono circa 0,5-1 l/h: 2 litri è il minimo consigliato per 6 ore."
+        },
+        {
+          "text": "Quale regola base si applica per non perdere l'orientamento sul sentiero?",
+          "choices": ["Verificare frequentemente la cartina e i segnali CAI", "Seguire sempre le persone davanti", "Affidarsi esclusivamente al GPS senza cartina", "Procedere in discesa è sempre la direzione giusta"],
+          "correctIndex": 0,
+          "explanation": "Carta topografica + bussola + segnali bianco-rossi CAI formano un sistema ridondante affidabile."
+        },
+        {
+          "text": "Cosa indica un segnale con riga rossa su bianco (senza triangolo) in montagna?",
+          "choices": ["Sentiero per Escursionisti (E)", "Via ferrata EEA", "Sentiero turistico T", "Sentiero per Esperti Escursionisti EE"],
+          "correctIndex": 0,
+          "explanation": "Il doppio segno bianco-rosso semplice indica i sentieri E, percorribili da escursionisti con buon allenamento."
+        },
+        {
+          "text": "Qual è la causa principale degli incidenti in discesa su sentiero?",
+          "choices": ["Stanchezza muscolare e sottovalutazione del percorso", "Eccessiva velocità in salita", "Mancanza di bastoncini", "Calzature troppo rigide"],
+          "correctIndex": 0,
+          "explanation": "In discesa i muscoli già affaticati reagiscono più lentamente, aumentando il rischio di scivolamento."
+        },
+        {
+          "text": "In caso di nebbia improvvisa in quota, cosa si deve fare?",
+          "choices": ["Fermarsi, orientarsi con bussola e scendere con cautela", "Accelerare per uscire dalla nebbia", "Chiamare i soccorsi immediatamente", "Aspettare che la nebbia si diradi senza muoversi"],
+          "correctIndex": 0,
+          "explanation": "Fermarsi evita di prendere direzioni errate; la bussola e la carta permettono di scendere in sicurezza."
+        },
+        {
+          "text": "Come si testa la solidità di un appiglio su roccia?",
+          "choices": ["Colpendolo leggermente col palmo e ascoltando il suono", "Tirandolo bruscamente", "Appoggiacisi direttamente con tutto il peso", "Non è necessario testarlo se visivamente sembra solido"],
+          "correctIndex": 0,
+          "explanation": "Un suono sordo indica roccia friabile o distaccata. La prova va fatta prima di caricare il peso."
+        },
+        {
+          "text": "Quale orario è generalmente più sicuro per partire in alta quota d'estate per evitare temporali?",
+          "choices": ["Partenza all'alba, rientro entro le 13:00", "Partenza a mezzogiorno", "Nessuna differenza di orario", "Partenza nel tardo pomeriggio"],
+          "correctIndex": 0,
+          "explanation": "I temporali estivi alpini si sviluppano tipicamente nel primo pomeriggio; partire all'alba consente di essere già in discesa."
+        }
+      ]
+    },
+    {
+      "categorySlug": "flora-fauna",
+      "title": "Fauna Alpina Trentina",
+      "description": "Specie animali protette e comportamento corretto nella fauna alpina.",
+      "passThreshold": 0.7,
+      "creditsReward": 30,
+      "sortOrder": 1,
+      "questions": [
+        {
+          "text": "Quale animale è il simbolo del Parco Naturale Adamello Brenta?",
+          "choices": ["Orso bruno", "Stambecco", "Aquila reale", "Lupo appenninico"],
+          "correctIndex": 0,
+          "explanation": "L'orso bruno (Ursus arctos) è il simbolo del PNAB e conta circa 100 esemplari in Trentino."
+        },
+        {
+          "text": "Come comportarsi in caso di avvistamento di un orso?",
+          "choices": ["Parlare con voce calma, non fuggire, allontanarsi lentamente", "Urlare e agitare le braccia", "Avvicinarsi per fotografarlo", "Correre verso il bosco vicino"],
+          "correctIndex": 0,
+          "explanation": "Fuggire stimola l'istinto predatorio. Allontanarsi lentamente e fare rumore evita sorprese."
+        },
+        {
+          "text": "Cosa indica la presenza di marmotte fischianti in sequenza ravvicinata?",
+          "choices": ["Un predatore in avvicinamento (aquila o volpe)", "Territorio libero", "Clima favorevole", "Pericolo di valanga"],
+          "correctIndex": 0,
+          "explanation": "Il fischio singolo allerta il gruppo; fischi multipli indicano pericolo imminente da predatore."
+        },
+        {
+          "text": "Qual è la specie di rapace diurno più grande presente sulle Alpi?",
+          "choices": ["Gipeto barbuto", "Aquila reale", "Falco pellegrino", "Poiana"],
+          "correctIndex": 0,
+          "explanation": "Il gipeto (avvoltoio degli agnelli) ha un'apertura alare fino a 2,9 m, superiore all'aquila reale."
+        },
+        {
+          "text": "Quale comportamento è vietato rispetto alla fauna alpina protetta?",
+          "choices": ["Alimentare gli animali selvatici", "Fotografarli da distanza sicura", "Osservarli col binocolo", "Segnalare gli avvistamenti ai ranger"],
+          "correctIndex": 0,
+          "explanation": "Nutrire la fauna selvatica crea dipendenza dall'uomo e può alterare i comportamenti naturali."
+        },
+        {
+          "text": "Quale stagione è più critica per non disturbare la fauna alpina?",
+          "choices": ["Primavera (periodo di riproduzione)", "Estate", "Autunno", "Inverno"],
+          "correctIndex": 0,
+          "explanation": "In primavera gli animali sono in riproduzione: il disturbo può causare l'abbandono del nido o dei piccoli."
+        },
+        {
+          "text": "Lo stambecco (Capra ibex) è riconoscibile per:",
+          "choices": ["Le corna ricurve con nodi orizzontali (nei maschi)", "Il manto rosso acceso", "Le orecchie lunghe come un asino", "Il fischio simile alla marmotta"],
+          "correctIndex": 0,
+          "explanation": "I maschi hanno corna massicce con anelli di accrescimento annuali ben visibili, fino a 100 cm."
+        },
+        {
+          "text": "Cosa si deve fare se si trova un cucciolo di animale selvatico apparentemente abbandonato?",
+          "choices": ["Non toccarlo e contattare il Corpo Forestale", "Portarlo a casa per curarlo", "Dargli acqua e cibo", "Lasciarlo e tornare il giorno dopo"],
+          "correctIndex": 0,
+          "explanation": "La madre di solito è vicina. Toccare il piccolo può far sì che venga rifiutato dalla madre."
+        },
+        {
+          "text": "Quale pianta alpina è tutelata in Trentino e non può essere raccolta?",
+          "choices": ["Stella alpina (Leontopodium alpinum)", "Tarassaco (Taraxacum)", "Ortica", "Mirtillo nero"],
+          "correctIndex": 0,
+          "explanation": "La stella alpina è protetta in tutto il territorio provinciale; la raccolta è punita con sanzione."
+        },
+        {
+          "text": "I camosci (Rupicapra rupicapra) presentano massima attività nelle ore:",
+          "choices": ["Alba e tramonto (crepuscolari)", "Metà giornata", "Notte", "Indifferenti all'ora"],
+          "correctIndex": 0,
+          "explanation": "Come molti ungulati alpini, i camosci sono più attivi nelle ore crepuscolari per evitare il caldo e i predatori."
+        }
+      ]
+    },
+    {
+      "categorySlug": "regolamenti-cai-sat",
+      "title": "Classificazione Sentieri CAI",
+      "description": "Scala di difficoltà ufficiale CAI e segnaletica dei sentieri alpini.",
+      "passThreshold": 0.7,
+      "creditsReward": 25,
+      "sortOrder": 1,
+      "questions": [
+        {
+          "text": "Quale lettera identifica un sentiero Turistico nella classificazione CAI?",
+          "choices": ["T", "E", "EE", "EEA"],
+          "correctIndex": 0,
+          "explanation": "T = Turistico: percorsi su strade e mulattiere, adatti a tutti senza esperienza specifica."
+        },
+        {
+          "text": "Un sentiero EE richiede:",
+          "choices": ["Buon allenamento, passo sicuro su terreno impervio e assenza di vertigini", "Solo scarpe da ginnastica", "Attrezzatura da ferrata", "Guida alpina obbligatoria"],
+          "correctIndex": 0,
+          "explanation": "EE = Escursionisti Esperti: terreno impervio, tratti esposti con possibili corde fisse, assenza di vertigini indispensabile."
+        },
+        {
+          "text": "Quale colore identifica la segnaletica ufficiale CAI?",
+          "choices": ["Bianco e rosso", "Giallo e nero", "Arancione e verde", "Blu e bianco"],
+          "correctIndex": 0,
+          "explanation": "Il bianco e rosso (con logo CAI e numero sentiero) è lo standard ufficiale della rete sentieristica italiana."
+        },
+        {
+          "text": "La SAT (Società Alpinisti Tridentini) è responsabile della manutenzione dei sentieri in:",
+          "choices": ["Provincia Autonoma di Trento", "Regione Veneto", "Alto Adige", "Tutta l'Italia"],
+          "correctIndex": 0,
+          "explanation": "La SAT, fondata nel 1872, gestisce e mantiene la rete sentieristica della Provincia di Trento."
+        },
+        {
+          "text": "Quante sezioni compongono il CAI a livello nazionale (approssimativo)?",
+          "choices": ["Oltre 500", "Circa 50", "Circa 200", "Circa 1000"],
+          "correctIndex": 0,
+          "explanation": "Il CAI conta oltre 500 sezioni e sottosezioni distribuite su tutto il territorio nazionale."
+        },
+        {
+          "text": "Un bivacco fisso in alta quota differisce da un rifugio perché:",
+          "choices": ["Non è custodito e non offre ristorazione", "Ha più posti letto", "Richiede prenotazione obbligatoria", "È aperto solo in estate"],
+          "correctIndex": 0,
+          "explanation": "Il bivacco è sempre aperto, non custodito, con attrezzatura minima di emergenza (coperte, fornellino)."
+        },
+        {
+          "text": "Qual è il numero di emergenza alpina europeo?",
+          "choices": ["112", "118", "113", "115"],
+          "correctIndex": 0,
+          "explanation": "Il 112 è il numero unico europeo per emergenze; in Italia il 118 è specifico per emergenze sanitarie compresa l'elisoccorso alpino."
+        },
+        {
+          "text": "Il Sentiero delle Bocchette Centrali nel Brenta è classificato come:",
+          "choices": ["EEA (via ferrata)", "E", "T", "EE"],
+          "correctIndex": 0,
+          "explanation": "Le Bocchette sono tra le vie ferrate più famose delle Dolomiti, classificate EEA per l'esposizione e l'attrezzatura richiesta."
+        }
+      ]
+    },
+    {
+      "categorySlug": "meteorologia",
+      "title": "Meteorologia Alpina",
+      "description": "Lettura del tempo, previsioni e comportamento sicuro in caso di maltempo.",
+      "passThreshold": 0.7,
+      "creditsReward": 35,
+      "sortOrder": 1,
+      "questions": [
+        {
+          "text": "Quale tipo di nuvola indica l'imminenza di un temporale?",
+          "choices": ["Cumulonembo (Cb)", "Cirro", "Strato", "Altocumulo lenticolare"],
+          "correctIndex": 0,
+          "explanation": "Il cumulonembo è la nube temporalesca per eccellenza: sviluppo verticale fino a 15 km, fulmini e grandine."
+        },
+        {
+          "text": "Come si calcola la distanza (km) di un fulmine?",
+          "choices": ["Secondi tra lampo e tuono diviso 3", "Secondi tra lampo e tuono diviso 10", "Secondi tra lampo e tuono moltiplicati per 3", "Non è calcolabile"],
+          "correctIndex": 0,
+          "explanation": "Il suono percorre circa 340 m/s (≈1 km ogni 3 secondi). Dividi i secondi per 3 per ottenere i chilometri."
+        },
+        {
+          "text": "Il vento di Föhn in Trentino porta tipicamente:",
+          "choices": ["Aria calda e secca da nord, visibilità eccellente", "Pioggia intensa e nebbia", "Neve a bassa quota", "Nebbia persistente nelle valli"],
+          "correctIndex": 0,
+          "explanation": "Il Föhn scende dal versante nord delle Alpi perdendo umidità; porta temperature elevate e cieli limpidi ma può deteriorarsi rapidamente."
+        },
+        {
+          "text": "La temperatura scende mediamente di circa quanti gradi ogni 1000 m di quota?",
+          "choices": ["6°C", "10°C", "2°C", "15°C"],
+          "correctIndex": 0,
+          "explanation": "Il gradiente termico normale dell'aria è circa 6,5°C/1000 m (gradiente secco ~9,8°C/1000 m)."
+        },
+        {
+          "text": "Un rapidissimo calo della pressione atmosferica in montagna segnala:",
+          "choices": ["Arrivo imminente di perturbazione", "Miglioramento del tempo", "Alta pressione stabile", "Inversione termica notturna"],
+          "correctIndex": 0,
+          "explanation": "Le perturbazioni atlantiche portano calo di pressione prima dell'arrivo di piogge e temporali."
+        },
+        {
+          "text": "I cirri (nuvole alte e sottili a forma di filamento) indicano di solito:",
+          "choices": ["Perturbazione in arrivo nelle 24-48 ore", "Bel tempo stabile", "Temporali imminenti", "Nebbia a bassa quota"],
+          "correctIndex": 0,
+          "explanation": "I cirri, formati da cristalli di ghiaccio, anticipano spesso il fronte nuvoloso di una perturbazione di 1-2 giorni."
+        },
+        {
+          "text": "In caso di fulmine in campo aperto senza riparo, la posizione corretta è:",
+          "choices": ["Accovacciarsi su piedi uniti, mani sulle orecchie, più bassi possibile", "Sdraiarsi a terra completamente", "Stare in piedi per essere pronti a correre", "Appoggiarsi a una roccia alta"],
+          "correctIndex": 0,
+          "explanation": "La posizione accovacciata riduce la superficie esposta e il rischio di correnti a terra senza sdraiarsi (che aumenta il contatto con il suolo)."
+        }
+      ]
+    },
+    {
+      "categorySlug": "primo-soccorso",
+      "title": "Primo Soccorso Alpino",
+      "description": "Manovre di emergenza, allerta soccorso e gestione degli infortuni in montagna.",
+      "passThreshold": 0.7,
+      "creditsReward": 50,
+      "sortOrder": 1,
+      "questions": [
+        {
+          "text": "Qual è la prima azione da compiere di fronte a un infortunato in montagna?",
+          "choices": ["Valutare la scena e mettere in sicurezza sé stessi", "Spostare immediatamente l'infortunato", "Iniziare il massaggio cardiaco", "Chiamare subito i soccorsi prima di avvicinarsi"],
+          "correctIndex": 0,
+          "explanation": "La sicurezza del soccorritore viene prima: un secondo infortunato peggiora la situazione."
+        },
+        {
+          "text": "La manovra DRABC in primo soccorso sta per:",
+          "choices": ["Danger, Response, Airway, Breathing, Circulation", "Diagnosi, Riposo, Acqua, Bendaggio, Chiamata", "Dolore, Reazione, Aula, Barella, Chiamata", "Disinfettare, Ridurre, Assistere, Bendare, Chiamare"],
+          "correctIndex": 0,
+          "explanation": "DRABC è lo schema di valutazione: Pericolo, Risposta, Vie aeree, Respirazione, Circolazione."
+        },
+        {
+          "text": "Come si allerta l'elisoccorso in montagna con segnali visivi quando il telefono non funziona?",
+          "choices": ["6 segnali acustici/visivi in un minuto (segnale internazionale di soccorso)", "3 segnali in rapida successione", "Sventolare un indumento rosso", "Accendere un fuoco"],
+          "correctIndex": 0,
+          "explanation": "Il segnale internazionale montagna è 6 segnali/minuto (fischi, lampi, agitazioni); la risposta è 3 segnali/minuto."
+        },
+        {
+          "text": "In caso di sospetta ipotermia, cosa si deve fare?",
+          "choices": ["Isolare il paziente dal freddo e dal vento, evitare movimenti bruschi", "Massaggiare energicamente gli arti", "Dare da bere alcolici per riscaldare", "Immergere in acqua calda immediatamente"],
+          "correctIndex": 0,
+          "explanation": "I movimenti bruschi possono provocare fibrillazione ventricolare in un ipotermico. L'isolamento è la priorità."
+        },
+        {
+          "text": "Un infortunato con sospetta frattura alla gamba deve essere:",
+          "choices": ["Immobilizzato con stecche improvvisate e non spostato senza barella", "Fatto camminare lentamente fino al rifugio più vicino", "Massaggiato sulla zona dolorante", "Trasportato in spalla dal soccorritore"],
+          "correctIndex": 0,
+          "explanation": "Muovere una frattura senza immobilizzazione può trasformarla in una frattura esposta con emorragia."
+        },
+        {
+          "text": "Come si gestisce un'emorragia esterna importante in montagna?",
+          "choices": ["Pressione diretta con materiale pulito per almeno 10 minuti", "Applicare un laccio emostatico subito", "Pulire la ferita con acqua di ruscello", "Coprire la ferita senza premere"],
+          "correctIndex": 0,
+          "explanation": "La pressione diretta è il primo presidio contro le emorragie; il laccio è riservato a casi estremi (amputazioni)."
+        },
+        {
+          "text": "Qual è il numero dell'elisoccorso trentino (SUEM)?",
+          "choices": ["118", "112", "115", "113"],
+          "correctIndex": 0,
+          "explanation": "Il SUEM 118 coordina l'elisoccorso in Trentino. In alternativa il 112 (numero unico europeo) raggiunge lo stesso servizio."
+        },
+        {
+          "text": "Un escursionista presenta pallore, sudorazione fredda, nausea e confusione. Probabile causa:",
+          "choices": ["Ipoglicemia (calo di zuccheri)", "Ipotermia", "Colpo di calore", "Frattura"],
+          "correctIndex": 0,
+          "explanation": "L'ipoglicemia in montagna si manifesta con questi sintomi; somministrare zuccheri semplici se il paziente è cosciente."
+        },
+        {
+          "text": "Cosa significa la sigla PLS nel primo soccorso?",
+          "choices": ["Posizione Laterale di Sicurezza", "Primo Livello di Soccorso", "Paziente Lieve Stabile", "Procedura di Lesione Spinale"],
+          "correctIndex": 0,
+          "explanation": "La PLS mantiene libere le vie aeree in un paziente incosciente che respira, prevenendo l'inalazione di vomito."
+        },
+        {
+          "text": "In caso di sospetta lesione alla colonna vertebrale, l'infortunato va:",
+          "choices": ["Lasciato nella posizione trovata fino all'arrivo dei soccorsi specializzati", "Ruotato in PLS immediatamente", "Seduto per valutare la mobilità", "Trasportato in spalla al rifugio"],
+          "correctIndex": 0,
+          "explanation": "Muovere un paziente con trauma spinale senza stabilizzazione cervicale può provocare paralisi permanente."
+        },
+        {
+          "text": "Come si riconosce un'ustione di secondo grado?",
+          "choices": ["Cute arrossata con vesciche (flittene)", "Solo rossore senza vesciche", "Cute carbonizzata e anestesia locale", "Gonfiore senza dolore"],
+          "correctIndex": 0,
+          "explanation": "Le vesciche (flittene) caratterizzano il II grado. Il I grado è solo eritema; il III grado è necrosi con perdita di sensibilità."
+        },
+        {
+          "text": "Quanto deve durare il massaggio cardiaco esterno (RCP) in un adulto prima di valutare i parametri?",
+          "choices": ["30 compressioni seguite da 2 insufflazioni, cicli continui", "10 compressioni poi pausa di 30 secondi", "Solo insufflazioni senza compressioni", "20 compressioni poi 5 insufflazioni"],
+          "correctIndex": 0,
+          "explanation": "Il protocollo BLS adulto prevede 30:2 (compressioni:ventilazioni) a ritmo di 100-120 compressioni/minuto."
+        }
+      ]
+    }
+  ]
+}

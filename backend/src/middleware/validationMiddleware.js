@@ -165,3 +165,107 @@ export const idParamSchema = Joi.object({
 export const statsQuerySchema = Joi.object({
   year: Joi.number().integer().min(2000).max(3000),
 });
+
+// ── Account (self-service) ──────────────────────────────────────────────
+
+export const updateAccountSchema = Joi.object({
+  username: Joi.string().min(3).max(30).optional(),
+  email:    emailField.optional(),
+}).min(1);
+
+export const changePasswordSchema = Joi.object({
+  oldPassword: Joi.string().required(),
+  newPassword: passwordField.required(),
+});
+
+export const deleteAccountSchema = Joi.object({
+  password: Joi.string().required(),
+});
+
+export const goalsSchema = Joi.object({
+  km:    Joi.number().min(0).max(500).optional(),
+  elevM: Joi.number().min(0).max(20000).optional(),
+  count: Joi.number().min(0).max(50).optional(),
+}).min(1);
+
+// ── Quiz ────────────────────────────────────────────────────────────────
+
+export const quizSubmitSchema = Joi.object({
+  answers: Joi.array()
+    .items(
+      Joi.object({
+        questionId: Joi.string().required(),
+        choiceIndex: Joi.number().integer().min(0).max(3).required(),
+      }),
+    )
+    .max(50)
+    .required(),
+});
+
+// ── NFC ─────────────────────────────────────────────────────────────────
+
+export const nfcScanSchema = Joi.object({
+  tagId:  Joi.string().required(),
+  gpsLon: Joi.number().min(-180).max(180).required(),
+  gpsLat: Joi.number().min(-90).max(90).required(),
+});
+
+export const nfcTotemCreateSchema = Joi.object({
+  tagId:         Joi.string().required(),
+  name:          Joi.string().required(),
+  description:   Joi.string().max(500).optional(),
+  lon:           Joi.number().min(-180).max(180).required(),
+  lat:           Joi.number().min(-90).max(90).required(),
+  altitude:      Joi.number().optional(),
+  radius:        Joi.number().min(10).max(500).default(50),
+  creditsReward: Joi.number().min(0).max(500).default(25),
+  kind:          Joi.string().valid("checkpoint", "summit", "refuge").default("checkpoint"),
+});
+
+// ── Profilo v2 (onboarding + edit) ──────────────────────────────────────
+// Tutti i campi sono opzionali a livello di singolo sub-schema: l'utente può
+// salvare anche solo il sesso o solo l'altezza. `.min(1)` impedisce body vuoti.
+
+export const personalInfoSchema = Joi.object({
+  sex: Joi.string().valid("M", "F", "X", "N"),
+  // Data nascita: serializzata come ISO 8601 dal client; il min cap 1900-01-01
+  // evita inserimenti palesemente errati, il max (oggi) impedisce date future.
+  birthDate: Joi.date().iso().min("1900-01-01").max("now"),
+  heightCm: Joi.number().integer().min(100).max(230),
+  weightKg: Joi.number().min(30).max(250),
+}).min(1);
+
+export const experienceSchema = Joi.object({
+  caiLevel: difficultyField,
+  baselineFitness: Joi.string().valid("sedentary", "active", "sport", "athlete"),
+  weeklyTrainingFreq: Joi.string().valid("0-1", "2-3", "4+"),
+}).min(1);
+
+// ── Challenges ──────────────────────────────────────────────────────────
+
+export const createChallengeSchema = Joi.object({
+  title: Joi.string().min(3).max(80).trim().required(),
+  description: Joi.string().max(280).trim().allow("", null),
+  metric: Joi.string().valid("distance", "elevation", "count", "points").required(),
+  targetValue: Joi.number().min(0).max(1000000).optional(),
+  startDate: Joi.date().iso().required(),
+  endDate: Joi.date().iso().greater(Joi.ref("startDate")).required(),
+  participantUserIds: Joi.array().items(objectIdField).max(20).default([]),
+});
+
+export const challengeRespondSchema = Joi.object({
+  accept: Joi.boolean().required(),
+});
+
+export const preferencesSchema = Joi.object({
+  units: Joi.string().valid("metric", "imperial"),
+  language: Joi.string().length(2), // ISO 639-1: it, en, de, ...
+  notifications: Joi.object({
+    pushEnabled: Joi.boolean(),
+    emailDigest: Joi.boolean(),
+    fcmToken: Joi.string().max(255).allow(null, ""),
+  }),
+  privacy: Joi.object({
+    profileVisibility: Joi.string().valid("public", "friends", "private"),
+  }),
+}).min(1);

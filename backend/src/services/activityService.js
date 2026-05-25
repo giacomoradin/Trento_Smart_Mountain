@@ -1,6 +1,10 @@
 // CRUD attività libere (collezione separata da HikeSession).
 // Authorization a livello service: ogni operazione verifica che userId === owner.
 import Activity from "../models/activity.js";
+import User from "../models/user.js";
+import { addCredits } from "./creditService.js";
+import { applyBaselineMultiplier } from "./userScoringService.js";
+import { evaluateAllBadges } from "./badgeService.js";
 
 export async function createActivity(userId, payload) {
   const activity = new Activity({
@@ -15,6 +19,33 @@ export async function createActivity(userId, payload) {
     elevationProfile: payload.elevationProfile,
   });
   await activity.save();
+
+  // Accredito crediti per attività libere: stesso modello delle sessioni di gruppo,
+  // con μ_user_baseline applicato. Idempotency via refId+source unique combination
+  // (vedi creditTransaction): un secondo POST con stesso payload non genera doppio
+  // accredito perché crea una nuova Activity con _id diverso → comportamento atteso
+  // (l'utente può creare tante attività quante ne vuole).
+  const basePoints = activity.actualStats?.finalPoints ?? 0;
+  if (basePoints > 0) {
+    const user = await User.findById(userId).select("experience").lean();
+    const credits = applyBaselineMultiplier(basePoints, user, activity.difficultyLevel);
+    if (credits > 0) {
+      await addCredits({
+        userId,
+        amount: credits,
+        source: "free_activity",
+        refId: activity._id,
+        refKind: "Activity",
+        note: credits !== basePoints ? `baseline μ applicato (base=${basePoints})` : undefined,
+      });
+    }
+  }
+
+  // Badge evaluation post-create — fire-and-forget.
+  evaluateAllBadges(userId).catch((err) => {
+    console.error("[activityService] badge eval fallita:", err.message);
+  });
+
   return activity;
 }
 

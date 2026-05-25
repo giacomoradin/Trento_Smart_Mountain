@@ -1,6 +1,9 @@
 import HikeSession from "../models/hikeSession.js";
 import User from "../models/user.js";
 import { getCombinedActivityStats } from "./activityService.js";
+import { addCredits } from "./creditService.js";
+import { applyBaselineMultiplier } from "./userScoringService.js";
+import { evaluateAllBadges } from "./badgeService.js";
 import crypto from "crypto";
 
 // Genera codice invito nel formato "TSM-XXXX" (4 hex uppercase)
@@ -269,6 +272,51 @@ export async function completeSession(sessionId, userId, actualStats = null) {
   }
 
   await session.save();
+
+  // Accredito crediti per-utente con idempotency atomic: ogni partecipante riceve
+  // i propri crediti UNA volta sola, indipendentemente da quante volte chiama /complete.
+  // Il $ne + $push in un solo round-trip impedisce race condition (doppio tap).
+  const basePoints = session.actualStats?.finalPoints ?? 0;
+  if (basePoints > 0) {
+    // Lookup PER-UTENTE del profilo: ogni partecipante può avere baseline diverso
+    // (es. capogruppo atleta, partecipante sedentario → boost diversi per la stessa sessione).
+    const user = await User.findById(userId).select("experience").lean();
+    const credits = applyBaselineMultiplier(
+      basePoints,
+      user,
+      session.routeDetails?.difficultyLevel,
+    );
+
+    const claimed = await HikeSession.findOneAndUpdate(
+      { _id: sessionId, creditsAwardedTo: { $ne: userId } },
+      {
+        $addToSet: { creditsAwardedTo: userId },
+        $setOnInsert: {},
+        ...(session.creditsAwardedAt ? {} : { $set: { creditsAwardedAt: new Date() } }),
+      },
+      { new: true },
+    );
+    if (claimed) {
+      await addCredits({
+        userId,
+        amount: credits,
+        source: "session",
+        refId: session._id,
+        refKind: "HikeSession",
+        // Note diagnostica: se in futuro vediamo crediti diversi tra utenti per
+        // la stessa sessione, il log conferma che è atteso (baseline differenti).
+        note: credits !== basePoints ? `baseline μ applicato (base=${basePoints}, final=${credits})` : undefined,
+      });
+    }
+  }
+
+  // Badge evaluation post-completion: completare la sessione può sbloccare
+  // first_steps / veteran / credit_*. Fire-and-forget — un errore qui non
+  // deve bloccare la response del complete.
+  evaluateAllBadges(userId).catch((err) => {
+    console.error("[hikeSessionService] badge eval fallita:", err.message);
+  });
+
   return session;
 }
 

@@ -9,8 +9,11 @@ export const authenticate = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // attach userId and role to the request; referred in HikeSessionRoutes.js
-    next(); // let the request through
+    // Convenzione: il JWT contiene { userId, role }. Esponiamo anche `_id` come
+    // alias per evitare regressioni in handler che usano l'abitudine Mongoose
+    // (req.user._id). Il valore è lo stesso: nessuna ambiguità.
+    req.user = { ...decoded, _id: decoded.userId };
+    next();
   } catch (error) {
     res.status(401).json({ message: "Invalid or expired token." });
   }

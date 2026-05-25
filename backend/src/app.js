@@ -10,12 +10,26 @@ import adminRoutes from "./routes/adminRoutes.js";
 import hikeSessionRoutes from "./routes/hikeSessionRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import weatherRoutes from "./routes/weatherRoutes.js";
+import creditsRoutes from "./routes/creditsRoutes.js";
+import quizRoutes from "./routes/quizRoutes.js";
+import nfcRoutes from "./routes/nfcRoutes.js";
+import accountRoutes from "./routes/accountRoutes.js";
+import challengeRoutes from "./routes/challengeRoutes.js";
+import badgeRoutes from "./routes/badgeRoutes.js";
 
 // IMPORTANTE: importa i discriminator models per registrarli con Mongoose
 // (devono essere caricati almeno una volta perché User.discriminator() venga eseguito)
 import "./models/hiker.js";
 import "./models/refuge.js";
 import "./models/admin.js";
+import "./models/creditTransaction.js";
+import "./models/quizCategory.js";
+import "./models/quiz.js";
+import "./models/quizAttempt.js";
+import "./models/nfcTotem.js";
+import "./models/nfcScan.js";
+import "./models/challenge.js";
+import "./models/earnedBadge.js";
 
 import { globalErrorHandler, notFoundHandler } from "./middleware/errorMiddleware.js";
 import {
@@ -80,6 +94,12 @@ app.use("/admin", adminRoutes);
 app.use("/api/v1/sessions", hikeSessionRoutes);
 app.use("/api/v1/activities", activityRoutes);
 app.use("/weather", weatherRoutes);
+app.use("/api/v1/users", creditsRoutes);
+app.use("/api/v1/quiz", quizRoutes);
+app.use("/api/v1/nfc", nfcRoutes);
+app.use("/api/v1/users", accountRoutes);
+app.use("/api/v1/challenges", challengeRoutes);
+app.use("/api/v1/users/me", badgeRoutes);
 
 // ─── Compatibility shim: /users (deprecato, mantenuto per backward-compat) ───
 // Il refactor 2026-05 ha separato la collection in hikers/refuges/admins ma
@@ -87,6 +107,7 @@ app.use("/weather", weatherRoutes);
 // conoscere a priori il ruolo. Smistiamo internamente verso lo schema corretto.
 import { authenticate as _authShim } from "./middleware/authMiddleware.js";
 import User from "./models/user.js";
+import { stripPrivateFields, isSelfOrAdmin } from "./utils/userPrivacy.js";
 
 app.post("/users", async (req, res, next) => {
   const role = req.body?.role;
@@ -111,7 +132,11 @@ app.get("/users/:id", _authShim, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select("-passwordHash -__v");
     if (!user) return res.status(404).json({ message: "Utente non trovato." });
-    res.status(200).json(user);
+    // Privacy gate: dati personali (peso, sesso, preferenze, etc.) visibili
+    // solo al proprietario o ad admin. Senza questo strip un utente
+    // qualunque potrebbe leggere weightKg/birthDate altrui via /users/:id.
+    const safe = stripPrivateFields(user, isSelfOrAdmin(req.user, req.params.id));
+    res.status(200).json(safe);
   } catch (error) {
     if (error.name === "CastError") {
       return res.status(400).json({ message: "ID utente non valido." });

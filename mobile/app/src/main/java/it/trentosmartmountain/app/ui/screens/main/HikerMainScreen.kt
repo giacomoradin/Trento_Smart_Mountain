@@ -47,6 +47,13 @@ fun HikerMainScreen(
   onLoggedOut: () -> Unit,
   onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
   onNavigateToActivityDetail: (activityId: String, sessionId: String?) -> Unit = { _, _ -> },
+  onNavigateToFormazione: () -> Unit = {},
+  onNavigateToNfcScan: () -> Unit = {},
+  onNavigateToAccount: () -> Unit = {},
+  onNavigateToOnboarding: () -> Unit = {},
+  onNavigateToGoals: () -> Unit = {},
+  onNavigateToChallenges: () -> Unit = {},
+  onNavigateToBadges: () -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
 
@@ -101,7 +108,17 @@ fun HikerMainScreen(
         onNavigateToDetail = onNavigateToSessionDetail,
       )
       HikerTab.Registra -> RegistraScreen(Modifier.padding(innerPadding))
-      HikerTab.Profile -> ProfileScreen(onLoggedOut = onLoggedOut, modifier = Modifier.padding(innerPadding))
+      HikerTab.Profile -> ProfileScreen(
+        onLoggedOut = onLoggedOut,
+        onNavigateToFormazione = onNavigateToFormazione,
+        onNavigateToNfcScan = onNavigateToNfcScan,
+        onNavigateToAccount = onNavigateToAccount,
+        onNavigateToOnboarding = onNavigateToOnboarding,
+        onNavigateToGoals = onNavigateToGoals,
+        onNavigateToChallenges = onNavigateToChallenges,
+        onNavigateToBadges = onNavigateToBadges,
+        modifier = Modifier.padding(innerPadding),
+      )
     }
   }
 }

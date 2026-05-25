@@ -10,7 +10,11 @@ import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreditHistoryResponse
 import it.trentosmartmountain.app.data.remote.dto.CreditsResponse
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateEmergencyRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateSessionRequest
+import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
+import it.trentosmartmountain.app.data.remote.dto.PatchEmergencyRequest
+import it.trentosmartmountain.app.data.remote.dto.SessionEmergenciesResponse
 import it.trentosmartmountain.app.data.remote.dto.DeleteAccountRequest
 import it.trentosmartmountain.app.data.remote.dto.ForgotPasswordRequest
 import it.trentosmartmountain.app.data.remote.dto.GoalsResponse
@@ -157,6 +161,23 @@ interface TsmApiService {
     @Path("id") id: String,
     @Body body: CompleteSessionRequest,
   ): Response<ApiMessageBody>
+
+  @GET("api/v1/sessions/{id}/emergencies")
+  suspend fun getSessionEmergencies(@Path("id") sessionId: String): Response<SessionEmergenciesResponse>
+
+  // ── Emergenze SOS ──
+
+  @POST("api/v1/emergencies")
+  suspend fun createEmergency(@Body body: CreateEmergencyRequest): Response<EmergencyResponse>
+
+  @GET("api/v1/emergencies/{id}")
+  suspend fun getEmergency(@Path("id") id: String): Response<EmergencyResponse>
+
+  @PATCH("api/v1/emergencies/{id}")
+  suspend fun patchEmergency(
+    @Path("id") id: String,
+    @Body body: PatchEmergencyRequest,
+  ): Response<EmergencyResponse>
 
   // ── Activity (attività libere senza sessione di gruppo) ──
 

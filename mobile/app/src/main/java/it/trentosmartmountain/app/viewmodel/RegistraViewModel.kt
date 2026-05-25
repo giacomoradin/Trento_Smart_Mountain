@@ -22,7 +22,11 @@ import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.data.sync.SyncManager
+import it.trentosmartmountain.app.repository.EmergencyRepository
+import it.trentosmartmountain.app.repository.OfflineEmergencyException
 import it.trentosmartmountain.app.service.ForegroundTrackingService
+import it.trentosmartmountain.app.service.SosBeaconService
+import java.security.SecureRandom
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,9 +87,28 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
      * appena il tracking parte o l'utente chiude il dialog.
      */
     val gpsDisabledWarning: Boolean = false,
+    /** SOS: fase UI (conferma, countdown, attivo, coda offline). */
+    val sosPhase: SosPhase = SosPhase.IDLE,
+    val sosCountdownSeconds: Int = 0,
+    val sosSelectedType: String = "INJURY",
+    val sosActiveEmergencyId: String? = null,
+    val sosBeaconInstanceId: String? = null,
+    val sosPendingOffline: Boolean = false,
+    val sosStatusMessage: String? = null,
+    val showSosConfirmDialog: Boolean = false,
+    val showSosCancelDialog: Boolean = false,
   )
 
+  enum class SosPhase {
+    IDLE,
+    COUNTDOWN,
+    ACTIVE,
+    QUEUED_OFFLINE,
+    SENDING,
+  }
+
   private val app = getApplication<Application>()
+  private val emergencyRepo = EmergencyRepository(app)
   private val locationTracker = UserLocationTracker(app)
   private val trackingEngine = HikeTrackingEngine()
   private val stationaryDetector = StationaryDetector(app)
@@ -94,8 +117,10 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
   private var timerJob: Job? = null
+  private var sosCountdownJob: Job? = null
   private var stillSinceMs: Long? = null
   private var lastSnapshot: LocationSnapshot? = null
+  private var activeSosIdempotencyKey: String? = null
 
   init {
     viewModelScope.launch {
@@ -529,7 +554,199 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       }
   }
 
+  fun canTriggerSos(): Boolean {
+    val state = _uiState.value
+    val trackingOk =
+      state.trackingStatus == TrackingStatus.RECORDING ||
+        state.trackingStatus == TrackingStatus.PAUSED
+    return trackingOk && state.activeSessionId != null && state.sosPhase == SosPhase.IDLE
+  }
+
+  fun onSosFabClicked() {
+    if (!canTriggerSos()) return
+    _uiState.update { it.copy(showSosConfirmDialog = true) }
+  }
+
+  fun dismissSosConfirmDialog() {
+    _uiState.update { it.copy(showSosConfirmDialog = false) }
+  }
+
+  fun updateSosEmergencyType(type: String) {
+    _uiState.update { it.copy(sosSelectedType = type) }
+  }
+
+  /** Dopo "Prosegui" nel dialog iniziale: avvia countdown 15s. */
+  fun confirmSosProceed() {
+    _uiState.update {
+      it.copy(
+        showSosConfirmDialog = false,
+        sosPhase = SosPhase.COUNTDOWN,
+        sosCountdownSeconds = SOS_COUNTDOWN_SEC,
+        sosStatusMessage = null,
+      )
+    }
+    sosCountdownJob?.cancel()
+    sosCountdownJob =
+      viewModelScope.launch {
+        var remaining = SOS_COUNTDOWN_SEC
+        while (remaining > 0) {
+          delay(1_000)
+          remaining--
+          _uiState.update { it.copy(sosCountdownSeconds = remaining) }
+        }
+        launchSosAfterCountdown()
+      }
+  }
+
+  fun cancelSosCountdown() {
+    sosCountdownJob?.cancel()
+    _uiState.update {
+      it.copy(
+        sosPhase = SosPhase.IDLE,
+        sosCountdownSeconds = 0,
+        sosStatusMessage = null,
+      )
+    }
+  }
+
+  private fun launchSosAfterCountdown() {
+    val state = _uiState.value
+    val sessionId = state.activeSessionId ?: return
+    val location = state.userLocation ?: run {
+      _uiState.update {
+        it.copy(
+          sosPhase = SosPhase.IDLE,
+          sosStatusMessage = "Posizione GPS non disponibile",
+        )
+      }
+      return
+    }
+
+    val beaconId = randomBeaconInstanceId()
+    val idempotencyKey = UUID.randomUUID().toString()
+    activeSosIdempotencyKey = idempotencyKey
+
+    SosBeaconService.start(app, beaconId)
+
+    _uiState.update {
+      it.copy(
+        sosPhase = SosPhase.SENDING,
+        sosBeaconInstanceId = beaconId,
+        sosStatusMessage = null,
+      )
+    }
+
+    viewModelScope.launch {
+      val result =
+        emergencyRepo.createEmergency(
+          sessionId = sessionId,
+          emergencyType = state.sosSelectedType,
+          longitude = location.longitude,
+          latitude = location.latitude,
+          beaconInstanceId = beaconId,
+          idempotencyKey = idempotencyKey,
+        )
+      result.fold(
+        onSuccess = { emergency ->
+          _uiState.update {
+            it.copy(
+              sosPhase = SosPhase.ACTIVE,
+              sosActiveEmergencyId = emergency.id,
+              sosPendingOffline = false,
+              sosStatusMessage = "SOS inviato al capogruppo",
+            )
+          }
+        },
+        onFailure = { err ->
+          if (err is OfflineEmergencyException) {
+            _uiState.update {
+              it.copy(
+                sosPhase = SosPhase.QUEUED_OFFLINE,
+                sosPendingOffline = true,
+                sosStatusMessage = "Beacon attivo — invio dati in attesa di connessione",
+              )
+            }
+            retryPendingSosWhenOnline()
+          } else {
+            _uiState.update {
+              it.copy(
+                sosPhase = SosPhase.ACTIVE,
+                sosPendingOffline = true,
+                sosStatusMessage = "Beacon attivo — errore invio: ${err.message}",
+              )
+            }
+          }
+        },
+      )
+    }
+  }
+
+  private fun retryPendingSosWhenOnline() {
+    viewModelScope.launch {
+      while (_uiState.value.sosPendingOffline) {
+        delay(15_000)
+        if (!emergencyRepo.isNetworkAvailable()) continue
+        val uploaded = emergencyRepo.flushPendingQueue()
+        if (uploaded > 0) {
+          _uiState.update {
+            it.copy(
+              sosPendingOffline = false,
+              sosPhase = SosPhase.ACTIVE,
+              sosStatusMessage = "SOS inviato al capogruppo",
+            )
+          }
+          break
+        }
+      }
+    }
+  }
+
+  fun requestCancelActiveSos() {
+    if (_uiState.value.sosPhase == SosPhase.ACTIVE ||
+      _uiState.value.sosPhase == SosPhase.QUEUED_OFFLINE
+    ) {
+      _uiState.update { it.copy(showSosCancelDialog = true) }
+    }
+  }
+
+  fun dismissSosCancelDialog() {
+    _uiState.update { it.copy(showSosCancelDialog = false) }
+  }
+
+  fun confirmCancelActiveSos(reason: String) {
+    _uiState.update { it.copy(showSosCancelDialog = false) }
+    SosBeaconService.stop(app)
+    val emergencyId = _uiState.value.sosActiveEmergencyId
+    val idempotencyKey = activeSosIdempotencyKey
+    _uiState.update {
+      it.copy(
+        sosPhase = SosPhase.IDLE,
+        sosActiveEmergencyId = null,
+        sosBeaconInstanceId = null,
+        sosPendingOffline = false,
+        sosStatusMessage = null,
+      )
+    }
+    activeSosIdempotencyKey = null
+    if (emergencyId != null) {
+      viewModelScope.launch {
+        emergencyRepo.cancelEmergency(emergencyId, reason)
+      }
+    } else if (idempotencyKey != null) {
+      viewModelScope.launch {
+        (app as TsmApplication).database.pendingEmergencyDao().deleteByKey(idempotencyKey)
+      }
+    }
+  }
+
+  private fun randomBeaconInstanceId(): String {
+    val bytes = ByteArray(6)
+    SecureRandom().nextBytes(bytes)
+    return bytes.joinToString("") { "%02x".format(it) }
+  }
+
   override fun onCleared() {
+    sosCountdownJob?.cancel()
     timerJob?.cancel()
     stationaryDetector.stop()
     locationTracker.stop()
@@ -543,5 +760,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     private const val STATIONARY_SPEED_MPS = 0.5f
     private const val RESUME_SPEED_MPS = 1.0f
     private const val AUTO_PAUSE_DELAY_MS = 45_000L
+    private const val SOS_COUNTDOWN_SEC = 15
   }
 }

@@ -60,7 +60,7 @@ import it.trentosmartmountain.app.viewmodel.RegistraViewModel
  * Integra [TsmMapView] (tile OpenTopoMap), permessi posizione/notifiche,
  * [RegistraViewModel] per metriche e traccia live.
  *
- * **Dialog SOS**: informativo (conferma/dismiss); non invia ancora allarme al backend.
+ * **SOS**: conferma → countdown 15s → beacon BLE + POST (o coda offline).
  * **Dialog stop**: conferma arresto registrazione e chiusura sessione sul server se collegata.
  */
 @Composable
@@ -70,7 +70,6 @@ fun RegistraScreen(
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   val context = LocalContext.current
-  var showSosDialog by rememberSaveable { mutableStateOf(false) }
 
   val hasFineLocation =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -199,7 +198,7 @@ fun RegistraScreen(
     RegistraMapActionFabs(
       canCenterOnUser = canCenterOnUser,
       onCenterOnUser = viewModel::centerOnUser,
-      onSosClick = { showSosDialog = true },
+      onSosClick = viewModel::onSosFabClicked,
       modifier = Modifier.align(Alignment.BottomEnd),
     )
 
@@ -222,30 +221,54 @@ fun RegistraScreen(
             .padding(bottom = RegistraLayout.bottomInset),
       )
     }
+
+    val sosBannerMessage = uiState.sosStatusMessage
+    if (
+      sosBannerMessage != null &&
+        (uiState.sosPhase == RegistraViewModel.SosPhase.ACTIVE ||
+          uiState.sosPhase == RegistraViewModel.SosPhase.QUEUED_OFFLINE ||
+          uiState.sosPhase == RegistraViewModel.SosPhase.SENDING)
+    ) {
+      Surface(
+        modifier =
+          Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 120.dp, start = 16.dp, end = 16.dp),
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
+        shape = MaterialTheme.shapes.small,
+        onClick = viewModel::requestCancelActiveSos,
+      ) {
+        Text(
+          text = sosBannerMessage,
+          modifier = Modifier.padding(12.dp),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onErrorContainer,
+        )
+      }
+    }
   }
 
-  if (showSosDialog) {
-    AlertDialog(
-      onDismissRequest = { showSosDialog = false },
-      title = { Text(stringResource(R.string.registra_sos_dialog_title)) },
-      text = { Text(stringResource(R.string.registra_sos_dialog_body)) },
-      confirmButton = {
-        Button(
-          onClick = { showSosDialog = false },
-          colors =
-            ButtonDefaults.buttonColors(
-              containerColor = MaterialTheme.colorScheme.error,
-              contentColor = MaterialTheme.colorScheme.onError,
-            ),
-        ) {
-          Text(stringResource(R.string.registra_sos_dialog_confirm))
-        }
-      },
-      dismissButton = {
-        TextButton(onClick = { showSosDialog = false }) {
-          Text(stringResource(R.string.registra_sos_dialog_dismiss))
-        }
-      },
+  if (uiState.showSosConfirmDialog) {
+    SosConfirmDialog(
+      selectedType = uiState.sosSelectedType,
+      onTypeChange = viewModel::updateSosEmergencyType,
+      onDismiss = viewModel::dismissSosConfirmDialog,
+      onProceed = viewModel::confirmSosProceed,
+    )
+  }
+
+  if (uiState.sosPhase == RegistraViewModel.SosPhase.COUNTDOWN) {
+    SosCountdownDialog(
+      secondsRemaining = uiState.sosCountdownSeconds,
+      onCancel = viewModel::cancelSosCountdown,
+    )
+  }
+
+  if (uiState.showSosCancelDialog) {
+    SosCancelActiveDialog(
+      onDismiss = viewModel::dismissSosCancelDialog,
+      onMistake = { viewModel.confirmCancelActiveSos("MISTAKE") },
+      onResolved = { viewModel.confirmCancelActiveSos("RESOLVED_SELF") },
     )
   }
 

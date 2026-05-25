@@ -12,13 +12,14 @@ import androidx.room.RoomDatabase
   entities = [
     CachedUserProfileEntity::class,
     CompletedActivityEntity::class,
+    PendingEmergencyEntity::class,
   ],
-  // v4: aggiunti retry_count, last_retry_at_ms, remote_id per il sync incrementale
-  // (sync libere → POST /activities, sync sessioni → PATCH /complete).
-  version = 4,
+  // v5: coda SOS offline (pending_emergencies).
+  version = 5,
   exportSchema = false,
 )
 abstract class TsmDatabase : RoomDatabase() {
   abstract fun profileDao(): ProfileDao
   abstract fun completedActivityDao(): CompletedActivityDao
+  abstract fun pendingEmergencyDao(): PendingEmergencyDao
 }

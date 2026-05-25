@@ -16,6 +16,8 @@ import nfcRoutes from "./routes/nfcRoutes.js";
 import accountRoutes from "./routes/accountRoutes.js";
 import challengeRoutes from "./routes/challengeRoutes.js";
 import badgeRoutes from "./routes/badgeRoutes.js";
+import emergencyRoutes from "./routes/emergencyRoutes.js";
+import "./models/emergency.js";
 
 // IMPORTANTE: importa i discriminator models per registrarli con Mongoose
 // (devono essere caricati almeno una volta perché User.discriminator() venga eseguito)
@@ -92,6 +94,7 @@ app.use("/hikers", hikerRoutes);
 app.use("/refuges", refugeRoutes);
 app.use("/admin", adminRoutes);
 app.use("/api/v1/sessions", hikeSessionRoutes);
+app.use("/api/v1/emergencies", emergencyRoutes);
 app.use("/api/v1/activities", activityRoutes);
 app.use("/weather", weatherRoutes);
 app.use("/api/v1/users", creditsRoutes);

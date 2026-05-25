@@ -22,9 +22,21 @@ data class EmergencyProfileSnapshot(
     @SerializedName("experience") val experience: Experience? = null,
 )
 
+/** Sessione popolata dal backend su POST/GET emergenze (non ObjectId raw). */
+data class EmergencySessionRef(
+    @SerializedName("_id") val id: String,
+    @SerializedName("inviteCode") val inviteCode: String? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("routeDetails") val routeDetails: EmergencyRouteRef? = null,
+)
+
+data class EmergencyRouteRef(
+    @SerializedName("name") val name: String? = null,
+)
+
 data class EmergencyResponse(
     @SerializedName("_id") val id: String,
-    @SerializedName("sessionId") val sessionId: String,
+    @SerializedName("sessionId") val sessionId: EmergencySessionRef,
     @SerializedName("senderUserId") val senderUserId: UserRefDto? = null,
     @SerializedName("emergencyType") val emergencyType: String,
     @SerializedName("coordinates") val coordinates: GeoPointDto,

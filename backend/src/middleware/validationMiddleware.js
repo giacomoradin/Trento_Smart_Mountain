@@ -244,6 +244,21 @@ export const nfcTotemCreateSchema = Joi.object({
 // Tutti i campi sono opzionali a livello di singolo sub-schema: l'utente può
 // salvare anche solo il sesso o solo l'altezza. `.min(1)` impedisce body vuoti.
 
+// Pattern stretto: data URI con MIME image/jpeg|png|webp + payload Base64 valido.
+// La cifra max nella regex ({1,10000000}) limita comunque sotto al 7MB del .max()
+// e blocca payload manifestamente malformati prima che Joi tagli sulla lunghezza.
+// Accettiamo anche stringa vuota / null perché il "rimuovi foto" lato client
+// invia avatarUrl="" per resettare il campo.
+const avatarDataUriField = Joi.string()
+  .max(7 * 1024 * 1024)
+  .pattern(/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/)
+  .messages({
+    "string.pattern.base":
+      "avatarUrl non valido: atteso un data URI image/jpeg|png|webp in Base64.",
+    "string.max": "avatarUrl supera la dimensione massima consentita (7 MB).",
+  })
+  .allow(null, "");
+
 export const personalInfoSchema = Joi.object({
   sex: Joi.string().valid("M", "F", "X", "N"),
   // Data nascita: serializzata come ISO 8601 dal client; il min cap 1900-01-01
@@ -251,8 +266,9 @@ export const personalInfoSchema = Joi.object({
   birthDate: Joi.date().iso().min("1900-01-01").max("now"),
   heightCm: Joi.number().integer().min(100).max(230),
   weightKg: Joi.number().min(30).max(250),
-  // Avatar in Base64 (max 3MB di caratteri per sicurezza su payload da 2MB binari)
-  avatarUrl: Joi.string().max(3 * 1024 * 1024).allow(null, ""),
+  // Avatar in Base64 (max 7MB di caratteri per sicurezza su payload da 5MB binari).
+  // Vedi `avatarDataUriField` per il pattern stretto.
+  avatarUrl: avatarDataUriField,
 }).min(1);
 
 export const experienceSchema = Joi.object({

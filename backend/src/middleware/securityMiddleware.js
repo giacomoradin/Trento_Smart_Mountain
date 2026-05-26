@@ -55,5 +55,5 @@ export const corsOptions = cors({
   credentials: false,
 });
 
-// 2 MB è sufficiente per un avatar Base64 compresso e blocca payload abnormi (JSON bomb).
-export const requestSizeLimit = "2mb";
+// 5 MB è sufficiente per un avatar Base64 ad alta risoluzione e blocca payload abnormi (JSON bomb).
+export const requestSizeLimit = "5mb";

@@ -168,18 +168,31 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** Carica l'avatar codificato in Base64 sul server. */
-    fun uploadAvatar(base64: String) {
+    /**
+     * Carica l'avatar codificato in Base64 sul server.
+     *
+     * Strategia di state-update: il backend ritorna `{ personalInfo: { ... } }`
+     * con TUTTI i campi del sub-document (sex/birthDate/heightCm/weightKg + il
+     * nuovo avatarUrl), quindi possiamo applicare il body al posto del vecchio
+     * `personalInfo` senza perdere dati. Se per qualche motivo il body è null
+     * (es. response gzip troncato), mergeggiamo l'avatarUrl nuovo dentro
+     * il vecchio `personalInfo` come fallback — così la UI vede comunque la
+     * foto e non il valore precedente.
+     */
+    fun uploadAvatar(dataUri: String) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isSavingSection = true, sectionError = null, sectionSuccess = null)
             runCatching {
-                // Inviamo solo l'avatarUrl, gli altri campi restano invariati sul server
-                api.updatePersonalInfo(PersonalInfo(avatarUrl = base64))
+                api.updatePersonalInfo(PersonalInfo(avatarUrl = dataUri))
             }.onSuccess { resp ->
                 if (resp.isSuccessful) {
+                    val serverPersonalInfo = resp.body()?.personalInfo
+                    val mergedPersonalInfo = serverPersonalInfo
+                        ?: _state.value.personalInfo?.copy(avatarUrl = dataUri)
+                        ?: PersonalInfo(avatarUrl = dataUri)
                     _state.value = _state.value.copy(
                         isSavingSection = false,
-                        personalInfo = resp.body()?.personalInfo ?: _state.value.personalInfo,
+                        personalInfo = mergedPersonalInfo,
                         sectionSuccess = "Foto profilo aggiornata.",
                     )
                 } else {
@@ -187,6 +200,50 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }.onFailure {
                 _state.value = _state.value.copy(isSavingSection = false, sectionError = it.message)
+            }
+        }
+    }
+
+    /**
+     * Rimuove la foto profilo: invia `avatarUrl=""` (stringa vuota è esplicitamente
+     * accettata dal Joi schema lato server, vedi `avatarDataUriField.allow("")`).
+     *
+     * Optimistic update: aggiorniamo `personalInfo.avatarUrl = null` localmente
+     * prima della response, così la UI fa subito il fallback alle iniziali.
+     * Se il server risponde errore, ripristiniamo lo stato precedente.
+     */
+    fun removeAvatar() {
+        val previous = _state.value.personalInfo
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                isSavingSection = true,
+                sectionError = null,
+                sectionSuccess = null,
+                personalInfo = previous?.copy(avatarUrl = null) ?: PersonalInfo(),
+            )
+            runCatching {
+                api.updatePersonalInfo(PersonalInfo(avatarUrl = ""))
+            }.onSuccess { resp ->
+                if (resp.isSuccessful) {
+                    _state.value = _state.value.copy(
+                        isSavingSection = false,
+                        personalInfo = resp.body()?.personalInfo ?: _state.value.personalInfo,
+                        sectionSuccess = "Foto profilo rimossa.",
+                    )
+                } else {
+                    // Rollback ottimistico: ripristina il valore precedente.
+                    _state.value = _state.value.copy(
+                        isSavingSection = false,
+                        personalInfo = previous,
+                        sectionError = parseErrorMessage(resp),
+                    )
+                }
+            }.onFailure { err ->
+                _state.value = _state.value.copy(
+                    isSavingSection = false,
+                    personalInfo = previous,
+                    sectionError = err.message,
+                )
             }
         }
     }

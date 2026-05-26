@@ -16,6 +16,8 @@ import nfcRoutes from "./routes/nfcRoutes.js";
 import accountRoutes from "./routes/accountRoutes.js";
 import challengeRoutes from "./routes/challengeRoutes.js";
 import badgeRoutes from "./routes/badgeRoutes.js";
+import emergencyRoutes from "./routes/emergencyRoutes.js";
+import "./models/emergency.js";
 
 // IMPORTANTE: importa i discriminator models per registrarli con Mongoose
 // (devono essere caricati almeno una volta perché User.discriminator() venga eseguito)
@@ -31,7 +33,10 @@ import "./models/nfcScan.js";
 import "./models/challenge.js";
 import "./models/earnedBadge.js";
 
-import { globalErrorHandler, notFoundHandler } from "./middleware/errorMiddleware.js";
+import {
+  globalErrorHandler,
+  notFoundHandler,
+} from "./middleware/errorMiddleware.js";
 import {
   helmetMiddleware,
   mongoSanitizeMiddleware,
@@ -39,7 +44,11 @@ import {
   corsOptions,
   requestSizeLimit,
 } from "./middleware/securityMiddleware.js";
-import { globalLimiter, authenticatedLimiter, writeLimiter } from "./middleware/rateLimitMiddleware.js";
+import {
+  globalLimiter,
+  authenticatedLimiter,
+  writeLimiter,
+} from "./middleware/rateLimitMiddleware.js";
 
 // Caricamento sicuro di Swagger (evita crash se il file manca in prod)
 let swaggerDocument;
@@ -48,7 +57,9 @@ try {
     readFileSync(new URL("../../swagger-output.json", import.meta.url)),
   );
 } catch (err) {
-  console.warn("[app] WARN: swagger-output.json non trovato. La documentazione API non sarà disponibile.");
+  console.warn(
+    "[app] WARN: swagger-output.json non trovato. La documentazione API non sarà disponibile.",
+  );
 }
 
 const app = express();
@@ -100,6 +111,7 @@ app.use("/hikers", hikerRoutes);
 app.use("/refuges", refugeRoutes);
 app.use("/admin", adminRoutes);
 app.use("/api/v1/sessions", hikeSessionRoutes);
+app.use("/api/v1/emergencies", emergencyRoutes);
 app.use("/api/v1/activities", activityRoutes);
 app.use("/weather", weatherRoutes);
 app.use("/api/v1/users", creditsRoutes);
@@ -119,7 +131,9 @@ import { stripPrivateFields, isSelfOrAdmin } from "./utils/userPrivacy.js";
 
 app.post("/users", async (req, res, next) => {
   const role = req.body?.role;
-  console.warn(`[app] DEPRECATION: POST /users (role=${role}) → usare /auth/register/hiker o /refuge`);
+  console.warn(
+    `[app] DEPRECATION: POST /users (role=${role}) → usare /auth/register/hiker o /refuge`,
+  );
   try {
     if (role === "rifugio") {
       const { createRefuge } = await import("./services/refugeService.js");
@@ -138,12 +152,17 @@ app.post("/users", async (req, res, next) => {
 
 app.get("/users/:id", _authShim, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select("-passwordHash -__v");
+    const user = await User.findById(req.params.id).select(
+      "-passwordHash -__v",
+    );
     if (!user) return res.status(404).json({ message: "Utente non trovato." });
     // Privacy gate: dati personali (peso, sesso, preferenze, etc.) visibili
     // solo al proprietario o ad admin. Senza questo strip un utente
     // qualunque potrebbe leggere weightKg/birthDate altrui via /users/:id.
-    const safe = stripPrivateFields(user, isSelfOrAdmin(req.user, req.params.id));
+    const safe = stripPrivateFields(
+      user,
+      isSelfOrAdmin(req.user, req.params.id),
+    );
     res.status(200).json(safe);
   } catch (error) {
     if (error.name === "CastError") {

@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import app from "./app.js"; // ← importa app.js invece di ricreare Express
-import { seedLocations } from './services/weatherService.js';
+import { seedLocations } from "./services/weatherService.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -19,7 +19,9 @@ async function autoSeedQuizzes() {
 
   const existingCount = await QuizCategory.countDocuments();
   if (existingCount > 0) {
-    console.log(`[seed] Quiz già presenti (${existingCount} categorie) — skip auto-seed.`);
+    console.log(
+      `[seed] Quiz già presenti (${existingCount} categorie) — skip auto-seed.`,
+    );
     return;
   }
 
@@ -41,7 +43,10 @@ async function autoSeedQuizzes() {
 
   for (const q of data.quizzes) {
     const categoryId = categoryIdBySlug[q.categorySlug];
-    if (!categoryId) { console.warn(`[seed]  Categoria non trovata: ${q.categorySlug}`); continue; }
+    if (!categoryId) {
+      console.warn(`[seed]  Categoria non trovata: ${q.categorySlug}`);
+      continue;
+    }
     const { categorySlug, ...quizData } = q;
     await Quiz.findOneAndUpdate(
       { title: quizData.title, categoryId },
@@ -59,26 +64,44 @@ function assertEnvironment() {
   const required = ["JWT_SECRET"];
   const inProduction = process.env.NODE_ENV === "production";
   if (inProduction) {
-    required.push("MONGO_URI", "BASE_URL", "BREVO_API_KEY", "EMAIL_FROM_ADDRESS");
+    required.push(
+      "MONGO_URI",
+      "BASE_URL",
+      "BREVO_API_KEY",
+      "EMAIL_FROM_ADDRESS",
+    );
   }
 
-  const missing = required.filter((k) => !process.env[k] || !process.env[k].trim());
+  const missing = required.filter(
+    (k) => !process.env[k] || !process.env[k].trim(),
+  );
   if (missing.length) {
-    console.error(`[boot] FATAL: variabili di ambiente mancanti: ${missing.join(", ")}`);
+    console.error(
+      `[boot] FATAL: variabili di ambiente mancanti: ${missing.join(", ")}`,
+    );
     console.error(`[boot] Vedi .env.example per la lista completa.`);
     process.exit(1);
   }
 
   // Detect default insicuri ovvi.
   const jwt = process.env.JWT_SECRET || "";
-  if (jwt.length < 32 || /^(secret|changeme|password|test|dev|default)$/i.test(jwt)) {
-    console.error(`[boot] FATAL: JWT_SECRET troppo debole (< 32 char o valore noto).`);
-    console.error(`[boot] Genera con: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`);
+  if (
+    jwt.length < 32 ||
+    /^(secret|changeme|password|test|dev|default)$/i.test(jwt)
+  ) {
+    console.error(
+      `[boot] FATAL: JWT_SECRET troppo debole (< 32 char o valore noto).`,
+    );
+    console.error(
+      `[boot] Genera con: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`,
+    );
     process.exit(1);
   }
 
   if (!inProduction && !process.env.BREVO_API_KEY) {
-    console.warn(`[boot] WARN: BREVO_API_KEY non impostata. Le email (verify/reset) falliranno.`);
+    console.warn(
+      `[boot] WARN: BREVO_API_KEY non impostata. Le email (verify/reset) falliranno.`,
+    );
   }
 }
 
@@ -90,7 +113,7 @@ const MONGO_URI =
 
 mongoose
   .connect(MONGO_URI)
-  .then(async() => {
+  .then(async () => {
     console.log("Connected to MongoDB");
     await seedLocations();
     await autoSeedQuizzes();

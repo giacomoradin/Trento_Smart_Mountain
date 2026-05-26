@@ -21,13 +21,13 @@ const hikerSchema = new mongoose.Schema({
   socialCredits: { type: Number, default: 0, min: 0, index: true },
 
   weeklyGoals: {
-    km:    { type: Number, default: 0, min: 0, max: 500 },
+    km: { type: Number, default: 0, min: 0, max: 500 },
     elevM: { type: Number, default: 0, min: 0, max: 20000 },
     count: { type: Number, default: 0, min: 0, max: 50 },
   },
 
   nfcStats: {
-    scansCount:   { type: Number, default: 0 },
+    scansCount: { type: Number, default: 0 },
     scansCredits: { type: Number, default: 0 },
   },
 
@@ -54,7 +54,10 @@ const hikerSchema = new mongoose.Schema({
   // nel calcolo crediti delle sessioni (premia la sfida personale).
   experience: {
     caiLevel: { type: String, enum: ["T", "E", "EE", "EEA"] }, // baseline difficoltà tecnica
-    baselineFitness: { type: String, enum: ["sedentary", "active", "sport", "athlete"] },
+    baselineFitness: {
+      type: String,
+      enum: ["sedentary", "active", "sport", "athlete"],
+    },
     weeklyTrainingFreq: { type: String, enum: ["0-1", "2-3", "4+"] },
   },
 
@@ -71,7 +74,11 @@ const hikerSchema = new mongoose.Schema({
     },
     privacy: {
       // Visibilità del profilo nella futura sezione Social.
-      profileVisibility: { type: String, enum: ["public", "friends", "private"], default: "friends" },
+      profileVisibility: {
+        type: String,
+        enum: ["public", "friends", "private"],
+        default: "friends",
+      },
     },
   },
 

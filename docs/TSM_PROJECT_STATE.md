@@ -253,6 +253,7 @@ trento-smart-mountain/
 ### Sprint 2 (in corso, deadline ~giugno 2026)
 
 #### Chiuso
+
 - [x] Bug fix tempi GPX (durata effettiva da `<time>`)
 - [x] Sync attività locali/cloud con actualStats
 - [x] Profilo altimetrico corretto (no overlap)
@@ -275,10 +276,12 @@ trento-smart-mountain/
 - [x] Endpoint mobile stats corretto (`/api/v1/sessions/stats` non `/activities/stats`)
 
 #### Piani approvati, codice da scrivere
+
 - [ ] Schermata SOCIAL (Home → tab Social) — piano in [sprint2_social.md](sprint2_social.md)
 - [ ] Schermata Profilo rinnovata + Formazione + NFC — piano in [sprint2_profilo_formazione.md](sprint2_profilo_formazione.md)
 
 #### Ancora aperto
+
 - [x] Tests Jest su route principali (auth + hiker + sessions + activities + weather auth + account v2 + discriminator persistence) — **78/78 verde**
 - [x] Profilo v2 completo (personalInfo/experience/preferences/goals) + onboarding 3-step skippable
 - [x] ProfileViewScreen read-only con indicatori 🔒 sui campi anti-cheat
@@ -379,6 +382,7 @@ I campi `personalInfo`, `experience`, `preferences`, `weeklyGoals`,
 sub-schema Hiker** (discriminator). Lo strict mode di Mongoose applicato al
 modello base scartava silenziosamente l'`$set`/`$inc` — la response tornava
 200 OK ma il DB non veniva toccato. Bug invisibile perché:
+
 - Le response 200 facevano pensare a un save riuscito
 - I successivi `findById` ritornavano comunque i dati esistenti (per i campi
   letti, la projection MongoDB funziona indipendentemente dal modello)
@@ -386,8 +390,9 @@ modello base scartava silenziosamente l'`$set`/`$inc` — la response tornava
 
 **Fix:** Tutti i write su campi discriminator usano ora `Hiker.findByIdAndUpdate`
 (o il modello corretto via lookup `role`). File toccati:
+
 - `services/accountService.js` — `updatePersonalInfo/Experience/Preferences/Goals`
-  + `markProfileCompleted`
+  - `markProfileCompleted`
 - `services/creditService.js` — `addCredits` ($inc socialCredits)
 - `services/nfcService.js` — $inc nfcStats.scansCount/scansCredits
 - `services/adminService.js` — `updateAnyUser` con lookup discriminator
@@ -472,6 +477,7 @@ Route ridotti: **35+ blocchi `if (err.message === "...")` rimossi** dai 6 file
 (accountRoutes, activityRoutes, nfcRoutes, quizRoutes, challengeRoutes,
 hikeSessionRoutes). Tutti sostituiti da `next(err)` puro. Aggiunti `next` ai
 signature handler dove mancava. Mantenuti i 2 blocchi semanticamente unici:
+
 - `err.code === 11000` (E11000 duplicate key) in nfcRoutes per il messaggio
   contestuale "tagId già esistente"
 - `err.name === "CastError"` in hikeSessionRoutes per 400 su ObjectId
@@ -481,6 +487,7 @@ signature handler dove mancava. Mantenuti i 2 blocchi semanticamente unici:
 
 Nuovo file `data/local/db/TsmMigrations.kt` come single source of truth per
 le migration esplicite. Pattern documentato per i futuri bump:
+
 1. Aggiungere `val MIGRATION_N_M = object : Migration(N, M) { ... }`
 2. Aggiungerla all'array `ALL`
 3. `Room.databaseBuilder.addMigrations(*TsmMigrations.ALL)` la prende automaticamente
@@ -503,6 +510,7 @@ Joi validation: `meetingDateField` con `Joi.alternatives` accetta entrambi i
 formati. Applicato a `createSessionSchema` e `updateSessionSchema`.
 
 Migration script `backend/migrations/2026-05-26-meetingDate-string-to-date.js`:
+
 - Connessione MongoDB via `MONGODB_URI` (o `MONGO_URI` fallback)
 - Cursor su `hikesessions` con `meetingDate: { $type: 2 }` (BSON String)
 - Parse "YYYY-MM-DD" → UTC midnight, update in place
@@ -517,6 +525,7 @@ sort cronologico funziona via `$sort: { meetingDate: 1 }`.
 ### 9.4 Tier 3 — Refresh token rotation con replay detection
 
 **Backend:**
+
 - Nuovo model `models/refreshToken.js`: hash SHA-256 (mai raw in DB),
   `family` UUID per rotation chain, `replacedBy` link per detection replay,
   TTL index 30 giorni (auto-cleanup MongoDB).
@@ -542,6 +551,7 @@ sort cronologico funziona via `$sort: { meetingDate: 1 }`.
   refresh mancante → 400, replay attack → 401 + revoca family, logout idempotente.
 
 **Mobile:**
+
 - `TokenStorage.kt`: nuova `saveTokens(access, refresh, expiresAtIso)`,
   `getRefreshToken()`, `getRefreshExpiresAtIso()`. Backward compat con
   `saveToken(token)` legacy.
@@ -568,6 +578,7 @@ GPS vivevano SOLO in memoria nel `HikeTrackingEngine` — un crash perdeva
 TUTTO. Ora ogni snapshot è un INSERT immediato.
 
 **Estratti 2 repository:**
+
 - `repository/TrackingPersistenceRepository.kt`: `startTrack()` (UUID),
   `appendPoint()` (insert WAL), `finalize(snapshot)` (legge WAL, sample 200pt,
   insert in `completed_activities`, cleanup WAL), `discardTrack()`.
@@ -577,12 +588,13 @@ TUTTO. Ora ogni snapshot è un INSERT immediato.
   upload fallisce). Ritorna `SyncResult.Synced(remoteId?)` o `Pending`.
 
 **`RegistraViewModel` refactor:**
+
 - Da 547 → 501 righe + responsabilità chiare (orchestrator UI/lifecycle only).
 - Nuovo field `currentTrackId: String?` — non-null sse `trackingStatus != IDLE`.
 - `startTracking()` → `persistence.startTrack()`.
 - `applyLocation()` → `persistence.appendPoint()` se RECORDING.
 - `discardTracking()` → `persistence.discardTrack(orphanId)`.
-- `confirmStopTracking()` → `persistence.finalize(snapshot)` → 
+- `confirmStopTracking()` → `persistence.finalize(snapshot)` →
   `sessionCommands.completeOrUpload(...)` → `dao.markSynced()` se OK.
 - Rimossi import non più usati: `Gson`, `CompletedActivityEntity`,
   `CreateActivityRequest`, `CompleteSessionRequest`, `UpdateSessionStatusRequest`,
@@ -643,6 +655,7 @@ viewer", impedendo di mostrare l'avatar nei partecipanti delle sessioni.
 
 **Fix:** introduzione di `PERSONAL_INFO_PUBLIC_FIELDS = ["avatarUrl"]`. Per
 viewer "other" ora:
+
 - `personalInfo` mantiene solo `avatarUrl` (gli altri campi sex/birthDate/
   heightCm/weightKg restano privati)
 - Se nessun campo pubblico è valorizzato → la chiave viene rimossa per non
@@ -756,9 +769,9 @@ Utility per gestire la foto end-to-end:
   Room `fallbackToDestructiveMigration`, alcune Icons.Outlined → AutoMirrored).
 - **File toccati totali:** 5 backend (user.js, userPrivacy.js,
   hikeSessionService.js, validationMiddleware.js, securityMiddleware.js)
-  + 6 mobile (SessionResponse.kt, ProfileV2ViewModel.kt, ProfileScreen.kt,
-  ProfileViewScreen.kt, SessionDetailScreen.kt, libs.versions.toml +
-  app/build.gradle.kts) + 2 nuovi mobile (AvatarImage.kt, AvatarUtils.kt).
+  - 6 mobile (SessionResponse.kt, ProfileV2ViewModel.kt, ProfileScreen.kt,
+    ProfileViewScreen.kt, SessionDetailScreen.kt, libs.versions.toml +
+    app/build.gradle.kts) + 2 nuovi mobile (AvatarImage.kt, AvatarUtils.kt).
 
 ### Lezione di processo (consolidata da Sprint 1 + Sprint 2)
 

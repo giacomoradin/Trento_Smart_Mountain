@@ -13,6 +13,7 @@ import androidx.room.RoomDatabase
     CachedUserProfileEntity::class,
     CompletedActivityEntity::class,
     TrackingWalEntity::class,
+    PendingEmergencyEntity::class,
   ],
   // v4: aggiunti retry_count, last_retry_at_ms, remote_id per il sync incrementale
   //     (sync libere → POST /activities, sync sessioni → PATCH /complete).
@@ -25,4 +26,5 @@ abstract class TsmDatabase : RoomDatabase() {
   abstract fun profileDao(): ProfileDao
   abstract fun completedActivityDao(): CompletedActivityDao
   abstract fun trackingWalDao(): TrackingWalDao
+  abstract fun pendingEmergencyDao(): PendingEmergencyDao
 }

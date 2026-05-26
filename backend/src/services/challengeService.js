@@ -7,12 +7,14 @@ import Activity from "../models/activity.js";
  * di default. I `participantUserIds` (opzionali) sono invitati con status "invited".
  */
 export async function createChallenge(creatorId, payload) {
-  const participants = [{
-    userId: creatorId,
-    status: "accepted",
-    invitedAt: new Date(),
-    respondedAt: new Date(),
-  }];
+  const participants = [
+    {
+      userId: creatorId,
+      status: "accepted",
+      invitedAt: new Date(),
+      respondedAt: new Date(),
+    },
+  ];
 
   // Resolve degli invitati (per username o ObjectId). Per MVP accettiamo userIds raw;
   // l'integrazione con un picker by-username arriva nella sezione Social vera e propria.
@@ -41,7 +43,8 @@ export async function createChallenge(creatorId, payload) {
 
 /** Aggiorna stato sfida in base a now (lazy state transition). */
 function reconcileStatus(challenge, now = new Date()) {
-  if (challenge.status === "CANCELLED" || challenge.status === "COMPLETED") return;
+  if (challenge.status === "CANCELLED" || challenge.status === "COMPLETED")
+    return;
   if (challenge.status === "PENDING" && challenge.startDate <= now) {
     challenge.status = "ACTIVE";
   }
@@ -87,7 +90,8 @@ async function computeProgress(challenge) {
 
   for (const s of sessions) {
     const km = (s.actualStats?.distanceMeters ?? 0) / 1000.0;
-    const elev = s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
+    const elev =
+      s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
     const pts = s.actualStats?.finalPoints ?? 0;
     // Una sessione conta per OGNI suo participant che è anche participant della challenge.
     for (const p of s.participants) {
@@ -114,14 +118,20 @@ async function computeProgress(challenge) {
   // Estrai il valore della metrica corrispondente.
   return acceptedIds.map((uid) => {
     const v = acc[uid.toString()];
-    const value = challenge.metric === "distance" ? v.km
-      : challenge.metric === "elevation" ? v.elevM
-      : challenge.metric === "count" ? v.count
-      : v.points;
+    const value =
+      challenge.metric === "distance"
+        ? v.km
+        : challenge.metric === "elevation"
+          ? v.elevM
+          : challenge.metric === "count"
+            ? v.count
+            : v.points;
     return {
       userId: uid,
       value: Math.round(value * 10) / 10,
-      reachedTarget: challenge.targetValue ? value >= challenge.targetValue : false,
+      reachedTarget: challenge.targetValue
+        ? value >= challenge.targetValue
+        : false,
     };
   });
 }
@@ -146,7 +156,11 @@ export async function getChallengeById(challengeId, requesterId) {
   const progress = await computeProgress(challenge);
 
   // Calcolo winner se COMPLETED e non ancora settato.
-  if (challenge.status === "COMPLETED" && !challenge.winnerId && progress.length > 0) {
+  if (
+    challenge.status === "COMPLETED" &&
+    !challenge.winnerId &&
+    progress.length > 0
+  ) {
     const best = progress.reduce((a, b) => (b.value > a.value ? b : a));
     if (best.value > 0) {
       challenge.winnerId = best.userId;
@@ -198,7 +212,8 @@ export async function respondToInvite(challengeId, userId, accept) {
 export async function cancelChallenge(challengeId, userId) {
   const challenge = await Challenge.findById(challengeId);
   if (!challenge) throw new Error("CHALLENGE_NOT_FOUND");
-  if (challenge.creatorId.toString() !== userId.toString()) throw new Error("ONLY_CREATOR_CAN_CANCEL_CHALLENGE");
+  if (challenge.creatorId.toString() !== userId.toString())
+    throw new Error("ONLY_CREATOR_CAN_CANCEL_CHALLENGE");
   if (challenge.status === "ACTIVE" || challenge.status === "COMPLETED") {
     throw new Error("CANNOT_CANCEL_RUNNING");
   }

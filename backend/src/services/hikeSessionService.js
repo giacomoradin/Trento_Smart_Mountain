@@ -40,7 +40,9 @@ export async function createSession(creatorId, routeDetails, sessionMeta = {}) {
   // un errore esplicito invece di bloccare il thread Express in un while(true).
   for (let attempt = 0; attempt < MAX_INVITE_CODE_ATTEMPTS; attempt++) {
     const candidate = generateInviteCode();
-    const existing = await HikeSession.findOne({ inviteCode: candidate }).select("_id").lean();
+    const existing = await HikeSession.findOne({ inviteCode: candidate })
+      .select("_id")
+      .lean();
     if (!existing) {
       inviteCode = candidate;
       break;
@@ -67,7 +69,7 @@ export async function createSession(creatorId, routeDetails, sessionMeta = {}) {
       sessionRoles: {
         groupId: session._id,
         role: "groupLeader",
-        createdBy: creatorId, 
+        createdBy: creatorId,
       },
     },
   });
@@ -92,7 +94,7 @@ export async function joinSession(userId, inviteCode) {
   }
 
   const alreadyIn = session.participants.some(
-    (p) => p.userId.toString() === userId.toString()
+    (p) => p.userId.toString() === userId.toString(),
   );
   if (alreadyIn) {
     throw new Error("ALREADY_IN_SESSION");
@@ -115,7 +117,10 @@ export async function joinSession(userId, inviteCode) {
   // riceva ObjectId raw nei campi ref → potenziale Gson IllegalStateException.
   return session.populate([
     { path: "creatorId", select: "username email personalInfo.avatarUrl" },
-    { path: "participants.userId", select: "username email personalInfo.avatarUrl" },
+    {
+      path: "participants.userId",
+      select: "username email personalInfo.avatarUrl",
+    },
   ]);
 }
 
@@ -159,11 +164,14 @@ export async function getActivityStats(userId, year) {
     yearCount++;
     // Preferisci sempre i dati REALI registrati dal client (actualStats);
     // fallback alle stime CAI del GPX quando il client non li ha caricati.
-    const actualDistKm = s.actualStats?.distanceMeters != null
-      ? s.actualStats.distanceMeters / 1000.0
-      : s.gpxStats?.distanceKm || 0;
-    const actualElev = s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
-    const actualPts = s.actualStats?.finalPoints ?? s.gpxStats?.estimatedPoints ?? 0;
+    const actualDistKm =
+      s.actualStats?.distanceMeters != null
+        ? s.actualStats.distanceMeters / 1000.0
+        : s.gpxStats?.distanceKm || 0;
+    const actualElev =
+      s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
+    const actualPts =
+      s.actualStats?.finalPoints ?? s.gpxStats?.estimatedPoints ?? 0;
     totalDist += actualDistKm;
     totalElev += actualElev;
     totalPoints += actualPts;
@@ -214,7 +222,8 @@ export async function getSessionsByUser(userId) {
 export async function leaveSession(userId, sessionId) {
   const session = await HikeSession.findById(sessionId);
   if (!session) throw new Error("SESSION_NOT_FOUND");
-  if (session.creatorId.toString() === userId.toString()) throw new Error("CREATOR_CANNOT_LEAVE");
+  if (session.creatorId.toString() === userId.toString())
+    throw new Error("CREATOR_CANNOT_LEAVE");
   session.participants = session.participants.filter(
     (p) => p.userId.toString() !== userId.toString(),
   );
@@ -228,15 +237,23 @@ export async function leaveSession(userId, sessionId) {
 export async function updateSessionDetails(sessionId, userId, updates) {
   const session = await HikeSession.findById(sessionId);
   if (!session) throw new Error("SESSION_NOT_FOUND");
-  if (session.creatorId.toString() !== userId.toString()) throw new Error("ONLY_CREATOR_CAN_UPDATE_SESSION");
+  if (session.creatorId.toString() !== userId.toString())
+    throw new Error("ONLY_CREATOR_CAN_UPDATE_SESSION");
 
-  if (updates.routeDetails?.name) session.routeDetails.name = updates.routeDetails.name;
-  if (updates.routeDetails?.difficultyLevel) session.routeDetails.difficultyLevel = updates.routeDetails.difficultyLevel;
-  if (updates.meetingDate !== undefined) session.meetingDate = updates.meetingDate;
-  if (updates.meetingTime !== undefined) session.meetingTime = updates.meetingTime;
-  if (updates.meetingLocation !== undefined) session.meetingLocation = updates.meetingLocation;
-  if (updates.maxParticipants !== undefined) session.maxParticipants = updates.maxParticipants;
-  if (updates.minExperienceLevel !== undefined) session.minExperienceLevel = updates.minExperienceLevel;
+  if (updates.routeDetails?.name)
+    session.routeDetails.name = updates.routeDetails.name;
+  if (updates.routeDetails?.difficultyLevel)
+    session.routeDetails.difficultyLevel = updates.routeDetails.difficultyLevel;
+  if (updates.meetingDate !== undefined)
+    session.meetingDate = updates.meetingDate;
+  if (updates.meetingTime !== undefined)
+    session.meetingTime = updates.meetingTime;
+  if (updates.meetingLocation !== undefined)
+    session.meetingLocation = updates.meetingLocation;
+  if (updates.maxParticipants !== undefined)
+    session.maxParticipants = updates.maxParticipants;
+  if (updates.minExperienceLevel !== undefined)
+    session.minExperienceLevel = updates.minExperienceLevel;
   // inviteCode is never updated
   await session.save();
   // Popola entrambi i campi ref in modo simmetrico a getSessionById/getSessionsByUser.
@@ -244,7 +261,10 @@ export async function updateSessionDetails(sessionId, userId, updates) {
   // invece dell'oggetto User → Gson crash: "Expected BEGIN_OBJECT but was STRING".
   return session.populate([
     { path: "creatorId", select: "username email personalInfo.avatarUrl" },
-    { path: "participants.userId", select: "username email personalInfo.avatarUrl" },
+    {
+      path: "participants.userId",
+      select: "username email personalInfo.avatarUrl",
+    },
   ]);
 }
 
@@ -266,7 +286,8 @@ export async function completeSession(sessionId, userId, actualStats = null) {
   const isParticipant = session.participants.some(
     (p) => p.userId.toString() === userId.toString(),
   );
-  if (!isCreator && !isParticipant) throw new Error("ONLY_CREATOR_CAN_COMPLETE_SESSION");
+  if (!isCreator && !isParticipant)
+    throw new Error("ONLY_CREATOR_CAN_COMPLETE_SESSION");
 
   session.status = "COMPLETED";
   session.endTime = new Date();
@@ -304,7 +325,9 @@ export async function completeSession(sessionId, userId, actualStats = null) {
       {
         $addToSet: { creditsAwardedTo: userId },
         $setOnInsert: {},
-        ...(session.creditsAwardedAt ? {} : { $set: { creditsAwardedAt: new Date() } }),
+        ...(session.creditsAwardedAt
+          ? {}
+          : { $set: { creditsAwardedAt: new Date() } }),
       },
       { new: true },
     );
@@ -317,7 +340,10 @@ export async function completeSession(sessionId, userId, actualStats = null) {
         refKind: "HikeSession",
         // Note diagnostica: se in futuro vediamo crediti diversi tra utenti per
         // la stessa sessione, il log conferma che è atteso (baseline differenti).
-        note: credits !== basePoints ? `baseline μ applicato (base=${basePoints}, final=${credits})` : undefined,
+        note:
+          credits !== basePoints
+            ? `baseline μ applicato (base=${basePoints}, final=${credits})`
+            : undefined,
       });
     }
   }

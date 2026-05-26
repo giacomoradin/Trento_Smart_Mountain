@@ -46,7 +46,8 @@ const PERSONAL_INFO_PUBLIC_FIELDS = ["avatarUrl"];
  */
 export function stripPrivateFields(user, viewerIsSelfOrAdmin) {
   if (!user) return user;
-  const plain = typeof user.toObject === "function" ? user.toObject() : { ...user };
+  const plain =
+    typeof user.toObject === "function" ? user.toObject() : { ...user };
   if (viewerIsSelfOrAdmin) return plain;
   for (const field of SELF_ONLY_FIELDS) {
     delete plain[field];
@@ -57,7 +58,10 @@ export function stripPrivateFields(user, viewerIsSelfOrAdmin) {
   if (plain.personalInfo && typeof plain.personalInfo === "object") {
     const publicSlice = {};
     for (const key of PERSONAL_INFO_PUBLIC_FIELDS) {
-      if (plain.personalInfo[key] !== undefined && plain.personalInfo[key] !== null) {
+      if (
+        plain.personalInfo[key] !== undefined &&
+        plain.personalInfo[key] !== null
+      ) {
         publicSlice[key] = plain.personalInfo[key];
       }
     }

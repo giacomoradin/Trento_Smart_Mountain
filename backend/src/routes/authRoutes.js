@@ -61,14 +61,34 @@ router.post("/login", loginLimiter, validate(loginSchema), loginUser);
 router.post("/refresh", loginLimiter, refreshTokens);
 router.post("/logout", logout);
 router.get("/verify/:token", verifyEmail);
-router.post("/forgot-password", passwordResetLimiter, validate(forgotPasswordSchema), forgotPassword);
+router.post(
+  "/forgot-password",
+  passwordResetLimiter,
+  validate(forgotPasswordSchema),
+  forgotPassword,
+);
 router.get("/reset-password/:token", getResetPasswordForm);
 // resetPassword accetta sia JSON che form HTML — la validazione Joi gestisce entrambi
 // (Content-Type "application/x-www-form-urlencoded" è parsato in req.body uguale al JSON).
-router.post("/reset-password/:token", passwordResetLimiter, validate(resetPasswordSchema), resetPassword);
+router.post(
+  "/reset-password/:token",
+  passwordResetLimiter,
+  validate(resetPasswordSchema),
+  resetPassword,
+);
 
 // Registrazione per ruolo (alias semantici) — limitatore registrazioni + schema specifico
-router.post("/register/hiker", registerLimiter, validate(registerHikerSchema), createHiker);
-router.post("/register/refuge", registerLimiter, validate(registerRefugeSchema), createRefuge);
+router.post(
+  "/register/hiker",
+  registerLimiter,
+  validate(registerHikerSchema),
+  createHiker,
+);
+router.post(
+  "/register/refuge",
+  registerLimiter,
+  validate(registerRefugeSchema),
+  createRefuge,
+);
 
 export default router;

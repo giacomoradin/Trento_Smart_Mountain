@@ -17,16 +17,19 @@ export const helmetMiddleware = helmet({
     },
   },
   // HSTS solo in produzione: in dev HTTP è ok e Render gestisce TLS in fronte.
-  hsts: process.env.NODE_ENV === "production"
-    ? { maxAge: 60 * 60 * 24 * 365, includeSubDomains: true }
-    : false,
+  hsts:
+    process.env.NODE_ENV === "production"
+      ? { maxAge: 60 * 60 * 24 * 365, includeSubDomains: true }
+      : false,
 });
 
 // Rimuove chiavi che iniziano con $ o contengono . dal body/params/query.
 // Esempio: { "email": { "$ne": null } } → { "email": {} }
 export const mongoSanitizeMiddleware = mongoSanitize({
   onSanitize: ({ req, key }) => {
-    console.warn(`[security] operatore NoSQL rimosso da ${req.method} ${req.path}: key=${key}`);
+    console.warn(
+      `[security] operatore NoSQL rimosso da ${req.method} ${req.path}: key=${key}`,
+    );
   },
 });
 

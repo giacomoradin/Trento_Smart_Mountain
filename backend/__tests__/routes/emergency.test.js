@@ -64,6 +64,23 @@ describe("Emergency Routes", () => {
       expect(res.body.profileSnapshot.displayName).toBe("member");
     });
 
+    test("accepts beaconActive false (SOS senza beacon)", async () => {
+      const { member, sessionId } = await createActiveSessionWithParticipant();
+
+      const res = await request(app)
+        .post("/api/v1/emergencies")
+        .set("Authorization", `Bearer ${member.token}`)
+        .send(
+          VALID_EMERGENCY_BODY(sessionId, {
+            idempotencyKey: "660e8400-e29b-41d4-a716-446655440001",
+            beaconActive: false,
+          }),
+        );
+
+      expect(res.status).toBe(201);
+      expect(res.body.beaconActive).toBe(false);
+    });
+
     test("idempotent on same idempotencyKey returns 200", async () => {
       const { member, sessionId } = await createActiveSessionWithParticipant();
       const body = VALID_EMERGENCY_BODY(sessionId);
@@ -168,6 +185,28 @@ describe("Emergency Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe("SHARED_WITH_GROUP");
+    });
+
+    test("leader can unshare from group", async () => {
+      const { leader, member, sessionId } = await createActiveSessionWithParticipant();
+
+      const created = await request(app)
+        .post("/api/v1/emergencies")
+        .set("Authorization", `Bearer ${member.token}`)
+        .send(VALID_EMERGENCY_BODY(sessionId));
+
+      await request(app)
+        .patch(`/api/v1/emergencies/${created.body._id}`)
+        .set("Authorization", `Bearer ${leader.token}`)
+        .send({ action: "share_with_group" });
+
+      const res = await request(app)
+        .patch(`/api/v1/emergencies/${created.body._id}`)
+        .set("Authorization", `Bearer ${leader.token}`)
+        .send({ action: "unshare_with_group" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("ACTIVE");
     });
   });
 });

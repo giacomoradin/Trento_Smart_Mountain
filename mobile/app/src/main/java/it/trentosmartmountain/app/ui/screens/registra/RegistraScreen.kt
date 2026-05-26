@@ -1,6 +1,8 @@
 package it.trentosmartmountain.app.ui.screens.registra
 
 import android.Manifest
+import android.app.Activity
+import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -92,6 +94,18 @@ fun RegistraScreen(
   val notificationLauncher =
     rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+  val bluetoothEnableLauncher =
+    rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+      viewModel.onBluetoothEnableResult(result.resultCode == Activity.RESULT_OK)
+    }
+
+  LaunchedEffect(uiState.launchBluetoothEnableIntent) {
+    if (uiState.launchBluetoothEnableIntent) {
+      viewModel.onBluetoothEnableIntentLaunched()
+      bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+    }
+  }
+
   LaunchedEffect(Unit) {
     viewModel.syncActiveSessionFromServer()
   }
@@ -169,25 +183,6 @@ fun RegistraScreen(
       altitudeMeters = uiState.currentAltitudeMeters,
       modifier = Modifier.align(Alignment.TopCenter),
     )
-
-    uiState.incomingSosDebugMessage?.let { debugMsg ->
-      if (!uiState.showIncomingEmergencyIcon) {
-        Surface(
-          modifier =
-            Modifier
-              .align(Alignment.TopCenter)
-              .padding(top = 100.dp, start = 16.dp, end = 16.dp),
-          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
-          shape = MaterialTheme.shapes.small,
-        ) {
-          Text(
-            text = debugMsg,
-            modifier = Modifier.padding(8.dp),
-            style = MaterialTheme.typography.labelSmall,
-          )
-        }
-      }
-    }
 
     if (uiState.showIncomingEmergencyIcon) {
       IncomingEmergencyIconButton(
@@ -311,6 +306,14 @@ fun RegistraScreen(
     )
   }
 
+  if (uiState.showBluetoothEnableDialog) {
+    SosBluetoothEnableDialog(
+      onActivateBluetooth = viewModel::requestBluetoothEnableForSos,
+      onContinueWithoutBeacon = viewModel::continueSosWithoutBeacon,
+      onCancel = viewModel::dismissBluetoothEnableDialog,
+    )
+  }
+
   if (uiState.showSosListSheet) {
     SosIncomingListDialog(
       emergencies = uiState.incomingEmergencies,
@@ -324,11 +327,24 @@ fun RegistraScreen(
       SosIncomingDetailDialog(
         emergency = emergency,
         isGroupLeader = uiState.isSessionGroupLeader,
+        canUseBeaconScanner =
+          uiState.isSessionGroupLeader || emergency.status == "SHARED_WITH_GROUP",
         onClose = viewModel::closeSosDetailSheet,
         onDismissEmergency = viewModel::dismissSelectedIncomingEmergency,
         onShareWithGroup = viewModel::shareSelectedIncomingEmergency,
+        onUnshareWithGroup = viewModel::unshareSelectedIncomingEmergency,
+        onScanBeacon = {
+          viewModel.openBeaconScanner(emergency.beaconInstanceId)
+        },
       )
     }
+  }
+
+  if (uiState.showBeaconScanner && uiState.beaconScannerTargetId != null) {
+    SosBeaconScannerDialog(
+      beaconInstanceId = uiState.beaconScannerTargetId!!,
+      onDismiss = viewModel::closeBeaconScanner,
+    )
   }
 
   // ── Dialog "Attività troppo corta" — chiede conferma per attività libere < 50m ──

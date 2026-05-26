@@ -143,9 +143,6 @@ mobile/.idea/deploymentTargetSelector.xml
 .externalNativeBuild
 .cxx/
 
-# Google Services (Cloud Messaging)
-google-services.json
-
 # Freeline
 project.freetime
 

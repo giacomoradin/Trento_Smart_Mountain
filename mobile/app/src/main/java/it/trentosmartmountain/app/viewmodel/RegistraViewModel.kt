@@ -29,6 +29,7 @@ import it.trentosmartmountain.app.data.sync.SyncManager
 import it.trentosmartmountain.app.repository.EmergencyRepository
 import it.trentosmartmountain.app.repository.OfflineEmergencyException
 import it.trentosmartmountain.app.service.ForegroundTrackingService
+import it.trentosmartmountain.app.data.ble.BluetoothHelper
 import it.trentosmartmountain.app.service.SosBeaconService
 import java.security.SecureRandom
 import kotlinx.coroutines.Job
@@ -111,8 +112,21 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val showSosListSheet: Boolean = false,
     val showSosDetailSheet: Boolean = false,
     val selectedIncomingEmergency: EmergencyResponse? = null,
-    /** Debug ricezione SOS (es. errore API o sessione non collegata). */
-    val incomingSosDebugMessage: String? = null,
+    val showBeaconScanner: Boolean = false,
+    val beaconScannerTargetId: String? = null,
+    /** Dialog: Bluetooth spento prima di avviare il beacon SOS. */
+    val showBluetoothEnableDialog: Boolean = false,
+    /** Evento one-shot per lanciare ACTION_REQUEST_ENABLE dalla UI. */
+    val launchBluetoothEnableIntent: Boolean = false,
+  )
+
+  private data class PendingSosLaunch(
+    val sessionId: String,
+    val emergencyType: String,
+    val longitude: Double,
+    val latitude: Double,
+    val beaconId: String,
+    val idempotencyKey: String,
   )
 
   enum class SosPhase {
@@ -140,6 +154,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private var emergencyPollJob: Job? = null
   private var lastIncomingEmergencyCount = 0
   private var currentUserId: String? = null
+  private var pendingSosLaunch: PendingSosLaunch? = null
 
   init {
     currentUserId =
@@ -188,7 +203,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
                 showIncomingEmergencyIcon = false,
                 showSosAlertBorder = false,
                 isSessionGroupLeader = false,
-                incomingSosDebugMessage = null,
               )
             }
           }
@@ -208,35 +222,14 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       }
       runCatching {
         val res = TsmApiClient.service().getMySessions()
-        if (!res.isSuccessful) {
-          _uiState.update {
-            it.copy(incomingSosDebugMessage = "Sessioni: HTTP ${res.code()}")
-          }
-          return@launch
-        }
+        if (!res.isSuccessful) return@launch
         val active = res.body()?.firstOrNull { it.status == "ACTIVE" }
         if (active != null) {
-          _uiState.update {
-            it.copy(
-              activeSessionId = active._id,
-              incomingSosDebugMessage = null,
-            )
-          }
+          _uiState.update { it.copy(activeSessionId = active._id) }
           refreshSessionRole(active._id)
           refreshIncomingEmergencies()
-        } else {
-          _uiState.update {
-            it.copy(
-              incomingSosDebugMessage =
-                "Nessuna sessione ACTIVE sul server — usa AVVIA dal dettaglio escursione",
-            )
-          }
         }
-      }.onFailure { e ->
-        _uiState.update {
-          it.copy(incomingSosDebugMessage = "Rete sessioni: ${e.message}")
-        }
-      }
+      }.onFailure { /* sessione opzionale in background */ }
     }
   }
 
@@ -713,34 +706,110 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val idempotencyKey = UUID.randomUUID().toString()
     activeSosIdempotencyKey = idempotencyKey
 
-    SosBeaconService.start(app, beaconId)
+    val pending =
+      PendingSosLaunch(
+        sessionId = sessionId,
+        emergencyType = state.sosSelectedType,
+        longitude = location.longitude,
+        latitude = location.latitude,
+        beaconId = beaconId,
+        idempotencyKey = idempotencyKey,
+      )
 
+    if (!BluetoothHelper.isBluetoothEnabled(app)) {
+      pendingSosLaunch = pending
+      _uiState.update {
+        it.copy(
+          sosPhase = SosPhase.SENDING,
+          sosBeaconInstanceId = beaconId,
+          showBluetoothEnableDialog = true,
+        )
+      }
+      return
+    }
+
+    executeSosLaunch(pending, startBeacon = true)
+  }
+
+  fun dismissBluetoothEnableDialog() {
+    pendingSosLaunch = null
+    _uiState.update {
+      it.copy(
+        showBluetoothEnableDialog = false,
+        sosPhase = SosPhase.IDLE,
+        sosBeaconInstanceId = null,
+        sosStatusMessage = null,
+      )
+    }
+    activeSosIdempotencyKey = null
+  }
+
+  fun requestBluetoothEnableForSos() {
+    _uiState.update {
+      it.copy(showBluetoothEnableDialog = false, launchBluetoothEnableIntent = true)
+    }
+  }
+
+  fun onBluetoothEnableIntentLaunched() {
+    _uiState.update { it.copy(launchBluetoothEnableIntent = false) }
+  }
+
+  fun onBluetoothEnableResult(enabled: Boolean) {
+    val pending = pendingSosLaunch ?: return
+    pendingSosLaunch = null
+    if (enabled) {
+      executeSosLaunch(pending, startBeacon = true)
+    } else {
+      executeSosLaunch(pending, startBeacon = false)
+    }
+  }
+
+  fun continueSosWithoutBeacon() {
+    val pending = pendingSosLaunch ?: return
+    pendingSosLaunch = null
+    _uiState.update { it.copy(showBluetoothEnableDialog = false) }
+    executeSosLaunch(pending, startBeacon = false)
+  }
+
+  private fun executeSosLaunch(pending: PendingSosLaunch, startBeacon: Boolean) {
     _uiState.update {
       it.copy(
         sosPhase = SosPhase.SENDING,
-        sosBeaconInstanceId = beaconId,
+        sosBeaconInstanceId = pending.beaconId,
+        showBluetoothEnableDialog = false,
         sosStatusMessage = null,
       )
+    }
+
+    if (startBeacon && BluetoothHelper.isBluetoothEnabled(app)) {
+      SosBeaconService.start(app, pending.beaconId)
     }
 
     viewModelScope.launch {
       val result =
         emergencyRepo.createEmergency(
-          sessionId = sessionId,
-          emergencyType = state.sosSelectedType,
-          longitude = location.longitude,
-          latitude = location.latitude,
-          beaconInstanceId = beaconId,
-          idempotencyKey = idempotencyKey,
+          sessionId = pending.sessionId,
+          emergencyType = pending.emergencyType,
+          longitude = pending.longitude,
+          latitude = pending.latitude,
+          beaconInstanceId = pending.beaconId,
+          idempotencyKey = pending.idempotencyKey,
+          beaconActive = startBeacon && BluetoothHelper.isBluetoothEnabled(app),
         )
       result.fold(
         onSuccess = { emergency ->
+          val beaconMsg =
+            if (startBeacon && BluetoothHelper.isBluetoothEnabled(app)) {
+              "SOS inviato al capogruppo"
+            } else {
+              "SOS inviato — beacon non attivo (Bluetooth spento)"
+            }
           _uiState.update {
             it.copy(
               sosPhase = SosPhase.ACTIVE,
               sosActiveEmergencyId = emergency.id,
               sosPendingOffline = false,
-              sosStatusMessage = "SOS inviato al capogruppo",
+              sosStatusMessage = beaconMsg,
             )
           }
           refreshIncomingEmergencies()
@@ -751,7 +820,12 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
               it.copy(
                 sosPhase = SosPhase.QUEUED_OFFLINE,
                 sosPendingOffline = true,
-                sosStatusMessage = "Beacon attivo — invio dati in attesa di connessione",
+                sosStatusMessage =
+                  if (startBeacon) {
+                    "Invio dati in attesa di connessione"
+                  } else {
+                    "Invio in coda — beacon non attivo"
+                  },
               )
             }
             retryPendingSosWhenOnline()
@@ -760,7 +834,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
               it.copy(
                 sosPhase = SosPhase.ACTIVE,
                 sosPendingOffline = true,
-                sosStatusMessage = "Beacon attivo — errore invio: ${err.message}",
+                sosStatusMessage = "Errore invio: ${err.message}",
               )
             }
           }
@@ -874,10 +948,34 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     }
   }
 
+  fun openBeaconScanner(beaconInstanceId: String) {
+    _uiState.update {
+      it.copy(showBeaconScanner = true, beaconScannerTargetId = beaconInstanceId)
+    }
+  }
+
+  fun closeBeaconScanner() {
+    _uiState.update {
+      it.copy(showBeaconScanner = false, beaconScannerTargetId = null)
+    }
+  }
+
   fun shareSelectedIncomingEmergency() {
     val id = _uiState.value.selectedIncomingEmergency?.id ?: return
     viewModelScope.launch {
       emergencyRepo.shareEmergencyWithGroup(id)
+      refreshIncomingEmergencies()
+      val updated = _uiState.value.incomingEmergencies.find { it.id == id }
+      if (updated != null) {
+        _uiState.update { it.copy(selectedIncomingEmergency = updated) }
+      }
+    }
+  }
+
+  fun unshareSelectedIncomingEmergency() {
+    val id = _uiState.value.selectedIncomingEmergency?.id ?: return
+    viewModelScope.launch {
+      emergencyRepo.unshareEmergencyWithGroup(id)
       refreshIncomingEmergencies()
       val updated = _uiState.value.incomingEmergencies.find { it.id == id }
       if (updated != null) {
@@ -946,19 +1044,12 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
             isSessionGroupLeader = isLeader,
             showIncomingEmergencyIcon = visible,
             showSosAlertBorder = showBorder,
-            incomingSosDebugMessage =
-              if (isLeader && list.isEmpty()) {
-                "In attesa SOS (sessione ${sessionId.takeLast(6)})…"
-              } else {
-                null
-              },
           )
         }
       },
-      onFailure = { err ->
+      onFailure = {
         _uiState.update {
           it.copy(
-            incomingSosDebugMessage = "Poll emergenze: ${err.message}",
             showIncomingEmergencyIcon = false,
             showSosAlertBorder = false,
           )

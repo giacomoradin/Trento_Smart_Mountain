@@ -811,11 +811,11 @@ Popola il DB con towns + POI da API TINIA. Da chiamare al primo avvio.
 
 | Method | Path | US | Note |
 |--------|------|-----|------|
-| `POST` | `/api/v1/emergencies` | US-19 | SOS con firma Ed25519 |
+| `POST` | `/api/v1/emergencies` | US-19 | SOS; `coordinates` = snapshot GPS all’invio (vedi `docs/sos_feature.md`) |
 | `PATCH` | `/api/v1/emergencies/:id` | US-19 | Validazione/cancellazione capogruppo |
 | `GET` | `/api/v1/sessions/:id/emergencies` | US-19 | Lista SOS sessione |
 | `POST` | `/api/v1/sessions/:id/telemetry` | US-21 | Batch GPS upload |
-| `GET` | `/api/v1/sessions/:id/positions` | US-22 | (Socket.io per real-time) |
+| `GET` | `/api/v1/sessions/:id/positions` | US-22 | Posizioni live partecipanti (mappa sessione; sostituisce aggiornamento coordinate in dettaglio SOS) |
 | `GET` | `/api/v1/feed/public` | US-20 | Social feed home |
 | `POST` | `/api/v1/users/:id/publicKey` | US-19 | Registrazione chiave pubblica ECC |
 

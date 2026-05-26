@@ -15,6 +15,8 @@ data class CreateEmergencyRequest(
     @SerializedName("beaconInstanceId") val beaconInstanceId: String,
     @SerializedName("idempotencyKey") val idempotencyKey: String,
     @SerializedName("signature") val signature: String? = null,
+    /** false se l'utente ha scelto di inviare l'SOS senza attivare il beacon BLE. */
+    @SerializedName("beaconActive") val beaconActive: Boolean = true,
 )
 
 data class EmergencyProfileSnapshot(
@@ -49,6 +51,8 @@ data class EmergencyResponse(
     @SerializedName("leaderAckAt") val leaderAckAt: String? = null,
     @SerializedName("sharedAt") val sharedAt: String? = null,
     @SerializedName("createdAt") val createdAt: String? = null,
+    /** false → il mittente non ha attivato il beacon; lo scanner non sarà utile. */
+    @SerializedName("beaconActive") val beaconActive: Boolean = true,
 )
 
 data class SessionEmergenciesResponse(

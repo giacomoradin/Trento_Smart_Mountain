@@ -143,6 +143,34 @@ fun SosCountdownDialog(
 }
 
 @Composable
+fun SosBluetoothEnableDialog(
+  onActivateBluetooth: () -> Unit,
+  onContinueWithoutBeacon: () -> Unit,
+  onCancel: () -> Unit,
+) {
+  AlertDialog(
+    onDismissRequest = onCancel,
+    title = { Text(stringResource(R.string.sos_bluetooth_enable_title)) },
+    text = { Text(stringResource(R.string.sos_bluetooth_enable_body)) },
+    confirmButton = {
+      Button(onClick = onActivateBluetooth) {
+        Text(stringResource(R.string.sos_bluetooth_enable_activate))
+      }
+    },
+    dismissButton = {
+      Column {
+        TextButton(onClick = onContinueWithoutBeacon) {
+          Text(stringResource(R.string.sos_bluetooth_enable_without))
+        }
+        TextButton(onClick = onCancel) {
+          Text(stringResource(R.string.sos_bluetooth_enable_cancel))
+        }
+      }
+    },
+  )
+}
+
+@Composable
 fun SosCancelActiveDialog(
   onDismiss: () -> Unit,
   onMistake: () -> Unit,

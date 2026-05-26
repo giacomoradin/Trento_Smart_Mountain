@@ -8,7 +8,7 @@ import androidx.core.app.NotificationCompat
 import it.trentosmartmountain.app.R
 
 /**
- * Notifiche locali quando il poll rileva un nuovo SOS (fallback senza FCM configurato).
+ * Notifiche locali quando il poll rileva un nuovo SOS.
  */
 object SosNotificationHelper {
   private const val CHANNEL_ID = "sos_incoming"

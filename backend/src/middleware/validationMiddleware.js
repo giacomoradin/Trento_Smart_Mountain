@@ -305,12 +305,13 @@ export const createEmergencySchema = Joi.object({
     .required(),
   idempotencyKey: Joi.string().uuid({ version: "uuidv4" }).required(),
   signature: Joi.string().max(512).allow(null, ""),
+  beaconActive: Joi.boolean().optional().default(true),
   profileSnapshot: profileSnapshotSchema,
 });
 
 export const patchEmergencySchema = Joi.object({
   action: Joi.string()
-    .valid("cancel", "dismiss", "share_with_group", "ack")
+    .valid("cancel", "dismiss", "share_with_group", "unshare_with_group", "ack")
     .required(),
   reason: Joi.string().valid("MISTAKE", "RESOLVED_SELF").when("action", {
     is: "cancel",

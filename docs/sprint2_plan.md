@@ -234,6 +234,8 @@
 
 ### US-22 — Socket.io real-time positions [Could / Sprint 3]
 
+> **Nota SOS:** le coordinate nel popup Dettaglio SOS restano lo **snapshot** all’invio (`docs/sos_feature.md`). La posizione **live** del mittente (e del gruppo) sarà sulla mappa di questa US, dopo il completamento del flusso SOS.
+
 **User Story:** Come **capogruppo** voglio vedere le posizioni live dei partecipanti sulla mia mappa, così da monitorare la coesione del gruppo in tempo reale.
 
 **Stato 17/05:** `socket.io` installato come dipendenza ma non integrato.

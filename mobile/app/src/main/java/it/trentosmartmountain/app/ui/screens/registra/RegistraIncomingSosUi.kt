@@ -31,6 +31,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -106,7 +107,18 @@ fun SosIncomingListDialog(
 ) {
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text(stringResource(R.string.sos_incoming_list_title)) },
+    title = {
+      Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(stringResource(R.string.sos_incoming_list_title))
+        IconButton(onClick = onDismiss) {
+          Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.sos_close))
+        }
+      }
+    },
     text = {
       LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(emergencies, key = { it.id }) { emergency ->
@@ -135,21 +147,25 @@ fun SosIncomingListDialog(
         }
       }
     },
-    confirmButton = {
-      TextButton(onClick = onDismiss) {
-        Text(stringResource(R.string.sos_close))
-      }
-    },
+    confirmButton = {},
   )
 }
 
+/**
+ * Dettaglio SOS per capogruppo/partecipanti.
+ * Le coordinate mostrate sono lo snapshot all'invio, non la posizione live
+ * (posizione aggiornata → US mappa sessione, docs/sos_feature.md).
+ */
 @Composable
 fun SosIncomingDetailDialog(
   emergency: EmergencyResponse,
   isGroupLeader: Boolean,
+  canUseBeaconScanner: Boolean,
   onClose: () -> Unit,
   onDismissEmergency: () -> Unit,
   onShareWithGroup: () -> Unit,
+  onUnshareWithGroup: () -> Unit,
+  onScanBeacon: () -> Unit,
 ) {
   val coords = emergency.coordinates.coordinates
   val lat = coords.getOrNull(1)
@@ -187,17 +203,40 @@ fun SosIncomingDetailDialog(
           stringResource(R.string.sos_beacon_id_label, emergency.beaconInstanceId),
           style = MaterialTheme.typography.labelSmall,
         )
+        if (!emergency.beaconActive) {
+          // Il mittente non ha attivato il beacon: scanner inutile
+          Text(
+            stringResource(R.string.sos_no_beacon_warning),
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+          )
+        } else if (canUseBeaconScanner) {
+          Button(
+            onClick = onScanBeacon,
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Text(stringResource(R.string.sos_open_beacon_scanner))
+          }
+        }
       }
     },
     confirmButton = {
       if (isGroupLeader) {
-        Column {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           if (emergency.status == "ACTIVE") {
             Button(
               onClick = onShareWithGroup,
               modifier = Modifier.fillMaxWidth(),
             ) {
               Text(stringResource(R.string.sos_share_with_group))
+            }
+          }
+          if (emergency.status == "SHARED_WITH_GROUP") {
+            OutlinedButton(
+              onClick = onUnshareWithGroup,
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Text(stringResource(R.string.sos_unshare_with_group))
             }
           }
           Button(
@@ -213,11 +252,7 @@ fun SosIncomingDetailDialog(
         }
       }
     },
-    dismissButton = {
-      TextButton(onClick = onClose) {
-        Text(stringResource(R.string.sos_close))
-      }
-    },
+    dismissButton = null,
   )
 }
 

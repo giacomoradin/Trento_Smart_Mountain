@@ -13,21 +13,25 @@ import android.bluetooth.le.BluetoothLeAdvertiser
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
-import android.os.ParcelUuid
+import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import it.trentosmartmountain.app.MainActivity
 import it.trentosmartmountain.app.R
-import java.util.UUID
+import it.trentosmartmountain.app.data.ble.BluetoothHelper
+import it.trentosmartmountain.app.data.ble.SosBeaconProtocol
 
 /**
- * Foreground service che trasmette un beacon iBeacon-compatibile per il soccorso in prossimità.
- * UUID namespace TSM fisso; major/minor derivati da [beaconInstanceId] (12 hex).
+ * Foreground service che trasmette un beacon BLE TSM per il soccorso in prossimità.
+ * La notifica «in trasmissione» compare solo dopo avvio riuscito dell'advertising.
  */
 class SosBeaconService : Service() {
 
   private var advertiser: BluetoothLeAdvertiser? = null
   private var advertiseCallback: AdvertiseCallback? = null
+  private val mainHandler = Handler(Looper.getMainLooper())
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -45,7 +49,8 @@ class SosBeaconService : Service() {
           stopSelf()
           return START_NOT_STICKY
         }
-        startForeground(NOTIFICATION_ID, buildNotification())
+        ensureChannel()
+        startForeground(NOTIFICATION_ID, buildPreparingNotification())
         startAdvertising(beaconId)
       }
     }
@@ -58,12 +63,35 @@ class SosBeaconService : Service() {
   }
 
   private fun startAdvertising(beaconInstanceId: String) {
-    val adapter = BluetoothAdapter.getDefaultAdapter() ?: return
-    if (!adapter.isEnabled) return
-    advertiser = adapter.bluetoothLeAdvertiser ?: return
+    if (!BluetoothHelper.isBluetoothEnabled(this)) {
+      Log.e(TAG, "Bluetooth spento — beacon non avviato")
+      showNotification(NotificationKind.BLUETOOTH_OFF)
+      mainHandler.postDelayed({ stopSelf() }, 2_500)
+      return
+    }
 
-    val (major, minor) = beaconInstanceIdToMajorMinor(beaconInstanceId)
-    val manufacturerData = buildIBeaconPayload(TSM_PROXIMITY_UUID, major, minor, TX_POWER_AT_1M)
+    val adapter = BluetoothHelper.adapter(this)
+    if (adapter == null) {
+      showNotification(NotificationKind.BLUETOOTH_OFF)
+      mainHandler.postDelayed({ stopSelf() }, 2_500)
+      return
+    }
+
+    advertiser = adapter.bluetoothLeAdvertiser
+    if (advertiser == null) {
+      Log.e(TAG, "BluetoothLeAdvertiser null")
+      showNotification(NotificationKind.FAILED)
+      mainHandler.postDelayed({ stopSelf() }, 2_500)
+      return
+    }
+
+    val (major, minor) = SosBeaconProtocol.beaconInstanceIdToMajorMinor(beaconInstanceId)
+    val manufacturerData =
+      SosBeaconProtocol.buildManufacturerPayload(
+        SosBeaconProtocol.PROXIMITY_UUID,
+        major,
+        minor,
+      )
 
     val settings =
       AdvertiseSettings.Builder()
@@ -76,14 +104,23 @@ class SosBeaconService : Service() {
     val data =
       AdvertiseData.Builder()
         .setIncludeDeviceName(false)
-        .addManufacturerData(APPLE_MANUFACTURER_ID, manufacturerData)
+        .addManufacturerData(SosBeaconProtocol.MANUFACTURER_ID, manufacturerData)
         .build()
+
+    stopAdvertising()
 
     advertiseCallback =
       object : AdvertiseCallback() {
-        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {}
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+          Log.i(TAG, "Beacon SOS in trasmissione id=$beaconInstanceId major=$major minor=$minor")
+          showNotification(NotificationKind.TRANSMITTING)
+        }
 
-        override fun onStartFailure(errorCode: Int) {}
+        override fun onStartFailure(errorCode: Int) {
+          Log.e(TAG, "Advertising fallito: $errorCode (${advertiseErrorLabel(errorCode)})")
+          showNotification(NotificationKind.FAILED)
+          mainHandler.postDelayed({ stopSelf() }, 3_000)
+        }
       }
 
     advertiser?.startAdvertising(settings, data, advertiseCallback)
@@ -95,30 +132,58 @@ class SosBeaconService : Service() {
     advertiseCallback = null
   }
 
-  private fun buildNotification(): Notification {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      val channel =
-        NotificationChannel(
-          CHANNEL_ID,
-          getString(R.string.sos_beacon_channel_name),
-          NotificationManager.IMPORTANCE_LOW,
-        )
-      (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
-    }
-    val openIntent =
-      PendingIntent.getActivity(
-        this,
-        0,
-        Intent(this, MainActivity::class.java),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-      )
-    return NotificationCompat.Builder(this, CHANNEL_ID)
+  private enum class NotificationKind {
+    PREPARING,
+    TRANSMITTING,
+    BLUETOOTH_OFF,
+    FAILED,
+  }
+
+  private fun showNotification(kind: NotificationKind) {
+    val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+    nm.notify(NOTIFICATION_ID, buildNotification(kind))
+  }
+
+  private fun buildPreparingNotification(): Notification = buildNotification(NotificationKind.PREPARING)
+
+  private fun buildNotification(kind: NotificationKind): Notification {
+    val (titleRes, bodyRes) =
+      when (kind) {
+        NotificationKind.TRANSMITTING ->
+          R.string.sos_beacon_notification_title to R.string.sos_beacon_notification_body
+        NotificationKind.PREPARING ->
+          R.string.sos_beacon_notification_title to R.string.sos_beacon_notification_preparing
+        NotificationKind.BLUETOOTH_OFF ->
+          R.string.sos_beacon_notification_title to R.string.sos_beacon_notification_bt_off
+        NotificationKind.FAILED ->
+          R.string.sos_beacon_notification_title to R.string.sos_beacon_notification_failed
+      }
+  return NotificationCompat.Builder(this, CHANNEL_ID)
       .setSmallIcon(R.drawable.ic_launcher_foreground)
-      .setContentTitle(getString(R.string.sos_beacon_notification_title))
-      .setContentText(getString(R.string.sos_beacon_notification_body))
-      .setContentIntent(openIntent)
-      .setOngoing(true)
+      .setContentTitle(getString(titleRes))
+      .setContentText(getString(bodyRes))
+      .setContentIntent(openAppPendingIntent())
+      .setOngoing(kind == NotificationKind.TRANSMITTING || kind == NotificationKind.PREPARING)
       .build()
+  }
+
+  private fun openAppPendingIntent(): PendingIntent =
+    PendingIntent.getActivity(
+      this,
+      0,
+      Intent(this, MainActivity::class.java),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+  private fun ensureChannel() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val channel =
+      NotificationChannel(
+        CHANNEL_ID,
+        getString(R.string.sos_beacon_channel_name),
+        NotificationManager.IMPORTANCE_LOW,
+      )
+    (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
   }
 
   companion object {
@@ -126,14 +191,9 @@ class SosBeaconService : Service() {
     const val ACTION_STOP = "it.trentosmartmountain.SOS_BEACON_STOP"
     const val EXTRA_BEACON_INSTANCE_ID = "beaconInstanceId"
 
-    /** UUID iBeacon namespace Trento Smart Mountain */
-    val TSM_PROXIMITY_UUID: UUID =
-      UUID.fromString("F7826DA6-4FA2-4E98-8024-BC5B71E0893E")
-
-    private const val APPLE_MANUFACTURER_ID = 0x004C
-    private const val TX_POWER_AT_1M: Byte = 0xC5.toByte() // -59 dBm
     private const val CHANNEL_ID = "sos_beacon"
     private const val NOTIFICATION_ID = 9102
+    private const val TAG = "SosBeaconService"
 
     fun start(context: Context, beaconInstanceId: String) {
       val intent =
@@ -152,32 +212,17 @@ class SosBeaconService : Service() {
       context.startService(intent)
     }
 
-    /** Converte 12 hex in major (byte 2-3) e minor (byte 4-5). */
-    fun beaconInstanceIdToMajorMinor(hex: String): Pair<Int, Int> {
-      val clean = hex.lowercase().padEnd(12, '0').take(12)
-      val major = clean.substring(0, 4).toInt(16) and 0xFFFF
-      val minor = clean.substring(4, 8).toInt(16) and 0xFFFF
-      return major to minor
-    }
+    fun beaconInstanceIdToMajorMinor(hex: String): Pair<Int, Int> =
+      SosBeaconProtocol.beaconInstanceIdToMajorMinor(hex)
 
-    private fun buildIBeaconPayload(uuid: UUID, major: Int, minor: Int, txPower: Byte): ByteArray {
-      val msb = uuid.mostSignificantBits
-      val lsb = uuid.leastSignificantBits
-      val uuidBytes = ByteArray(16)
-      for (i in 0 until 8) {
-        uuidBytes[i] = (msb shr (8 * (7 - i))).toByte()
-        uuidBytes[8 + i] = (lsb shr (8 * (7 - i))).toByte()
+    private fun advertiseErrorLabel(code: Int): String =
+      when (code) {
+        AdvertiseCallback.ADVERTISE_FAILED_DATA_TOO_LARGE -> "dati troppo grandi"
+        AdvertiseCallback.ADVERTISE_FAILED_TOO_MANY_ADVERTISERS -> "troppi advertiser"
+        AdvertiseCallback.ADVERTISE_FAILED_ALREADY_STARTED -> "già attivo"
+        AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR -> "errore interno"
+        AdvertiseCallback.ADVERTISE_FAILED_FEATURE_UNSUPPORTED -> "non supportato"
+        else -> "codice $code"
       }
-      return byteArrayOf(
-        0x02,
-        0x15,
-        *uuidBytes,
-        ((major shr 8) and 0xFF).toByte(),
-        (major and 0xFF).toByte(),
-        ((minor shr 8) and 0xFF).toByte(),
-        (minor and 0xFF).toByte(),
-        txPower,
-      )
-    }
   }
 }

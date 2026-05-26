@@ -3,7 +3,7 @@
  *
  * Quando un utente A richiede il profilo di un utente B (con A ≠ B), il body
  * di risposta deve nascondere i campi sensibili (peso, sesso, data nascita,
- * scheda medica, FCM token, preferenze privacy). Questi campi sono solo per
+ * scheda medica, token push, preferenze privacy). Questi campi sono solo per
  * self-view o per amministrazione.
  *
  * Per now: l'admin viene trattato come "self" (vede tutto). In futuro, quando

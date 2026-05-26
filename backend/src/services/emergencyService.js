@@ -1,18 +1,9 @@
 import Emergency from "../models/emergency.js";
 import HikeSession from "../models/hikeSession.js";
 import User from "../models/user.js";
-import {
-  notifySessionGroupLeaders,
-  notifySessionParticipants,
-  sendPushToUsers,
-} from "./notificationService.js";
 
 const OPEN_STATUSES = ["ACTIVE", "SHARED_WITH_GROUP"];
 const TERMINAL_STATUSES = ["DISMISSED", "CANCELLED_BY_SENDER"];
-
-function participantIds(session) {
-  return session.participants.map((p) => p.userId.toString());
-}
 
 export function isSessionGroupLeader(session, userId) {
   return session.participants.some(
@@ -66,6 +57,7 @@ export async function createEmergency(senderUserId, payload) {
     beaconInstanceId,
     idempotencyKey,
     signature = null,
+    beaconActive = true,
   } = payload;
 
   const existing = await Emergency.findOne({ idempotencyKey });
@@ -93,6 +85,7 @@ export async function createEmergency(senderUserId, payload) {
     beaconInstanceId: beaconInstanceId.toLowerCase(),
     idempotencyKey,
     signature: signature || null,
+    beaconActive,
     status: "ACTIVE",
   });
 
@@ -100,23 +93,6 @@ export async function createEmergency(senderUserId, payload) {
     { path: "senderUserId", select: "username email" },
     { path: "sessionId", select: "routeDetails.name inviteCode status" },
   ]);
-
-  const session = await HikeSession.findById(sessionId);
-  if (session) {
-    await notifySessionGroupLeaders(
-      session,
-      {
-        title: "SOS — emergenza in gruppo",
-        body: `${profileSnapshot.displayName} ha inviato un SOS`,
-        data: {
-          type: "sos_created",
-          emergencyId: populated._id.toString(),
-          sessionId: sessionId.toString(),
-        },
-      },
-      senderUserId,
-    );
-  }
 
   return { emergency: populated, isNew: true };
 }
@@ -218,6 +194,12 @@ export async function patchEmergency(emergencyId, userId, action, extras = {}) {
       emergency.sharedAt = new Date();
       break;
     }
+    case "unshare_with_group": {
+      if (!isSessionGroupLeader(session, userId)) throw new Error("FORBIDDEN");
+      if (emergency.status !== "SHARED_WITH_GROUP") throw new Error("INVALID_STATE_TRANSITION");
+      emergency.status = "ACTIVE";
+      break;
+    }
     case "ack": {
       if (!isSessionGroupLeader(session, userId)) throw new Error("FORBIDDEN");
       emergency.leaderAckAt = new Date();
@@ -232,42 +214,6 @@ export async function patchEmergency(emergencyId, userId, action, extras = {}) {
     { path: "senderUserId", select: "username email" },
     { path: "sessionId", select: "routeDetails.name inviteCode status" },
   ]);
-
-  const notifyPayload = {
-    data: {
-      emergencyId: populated._id.toString(),
-      sessionId: session._id.toString(),
-    },
-  };
-
-  if (action === "share_with_group") {
-    await notifySessionParticipants(
-      session,
-      {
-        title: "SOS condiviso con il gruppo",
-        body: "Il capogruppo ha condiviso un'allerta SOS",
-        data: { ...notifyPayload.data, type: "sos_shared" },
-      },
-      userId,
-    );
-  } else if (action === "dismiss") {
-    const senderId = populated.senderUserId?._id || populated.senderUserId;
-    await sendPushToUsers([senderId], {
-      title: "SOS chiuso",
-      body: "Il capogruppo ha chiuso la segnalazione",
-      data: { ...notifyPayload.data, type: "sos_dismissed" },
-    });
-  } else if (action === "cancel") {
-    await notifySessionGroupLeaders(
-      session,
-      {
-        title: "SOS revocato",
-        body: "Il partecipante ha annullato il segnale SOS",
-        data: { ...notifyPayload.data, type: "sos_cancelled" },
-      },
-      userId,
-    );
-  }
 
   return populated;
 }

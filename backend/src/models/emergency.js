@@ -24,6 +24,8 @@ const emergencySchema = new Schema(
       enum: ["INJURY", "LOST", "AVALANCHE", "WEATHER", "EQUIPMENT", "OTHER"],
       required: true,
     },
+    // Snapshot GPS al momento dell'invio SOS. Non aggiornato in tempo reale;
+    // posizione live dei partecipanti → US mappa sessione (US-22). Vedi docs/sos_feature.md.
     coordinates: {
       type: { type: String, enum: ["Point"], default: "Point" },
       coordinates: {
@@ -61,6 +63,8 @@ const emergencySchema = new Schema(
       type: String,
       required: true,
     },
+    /** true se il mittente ha avviato il beacon BLE al momento dell'invio. */
+    beaconActive: { type: Boolean, default: true },
     /** Riservato firma Ed25519 (Sprint successivo). */
     signature: { type: String, default: null },
     cancelReason: {

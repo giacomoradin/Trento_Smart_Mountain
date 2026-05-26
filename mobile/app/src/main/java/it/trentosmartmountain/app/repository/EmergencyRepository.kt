@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.sync.EmergencyUploadScheduler
 import it.trentosmartmountain.app.data.local.db.PendingEmergencyEntity
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.CreateEmergencyRequest
@@ -27,6 +28,11 @@ class EmergencyRepository(private val context: Context) {
             caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
+    suspend fun hasPendingEmergencies(): Boolean =
+        withContext(Dispatchers.IO) {
+            pendingDao.count() > 0
+        }
+
     suspend fun createEmergency(
         sessionId: String,
         emergencyType: String,
@@ -34,6 +40,7 @@ class EmergencyRepository(private val context: Context) {
         latitude: Double,
         beaconInstanceId: String,
         idempotencyKey: String,
+        beaconActive: Boolean = true,
     ): Result<it.trentosmartmountain.app.data.remote.dto.EmergencyResponse> =
         withContext(Dispatchers.IO) {
             if (!isNetworkAvailable()) {
@@ -48,6 +55,7 @@ class EmergencyRepository(private val context: Context) {
                         createdAtMs = System.currentTimeMillis(),
                     ),
                 )
+                EmergencyUploadScheduler.enqueue(context.applicationContext)
                 return@withContext Result.failure(OfflineEmergencyException())
             }
             postEmergency(
@@ -57,6 +65,7 @@ class EmergencyRepository(private val context: Context) {
                 latitude,
                 beaconInstanceId,
                 idempotencyKey,
+                beaconActive,
             )
         }
 
@@ -89,6 +98,7 @@ class EmergencyRepository(private val context: Context) {
         latitude: Double,
         beaconInstanceId: String,
         idempotencyKey: String,
+        beaconActive: Boolean = true,
     ): Result<it.trentosmartmountain.app.data.remote.dto.EmergencyResponse> {
         return try {
             val response =
@@ -99,6 +109,7 @@ class EmergencyRepository(private val context: Context) {
                         coordinates = GeoPointDto(coordinates = listOf(longitude, latitude)),
                         beaconInstanceId = beaconInstanceId,
                         idempotencyKey = idempotencyKey,
+                        beaconActive = beaconActive,
                     ),
                 )
             if (response.isSuccessful && response.body() != null) {
@@ -145,6 +156,9 @@ class EmergencyRepository(private val context: Context) {
 
     suspend fun shareEmergencyWithGroup(emergencyId: String): Result<EmergencyResponse> =
         patchEmergency(emergencyId, PatchEmergencyRequest(action = "share_with_group"))
+
+    suspend fun unshareEmergencyWithGroup(emergencyId: String): Result<EmergencyResponse> =
+        patchEmergency(emergencyId, PatchEmergencyRequest(action = "unshare_with_group"))
 
     suspend fun ackEmergency(emergencyId: String): Result<EmergencyResponse> =
         patchEmergency(emergencyId, PatchEmergencyRequest(action = "ack"))

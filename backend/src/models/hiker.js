@@ -57,7 +57,7 @@ const hikerSchema = new mongoose.Schema({
     notifications: {
       pushEnabled: { type: Boolean, default: true },
       emailDigest: { type: Boolean, default: false },
-      // FCM token registrato dal client per push notifications.
+      // Token opzionale per notifiche push (futuro).
       // Salvato solo se pushEnabled === true; clearato al logout.
       fcmToken: { type: String },
     },

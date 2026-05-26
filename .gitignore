@@ -139,10 +139,6 @@ mobile/.idea/deploymentTargetSelector.xml
 *.apk
 *.aab
 
-# Android build artifacts
-*.apk
-*.aab
-
 # Keystore files
 *.jks
 *.keystore

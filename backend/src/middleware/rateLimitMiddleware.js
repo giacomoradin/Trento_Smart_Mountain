@@ -44,10 +44,10 @@ export const loginLimiter = rateLimit({
   skip: skipInTest,
 });
 
-// Soglia bassa per evitare account farming spam.
+// Soglia più alta per permettere testing intensivo (es. delete -> recreate flow).
 export const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 5,
+  max: 20,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: rateLimitHandler,

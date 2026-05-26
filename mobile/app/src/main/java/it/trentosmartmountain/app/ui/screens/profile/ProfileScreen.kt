@@ -1,8 +1,15 @@
 package it.trentosmartmountain.app.ui.screens.profile
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.nfc.NfcAdapter
+import android.util.Base64
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,6 +62,8 @@ import it.trentosmartmountain.app.data.remote.dto.WeeklyGoals
 import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
 import it.trentosmartmountain.app.viewmodel.ProfileV2ViewModel
 import it.trentosmartmountain.app.viewmodel.ProfileViewModel
+import it.trentosmartmountain.app.ui.theme.TsmPrimary
+import java.io.ByteArrayOutputStream
 
 private val DarkSurface = Color(0xFF1C1C1E)
 private val CardBackground = Color(0xFF2C2C2E)
@@ -65,6 +75,7 @@ private val ChipGreen = Color(0xFF1A3D1A)
 
 @Composable
 fun ProfileScreen(
+    modifier: Modifier = Modifier,
     onLoggedOut: () -> Unit,
     onNavigateToFormazione: () -> Unit = {},
     onNavigateToNfcScan: () -> Unit = {},
@@ -74,7 +85,6 @@ fun ProfileScreen(
     onNavigateToChallenges: () -> Unit = {},
     onNavigateToBadges: () -> Unit = {},
     onNavigateToProfileView: () -> Unit = {},
-    modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application,
@@ -93,6 +103,30 @@ fun ProfileScreen(
     val profileV2State by profileV2ViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val nfcAvailable = NfcAdapter.getDefaultAdapter(context) != null
+
+    // Photo picker per l'upload dell'avatar
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            try {
+                val inputStream = context.contentResolver.openInputStream(it)
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                // Ridimensioniamo per restare nei 2MB di limite backend (e non appesantire DB)
+                val scaled = if (bitmap.width > 500) {
+                    val ratio = 500f / bitmap.width
+                    Bitmap.createScaledBitmap(bitmap, 500, (bitmap.height * ratio).toInt(), true)
+                } else bitmap
+
+                val outputStream = ByteArrayOutputStream()
+                scaled.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+                val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
+                profileV2ViewModel.uploadAvatar("data:image/jpeg;base64,$base64")
+            } catch (e: Exception) {
+                Toast.makeText(context, "Errore caricamento foto: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     Surface(modifier = modifier.fillMaxSize(), color = DarkSurface) {
         if (uiState.showBlockingLoading) {
@@ -158,18 +192,21 @@ fun ProfileScreen(
                             .size(64.dp)
                             .clip(CircleShape)
                             .background(Color(0xFF2D5A2D))
-                            .clickable {
-                                // TODO: Implementare Image Picker per caricamento reale.
-                                // Per ora mostriamo un feedback visivo.
-                                Toast.makeText(context, "Caricamento foto in arrivo!", Toast.LENGTH_SHORT).show()
-                            },
+                            .clickable { photoPickerLauncher.launch("image/*") },
                         contentAlignment = Alignment.Center,
                     ) {
                         val avatarUrl = profileV2State.personalInfo?.avatarUrl
-                        if (!avatarUrl.isNullOrBlank()) {
-                            // Placeholder per immagine reale (in produzione usare Coil/Glide)
-                            Box(Modifier.fillMaxSize().background(AccentCyan)) {
-                                Text("IMG", color = Color.Black, modifier = Modifier.align(Alignment.Center))
+                        if (!avatarUrl.isNullOrBlank() && avatarUrl.startsWith("data:image")) {
+                            val base64Data = avatarUrl.substringAfter("base64,")
+                            val imageBytes = Base64.decode(base64Data, Base64.DEFAULT)
+                            val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Foto profilo",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
                             }
                         } else {
                             val initials = uiState.username?.take(2)?.uppercase() ?: "??"
@@ -619,12 +656,12 @@ private fun WeeklyGoalsCard(
                 // in PreferencesEditScreen → ProfileScreen ricomposta automaticamente.
                 val prefs by PreferencesHolder.prefs.collectAsStateWithLifecycle()
                 val units = prefs.units
-                if (goals!!.km > 0) {
+                if (goals.km > 0) {
                     GoalRowFormatted(
                         label = "Distanza",
                         currentText = UnitsFormatter.distance(stats?.km ?: 0.0, units, decimals = 1),
                         targetText = UnitsFormatter.distance(goals.km.toDouble(), units, decimals = 1),
-                        progress = if (goals.km > 0) ((stats?.km ?: 0.0) / goals.km).toFloat().coerceIn(0f, 1f) else 0f,
+                        progress = ((stats?.km ?: 0.0) / goals.km).toFloat().coerceIn(0f, 1f),
                         reached = (stats?.km ?: 0.0) >= goals.km,
                     )
                     Spacer(Modifier.height(8.dp))
@@ -634,7 +671,7 @@ private fun WeeklyGoalsCard(
                         label = "Dislivello",
                         currentText = UnitsFormatter.elevation(stats?.elevM ?: 0, units),
                         targetText = UnitsFormatter.elevation(goals.elevM, units),
-                        progress = if (goals.elevM > 0) ((stats?.elevM ?: 0).toFloat() / goals.elevM).coerceIn(0f, 1f) else 0f,
+                        progress = ((stats?.elevM ?: 0).toFloat() / goals.elevM).coerceIn(0f, 1f),
                         reached = (stats?.elevM ?: 0) >= goals.elevM,
                     )
                     Spacer(Modifier.height(8.dp))
@@ -645,7 +682,7 @@ private fun WeeklyGoalsCard(
                         label = "Escursioni",
                         currentText = "${stats?.count ?: 0}",
                         targetText = "${goals.count}",
-                        progress = if (goals.count > 0) ((stats?.count ?: 0).toFloat() / goals.count).coerceIn(0f, 1f) else 0f,
+                        progress = ((stats?.count ?: 0).toFloat() / goals.count).coerceIn(0f, 1f),
                         reached = (stats?.count ?: 0) >= goals.count,
                     )
                 }

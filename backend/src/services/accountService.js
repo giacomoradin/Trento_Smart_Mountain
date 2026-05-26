@@ -202,11 +202,16 @@ class LockedFieldError extends Error {
 // personalInfo/experience/preferences sono definiti SOLO nel sub-schema
 // Hiker — se interroghiamo User base, il $set viene silenziosamente droppato.
 export async function updatePersonalInfo(userId, data) {
-  // Anti-cheat: blocca update di birthDate se già impostato.
+  // Anti-cheat: blocca update di birthDate se già impostato e DIVERSO dal nuovo valore.
   if (data.birthDate !== undefined) {
     const existing = await Hiker.findById(userId).select("personalInfo.birthDate").lean();
     if (existing?.personalInfo?.birthDate) {
-      throw new LockedFieldError("birthDate");
+      // Confronto ISO string (YYYY-MM-DD) per evitare falsi positivi da oggetti Date/Timestamp.
+      const existingIso = existing.personalInfo.birthDate.toISOString().split("T")[0];
+      const newIso = new Date(data.birthDate).toISOString().split("T")[0];
+      if (existingIso !== newIso) {
+        throw new LockedFieldError("birthDate");
+      }
     }
   }
   const set = flattenForSet("personalInfo", data);
@@ -218,10 +223,10 @@ export async function updatePersonalInfo(userId, data) {
 }
 
 export async function updateExperience(userId, data) {
-  // Anti-cheat: blocca update di caiLevel se già impostato.
+  // Anti-cheat: blocca update di caiLevel se già impostato e DIVERSO dal nuovo valore.
   if (data.caiLevel !== undefined) {
     const existing = await Hiker.findById(userId).select("experience.caiLevel").lean();
-    if (existing?.experience?.caiLevel) {
+    if (existing?.experience?.caiLevel && existing.experience.caiLevel !== data.caiLevel) {
       throw new LockedFieldError("caiLevel");
     }
   }

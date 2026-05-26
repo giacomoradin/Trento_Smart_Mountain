@@ -48,10 +48,18 @@ export const createHiker = async (req, res) => {
 
     const saved = await hiker.save();
 
-    // Invio email asincrono (non blocca la response)
-    sendVerificationEmail(email, verificationToken).catch((err) => {
+    // Invio email sincrono: se fallisce, cancelliamo l'utente e restituiamo errore.
+    // Questo permette all'utente di riprovare subito correggendo eventuali typo,
+    // ed evita di "bruciare" l'email con un account non verificabile.
+    try {
+      await sendVerificationEmail(email, verificationToken);
+    } catch (err) {
       console.error("[hikerService] Invio email verifica fallito:", err.message);
-    });
+      await hiker.deleteOne(); // Rollback creazione utente
+      return res.status(500).json({
+        message: "Errore durante l'invio dell'email di verifica. L'account non è stato creato, riprova tra qualche istante.",
+      });
+    }
 
     const { passwordHash: _p, verificationToken: _v, __v, ...userPublic } =
       saved.toObject();

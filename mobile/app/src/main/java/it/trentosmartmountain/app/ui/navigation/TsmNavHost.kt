@@ -1,11 +1,19 @@
 package it.trentosmartmountain.app.ui.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -60,6 +68,9 @@ import it.trentosmartmountain.app.ui.util.gsonSaver
  *
  * La destinazione iniziale dipende dal JWT salvato ([it.trentosmartmountain.app.data.local.AuthSession]).
  */
+private val DarkSurface = Color(0xFF1C1C1E)
+private val AccentCyan = Color(0xFF4DD0E1)
+
 @Composable
 fun TsmNavHost() {
     val application = LocalContext.current.applicationContext as TsmApplication
@@ -288,20 +299,28 @@ fun TsmNavHost() {
                     submission = result,
                     quizTitle = pendingQuizTitle,
                     onBackToFormazione = {
-                        pendingQuizResult = null
+                        // Navighiamo prima, il cleanup avviene dopo o via lifecycle
                         navController.navigate(Routes.FORMAZIONE) {
                             popUpTo(Routes.MAIN_HIKER) { inclusive = false }
                         }
                     },
                     onRetry = {
-                        pendingQuizResult = null
-                        navController.navigate(Routes.quizRoute(pendingQuizId)) {
+                        val qId = pendingQuizId
+                        navController.navigate(Routes.quizRoute(qId)) {
                             popUpTo(Routes.QUIZ_RESULT) { inclusive = true }
                         }
                     },
                 )
             } else {
-                navController.popBackStack()
+                Box(Modifier.fillMaxSize().background(DarkSurface), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = AccentCyan)
+                }
+                // Se arriviamo qui per errore (es. deep link diretto), torniamo alla formazione
+                LaunchedEffect(Unit) {
+                    navController.navigate(Routes.FORMAZIONE) {
+                        popUpTo(Routes.MAIN_HIKER) { inclusive = false }
+                    }
+                }
             }
         }
 

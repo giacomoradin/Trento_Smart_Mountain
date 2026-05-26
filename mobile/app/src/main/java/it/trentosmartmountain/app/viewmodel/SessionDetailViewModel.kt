@@ -3,6 +3,8 @@ package it.trentosmartmountain.app.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.trentosmartmountain.app.data.remote.TsmApiClient
+import it.trentosmartmountain.app.ui.util.ApiErrorMessages
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateRouteDetails
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
@@ -168,9 +170,16 @@ class SessionDetailViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
+                val meetingDateApi = SessionDateFormats.toApiOrNull(state.editDate)
+                if (state.editDate.isNotBlank() && meetingDateApi == null) {
+                    _uiState.update {
+                        it.copy(isSaving = false, error = "Data non valida. Selezionala di nuovo dal calendario.")
+                    }
+                    return@launch
+                }
                 val body = UpdateSessionRequest(
                     routeDetails = UpdateRouteDetails(name = state.editName, difficultyLevel = state.editDifficulty),
-                    meetingDate = state.editDate.ifBlank { null },
+                    meetingDate = meetingDateApi,
                     meetingTime = state.editTime.ifBlank { null },
                     maxParticipants = state.editMaxParticipants,
                 )
@@ -187,13 +196,10 @@ class SessionDetailViewModel : ViewModel() {
                     }
                     silentReloadSession(sessionId) // Ricarica in background
                 } else {
-                    // 3. SEGNALAZIONE FALLIMENTO (Senza riaprire la tendina)
-                    val errorBody = response.errorBody()?.string() ?: "Errore Sconosciuto"
                     _uiState.update {
                         it.copy(
                             isSaving = false,
-                            // Lasciamo editMode = false per confermare che l'input UI funziona.
-                            error = "HTTP ${response.code()}: $errorBody" 
+                            error = ApiErrorMessages.fromResponse(response),
                         )
                     }
                 }
@@ -262,9 +268,9 @@ class SessionDetailViewModel : ViewModel() {
 
     // --- AVVIA ---
 
-    fun onAvviaClick(todayFormatted: String, onNavigate: () -> Unit) {
-        val meetingDate = _uiState.value.session?.meetingDate ?: ""
-        if (meetingDate.isBlank() || meetingDate == todayFormatted) {
+    fun onAvviaClick(onNavigate: () -> Unit) {
+        val meetingDate = _uiState.value.session?.meetingDate
+        if (meetingDate.isNullOrBlank() || SessionDateFormats.isTodayApi(meetingDate)) {
             onNavigate()
         } else {
             _uiState.update { it.copy(showAvviaConfirm = true) }

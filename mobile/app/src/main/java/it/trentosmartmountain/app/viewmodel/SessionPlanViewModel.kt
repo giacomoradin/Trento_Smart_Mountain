@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.CreateSessionRequest
+import it.trentosmartmountain.app.ui.util.ApiErrorMessages
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.data.remote.dto.GeoPoint
 import it.trentosmartmountain.app.data.remote.dto.GpxStats
 import it.trentosmartmountain.app.data.remote.dto.SessionRouteDetails
@@ -108,6 +110,13 @@ class SessionPlanViewModel : ViewModel() {
             _uiState.update { it.copy(generalError = "Inserisci un nome per l'escursione.") }
             return
         }
+        val meetingDateApi = SessionDateFormats.toApiOrNull(state.meetingDate)
+        if (state.meetingDate.isNotBlank() && meetingDateApi == null) {
+            _uiState.update {
+                it.copy(generalError = "Data non valida. Selezionala di nuovo dal calendario.")
+            }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, generalError = null) }
             try {
@@ -120,7 +129,7 @@ class SessionPlanViewModel : ViewModel() {
                         startPoint = gpx?.firstPoint?.let { GeoPoint(coordinates = listOf(it.second, it.first)) },
                         endPoint = gpx?.lastPoint?.let { GeoPoint(coordinates = listOf(it.second, it.first)) },
                     ),
-                    meetingDate = state.meetingDate.ifBlank { null },
+                    meetingDate = meetingDateApi,
                     meetingTime = state.meetingTime.ifBlank { null },
                     maxParticipants = state.maxParticipants,
                     minExperienceLevel = state.difficultyLevel,
@@ -143,7 +152,7 @@ class SessionPlanViewModel : ViewModel() {
                 } else {
                     val error = when (response.code()) {
                         409 -> "Sei già in una sessione attiva."
-                        else -> "Errore server (${response.code()})."
+                        else -> ApiErrorMessages.fromResponse(response)
                     }
                     _uiState.update { it.copy(isLoading = false, generalError = error) }
                 }

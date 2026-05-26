@@ -1,6 +1,6 @@
 # Trento Smart Mountain — Stato del progetto
 
-> Snapshot dell'architettura, codebase e implementazione corrente. Aggiornato al **26 maggio 2026** (Sprint 2, dopo batch fix critico discriminator persistence + anti-cheat server-side, ProfileViewScreen, build mobile + 78 test verdi).
+> Snapshot dell'architettura, codebase e implementazione corrente. Aggiornato al **26 maggio 2026 (sessione serale)** — Sprint 2 con feature **Foto profilo utente** completata (privacy gate fix, componente Compose `AvatarImage` riusabile, EXIF rotation, foto visibile in ProfileScreen / ProfileViewScreen / partecipanti sessioni), oltre alle tre sessioni precedenti dello stesso giorno (notturna: discriminator persistence + anti-cheat; pomeridiana: refresh token rotation + WAL Room v5). Build mobile **`compileDebugKotlin` green**, backend **88/89 test verdi** (1 test fragile pre-esistente su `BREVO_API_KEY`).
 
 ---
 
@@ -190,6 +190,19 @@ trento-smart-mountain/
 - ✅ Room v4 con campi `retry_count`, `last_retry_at_ms`, `remote_id`
 - ✅ Marcatura `isSynced=1` post upload + tracking `remoteId` per delete cross-device
 
+#### Foto profilo (avatar) — sessione serale 26/05
+
+- ✅ Schema: `Hiker.personalInfo.avatarUrl` (data URI Base64, max 7 MB lato Joi su body cap 5 MB)
+- ✅ Endpoint riusato: `PATCH /api/v1/users/me/personal-info` con `avatarUrl` opzionale
+- ✅ Privacy gate (`userPrivacy.js`): per "other viewer" è pubblico SOLO `personalInfo.avatarUrl`; gli altri campi (sex, birthDate, heightCm, weightKg) restano privati
+- ✅ Populate sessioni: `participants.userId` e `creatorId` includono `personalInfo.avatarUrl` (8 occorrenze in `hikeSessionService.js`)
+- ✅ Joi validation: pattern stretto `^data:image/(jpeg|jpg|png|webp);base64,...$`, accetta `""` per il flow "rimuovi foto"
+- ✅ Mobile: componente Compose riusabile `ui/components/AvatarImage.kt` (decode Base64 memoizzato via `remember(avatarUrl)`, fallback iniziali con colore deterministico, overlay loader)
+- ✅ Mobile: utility `ui/util/AvatarUtils.kt` (load URI → EXIF rotation → downscale 500 px → JPEG q70 → Base64 NO_WRAP, tutto su `Dispatchers.IO`)
+- ✅ UX: long-press sull'avatar in ProfileScreen → dialog "Rimuovi foto" + Toast su success/error; icona `CameraAlt` come hint di tap
+- ✅ Foto visibile in: `ProfileScreen` (64 dp), `ProfileViewScreen` (88 dp header), `SessionDetailScreen` PartecipantsCard (40 dp con bordo accent per creator)
+- ✅ Dipendenza aggiunta: `androidx.exifinterface:1.3.7`
+
 ### Convenzioni codice
 
 - Backend: routes → services → models (3 layer); errori business come `throw new Error("CODE")` mappati in HTTP
@@ -217,14 +230,16 @@ trento-smart-mountain/
 
 ### Tech debt / TODO security
 
-- ⚠ Logging strutturato + Sentry (oggi solo console)
-- ⚠ Audit trail per azioni admin (chi ha eliminato chi)
+- ⚠ Logging strutturato + Sentry (oggi solo `console.log/error`)
+- ⚠ Audit trail per azioni admin (chi ha eliminato chi, change-role events)
 - ⚠ Rotazione automatica JWT secret (oggi manuale, vedi SECURITY.md sez. 6)
-- ⚠ Tombstone table per delete offline-first (oggi best-effort)
-- ⚠ Refresh token rotation (oggi JWT singolo con expiry 7d — basta per offline 3gg, ma Sprint 3 vuole access+refresh)
-- ⚠ Rate limit con store Redis (oggi in-memory, ok per single-instance)
+- ⚠ Tombstone table per delete offline-first (oggi best-effort via `remoteId`)
+- ⚠ Rate limit con store Redis (oggi in-memory, ok per Render single-instance)
 - ⚠ CI gate su `npm audit` (oggi 6 moderate severity da risolvere)
-- ⚠ Coverage Jest da estendere ai service layer (oggi: route auth/hiker/sessions/activities/weather coperte; service layer indiretto via route)
+- ⚠ Coverage Jest da estendere ai service layer (oggi: route auth/hiker/sessions/activities/weather/account/refreshToken coperte; service layer indiretto via route)
+- ⚠ Test fragile `POST /auth/register/hiker` dipende da `BREVO_API_KEY` env in test → mockare `emailService.sendVerificationEmail` per renderlo hermetico (1 test su 89 in failure per questo)
+- ⚠ Recovery dialog post-crash dalla WAL (`tracking_wal`): l'infra c'è (Room v5, `TrackingPersistenceRepository.finalize`), manca solo il prompt UX alla riapertura per recuperare l'attività interrotta
+- ⚠ Avatar: serializzato come Base64 inline nei `participants.userId.personalInfo.avatarUrl` → payload pesante (~30-100 KB per partecipante). Tradeoff accettato per Sprint 2; in Sprint 3 considerare endpoint dedicato `/users/:id/avatar` con cache headers
 
 ### Limiti noti sync mobile
 
@@ -270,19 +285,23 @@ trento-smart-mountain/
 - [x] Anti-cheat enforcement server-side (birthDate, caiLevel) — fix critico 26/05
 - [x] Discriminator persistence (Hiker fields via $set/$inc) — fix critico 26/05
 - [x] Auto-seed quizzes al boot del server (idempotente)
+- [x] Foto profilo utente (avatar) end-to-end — sessione serale 26/05: privacy gate fix, componente `AvatarImage` riusabile, EXIF rotation, foto visibile in ProfileScreen/ProfileViewScreen/PartecipantsCard, long-press per rimuovere
 - [ ] D3 documentation (in scrittura)
+- [ ] M4 (Milestone 4) — deadline 07/06/2026, scheletro `docs/M4_ID6_Ingegneria_del_Software.md` creato in worktree `.claude/`
 
 ### Sprint 3 (planned)
 
 - [ ] BLE Mesh SOS prototype
-- [ ] OAuth Google
-- [ ] Sentry integration
-- [ ] CI con npm audit gate
-- [ ] Migration Room esplicita (no più fallbackToDestructive)
-- [ ] Refresh token rotation (access 15min + refresh 30d)
-- [ ] WorkManager per sync robusto quando OS killa l'app
-- [ ] CMS web admin per quiz (oggi seed JSON)
+- [ ] OAuth Google login
+- [ ] Sentry integration + logging strutturato (Pino)
+- [ ] CI con `npm audit` gate
+- [ ] Recovery dialog post-crash WAL (UX prompt per riprendere il tracking interrotto)
+- [ ] WorkManager per sync robusto anche quando OS killa l'app
+- [ ] CMS web admin per quiz (oggi seed JSON in repo)
 - [ ] Modalità gara quiz (timer per domanda + leaderboard)
+- [ ] Endpoint dedicato `/users/:id/avatar` (estrazione blob dai populate sessione, cache headers ETag)
+- [ ] Audit trail admin (chi ha eliminato chi, change-role events)
+- [ ] Rate limit con store Redis (preparazione per multi-instance Render paid)
 
 ---
 
@@ -580,3 +599,172 @@ rimane TODO Sprint 3.
 - **Mobile build:** `compileDebugKotlin` BUILD SUCCESSFUL, solo deprecation warnings
 - **Audit Gemini:** 9/9 azioni richieste implementate (8 fatte tra notte+pomeriggio,
   1 parziale già documentata)
+
+---
+
+## 10. Sessione serale 26/05/2026 — Feature foto profilo end-to-end
+
+Sessione richiesta esplicitamente dall'utente ("sto cercando di implementare la
+foto profilo con scarso successo, aiutami a sistemarla"). Il lavoro pregresso
+sul branch `UI` (5 commit avatar) aveva già messo le fondamenta ma con problemi
+strutturali che impedivano alla foto di apparire correttamente, soprattutto
+nelle altre schermate. Tutti i fix completati in-session.
+
+### 10.1 Sintomo originale e root cause
+
+**Sintomo riportato:** "Upload OK ma foto non appare."
+
+**Root cause (3 cause concorrenti, tutte fixate):**
+
+1. **`BitmapFactory.decodeByteArray` ritornava `null` → Box vuoto** — il codice
+   inline in `ProfileScreen.kt` aveva `if (bitmap != null) Image(...)` ma
+   nessun ramo `else` con fallback. Una qualsiasi decode fallita (Base64
+   corrotto, char extra) lasciava un cerchio vuoto.
+2. **Decodifica Base64 ad ogni ricomposizione su main thread** — non c'era
+   `remember(avatarUrl)` → ogni cambio di stato ridecodificava ~100 KB di
+   bytes su UI thread (jank + spreco batteria).
+3. **`personalInfo` response merge debole** — se il body del `PATCH` arrivava
+   troncato o senza il sub-document completo, lo state restava col vecchio
+   `personalInfo` (senza il nuovo avatarUrl) e l'UI mostrava le iniziali.
+
+### 10.2 Fix critici backend
+
+#### `User.avatarUrl` morto rimosso
+
+`backend/src/models/user.js`: il campo `avatarUrl` era nello schema base ma
+**nessuno scriveva/leggeva** lì (tutti gli write andavano su
+`Hiker.personalInfo.avatarUrl`). Source of truth ora univoca →
+`Hiker.personalInfo.avatarUrl`.
+
+#### Privacy gate (`utils/userPrivacy.js`)
+
+`stripPrivateFields` cancellava l'**intero** `personalInfo` per gli "other
+viewer", impedendo di mostrare l'avatar nei partecipanti delle sessioni.
+
+**Fix:** introduzione di `PERSONAL_INFO_PUBLIC_FIELDS = ["avatarUrl"]`. Per
+viewer "other" ora:
+- `personalInfo` mantiene solo `avatarUrl` (gli altri campi sex/birthDate/
+  heightCm/weightKg restano privati)
+- Se nessun campo pubblico è valorizzato → la chiave viene rimossa per non
+  sporcare la response con un oggetto vuoto
+
+#### Populate sessioni
+
+`backend/src/services/hikeSessionService.js`: 8 occorrenze di
+`populate(..., "username email")` → `"username email personalInfo.avatarUrl"`
+(creatorId + participants.userId in createSession, getSessionById,
+getSessionsByUser, updateSessionDetails).
+
+#### Validazione Joi stretta
+
+`backend/src/middleware/validationMiddleware.js`: nuovo
+`avatarDataUriField` con pattern stretto
+`^data:image/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$` + messaggi custom.
+Accetta `""` per il flow "rimuovi foto" (`.allow(null, "")` bypassa il
+pattern, by design Joi).
+
+#### Body limit a 5 MB
+
+`backend/src/middleware/securityMiddleware.js`: `requestSizeLimit` portato
+da "2mb" a "5mb" (commit del lavoro pregresso uncommitted in branch UI).
+Lascia margine per foto 500 px JPEG q70 anche a quality più alta in futuro.
+
+### 10.3 Componente mobile riusabile
+
+#### `ui/components/AvatarImage.kt` (nuovo)
+
+Composable circolare riusabile in tutta l'app:
+
+- **Decode Base64 memoizzato** con `remember(avatarUrl)` → un solo decode per
+  ogni valore distinto di URL (risolve causa #2).
+- **Fallback iniziali** se decode fallisce o URL è null/blank (risolve causa #1).
+- **Colore di sfondo deterministico** dal hash dello username — stesso utente
+  sempre stesso colore (palette 8 tonalità outdoor).
+- **Overlay loader** (parametro `isLoading: Boolean`) → CircularProgressIndicator
+  bianco su sfondo semi-trasparente sopra l'avatar quando il VM sta uploadando
+  o rimuovendo.
+- **Helpers visibili al test**: `initialsFrom(name)`, `deterministicAvatarColor(seed)`.
+
+#### `ui/util/AvatarUtils.kt` (nuovo)
+
+Utility per gestire la foto end-to-end:
+
+- `loadOrientedBitmapFromUri(resolver, uri)`: legge bytes, parsea EXIF tag
+  `TAG_ORIENTATION`, applica `Matrix.postRotate` (gestisce ROTATE_90/180/270 +
+  FLIP_HORIZONTAL/VERTICAL + TRANSPOSE/TRANSVERSE). Risolve foto camera in
+  portrait che apparivano ruotate.
+- `downscaleToBox(bitmap, maxSide=500)`: usa il lato **maggiore** (non solo
+  width come il vecchio codice) così foto verticali non restano enormi sull'altezza.
+- `encodeToDataUri(bitmap, q=70)`: JPEG + `Base64.NO_WRAP` (no newline → safe
+  per JSON + regex Joi).
+- `decodeDataUri(dataUri)`: robusto sui prefissi (taglia fino a `base64,`),
+  ritorna `null` invece di crashare.
+- `prepareAvatarForUpload(resolver, uri)`: pipeline completa che il
+  `ProfileScreen` invoca su `Dispatchers.IO`.
+
+### 10.4 Wiring nelle schermate
+
+#### `ui/screens/profile/ProfileScreen.kt`
+
+- Photo picker (`ActivityResultContracts.GetContent`) ora delega ad
+  `AvatarUtils.prepareAvatarForUpload` in `withContext(Dispatchers.IO)`.
+- Avatar 64 dp interattivo: `combinedClickable` con tap = picker, long-press =
+  dialog "Rimuovi foto" (visibile solo se `hasAvatar`).
+- Icona badge cambiata da `Settings` a `CameraAlt` per chiarezza UX.
+- `LaunchedEffect` su `sectionSuccess/sectionError` → Toast + clear messages.
+
+#### `ui/screens/profile/ProfileViewScreen.kt`
+
+- Aggiunto header row con `AvatarImage` 88 dp + username + email sopra le
+  sezioni dati. Prima era solo testo.
+
+#### `ui/screens/session/SessionDetailScreen.kt` (PartecipantsCard)
+
+- Sostituito il Box con iniziali colorate (`avatarColorFor` rimosso) con
+  `AvatarImage` 40 dp. Wrapper esterno mantiene il bordo accent per il
+  creator senza interferire con il clip circolare.
+- Foto reale dei partecipanti ora visibile grazie al populate aggiornato
+  lato backend (sezione 10.2).
+
+### 10.5 ViewModel changes
+
+`ProfileV2ViewModel.kt`:
+
+- **`uploadAvatar(dataUri)`** ora merge-safe: se `resp.body()?.personalInfo`
+  è null (caso patologico response gzip troncata), fa fallback al
+  `_state.personalInfo?.copy(avatarUrl = dataUri)` invece di perdere il
+  nuovo URL (risolve causa #3 della root cause).
+- **`removeAvatar()` (nuovo)**: optimistic update (UI mostra subito le
+  iniziali) + rollback automatico se il server risponde errore. Invia
+  `avatarUrl=""` (accettato da Joi via `.allow("")`).
+
+### 10.6 Build & dipendenze
+
+- Nuova dep: `androidx.exifinterface:1.3.7` in `libs.versions.toml` +
+  `app/build.gradle.kts`.
+- DTO update: `SessionUserInfo` ora ha `personalInfo: SessionUserPersonalInfo?`
+  con helper `.avatarUrl` (proxy del campo nested).
+
+### Stato finale build & test (sessione serale)
+
+- **Backend test:** 88/89 verdi (1 test `POST /auth/register/hiker` fallisce
+  per `BREVO_API_KEY` mancante in env di test — **pre-esistente**, nessuna
+  delle 5 modifiche backend tocca quel path; mockare `emailService` lo
+  renderebbe hermetico, è in tech debt).
+- **Mobile build:** `compileDebugKotlin` BUILD SUCCESSFUL in 1m 7s, solo
+  deprecation warnings pre-esistenti (TokenStorage EncryptedSharedPreferences,
+  Room `fallbackToDestructiveMigration`, alcune Icons.Outlined → AutoMirrored).
+- **File toccati totali:** 5 backend (user.js, userPrivacy.js,
+  hikeSessionService.js, validationMiddleware.js, securityMiddleware.js)
+  + 6 mobile (SessionResponse.kt, ProfileV2ViewModel.kt, ProfileScreen.kt,
+  ProfileViewScreen.kt, SessionDetailScreen.kt, libs.versions.toml +
+  app/build.gradle.kts) + 2 nuovi mobile (AvatarImage.kt, AvatarUtils.kt).
+
+### Lezione di processo (consolidata da Sprint 1 + Sprint 2)
+
+Anche stavolta vale il pattern visto nelle sessioni notturna e pomeridiana
+del 26/05: **un sintomo riportato in UI (qui "foto non appare") aveva 3
+cause concorrenti** (no fallback decode, no memoization, weak state merge),
+solo una delle quali era ovvia dal codice. Senza l'audit a 2 passi prima
+del commit, due delle tre sarebbero rimaste in produzione e il "bug" sarebbe
+ricomparso a colpi singoli su utenti diversi.

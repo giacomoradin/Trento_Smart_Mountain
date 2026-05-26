@@ -69,8 +69,33 @@ object TsmMigrations {
   }
 
   /**
+   * v5 → v6: tabella `pending_emergencies` (coda SOS offline, merge branch SOS).
+   * `IF NOT EXISTS` per installazioni che avevano già v5 dal branch SOS.
+   */
+  val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+      db.execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS `pending_emergencies` (
+          `idempotencyKey` TEXT NOT NULL,
+          `sessionId` TEXT NOT NULL,
+          `emergencyType` TEXT NOT NULL,
+          `longitude` REAL NOT NULL,
+          `latitude` REAL NOT NULL,
+          `beaconInstanceId` TEXT NOT NULL,
+          `createdAtMs` INTEGER NOT NULL,
+          `retryCount` INTEGER NOT NULL,
+          `lastError` TEXT,
+          PRIMARY KEY(`idempotencyKey`)
+        )
+        """.trimIndent(),
+      )
+    }
+  }
+
+  /**
    * Tutte le migration esplicite registrate, in ordine cronologico.
    * Passate a Room via `Room.databaseBuilder(...).addMigrations(*ALL)`.
    */
-  val ALL: Array<Migration> = arrayOf(MIGRATION_4_5)
+  val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6)
 }

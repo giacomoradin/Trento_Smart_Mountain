@@ -25,6 +25,7 @@ import {
   completeSession,
   getActivityStats,
 } from "../services/hikeSessionService.js";
+import { listSessionEmergencies } from "../services/emergencyService.js";
 
 const router = express.Router();
 
@@ -109,6 +110,22 @@ router.get("/my", async (req, res, next) => {
     res.status(200).json(sessions);
   } catch (err) {
     next(err);
+  }
+});
+
+// GET /api/v1/sessions/:id/emergencies — SOS attivi per sessione
+router.get("/:id/emergencies", validate(idParamSchema, "params"), async (req, res) => {
+  try {
+    const result = await listSessionEmergencies(req.params.id, req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    if (err.message === "SESSION_NOT_FOUND") {
+      return res.status(404).json({ error: err.message });
+    }
+    if (err.message === "FORBIDDEN") {
+      return res.status(403).json({ error: err.message });
+    }
+    res.status(500).json({ error: "Errore recupero emergenze" });
   }
 });
 

@@ -353,3 +353,58 @@ export const preferencesSchema = Joi.object({
     profileVisibility: Joi.string().valid("public", "friends", "private"),
   }),
 }).min(1);
+
+// ── Emergenze SOS ───────────────────────────────────────────────────────
+
+const emergencyTypeField = Joi.string().valid(
+  "INJURY",
+  "LOST",
+  "AVALANCHE",
+  "WEATHER",
+  "EQUIPMENT",
+  "OTHER",
+);
+
+const profileSnapshotSchema = Joi.object({
+  displayName: Joi.string().min(1).max(80).required(),
+  personalInfo: Joi.object({
+    sex: Joi.string().valid("M", "F", "X", "N"),
+    birthDate: Joi.date().iso(),
+    heightCm: Joi.number().integer().min(100).max(230),
+    weightKg: Joi.number().min(30).max(250),
+  }),
+  experience: Joi.object({
+    caiLevel: difficultyField,
+    baselineFitness: Joi.string().valid(
+      "sedentary",
+      "active",
+      "sport",
+      "athlete",
+    ),
+    weeklyTrainingFreq: Joi.string().valid("0-1", "2-3", "4+"),
+  }),
+});
+
+export const createEmergencySchema = Joi.object({
+  sessionId: objectIdField.required(),
+  emergencyType: emergencyTypeField.required(),
+  coordinates: geoPointSchema.required(),
+  beaconInstanceId: Joi.string()
+    .pattern(/^[0-9a-fA-F]{12}$/)
+    .required(),
+  idempotencyKey: Joi.string().uuid({ version: "uuidv4" }).required(),
+  signature: Joi.string().max(512).allow(null, ""),
+  beaconActive: Joi.boolean().optional().default(true),
+  profileSnapshot: profileSnapshotSchema,
+});
+
+export const patchEmergencySchema = Joi.object({
+  action: Joi.string()
+    .valid("cancel", "dismiss", "share_with_group", "unshare_with_group", "ack")
+    .required(),
+  reason: Joi.string().valid("MISTAKE", "RESOLVED_SELF").when("action", {
+    is: "cancel",
+    then: Joi.optional(),
+    otherwise: Joi.forbidden(),
+  }),
+});

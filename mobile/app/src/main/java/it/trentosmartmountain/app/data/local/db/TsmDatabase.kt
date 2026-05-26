@@ -19,7 +19,8 @@ import androidx.room.RoomDatabase
   //     (sync libere → POST /activities, sync sessioni → PATCH /complete).
   // v5: nuova tabella `tracking_wal` (crash-safety GPS — vedi TrackingWalEntity).
   //     Migration esplicita in TsmMigrations.MIGRATION_4_5 → niente data loss.
-  version = 5,
+  // v6: coda SOS offline (`pending_emergencies`) — merge branch SOS.
+  version = 6,
   exportSchema = false,
 )
 abstract class TsmDatabase : RoomDatabase() {

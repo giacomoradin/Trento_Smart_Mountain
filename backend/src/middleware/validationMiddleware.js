@@ -251,6 +251,8 @@ export const personalInfoSchema = Joi.object({
   birthDate: Joi.date().iso().min("1900-01-01").max("now"),
   heightCm: Joi.number().integer().min(100).max(230),
   weightKg: Joi.number().min(30).max(250),
+  // Avatar in Base64 (max 3MB di caratteri per sicurezza su payload da 2MB binari)
+  avatarUrl: Joi.string().max(3 * 1024 * 1024).allow(null, ""),
 }).min(1);
 
 export const experienceSchema = Joi.object({

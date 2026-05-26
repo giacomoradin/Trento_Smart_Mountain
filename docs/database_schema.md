@@ -331,9 +331,65 @@ activities.startPoint_2dsphere         // sparse, per query geografiche future
 
 ---
 
+### 1.5 Collezione `emergencies`
+
+**Modello**: `backend/src/models/emergency.js`  
+**Collection MongoDB**: `emergencies`  
+**Branch**: `SOS` (US-19 MVP)
+
+Segnalazioni SOS legate a una `hikesessions` in stato `ACTIVE`. Il payload sensibile viaggia su HTTPS; il beacon BLE espone solo `beaconInstanceId` (vedi `docs/sos_feature.md`).
+
+#### Schema
+
+```javascript
+{
+  _id: ObjectId,
+  sessionId: ObjectId,              // ref HikeSession, required, indexed
+  senderUserId: ObjectId,           // ref User, required, indexed
+  emergencyType: String,          // INJURY | LOST | AVALANCHE | WEATHER | EQUIPMENT | OTHER
+  coordinates: {                    // GeoJSON Point — snapshot all'invio, non aggiornato
+    type: "Point",
+    coordinates: [Number],          // [longitude, latitude]
+  },
+  profileSnapshot: {
+    displayName: String,            // required (username al momento SOS)
+    personalInfo: { sex, birthDate, heightCm, weightKg },
+    experience: { caiLevel, baselineFitness, weeklyTrainingFreq },
+  },
+  status: String,                   // ACTIVE | SHARED_WITH_GROUP | DISMISSED | CANCELLED_BY_SENDER
+  beaconInstanceId: String,         // 12 hex, required
+  beaconActive: Boolean,            // default true — false se mittente senza beacon BLE
+  idempotencyKey: String,           // UUID v4, unique
+  signature: String,                // null — riservato Ed25519 (Sprint successivo)
+  cancelReason: String,             // MISTAKE | RESOLVED_SELF (solo cancel)
+  leaderAckAt: Date,
+  sharedAt: Date,
+  dismissedAt: Date,
+  dismissedBy: ObjectId,
+  cancelledAt: Date,
+  cancelledBy: ObjectId,
+  createdAt: Date,
+}
+```
+
+#### Indici
+
+```javascript
+emergencies.sessionId_1_status_1_createdAt_-1   // lista SOS per sessione
+emergencies.idempotencyKey_1                    // unique — idempotenza POST
+```
+
+#### Note operative
+
+- **Visibilità**: capogruppo vede `ACTIVE` + `SHARED_WITH_GROUP`; partecipante vede `SHARED_WITH_GROUP` e proprie `ACTIVE`.
+- **Idempotenza**: stesso `idempotencyKey` + stesso `senderUserId` → `200` con documento esistente.
+- **Nessun TTL** su `idempotencyKey` nel modello attuale (la tabella proposta sotto con TTL 30g non è ancora applicata).
+
+---
+
 ## 2. Mobile — Room Database
 
-Database: `TsmDatabase` (file `tsm.db`), **versione 4** (bump Sprint 2: campi `retry_count`, `last_retry_at_ms`, `remote_id` aggiunti a `completed_activities` per il SyncManager con backoff incrementale).
+Database: `TsmDatabase` (file `tsm.db`), **versione 5** (coda `pending_emergencies` per SOS offline). Versione 4: campi sync su `completed_activities`.
 **File**: `mobile/.../data/local/db/TsmDatabase.kt`
 
 ### 2.1 Entità `CachedUserProfileEntity`
@@ -388,7 +444,30 @@ data class CompletedActivityEntity(
 
 ---
 
-### 2.3 Migration strategy
+### 2.3 Entità `PendingEmergencyEntity`
+
+```kotlin
+@Entity(tableName = "pending_emergencies")
+data class PendingEmergencyEntity(
+    @PrimaryKey val idempotencyKey: String,
+    val sessionId: String,
+    val emergencyType: String,
+    val longitude: Double,
+    val latitude: Double,
+    val beaconInstanceId: String,
+    val createdAtMs: Long,
+    val retryCount: Int = 0,
+    val lastError: String? = null,
+)
+```
+
+**Uso**: `POST /emergencies` in coda se offline; flush via `EmergencyUploadWorker` (WorkManager) e retry in `RegistraViewModel`.
+
+**DAO**: `PendingEmergencyDao` — `upsert`, `getAll`, `deleteByKey`, `count`.
+
+---
+
+### 2.4 Migration strategy
 
 Attualmente Room è configurato con `fallbackToDestructiveMigration()` in `TsmDatabase.kt` — accettabile in dev, **da rimuovere prima del Play Store** (Sprint 3+).
 
@@ -527,8 +606,8 @@ Trigger automatico: SessionDetailViewModel.loadMeteo(session)
 | `hikesessions` | `participants.userId_1` | idem |
 | `hikesessions` | `status_1 + meetingDate_1` (compound) | filtro "sessioni future ATTIVE" — dopo migration M2 |
 | `users` | `role_1` | dashboard admin |
-| nuovo `emergencies` | `userId + createdAt_-1` (compound) | history SOS |
-| nuovo `emergencies` | `idempotencyKey_1` (unique, TTL 30g) | idempotenza |
+| `emergencies` | `sessionId_1 + status_1 + createdAt_-1` | lista SOS per sessione (implementato branch `SOS`) |
+| `emergencies` | `idempotencyKey_1` (unique) | idempotenza POST (implementato) |
 
 ### 5.3 Query pattern critici
 
@@ -542,4 +621,4 @@ Trigger automatico: SessionDetailViewModel.loadMeteo(session)
 
 ---
 
-*Database schema doc — Sprint 1 chiuso 17/05/2026. Aggiornare ad ogni schema change con script migration documentato.*
+*Database schema doc — aggiornato 26/05/2026 (collezione `emergencies`, Room `pending_emergencies`).*

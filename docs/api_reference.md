@@ -2,7 +2,7 @@
 
 > Reference human-readable degli endpoint REST del backend TSM, complementare al Swagger autogenerato (`swagger-output.json` → UI su `/api-docs`).
 >
-> **Ultima revisione**: 17/05/2026 — Post-refactor discriminator Mongoose (user → hiker/refuge/admin).
+> **Ultima revisione**: 26/05/2026 — Emergenze SOS (branch `SOS`); refactor discriminator Mongoose (user → hiker/refuge/admin).
 > **Base URL produzione**: `https://trento-smart-mountain-xz7u.onrender.com`
 > **Base URL dev**: `http://10.0.2.2:3000` (emulator) / `http://localhost:3000` (Postman dev).
 
@@ -671,7 +671,124 @@ Elimina un'attività libera.
 
 ---
 
-## 6. Meteo (`/weather`)
+## 6. Emergenze SOS (`/api/v1/emergencies`)
+
+Segnalazioni in sessione **ACTIVE** only. Flusso mobile e beacon: `docs/sos_feature.md`.
+
+**Auth:** 🔐 JWT su tutti gli endpoint. Partecipante sessione richiesto.
+
+### Stati `status`
+
+| Valore | Descrizione |
+|--------|-------------|
+| `ACTIVE` | Nuovo SOS; visibile al capogruppo (e al mittente) |
+| `SHARED_WITH_GROUP` | Condiviso con tutti i partecipanti |
+| `DISMISSED` | Chiuso dal capogruppo |
+| `CANCELLED_BY_SENDER` | Annullato dal mittente |
+
+### `POST /api/v1/emergencies`
+
+Crea SOS (idempotente). Il server costruisce `profileSnapshot` dall’utente autenticato se omesso nel body.
+
+#### Body
+
+```json
+{
+  "sessionId": "67d8...",
+  "emergencyType": "INJURY",
+  "coordinates": { "type": "Point", "coordinates": [11.12, 46.07] },
+  "beaconInstanceId": "a1b2c3d4e5f6",
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440000",
+  "beaconActive": true,
+  "signature": null
+}
+```
+
+| Campo | Tipo | Obbligatorio | Note |
+|-------|------|--------------|------|
+| `sessionId` | ObjectId | sì | Sessione `ACTIVE` |
+| `emergencyType` | string | sì | `INJURY`, `LOST`, `AVALANCHE`, `WEATHER`, `EQUIPMENT`, `OTHER` |
+| `coordinates` | GeoJSON Point | sì | **Snapshot** GPS all’invio (non aggiornato dopo) |
+| `beaconInstanceId` | string | sì | 12 caratteri hex |
+| `idempotencyKey` | UUID v4 | sì | Retry sicuro |
+| `beaconActive` | boolean | no | default `true`; `false` = SOS senza beacon BLE |
+| `signature` | string | no | Riservato Ed25519 (non verificato) |
+
+#### Response
+
+| Code | Body |
+|------|------|
+| `201` | Emergenza creata (`status: ACTIVE`) |
+| `200` | Stessa `idempotencyKey` già usata dallo stesso mittente |
+| `403` | `FORBIDDEN` |
+| `404` | `SESSION_NOT_FOUND` |
+| `409` | `SESSION_NOT_ACTIVE` |
+| `422` | Validazione Joi fallita |
+
+---
+
+### `GET /api/v1/emergencies/:id`
+
+Dettaglio singola emergenza (populate `senderUserId`, `sessionId`).
+
+| Code | Note |
+|------|------|
+| `200` | Documento emergenza |
+| `403` | `FORBIDDEN` (regole visibilità) |
+| `404` | `EMERGENCY_NOT_FOUND` |
+
+---
+
+### `PATCH /api/v1/emergencies/:id`
+
+#### Body
+
+```json
+{ "action": "share_with_group" }
+```
+
+```json
+{ "action": "cancel", "reason": "MISTAKE" }
+```
+
+| `action` | Chi | Effetto |
+|----------|-----|---------|
+| `cancel` | Mittente | `CANCELLED_BY_SENDER`; `reason` opzionale: `MISTAKE`, `RESOLVED_SELF` |
+| `dismiss` | Capogruppo | `DISMISSED` |
+| `share_with_group` | Capogruppo | `ACTIVE` → `SHARED_WITH_GROUP` |
+| `unshare_with_group` | Capogruppo | `SHARED_WITH_GROUP` → `ACTIVE` |
+| `ack` | Capogruppo | Imposta `leaderAckAt` (non cambia `status`) |
+
+| Code | Note |
+|------|------|
+| `200` | Emergenza aggiornata |
+| `403` | `FORBIDDEN` |
+| `409` | `EMERGENCY_ALREADY_CLOSED`, `INVALID_STATE_TRANSITION` |
+
+---
+
+### `GET /api/v1/sessions/:id/emergencies`
+
+Lista emergenze **aperte** per la sessione (route su `hikeSessionRoutes`).
+
+#### Response 200
+
+```json
+{
+  "emergencies": [ { /* Emergency populated */ } ],
+  "isGroupLeader": true,
+  "hasUnacked": true
+}
+```
+
+| Campo | Note |
+|-------|------|
+| `emergencies` | Capo: `ACTIVE` + `SHARED_WITH_GROUP`. Partecipante: `SHARED_WITH_GROUP` + proprie `ACTIVE`. |
+| `hasUnacked` | `true` se capogruppo e almeno un SOS senza `leaderAckAt` |
+
+---
+
+## 7. Meteo (`/weather`)
 
 ### `GET /weather/locations/nearby`
 
@@ -793,7 +910,7 @@ Popola il DB con towns + POI da API TINIA. Da chiamare al primo avvio.
 
 ---
 
-## 7. Errori comuni & troubleshooting
+## 8. Errori comuni & troubleshooting
 
 | Sintomo | Causa probabile | Fix |
 |---------|-----------------|-----|
@@ -807,13 +924,10 @@ Popola il DB con towns + POI da API TINIA. Da chiamare al primo avvio.
 
 ---
 
-## 7. Endpoint pianificati Sprint 2+
+## 9. Endpoint pianificati Sprint 2+
 
 | Method | Path | US | Note |
 |--------|------|-----|------|
-| `POST` | `/api/v1/emergencies` | US-19 | SOS; `coordinates` = snapshot GPS all’invio (vedi `docs/sos_feature.md`) |
-| `PATCH` | `/api/v1/emergencies/:id` | US-19 | Validazione/cancellazione capogruppo |
-| `GET` | `/api/v1/sessions/:id/emergencies` | US-19 | Lista SOS sessione |
 | `POST` | `/api/v1/sessions/:id/telemetry` | US-21 | Batch GPS upload |
 | `GET` | `/api/v1/sessions/:id/positions` | US-22 | Posizioni live partecipanti (mappa sessione; sostituisce aggiornamento coordinate in dettaglio SOS) |
 | `GET` | `/api/v1/feed/public` | US-20 | Social feed home |
@@ -821,7 +935,7 @@ Popola il DB con towns + POI da API TINIA. Da chiamare al primo avvio.
 
 ---
 
-## 8. Riferimento alternativo
+## 10. Riferimento alternativo
 
 - **Swagger UI**: `http://localhost:3000/api-docs` (interattivo, prova le request inline)
 - **Swagger JSON**: `swagger-output.json` nella root del repo
@@ -829,4 +943,4 @@ Popola il DB con towns + POI da API TINIA. Da chiamare al primo avvio.
 
 ---
 
-*API Reference — Sprint 1 chiuso 17/05/2026. Aggiornare insieme a Swagger ad ogni nuova route o cambio contract.*
+*API Reference — aggiornato 26/05/2026 (§6 Emergenze SOS). Aggiornare insieme a Swagger ad ogni nuova route o cambio contract.*

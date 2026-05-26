@@ -103,34 +103,38 @@
 
 **User Story:** Come **escursionista in difficoltà** voglio inviare un segnale SOS con le mie coordinate, così da ricevere soccorso il prima possibile.
 
-**Stato 17/05:** UI SOS dialog implementata in `RegistraScreen` (TC-17 PARTIAL). Backend non esiste.
+**Stato 26/05 (branch `SOS`):** MVP SOS sessione ACTIVE implementato (backend + mobile). Dettaglio: `docs/sos_feature.md`, API: `docs/api_reference.md` § Emergenze.
 
-**Da fare Sprint 2:**
+#### Implementato (branch `SOS`)
 
-#### Backend
-1. Modello `Emergency`:
-   ```javascript
-   { userId, sessionId, coordinates (GeoJSON), emergencyType, signature (Ed25519), timestamp, hopCount, status (PENDING/VALIDATED/FORWARDED/CANCELLED) }
-   ```
-2. Endpoint `POST /api/v1/emergencies`:
-   - Verifica firma ECC Ed25519 con chiave pubblica utente.
-   - Status iniziale: `PENDING`.
-   - Idempotency: `idempotencyKey` UUID v4 nel body.
-3. Endpoint `PATCH /api/v1/emergencies/:id` per validazione/cancellazione capogruppo.
-4. Endpoint `GET /api/v1/sessions/:id/emergencies` per dashboard capogruppo.
+**Backend**
+- Modello `Emergency`: snapshot GPS, `profileSnapshot`, `beaconInstanceId`, `beaconActive`, stati `ACTIVE` \| `SHARED_WITH_GROUP` \| `DISMISSED` \| `CANCELLED_BY_SENDER`
+- `POST /api/v1/emergencies` (idempotente su `idempotencyKey` UUID v4)
+- `GET /api/v1/emergencies/:id`, `PATCH` con azioni `cancel`, `dismiss`, `share_with_group`, `unshare_with_group`, `ack`
+- `GET /api/v1/sessions/:id/emergencies` (lista + `isGroupLeader`, `hasUnacked`)
+- Test: `backend/__tests__/routes/emergency.test.js`
 
-#### Mobile
-5. Generazione coppia chiavi ECC Ed25519 al primo login (via Android Keystore o Tink).
-6. Salvataggio chiave pubblica su backend al login.
-7. SOS dialog → conferma → API call con timer 5s "Annulla" (Falso Allarme).
-8. Cache locale offline se rete mancante (Room: `pending_emergencies`).
+**Mobile**
+- Invio SOS con countdown, dialog conferma/annulla, beacon BLE TSM (`SosBeaconService`)
+- Dialog BT mittente; invio senza beacon (`beaconActive: false`)
+- Ricezione capogruppo/partecipanti: poll 8s, notifica locale, dettaglio, scanner RSSI
+- Coda offline Room + WorkManager (`pending_emergencies`, `EmergencyUploadWorker`)
+- Revoca condivisione gruppo (`unshare_with_group`)
 
-**Acceptance criteria:**
-- Nuovo TC-21: SOS con device offline → cache locale → invio automatico al ritorno della rete.
-- Firma ECC verificata server-side.
+#### Ancora da fare (US-19 completa / Sprint successivo)
+
+1. Firma **Ed25519** sul payload + verifica server (`signature` opzionale oggi, non verificata).
+2. Registrazione chiave pubblica utente (`POST /users/:id/publicKey`).
+3. Inoltro verso soccorsi / CNSAS (US backlog).
+4. Swagger annotato per emergenze.
+5. Allineare coda offline con `beaconActive` se si invia SOS senza beacon da offline.
+
+**Acceptance criteria (parziale):**
+- TC-21: SOS offline → coda Room → upload a rete (WorkManager + retry ViewModel) — **coperto**.
+- Firma ECC verificata server-side — **non ancora**.
 
 **Volunteer:** Marco (backend) + Giacomo (mobile)
-**Stima:** 8 SP
+**Stima residua:** ~3 SP (ECC + publicKey + Swagger)
 
 ---
 

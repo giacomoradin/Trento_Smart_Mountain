@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
 
+import mongoose from "mongoose";
 /**
  * Mongoose Schema for Mountain Pathways (Sentieri SAT)
  * 
@@ -175,4 +175,4 @@ sentieroSchema.statics.findByDifficulty = function(difficulties) {
 
 const Sentiero = mongoose.model('Sentiero', sentieroSchema);
 
-module.exports = Sentiero;
+export default Sentiero;

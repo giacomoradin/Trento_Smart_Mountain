@@ -25,7 +25,7 @@ async function autoSeedQuizzes() {
 
   console.log("[seed] Collezione quiz vuota — avvio auto-seed...");
   const data = JSON.parse(
-    readFileSync(join(__dirname, "../../seed/quizzes.json"), "utf8"),
+    readFileSync(join(__dirname, "../seed/quizzes.json"), "utf8"),
   );
 
   const categoryIdBySlug = {};

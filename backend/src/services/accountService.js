@@ -205,10 +205,13 @@ export async function updatePersonalInfo(userId, data) {
   if (data.birthDate !== undefined) {
     const existing = await Hiker.findById(userId).select("personalInfo.birthDate").lean();
     if (existing?.personalInfo?.birthDate) {
-      // Confronto ISO string (YYYY-MM-DD) per evitare falsi positivi da oggetti Date/Timestamp.
-      const existingIso = existing.personalInfo.birthDate.toISOString().split("T")[0];
-      const newIso = new Date(data.birthDate).toISOString().split("T")[0];
-      if (existingIso !== newIso) {
+      const d1 = new Date(existing.personalInfo.birthDate);
+      const d2 = new Date(data.birthDate);
+      // Confronto esatto di YYYY-MM-DD
+      const isSameDate = d1.getUTCFullYear() === d2.getUTCFullYear() &&
+                         d1.getUTCMonth() === d2.getUTCMonth() &&
+                         d1.getUTCDate() === d2.getUTCDate();
+      if (!isSameDate) {
         throw new LockedFieldError("birthDate");
       }
     }

@@ -173,6 +173,7 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _state.value = _state.value.copy(isSavingSection = true, sectionError = null, sectionSuccess = null)
             runCatching {
+                // Inviamo solo l'avatarUrl, gli altri campi restano invariati sul server
                 api.updatePersonalInfo(PersonalInfo(avatarUrl = base64))
             }.onSuccess { resp ->
                 if (resp.isSuccessful) {

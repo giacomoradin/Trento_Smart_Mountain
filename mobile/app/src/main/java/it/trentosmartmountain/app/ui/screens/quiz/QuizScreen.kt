@@ -143,6 +143,9 @@ fun QuizScreen(
                 }
                 is QuizState.Result -> {
                     LaunchedEffect(s) { onResult(s.submission, s.quiz.id, s.quiz.title) }
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = AccentCyan)
+                    }
                 }
                 is QuizState.AllCompleted -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {

@@ -157,16 +157,40 @@ fun ProfileScreen(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF2D5A2D)),
+                            .background(Color(0xFF2D5A2D))
+                            .clickable {
+                                // TODO: Implementare Image Picker per caricamento reale.
+                                // Per ora mostriamo un feedback visivo.
+                                Toast.makeText(context, "Caricamento foto in arrivo!", Toast.LENGTH_SHORT).show()
+                            },
                         contentAlignment = Alignment.Center,
                     ) {
-                        val initials = uiState.username?.take(2)?.uppercase() ?: "??"
-                        Text(
-                            text = initials,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp,
-                        )
+                        val avatarUrl = profileV2State.personalInfo?.avatarUrl
+                        if (!avatarUrl.isNullOrBlank()) {
+                            // Placeholder per immagine reale (in produzione usare Coil/Glide)
+                            Box(Modifier.fillMaxSize().background(AccentCyan)) {
+                                Text("IMG", color = Color.Black, modifier = Modifier.align(Alignment.Center))
+                            }
+                        } else {
+                            val initials = uiState.username?.take(2)?.uppercase() ?: "??"
+                            Text(
+                                text = initials,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                            )
+                        }
+                        // Icona overlay per indicare che è modificabile
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .align(Alignment.BottomEnd)
+                                .background(TsmPrimary, CircleShape)
+                                .border(1.dp, Color.White, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                        }
                     }
                     Spacer(Modifier.width(16.dp))
                     Column {
@@ -486,6 +510,24 @@ fun ProfileScreen(
                         Text("Account e dati personali", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                     }
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // ── Logout entry row ────────────────────────────────
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { viewModel.logout(onLoggedOut) },
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A1A1A)),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3D1A1A)),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Text("ESCI", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                 }
             }
 

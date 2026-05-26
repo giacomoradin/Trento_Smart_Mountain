@@ -3,11 +3,12 @@ import crypto from "crypto";
 import User from "../models/user.js";
 import Hiker from "../models/hiker.js";
 
-export async function updateUser(userId, { username, email }) {
+export async function updateUser(userId, { username, email, avatarUrl }) {
   const user = await User.findById(userId);
   if (!user) throw new Error("USER_NOT_FOUND");
 
   if (username !== undefined) user.username = username;
+  if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
 
   let requiresEmailVerification = false;
   if (email !== undefined && email !== user.email) {

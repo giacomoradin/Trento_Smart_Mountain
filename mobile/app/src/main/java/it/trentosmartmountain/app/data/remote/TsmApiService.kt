@@ -291,7 +291,7 @@ interface TsmApiService {
   @POST("api/v1/users/change-password")
   suspend fun changePassword(@Body body: ChangePasswordRequest): Response<ApiMessageBody>
 
-  @DELETE("api/v1/users/me")
+  @retrofit2.http.HTTP(method = "DELETE", path = "api/v1/users/me", hasBody = true)
   suspend fun deleteAccount(@Body body: DeleteAccountRequest): Response<ApiMessageBody>
 
   @PATCH("api/v1/users/me/goals")

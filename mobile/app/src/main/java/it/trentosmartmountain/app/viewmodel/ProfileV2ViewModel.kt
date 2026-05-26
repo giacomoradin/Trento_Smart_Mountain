@@ -139,10 +139,10 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
      */
     private fun parseErrorMessage(resp: retrofit2.Response<*>): String {
         val raw = runCatching { resp.errorBody()?.string() }.getOrNull().orEmpty()
-        // Estrazione greedy del primo "message":"..." — evita di dipendere da
-        // un parser JSON dedicato per un singolo campo.
-        val match = Regex("\"message\"\\s*:\\s*\"([^\"]*)\"").find(raw)
-        return match?.groupValues?.get(1) ?: "Errore (${resp.code()})."
+        // Estrazione robusta del valore "message": gestisce anche stringhe con quote escape-ate (es. Joi).
+        // Il pattern cerca "message":" e cattura tutto fino alla chiusura quote non preceduta da backslash dispari.
+        val match = Regex("\"message\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(raw)
+        return match?.groupValues?.get(1)?.replace("\\\"", "\"") ?: "Errore (${resp.code()})."
     }
 
     fun savePersonalInfo(data: PersonalInfo) {

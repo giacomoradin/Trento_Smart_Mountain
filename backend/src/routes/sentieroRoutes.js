@@ -24,8 +24,9 @@ const router = express.Router();
 
 router.get("/", getAllSentieri);
 router.get("/stats", getStats);
-router.get("/:codice", getSentieroByCode);
 router.get("/destinazioni", getAllDestinazioni);
 router.get("/destinazioni/:nome/sentieri", getSentieriByDestination);
+router.get("/:codice", getSentieroByCode);
+
 
 export default router;

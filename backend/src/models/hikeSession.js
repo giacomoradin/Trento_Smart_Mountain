@@ -90,13 +90,13 @@ const hikSessionSchema = new Schema({
   // Popolate da PATCH /api/v1/sessions/:id/complete quando la sessione diventa COMPLETED.
   // Se presenti, sostituiscono completamente le stime CAI nella UI.
   actualStats: {
-    movingSeconds: { type: Number },       // tempo cronometrato senza pause
-    totalSeconds: { type: Number },        // tempo totale (incluso pause)
-    distanceMeters: { type: Number },      // distanza percorsa effettiva
-    elevationGainM: { type: Number },      // dislivello positivo cumulato reale
-    finalPoints: { type: Number },         // punteggio post-completamento (μ pesato)
-    estimatedCalories: { type: Number },   // kcal stimate
-    currentAltitudeM: { type: Number },    // ultima altitudine registrata
+    movingSeconds: { type: Number }, // tempo cronometrato senza pause
+    totalSeconds: { type: Number }, // tempo totale (incluso pause)
+    distanceMeters: { type: Number }, // distanza percorsa effettiva
+    elevationGainM: { type: Number }, // dislivello positivo cumulato reale
+    finalPoints: { type: Number }, // punteggio post-completamento (μ pesato)
+    estimatedCalories: { type: Number }, // kcal stimate
+    currentAltitudeM: { type: Number }, // ultima altitudine registrata
   },
 
   // Codice invito alfanumerico univoco (generato automaticamente)

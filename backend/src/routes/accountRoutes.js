@@ -30,7 +30,11 @@ const mw = [authenticate, authenticatedLimiter];
 // prima della centralizzazione (così il client mobile non deve cambiare nulla).
 function validateBody(schema, body) {
   const { error, value } = schema.validate(body);
-  if (error) return { ok: false, response: { status: 422, body: { message: error.details[0].message } } };
+  if (error)
+    return {
+      ok: false,
+      response: { status: 422, body: { message: error.details[0].message } },
+    };
   return { ok: true, value };
 }
 

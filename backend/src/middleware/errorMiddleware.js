@@ -13,37 +13,69 @@
  */
 const BUSINESS_ERROR_MAP = {
   // 401 — credenziali
-  WRONG_PASSWORD:               { status: 401, message: "Password errata." },
-  WRONG_OLD_PASSWORD:           { status: 401, message: "Password attuale errata." },
-  INVALID_CREDENTIALS:          { status: 401, message: "Credenziali non valide." },
+  WRONG_PASSWORD: { status: 401, message: "Password errata." },
+  WRONG_OLD_PASSWORD: { status: 401, message: "Password attuale errata." },
+  INVALID_CREDENTIALS: { status: 401, message: "Credenziali non valide." },
   // 403 — autorizzazione
-  FORBIDDEN:                    { status: 403, message: "Non autorizzato." },
-  NOT_INVITED:                  { status: 403, message: "Non invitato a questa sfida." },
-  CREATOR_CANNOT_LEAVE:         { status: 403, message: "Il Capogruppo non può abbandonare la sessione. Eliminala se vuoi rimuoverla." },
-  ONLY_CREATOR_CAN_UPDATE_SESSION: { status: 403, message: "Solo il Capogruppo può modificare la sessione." },
-  ONLY_CREATOR_CAN_DELETE_SESSION: { status: 403, message: "Solo il Capogruppo può eliminare la sessione." },
-  ONLY_CREATOR_CAN_COMPLETE_SESSION: { status: 403, message: "Non sei autorizzato a completare questa sessione." },
-  ONLY_CREATOR_CAN_CANCEL_CHALLENGE: { status: 403, message: "Solo il creator può cancellare." },
+  FORBIDDEN: { status: 403, message: "Non autorizzato." },
+  NOT_INVITED: { status: 403, message: "Non invitato a questa sfida." },
+  CREATOR_CANNOT_LEAVE: {
+    status: 403,
+    message:
+      "Il Capogruppo non può abbandonare la sessione. Eliminala se vuoi rimuoverla.",
+  },
+  ONLY_CREATOR_CAN_UPDATE_SESSION: {
+    status: 403,
+    message: "Solo il Capogruppo può modificare la sessione.",
+  },
+  ONLY_CREATOR_CAN_DELETE_SESSION: {
+    status: 403,
+    message: "Solo il Capogruppo può eliminare la sessione.",
+  },
+  ONLY_CREATOR_CAN_COMPLETE_SESSION: {
+    status: 403,
+    message: "Non sei autorizzato a completare questa sessione.",
+  },
+  ONLY_CREATOR_CAN_CANCEL_CHALLENGE: {
+    status: 403,
+    message: "Solo il creator può cancellare.",
+  },
   // 404 — risorsa non trovata
-  USER_NOT_FOUND:               { status: 404, message: "Utente non trovato." },
-  SESSION_NOT_FOUND:            { status: 404, message: "Sessione non trovata." },
-  INVITE_CODE_INVALID:          { status: 404, message: "Codice invito non valido." },
-  ACTIVITY_NOT_FOUND:           { status: 404, message: "Attività non trovata." },
-  QUIZ_NOT_FOUND:               { status: 404, message: "Quiz non trovato." },
-  CATEGORY_NOT_FOUND:           { status: 404, message: "Categoria non trovata." },
-  TOTEM_NOT_FOUND:              { status: 404, message: "Totem non trovato." },
-  CHALLENGE_NOT_FOUND:          { status: 404, message: "Sfida non trovata." },
+  USER_NOT_FOUND: { status: 404, message: "Utente non trovato." },
+  SESSION_NOT_FOUND: { status: 404, message: "Sessione non trovata." },
+  INVITE_CODE_INVALID: { status: 404, message: "Codice invito non valido." },
+  ACTIVITY_NOT_FOUND: { status: 404, message: "Attività non trovata." },
+  QUIZ_NOT_FOUND: { status: 404, message: "Quiz non trovato." },
+  CATEGORY_NOT_FOUND: { status: 404, message: "Categoria non trovata." },
+  TOTEM_NOT_FOUND: { status: 404, message: "Totem non trovato." },
+  CHALLENGE_NOT_FOUND: { status: 404, message: "Sfida non trovata." },
   // 409 — conflitti
-  EMAIL_TAKEN:                  { status: 409, message: "Email già in uso." },
-  USERNAME_TAKEN:               { status: 409, message: "Username già in uso." },
-  USER_ALREADY_IN_SESSION:      { status: 409, message: "Hai una sessione attualmente in corso. Concludila prima di crearne / unirti a un'altra." },
-  ALREADY_IN_SESSION:           { status: 409, message: "Sei già in questa sessione." },
-  SESSION_NOT_JOINABLE:         { status: 409, message: "La sessione non è più aperta." },
-  ALREADY_RESPONDED:            { status: 409, message: "Hai già risposto a questo invito." },
-  CANNOT_CANCEL_RUNNING:        { status: 409, message: "Impossibile cancellare una sfida attiva o completata." },
-  TOTEM_TAG_DUPLICATE:          { status: 409, message: "tagId già esistente." },
+  EMAIL_TAKEN: { status: 409, message: "Email già in uso." },
+  USERNAME_TAKEN: { status: 409, message: "Username già in uso." },
+  USER_ALREADY_IN_SESSION: {
+    status: 409,
+    message:
+      "Hai una sessione attualmente in corso. Concludila prima di crearne / unirti a un'altra.",
+  },
+  ALREADY_IN_SESSION: { status: 409, message: "Sei già in questa sessione." },
+  SESSION_NOT_JOINABLE: {
+    status: 409,
+    message: "La sessione non è più aperta.",
+  },
+  ALREADY_RESPONDED: {
+    status: 409,
+    message: "Hai già risposto a questo invito.",
+  },
+  CANNOT_CANCEL_RUNNING: {
+    status: 409,
+    message: "Impossibile cancellare una sfida attiva o completata.",
+  },
+  TOTEM_TAG_DUPLICATE: { status: 409, message: "tagId già esistente." },
   // 500 — server-side ma con messaggio utile
-  INVITE_CODE_GENERATION_FAILED:{ status: 500, message: "Impossibile generare un codice invito univoco. Riprova." },
+  INVITE_CODE_GENERATION_FAILED: {
+    status: 500,
+    message: "Impossibile generare un codice invito univoco. Riprova.",
+  },
 };
 
 /**
@@ -96,7 +128,9 @@ export const globalErrorHandler = (err, req, res, next) => {
 
   const payload = {
     error: "Errore interno del server",
-    message: exposeMessage ? err.message : "Errore imprevisto. Riprova più tardi.",
+    message: exposeMessage
+      ? err.message
+      : "Errore imprevisto. Riprova più tardi.",
   };
   if (!isProd) payload.stack = err.stack;
 

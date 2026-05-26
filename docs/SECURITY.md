@@ -155,39 +155,39 @@ Legenda:
 - 🛡 = consentito solo se _partecipante_ della sessione
 - 🅿 = pubblico (anche anonimo)
 
-| Risorsa / Azione                      | Anon |      Hiker      |     Refuge      | Admin |
-| ------------------------------------- | :--: | :-------------: | :-------------: | :---: |
-| `POST /auth/login`                    |  🅿  |       🅿        |       🅿        |  🅿   |
-| `POST /auth/register/hiker`           |  🅿  |       🅿        |       🅿        |  🅿   |
-| `POST /auth/register/refuge`          |  🅿  |       🅿        |       🅿        |  🅿   |
-| `GET /auth/verify/:token`             |  🅿  |       🅿        |       🅿        |  🅿   |
-| `POST /auth/forgot-password`          |  🅿  |       🅿        |       🅿        |  🅿   |
-| `POST /auth/reset-password/:token`    |  🅿  |       🅿        |       🅿        |  🅿   |
-| `GET /hikers/:id`                     |  ❌  |  ✅ (privacy)†  |       ❌        |  ✅   |
-| `GET /refuges/:id`                    |  ❌  |       ✅        |       👤        |  ✅   |
-| `GET /users/:id` (legacy)             |  ❌  |  ✅ (privacy)†  |  ✅ (privacy)†  |  ✅   |
-| `PATCH /api/v1/users/me/personal-info`|  ❌  | 👤 (anti-cheat) | 👤 (anti-cheat) |  ✅   |
-| `POST /api/v1/sessions`               |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /api/v1/sessions/my`             |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /api/v1/sessions/:id`            |  ❌  |       🛡        |       🛡        |  ✅   |
-| `PATCH /api/v1/sessions/:id`          |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
-| `PATCH /api/v1/sessions/:id/status`   |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
-| `PATCH /api/v1/sessions/:id/complete` |  ❌  |       🛡        |       🛡        |  ✅   |
-| `POST /api/v1/sessions/:id/leave`     |  ❌  | 🛡 (no creator) | 🛡 (no creator) |  ✅   |
-| `POST /api/v1/sessions/join`          |  ❌  |       ✅        |       ✅        |  ✅   |
-| `DELETE /api/v1/sessions/:id`         |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
-| `GET /api/v1/sessions/stats`          |  ❌  |  ✅ (only own)  |  ✅ (only own)  |  ✅   |
-| `POST /api/v1/activities`             |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /api/v1/activities`              |  ❌  |  ✅ (only own)  |  ✅ (only own)  |  ✅   |
-| `GET /api/v1/activities/:id`          |  ❌  |       👤        |       👤        |  ✅   |
-| `DELETE /api/v1/activities/:id`       |  ❌  |       👤        |       👤        |  ✅   |
-| `GET /weather/locations/nearby`       |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /weather/locations/search`       |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /weather/forecast/:externalId`   |  ❌  |       ✅        |       ✅        |  ✅   |
-| `POST /weather/seed`                  |  ❌  |       ❌        |       ❌        |  ✅   |
-| `POST /weather/forecast/:id/refresh`  |  ❌  |       ❌        |       ❌        |  ✅   |
-| `/admin/*`                            |  ❌  |       ❌        |       ❌        |  ✅   |
-| `GET /api-docs`                       |  🅿  |       🅿        |       🅿        |  🅿   |
+| Risorsa / Azione                       | Anon |      Hiker      |     Refuge      | Admin |
+| -------------------------------------- | :--: | :-------------: | :-------------: | :---: |
+| `POST /auth/login`                     |  🅿  |       🅿        |       🅿        |  🅿   |
+| `POST /auth/register/hiker`            |  🅿  |       🅿        |       🅿        |  🅿   |
+| `POST /auth/register/refuge`           |  🅿  |       🅿        |       🅿        |  🅿   |
+| `GET /auth/verify/:token`              |  🅿  |       🅿        |       🅿        |  🅿   |
+| `POST /auth/forgot-password`           |  🅿  |       🅿        |       🅿        |  🅿   |
+| `POST /auth/reset-password/:token`     |  🅿  |       🅿        |       🅿        |  🅿   |
+| `GET /hikers/:id`                      |  ❌  |  ✅ (privacy)†  |       ❌        |  ✅   |
+| `GET /refuges/:id`                     |  ❌  |       ✅        |       👤        |  ✅   |
+| `GET /users/:id` (legacy)              |  ❌  |  ✅ (privacy)†  |  ✅ (privacy)†  |  ✅   |
+| `PATCH /api/v1/users/me/personal-info` |  ❌  | 👤 (anti-cheat) | 👤 (anti-cheat) |  ✅   |
+| `POST /api/v1/sessions`                |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /api/v1/sessions/my`              |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /api/v1/sessions/:id`             |  ❌  |       🛡        |       🛡        |  ✅   |
+| `PATCH /api/v1/sessions/:id`           |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
+| `PATCH /api/v1/sessions/:id/status`    |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
+| `PATCH /api/v1/sessions/:id/complete`  |  ❌  |       🛡        |       🛡        |  ✅   |
+| `POST /api/v1/sessions/:id/leave`      |  ❌  | 🛡 (no creator) | 🛡 (no creator) |  ✅   |
+| `POST /api/v1/sessions/join`           |  ❌  |       ✅        |       ✅        |  ✅   |
+| `DELETE /api/v1/sessions/:id`          |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
+| `GET /api/v1/sessions/stats`           |  ❌  |  ✅ (only own)  |  ✅ (only own)  |  ✅   |
+| `POST /api/v1/activities`              |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /api/v1/activities`               |  ❌  |  ✅ (only own)  |  ✅ (only own)  |  ✅   |
+| `GET /api/v1/activities/:id`           |  ❌  |       👤        |       👤        |  ✅   |
+| `DELETE /api/v1/activities/:id`        |  ❌  |       👤        |       👤        |  ✅   |
+| `GET /weather/locations/nearby`        |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /weather/locations/search`        |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /weather/forecast/:externalId`    |  ❌  |       ✅        |       ✅        |  ✅   |
+| `POST /weather/seed`                   |  ❌  |       ❌        |       ❌        |  ✅   |
+| `POST /weather/forecast/:id/refresh`   |  ❌  |       ❌        |       ❌        |  ✅   |
+| `/admin/*`                             |  ❌  |       ❌        |       ❌        |  ✅   |
+| `GET /api-docs`                        |  🅿  |       🅿        |       🅿        |  🅿   |
 
 ### Note di implementazione
 
@@ -216,17 +216,17 @@ Header esposti in risposta: `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-Aft
 
 ## 6. Secret management
 
-| Variabile            | Required       | Note                                                              |
-| -------------------- | -------------- | ----------------------------------------------------------------- |
-| `JWT_SECRET`         | ✅ (sempre)    | >= 32 char, generato con `crypto.randomBytes(48).toString('hex')` |
+| Variabile            | Required       | Note                                                                                                                                        |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JWT_SECRET`         | ✅ (sempre)    | >= 32 char, generato con `crypto.randomBytes(48).toString('hex')`                                                                           |
 | `JWT_EXPIRES_IN`     | ⚠ default `7d` | Calibrato per supportare requisito offline 3 giorni con margine. Sprint 3 → refresh token rotation (access 15min + refresh 30d). Mai > 30d. |
-| `MONGO_URI`          | ✅ (prod)      | Connection string Atlas con credenziali read/write                |
-| `BASE_URL`           | ✅ (prod)      | URL pubblico backend per email link                               |
-| `BREVO_API_KEY`      | ✅ (prod)      | API key Brevo solo "transactional emails"                         |
-| `EMAIL_FROM_ADDRESS` | ✅ (prod)      | Mittente verificato su Brevo                                      |
-| `EMAIL_FROM_NAME`    | ❌             | Default "Trento Smart Mountain"                                   |
-| `ALLOWED_ORIGINS`    | ⚠ prod         | CSV di origin CORS allow-list                                     |
-| `NODE_ENV`           | ⚠              | `production` abilita HSTS + fail-fast aggiuntivi                  |
+| `MONGO_URI`          | ✅ (prod)      | Connection string Atlas con credenziali read/write                                                                                          |
+| `BASE_URL`           | ✅ (prod)      | URL pubblico backend per email link                                                                                                         |
+| `BREVO_API_KEY`      | ✅ (prod)      | API key Brevo solo "transactional emails"                                                                                                   |
+| `EMAIL_FROM_ADDRESS` | ✅ (prod)      | Mittente verificato su Brevo                                                                                                                |
+| `EMAIL_FROM_NAME`    | ❌             | Default "Trento Smart Mountain"                                                                                                             |
+| `ALLOWED_ORIGINS`    | ⚠ prod         | CSV di origin CORS allow-list                                                                                                               |
+| `NODE_ENV`           | ⚠              | `production` abilita HSTS + fail-fast aggiuntivi                                                                                            |
 
 ### Procedura rotazione JWT_SECRET
 

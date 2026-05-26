@@ -5,6 +5,10 @@ import android.content.Context
 import android.location.LocationManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.estimation.HikeEstimation
+import it.trentosmartmountain.app.data.local.db.CompletedActivityEntity
 import it.trentosmartmountain.app.data.location.HikeTrackingEngine
 import it.trentosmartmountain.app.data.location.LocationSnapshot
 import it.trentosmartmountain.app.data.location.StationaryDetector
@@ -15,15 +19,38 @@ import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.repository.SessionCommandRepository
 import it.trentosmartmountain.app.repository.TrackingPersistenceRepository
 import it.trentosmartmountain.app.service.ForegroundTrackingService
+import it.trentosmartmountain.app.data.local.TokenStorage
+import it.trentosmartmountain.app.data.remote.JwtDecoder
+import it.trentosmartmountain.app.data.remote.TsmApiClient
+import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
+import it.trentosmartmountain.app.util.SosNotificationHelper
+import it.trentosmartmountain.app.data.remote.dto.ActualStats
+import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
+import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
+import it.trentosmartmountain.app.data.session.SessionStartCoordinator
+import it.trentosmartmountain.app.data.sync.SyncManager
+import it.trentosmartmountain.app.repository.EmergencyRepository
+import it.trentosmartmountain.app.repository.OfflineEmergencyException
+import it.trentosmartmountain.app.service.ForegroundTrackingService
+import it.trentosmartmountain.app.data.ble.BluetoothHelper
+import it.trentosmartmountain.app.service.SosBeaconService
+import java.security.SecureRandom
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 
 /**
  * Logica della tab **Registra**: permessi GPS, tracking escursione, metriche e traccia su mappa OSMdroid.
@@ -77,7 +104,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
      * appena il tracking parte o l'utente chiude il dialog.
      */
     val gpsDisabledWarning: Boolean = false,
-  )
 
   private val app = getApplication<Application>()
   private val locationTracker = UserLocationTracker(app)
@@ -85,6 +111,54 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private val stationaryDetector = StationaryDetector(app)
   private val persistence = TrackingPersistenceRepository(app)
   private val sessionCommands = SessionCommandRepository(app)
+    /** SOS: fase UI (conferma, countdown, attivo, coda offline). */
+    val sosPhase: SosPhase = SosPhase.IDLE,
+    val sosCountdownSeconds: Int = 0,
+    val sosSelectedType: String = "INJURY",
+    val sosActiveEmergencyId: String? = null,
+    val sosBeaconInstanceId: String? = null,
+    val sosPendingOffline: Boolean = false,
+    val sosStatusMessage: String? = null,
+    val showSosConfirmDialog: Boolean = false,
+    val showSosCancelDialog: Boolean = false,
+    /** SOS in entrata (capogruppo o partecipante dopo share). */
+    val incomingEmergencies: List<EmergencyResponse> = emptyList(),
+    val isSessionGroupLeader: Boolean = false,
+    val showIncomingEmergencyIcon: Boolean = false,
+    val showSosAlertBorder: Boolean = false,
+    val showSosListSheet: Boolean = false,
+    val showSosDetailSheet: Boolean = false,
+    val selectedIncomingEmergency: EmergencyResponse? = null,
+    val showBeaconScanner: Boolean = false,
+    val beaconScannerTargetId: String? = null,
+    /** Dialog: Bluetooth spento prima di avviare il beacon SOS. */
+    val showBluetoothEnableDialog: Boolean = false,
+    /** Evento one-shot per lanciare ACTION_REQUEST_ENABLE dalla UI. */
+    val launchBluetoothEnableIntent: Boolean = false,
+  )
+
+  private data class PendingSosLaunch(
+    val sessionId: String,
+    val emergencyType: String,
+    val longitude: Double,
+    val latitude: Double,
+    val beaconId: String,
+    val idempotencyKey: String,
+  )
+
+  enum class SosPhase {
+    IDLE,
+    COUNTDOWN,
+    ACTIVE,
+    QUEUED_OFFLINE,
+    SENDING,
+  }
+
+  private val app = getApplication<Application>()
+  private val emergencyRepo = EmergencyRepository(app)
+  private val locationTracker = UserLocationTracker(app)
+  private val trackingEngine = HikeTrackingEngine()
+  private val stationaryDetector = StationaryDetector(app)
 
   private val _uiState = MutableStateFlow(UiState())
   val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -95,8 +169,17 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   // Identifica il tracciato corrente nella WAL Room (crash-safety).
   // Non-null sse trackingStatus != IDLE. Generato da persistence.startTrack().
   private var currentTrackId: String? = null
+  private var sosCountdownJob: Job? = null
+  private var stillSinceMs: Long? = null
+  private var lastSnapshot: LocationSnapshot? = null
+  private var activeSosIdempotencyKey: String? = null
+  private var emergencyPollJob: Job? = null
+  private var lastIncomingEmergencyCount = 0
+  private var currentUserId: String? = null
+  private var pendingSosLaunch: PendingSosLaunch? = null
 
-  init {
+  init {currentUserId =
+      TokenStorage.getInstance(app).getToken()?.let { JwtDecoder.userIdFrom(it) }
     viewModelScope.launch {
       locationTracker.location.collect { snapshot ->
         if (_uiState.value.trackingStatus == TrackingStatus.IDLE) {
@@ -125,6 +208,49 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         }
         SessionStartCoordinator.consume()
       }
+    }
+    viewModelScope.launch {
+      uiState
+        .map { it.activeSessionId }
+        .distinctUntilChanged()
+        .collect { sessionId ->
+          if (sessionId != null) {
+            startEmergencyPolling(sessionId)
+          } else {
+            stopEmergencyPolling()
+            _uiState.update {
+              it.copy(
+                incomingEmergencies = emptyList(),
+                showIncomingEmergencyIcon = false,
+                showSosAlertBorder = false,
+                isSessionGroupLeader = false,
+              )
+            }
+          }
+        }
+    }
+  }
+
+  /**
+   * Collega la sessione ACTIVE dal server se l'utente è su Registra senza aver passato da AVVIA
+   * (es. capogruppo già in escursione o tab cambiata).
+   */
+  fun syncActiveSessionFromServer() {
+    viewModelScope.launch {
+      if (_uiState.value.activeSessionId != null) {
+        refreshIncomingEmergencies()
+        return@launch
+      }
+      runCatching {
+        val res = TsmApiClient.service().getMySessions()
+        if (!res.isSuccessful) return@launch
+        val active = res.body()?.firstOrNull { it.status == "ACTIVE" }
+        if (active != null) {
+          _uiState.update { it.copy(activeSessionId = active._id) }
+          refreshSessionRole(active._id)
+          refreshIncomingEmergencies()
+        }
+      }.onFailure { /* sessione opzionale in background */ }
     }
   }
 
@@ -483,7 +609,433 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       }
   }
 
+  fun canTriggerSos(): Boolean {
+    val state = _uiState.value
+    val trackingOk =
+      state.trackingStatus == TrackingStatus.RECORDING ||
+        state.trackingStatus == TrackingStatus.PAUSED
+    return trackingOk && state.activeSessionId != null && state.sosPhase == SosPhase.IDLE
+  }
+
+  fun onSosFabClicked() {
+    if (!canTriggerSos()) return
+    _uiState.update { it.copy(showSosConfirmDialog = true) }
+  }
+
+  fun dismissSosConfirmDialog() {
+    _uiState.update { it.copy(showSosConfirmDialog = false) }
+  }
+
+  fun updateSosEmergencyType(type: String) {
+    _uiState.update { it.copy(sosSelectedType = type) }
+  }
+
+  /** Dopo "Prosegui" nel dialog iniziale: avvia countdown 15s. */
+  fun confirmSosProceed() {
+    _uiState.update {
+      it.copy(
+        showSosConfirmDialog = false,
+        sosPhase = SosPhase.COUNTDOWN,
+        sosCountdownSeconds = SOS_COUNTDOWN_SEC,
+        sosStatusMessage = null,
+      )
+    }
+    sosCountdownJob?.cancel()
+    sosCountdownJob =
+      viewModelScope.launch {
+        var remaining = SOS_COUNTDOWN_SEC
+        while (remaining > 0) {
+          delay(1_000)
+          remaining--
+          _uiState.update { it.copy(sosCountdownSeconds = remaining) }
+        }
+        launchSosAfterCountdown()
+      }
+  }
+
+  fun cancelSosCountdown() {
+    sosCountdownJob?.cancel()
+    _uiState.update {
+      it.copy(
+        sosPhase = SosPhase.IDLE,
+        sosCountdownSeconds = 0,
+        sosStatusMessage = null,
+      )
+    }
+  }
+
+  private fun launchSosAfterCountdown() {
+    val state = _uiState.value
+    val sessionId = state.activeSessionId ?: return
+    val location = state.userLocation ?: run {
+      _uiState.update {
+        it.copy(
+          sosPhase = SosPhase.IDLE,
+          sosStatusMessage = "Posizione GPS non disponibile",
+        )
+      }
+      return
+    }
+
+    val beaconId = randomBeaconInstanceId()
+    val idempotencyKey = UUID.randomUUID().toString()
+    activeSosIdempotencyKey = idempotencyKey
+
+    val pending =
+      PendingSosLaunch(
+        sessionId = sessionId,
+        emergencyType = state.sosSelectedType,
+        longitude = location.longitude,
+        latitude = location.latitude,
+        beaconId = beaconId,
+        idempotencyKey = idempotencyKey,
+      )
+
+    if (!BluetoothHelper.isBluetoothEnabled(app)) {
+      pendingSosLaunch = pending
+      _uiState.update {
+        it.copy(
+          sosPhase = SosPhase.SENDING,
+          sosBeaconInstanceId = beaconId,
+          showBluetoothEnableDialog = true,
+        )
+      }
+      return
+    }
+
+    executeSosLaunch(pending, startBeacon = true)
+  }
+
+  fun dismissBluetoothEnableDialog() {
+    pendingSosLaunch = null
+    _uiState.update {
+      it.copy(
+        showBluetoothEnableDialog = false,
+        sosPhase = SosPhase.IDLE,
+        sosBeaconInstanceId = null,
+        sosStatusMessage = null,
+      )
+    }
+    activeSosIdempotencyKey = null
+  }
+
+  fun requestBluetoothEnableForSos() {
+    _uiState.update {
+      it.copy(showBluetoothEnableDialog = false, launchBluetoothEnableIntent = true)
+    }
+  }
+
+  fun onBluetoothEnableIntentLaunched() {
+    _uiState.update { it.copy(launchBluetoothEnableIntent = false) }
+  }
+
+  fun onBluetoothEnableResult(enabled: Boolean) {
+    val pending = pendingSosLaunch ?: return
+    pendingSosLaunch = null
+    if (enabled) {
+      executeSosLaunch(pending, startBeacon = true)
+    } else {
+      executeSosLaunch(pending, startBeacon = false)
+    }
+  }
+
+  fun continueSosWithoutBeacon() {
+    val pending = pendingSosLaunch ?: return
+    pendingSosLaunch = null
+    _uiState.update { it.copy(showBluetoothEnableDialog = false) }
+    executeSosLaunch(pending, startBeacon = false)
+  }
+
+  private fun executeSosLaunch(pending: PendingSosLaunch, startBeacon: Boolean) {
+    _uiState.update {
+      it.copy(
+        sosPhase = SosPhase.SENDING,
+        sosBeaconInstanceId = pending.beaconId,
+        showBluetoothEnableDialog = false,
+        sosStatusMessage = null,
+      )
+    }
+
+    if (startBeacon && BluetoothHelper.isBluetoothEnabled(app)) {
+      SosBeaconService.start(app, pending.beaconId)
+    }
+
+    viewModelScope.launch {
+      val result =
+        emergencyRepo.createEmergency(
+          sessionId = pending.sessionId,
+          emergencyType = pending.emergencyType,
+          longitude = pending.longitude,
+          latitude = pending.latitude,
+          beaconInstanceId = pending.beaconId,
+          idempotencyKey = pending.idempotencyKey,
+          beaconActive = startBeacon && BluetoothHelper.isBluetoothEnabled(app),
+        )
+      result.fold(
+        onSuccess = { emergency ->
+          val beaconMsg =
+            if (startBeacon && BluetoothHelper.isBluetoothEnabled(app)) {
+              "SOS inviato al capogruppo"
+            } else {
+              "SOS inviato — beacon non attivo (Bluetooth spento)"
+            }
+          _uiState.update {
+            it.copy(
+              sosPhase = SosPhase.ACTIVE,
+              sosActiveEmergencyId = emergency.id,
+              sosPendingOffline = false,
+              sosStatusMessage = beaconMsg,
+            )
+          }
+          refreshIncomingEmergencies()
+        },
+        onFailure = { err ->
+          if (err is OfflineEmergencyException) {
+            _uiState.update {
+              it.copy(
+                sosPhase = SosPhase.QUEUED_OFFLINE,
+                sosPendingOffline = true,
+                sosStatusMessage =
+                  if (startBeacon) {
+                    "Invio dati in attesa di connessione"
+                  } else {
+                    "Invio in coda — beacon non attivo"
+                  },
+              )
+            }
+            retryPendingSosWhenOnline()
+          } else {
+            _uiState.update {
+              it.copy(
+                sosPhase = SosPhase.ACTIVE,
+                sosPendingOffline = true,
+                sosStatusMessage = "Errore invio: ${err.message}",
+              )
+            }
+          }
+        },
+      )
+    }
+  }
+
+  private fun retryPendingSosWhenOnline() {
+    viewModelScope.launch {
+      while (_uiState.value.sosPendingOffline) {
+        delay(15_000)
+        if (!emergencyRepo.isNetworkAvailable()) continue
+        val uploaded = emergencyRepo.flushPendingQueue()
+        if (uploaded > 0) {
+          _uiState.update {
+            it.copy(
+              sosPendingOffline = false,
+              sosPhase = SosPhase.ACTIVE,
+              sosStatusMessage = "SOS inviato al capogruppo",
+            )
+          }
+          break
+        }
+      }
+    }
+  }
+
+  fun requestCancelActiveSos() {
+    if (_uiState.value.sosPhase == SosPhase.ACTIVE ||
+      _uiState.value.sosPhase == SosPhase.QUEUED_OFFLINE
+    ) {
+      _uiState.update { it.copy(showSosCancelDialog = true) }
+    }
+  }
+
+  fun dismissSosCancelDialog() {
+    _uiState.update { it.copy(showSosCancelDialog = false) }
+  }
+
+  fun confirmCancelActiveSos(reason: String) {
+    _uiState.update { it.copy(showSosCancelDialog = false) }
+    SosBeaconService.stop(app)
+    val emergencyId = _uiState.value.sosActiveEmergencyId
+    val idempotencyKey = activeSosIdempotencyKey
+    _uiState.update {
+      it.copy(
+        sosPhase = SosPhase.IDLE,
+        sosActiveEmergencyId = null,
+        sosBeaconInstanceId = null,
+        sosPendingOffline = false,
+        sosStatusMessage = null,
+      )
+    }
+    activeSosIdempotencyKey = null
+    if (emergencyId != null) {
+      viewModelScope.launch {
+        emergencyRepo.cancelEmergency(emergencyId, reason)
+      }
+    } else if (idempotencyKey != null) {
+      viewModelScope.launch {
+        (app as TsmApplication).database.pendingEmergencyDao().deleteByKey(idempotencyKey)
+      }
+    }
+  }
+
+  private fun randomBeaconInstanceId(): String {
+    val bytes = ByteArray(6)
+    SecureRandom().nextBytes(bytes)
+    return bytes.joinToString("") { "%02x".format(it) }
+  }
+
+  fun onIncomingEmergencyIconClick() {
+    _uiState.update { it.copy(showSosListSheet = true, showSosAlertBorder = false) }
+    viewModelScope.launch {
+      val unacked = _uiState.value.incomingEmergencies.filter { it.leaderAckAt == null }
+      for (emergency in unacked) {
+        emergencyRepo.ackEmergency(emergency.id)
+      }
+      refreshIncomingEmergencies()
+    }
+  }
+
+  fun closeSosListSheet() {
+    _uiState.update { it.copy(showSosListSheet = false) }
+  }
+
+  fun openIncomingEmergencyDetail(emergency: EmergencyResponse) {
+    _uiState.update {
+      it.copy(
+        selectedIncomingEmergency = emergency,
+        showSosDetailSheet = true,
+        showSosListSheet = false,
+      )
+    }
+  }
+
+  fun closeSosDetailSheet() {
+    _uiState.update {
+      it.copy(showSosDetailSheet = false, selectedIncomingEmergency = null, showSosListSheet = true)
+    }
+  }
+
+  fun dismissSelectedIncomingEmergency() {
+    val id = _uiState.value.selectedIncomingEmergency?.id ?: return
+    viewModelScope.launch {
+      emergencyRepo.dismissEmergency(id)
+      _uiState.update { it.copy(showSosDetailSheet = false, selectedIncomingEmergency = null) }
+      refreshIncomingEmergencies()
+      _uiState.update { it.copy(showSosListSheet = it.incomingEmergencies.isNotEmpty()) }
+    }
+  }
+
+  fun openBeaconScanner(beaconInstanceId: String) {
+    _uiState.update {
+      it.copy(showBeaconScanner = true, beaconScannerTargetId = beaconInstanceId)
+    }
+  }
+
+  fun closeBeaconScanner() {
+    _uiState.update {
+      it.copy(showBeaconScanner = false, beaconScannerTargetId = null)
+    }
+  }
+
+  fun shareSelectedIncomingEmergency() {
+    val id = _uiState.value.selectedIncomingEmergency?.id ?: return
+    viewModelScope.launch {
+      emergencyRepo.shareEmergencyWithGroup(id)
+      refreshIncomingEmergencies()
+      val updated = _uiState.value.incomingEmergencies.find { it.id == id }
+      if (updated != null) {
+        _uiState.update { it.copy(selectedIncomingEmergency = updated) }
+      }
+    }
+  }
+
+  fun unshareSelectedIncomingEmergency() {
+    val id = _uiState.value.selectedIncomingEmergency?.id ?: return
+    viewModelScope.launch {
+      emergencyRepo.unshareEmergencyWithGroup(id)
+      refreshIncomingEmergencies()
+      val updated = _uiState.value.incomingEmergencies.find { it.id == id }
+      if (updated != null) {
+        _uiState.update { it.copy(selectedIncomingEmergency = updated) }
+      }
+    }
+  }
+
+  private fun startEmergencyPolling(sessionId: String) {
+    emergencyPollJob?.cancel()
+    emergencyPollJob =
+      viewModelScope.launch {
+        refreshSessionRole(sessionId)
+        refreshIncomingEmergencies()
+        while (isActive) {
+          delay(EMERGENCY_POLL_INTERVAL_MS)
+          refreshIncomingEmergencies()
+        }
+      }
+  }
+
+  private fun stopEmergencyPolling() {
+    emergencyPollJob?.cancel()
+    emergencyPollJob = null
+    lastIncomingEmergencyCount = 0
+  }
+
+  private suspend fun refreshSessionRole(sessionId: String) {
+    val userId = currentUserId ?: return
+    runCatching {
+      val res = TsmApiClient.service().getSessionById(sessionId)
+      if (res.isSuccessful && res.body() != null) {
+        val session = res.body()!!
+        val isLeader =
+          session.participants?.any {
+            it.userId?._id == userId && it.role == "groupLeader"
+          } == true
+        _uiState.update { it.copy(isSessionGroupLeader = isLeader) }
+      }
+    }
+  }
+
+  private suspend fun refreshIncomingEmergencies() {
+    val sessionId = _uiState.value.activeSessionId ?: return
+    val result = emergencyRepo.listSessionEmergencies(sessionId)
+    result.fold(
+      onSuccess = { payload ->
+        val list = payload.emergencies
+        val isLeader = payload.isGroupLeader
+        val visible =
+          list.isNotEmpty() &&
+            (isLeader || list.any { it.status == "SHARED_WITH_GROUP" })
+        val showBorder =
+          isLeader && payload.hasUnacked && !_uiState.value.showSosListSheet
+
+        if (isLeader && list.size > lastIncomingEmergencyCount && list.isNotEmpty()) {
+          val newest = list.firstOrNull()
+          val name = newest?.profileSnapshot?.displayName ?: newest?.senderUserId?.username ?: "?"
+          SosNotificationHelper.showIncomingSos(app, name)
+        }
+        lastIncomingEmergencyCount = if (isLeader) list.size else lastIncomingEmergencyCount
+
+        _uiState.update {
+          it.copy(
+            incomingEmergencies = list,
+            isSessionGroupLeader = isLeader,
+            showIncomingEmergencyIcon = visible,
+            showSosAlertBorder = showBorder,
+          )
+        }
+      },
+      onFailure = {
+        _uiState.update {
+          it.copy(
+            showIncomingEmergencyIcon = false,
+            showSosAlertBorder = false,
+          )
+        }
+      },
+    )
+  }
+
   override fun onCleared() {
+    stopEmergencyPolling()
+    sosCountdownJob?.cancel()
     timerJob?.cancel()
     stationaryDetector.stop()
     locationTracker.stop()
@@ -497,5 +1049,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     private const val STATIONARY_SPEED_MPS = 0.5f
     private const val RESUME_SPEED_MPS = 1.0f
     private const val AUTO_PAUSE_DELAY_MS = 45_000L
+    private const val SOS_COUNTDOWN_SEC = 15
+    private const val EMERGENCY_POLL_INTERVAL_MS = 8_000L
   }
 }

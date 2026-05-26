@@ -34,4 +34,8 @@ object RegistraLayout {
       (if (isTrackingActive) metricsStripHeight + metricsToGpsGap else 0.dp) +
       gpsIndicatorApproxHeight +
       autoPauseBelowGps
+
+  /** Icona emergenze in entrata: sotto striscia metriche + indicatore GPS. */
+  fun incomingEmergencyIconTop(isTrackingActive: Boolean) =
+    autoPauseTop(isTrackingActive) + 8.dp
 }

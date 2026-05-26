@@ -27,7 +27,10 @@ export async function updateUser(userId, { username, email }) {
     try {
       await sendVerificationEmail(user.email, user.verificationToken);
     } catch (err) {
-      console.error("[accountService] Errore invio email verifica:", err.message);
+      console.error(
+        "[accountService] Errore invio email verifica:",
+        err.message,
+      );
     }
   }
 
@@ -76,7 +79,8 @@ export async function deleteAccount(userId, { password }) {
   }
 
   // Cascade: anonimizza transaction e scan, cancella il documento utente
-  const { default: CreditTransaction } = await import("../models/creditTransaction.js");
+  const { default: CreditTransaction } =
+    await import("../models/creditTransaction.js");
   const { default: NfcScan } = await import("../models/nfcScan.js");
   const { default: QuizAttempt } = await import("../models/quizAttempt.js");
   const { default: Activity } = await import("../models/activity.js");
@@ -95,7 +99,13 @@ export async function updateGoals(userId, { km, elevM, count }) {
   if (count !== undefined) update["weeklyGoals.count"] = count;
   // weeklyGoals è un campo del discriminator Hiker → usa Hiker per evitare
   // che lo strict mode di User base scarti silenziosamente l'$set.
-  const user = await Hiker.findByIdAndUpdate(userId, { $set: update }, { new: true }).select("weeklyGoals").lean();
+  const user = await Hiker.findByIdAndUpdate(
+    userId,
+    { $set: update },
+    { new: true },
+  )
+    .select("weeklyGoals")
+    .lean();
   if (!user) throw new Error("USER_NOT_FOUND");
   return user.weeklyGoals;
 }
@@ -170,7 +180,11 @@ export async function getWeeklyStats(userId) {
 function flattenForSet(prefix, obj) {
   const set = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (value !== null && typeof value === "object" && !(value instanceof Date)) {
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      !(value instanceof Date)
+    ) {
       Object.assign(set, flattenForSet(`${prefix}.${key}`, value));
     } else {
       set[`${prefix}.${key}`] = value;
@@ -203,21 +217,28 @@ class LockedFieldError extends Error {
 export async function updatePersonalInfo(userId, data) {
   // Anti-cheat: blocca update di birthDate se già impostato e DIVERSO dal nuovo valore.
   if (data.birthDate !== undefined) {
-    const existing = await Hiker.findById(userId).select("personalInfo.birthDate").lean();
+    const existing = await Hiker.findById(userId)
+      .select("personalInfo.birthDate")
+      .lean();
     if (existing?.personalInfo?.birthDate) {
       const d1 = new Date(existing.personalInfo.birthDate);
       const d2 = new Date(data.birthDate);
       // Confronto esatto di YYYY-MM-DD
-      const isSameDate = d1.getUTCFullYear() === d2.getUTCFullYear() &&
-                         d1.getUTCMonth() === d2.getUTCMonth() &&
-                         d1.getUTCDate() === d2.getUTCDate();
+      const isSameDate =
+        d1.getUTCFullYear() === d2.getUTCFullYear() &&
+        d1.getUTCMonth() === d2.getUTCMonth() &&
+        d1.getUTCDate() === d2.getUTCDate();
       if (!isSameDate) {
         throw new LockedFieldError("birthDate");
       }
     }
   }
   const set = flattenForSet("personalInfo", data);
-  const user = await Hiker.findByIdAndUpdate(userId, { $set: set }, { new: true })
+  const user = await Hiker.findByIdAndUpdate(
+    userId,
+    { $set: set },
+    { new: true },
+  )
     .select("personalInfo")
     .lean();
   if (!user) throw new Error("USER_NOT_FOUND");
@@ -227,13 +248,22 @@ export async function updatePersonalInfo(userId, data) {
 export async function updateExperience(userId, data) {
   // Anti-cheat: blocca update di caiLevel se già impostato e DIVERSO dal nuovo valore.
   if (data.caiLevel !== undefined) {
-    const existing = await Hiker.findById(userId).select("experience.caiLevel").lean();
-    if (existing?.experience?.caiLevel && existing.experience.caiLevel !== data.caiLevel) {
+    const existing = await Hiker.findById(userId)
+      .select("experience.caiLevel")
+      .lean();
+    if (
+      existing?.experience?.caiLevel &&
+      existing.experience.caiLevel !== data.caiLevel
+    ) {
       throw new LockedFieldError("caiLevel");
     }
   }
   const set = flattenForSet("experience", data);
-  const user = await Hiker.findByIdAndUpdate(userId, { $set: set }, { new: true })
+  const user = await Hiker.findByIdAndUpdate(
+    userId,
+    { $set: set },
+    { new: true },
+  )
     .select("experience")
     .lean();
   if (!user) throw new Error("USER_NOT_FOUND");
@@ -242,7 +272,11 @@ export async function updateExperience(userId, data) {
 
 export async function updatePreferences(userId, data) {
   const set = flattenForSet("preferences", data);
-  const user = await Hiker.findByIdAndUpdate(userId, { $set: set }, { new: true })
+  const user = await Hiker.findByIdAndUpdate(
+    userId,
+    { $set: set },
+    { new: true },
+  )
     .select("preferences")
     .lean();
   if (!user) throw new Error("USER_NOT_FOUND");

@@ -73,7 +73,9 @@ export const getAnyUserById = async (req, res) => {
      #swagger.description = 'Recupera dati di qualunque utente. Solo admin.'
   */
   try {
-    const user = await User.findById(req.params.id).select("-passwordHash -__v");
+    const user = await User.findById(req.params.id).select(
+      "-passwordHash -__v",
+    );
     if (!user) {
       return res.status(404).json({ message: "Utente non trovato." });
     }
@@ -126,10 +128,14 @@ export const updateAnyUser = async (req, res) => {
     };
     const TargetModel = ModelByRole[targetUser.role] || User;
 
-    const updated = await TargetModel.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-      runValidators: true,
-    }).select("-passwordHash -__v");
+    const updated = await TargetModel.findByIdAndUpdate(
+      req.params.id,
+      updates,
+      {
+        new: true,
+        runValidators: true,
+      },
+    ).select("-passwordHash -__v");
 
     if (!updated) {
       return res.status(404).json({ message: "Utente non trovato." });

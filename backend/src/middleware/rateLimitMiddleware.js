@@ -84,6 +84,8 @@ export const writeLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
   skip: (req) =>
-    skipInTest()
-    || req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS",
+    skipInTest() ||
+    req.method === "GET" ||
+    req.method === "HEAD" ||
+    req.method === "OPTIONS",
 });

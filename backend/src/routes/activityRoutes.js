@@ -47,23 +47,31 @@ router.get("/", async (req, res, next) => {
 });
 
 // GET /api/v1/activities/:id — dettaglio singola attività
-router.get("/:id", validate(idParamSchema, "params"), async (req, res, next) => {
-  try {
-    const activity = await getActivityById(req.params.id, req.user.userId);
-    res.status(200).json(activity);
-  } catch (err) {
-    next(err);
-  }
-});
+router.get(
+  "/:id",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const activity = await getActivityById(req.params.id, req.user.userId);
+      res.status(200).json(activity);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // DELETE /api/v1/activities/:id — elimina attività (solo proprietario)
-router.delete("/:id", validate(idParamSchema, "params"), async (req, res, next) => {
-  try {
-    await deleteActivity(req.params.id, req.user.userId);
-    res.status(200).json({ message: "Attività eliminata" });
-  } catch (err) {
-    next(err);
-  }
-});
+router.delete(
+  "/:id",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      await deleteActivity(req.params.id, req.user.userId);
+      res.status(200).json({ message: "Attività eliminata" });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export default router;

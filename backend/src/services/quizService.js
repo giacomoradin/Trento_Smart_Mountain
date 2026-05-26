@@ -71,7 +71,9 @@ export async function listByCategory(slug, userId) {
     userId,
     quizId: { $in: quizzes.map((q) => q._id) },
     passed: true,
-  }).sort({ createdAt: 1 }).lean();
+  })
+    .sort({ createdAt: 1 })
+    .lean();
 
   const passedMap = {};
   for (const a of passedAttempts) {
@@ -111,11 +113,15 @@ export async function getNextQuizForCategory(slug, userId) {
   if (quizzes.length === 0) return { allCompleted: true, id: null };
 
   const passedIds = new Set(
-    (await QuizAttempt.find({
-      userId,
-      quizId: { $in: quizzes.map((q) => q._id) },
-      passed: true,
-    }).select("quizId").lean()).map((a) => a.quizId.toString()),
+    (
+      await QuizAttempt.find({
+        userId,
+        quizId: { $in: quizzes.map((q) => q._id) },
+        passed: true,
+      })
+        .select("quizId")
+        .lean()
+    ).map((a) => a.quizId.toString()),
   );
 
   const next = quizzes.find((q) => !passedIds.has(q._id.toString()));
@@ -140,7 +146,9 @@ export async function getQuizForClient(quizId, userId) {
   // Già superato? La UI mostra un banner "non riceverai crediti aggiuntivi"
   // così l'utente sa che sta solo ripassando il materiale.
   const alreadyPassed = userId
-    ? !!(await QuizAttempt.findOne({ userId, quizId, passed: true }).select("_id").lean())
+    ? !!(await QuizAttempt.findOne({ userId, quizId, passed: true })
+        .select("_id")
+        .lean())
     : false;
 
   // Strip correctIndex + explanation — mai esposti prima del submit
@@ -170,24 +178,27 @@ export async function submitQuiz(quizId, userId, answers) {
 
   let correctCount = 0;
   const seen = new Set();
-  const breakdown = answers.filter((a) => {
-    const id = a.questionId?.toString();
-    if (!id || seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  }).map((a) => {
-    const q = questionMap[a.questionId.toString()];
-    if (!q) return null;
-    const isCorrect = q.correctIndex === a.choiceIndex;
-    if (isCorrect) correctCount++;
-    return {
-      questionId: q._id,
-      choiceIndex: a.choiceIndex,
-      isCorrect,
-      correctIndex: q.correctIndex,
-      explanation: q.explanation,
-    };
-  }).filter(Boolean);
+  const breakdown = answers
+    .filter((a) => {
+      const id = a.questionId?.toString();
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .map((a) => {
+      const q = questionMap[a.questionId.toString()];
+      if (!q) return null;
+      const isCorrect = q.correctIndex === a.choiceIndex;
+      if (isCorrect) correctCount++;
+      return {
+        questionId: q._id,
+        choiceIndex: a.choiceIndex,
+        isCorrect,
+        correctIndex: q.correctIndex,
+        explanation: q.explanation,
+      };
+    })
+    .filter(Boolean);
 
   const totalQuestions = quiz.questions.length;
   const score = totalQuestions > 0 ? correctCount / totalQuestions : 0;

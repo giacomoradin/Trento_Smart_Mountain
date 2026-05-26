@@ -36,10 +36,12 @@ export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ message: "Credenziali non valide." });
+    if (!user)
+      return res.status(401).json({ message: "Credenziali non valide." });
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isPasswordValid) return res.status(401).json({ message: "Credenziali non valide." });
+    if (!isPasswordValid)
+      return res.status(401).json({ message: "Credenziali non valide." });
 
     if (!user.isVerified) {
       return res.status(403).json({
@@ -138,7 +140,11 @@ export const forgotPassword = async (req, res) => {
       }
     }
     // Risposta generica per evitare user enumeration
-    res.status(200).json({ message: "Se l'indirizzo è registrato, riceverai un link per il reset." });
+    res
+      .status(200)
+      .json({
+        message: "Se l'indirizzo è registrato, riceverai un link per il reset.",
+      });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -175,18 +181,27 @@ export const getResetPasswordForm = (req, res) => {
 };
 
 export const resetPassword = async (req, res) => {
-  const isJson = req.is('application/json');
+  const isJson = req.is("application/json");
   try {
     const { token } = req.params;
     const password = req.body.password;
     const confirmPassword = req.body.confirmPassword;
 
     if (!isJson && password !== confirmPassword) {
-      return res.status(400).send('<p style="color:red">Le password non corrispondono.</p>');
+      return res
+        .status(400)
+        .send('<p style="color:red">Le password non corrispondono.</p>');
     }
     if (!password || password.length < 8) {
-      if (isJson) return res.status(400).json({ message: "Password di almeno 8 caratteri." });
-      return res.status(400).send('<p style="color:red">Password di almeno 8 caratteri richiesta.</p>');
+      if (isJson)
+        return res
+          .status(400)
+          .json({ message: "Password di almeno 8 caratteri." });
+      return res
+        .status(400)
+        .send(
+          '<p style="color:red">Password di almeno 8 caratteri richiesta.</p>',
+        );
     }
 
     const user = await User.findOne({
@@ -194,8 +209,13 @@ export const resetPassword = async (req, res) => {
       passwordResetExpires: { $gt: new Date() },
     });
     if (!user) {
-      if (isJson) return res.status(400).json({ message: "Token non valido o scaduto." });
-      return res.status(400).send('<p style="color:red">Token non valido o scaduto. Richiedi un nuovo link.</p>');
+      if (isJson)
+        return res.status(400).json({ message: "Token non valido o scaduto." });
+      return res
+        .status(400)
+        .send(
+          '<p style="color:red">Token non valido o scaduto. Richiedi un nuovo link.</p>',
+        );
     }
 
     user.passwordHash = await bcrypt.hash(password, 10);
@@ -203,7 +223,10 @@ export const resetPassword = async (req, res) => {
     user.passwordResetExpires = undefined;
     await user.save();
 
-    if (isJson) return res.status(200).json({ message: "Password aggiornata con successo." });
+    if (isJson)
+      return res
+        .status(200)
+        .json({ message: "Password aggiornata con successo." });
     res.send(`<html><body style="font-family:sans-serif;background:#121212;color:#fff;text-align:center;padding:60px">
       <h2 style="color:#2E5A27">✓ Password aggiornata!</h2>
       <p>Torna all'app Trento Smart Mountain per accedere.</p>

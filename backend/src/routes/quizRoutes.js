@@ -49,7 +49,8 @@ router.get("/:id", ...mw, async (req, res, next) => {
 router.post("/:id/submit", ...mw, async (req, res, next) => {
   try {
     const { error, value } = quizSubmitSchema.validate(req.body);
-    if (error) return res.status(422).json({ message: error.details[0].message });
+    if (error)
+      return res.status(422).json({ message: error.details[0].message });
     res.json(await submitQuiz(req.params.id, req.user.userId, value.answers));
   } catch (err) {
     next(err);

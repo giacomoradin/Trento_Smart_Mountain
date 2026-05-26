@@ -15,7 +15,10 @@ export function validate(schema, source = "body") {
     if (error) {
       return res.status(422).json({
         error: "Validazione fallita",
-        details: error.details.map((d) => ({ path: d.path.join("."), message: d.message })),
+        details: error.details.map((d) => ({
+          path: d.path.join("."),
+          message: d.message,
+        })),
       });
     }
     req[source] = value;
@@ -25,14 +28,25 @@ export function validate(schema, source = "body") {
 
 // ── Auth ────────────────────────────────────────────────────────────────
 
-const emailField = Joi.string().email({ tlds: { allow: false } }).max(254).lowercase().trim();
+const emailField = Joi.string()
+  .email({ tlds: { allow: false } })
+  .max(254)
+  .lowercase()
+  .trim();
 const passwordField = Joi.string().min(8).max(128);
 // Accetta nomi composti italiani: "Giacomo Radin", "D'Angelo", "De Luca-Rossi"
 // Caratteri ammessi: lettere (incluse accentate À-ÿ), cifre, spazi, apostrofi, trattini, punti.
-const usernameField = Joi.string().min(2).max(40).trim()
+const usernameField = Joi.string()
+  .min(2)
+  .max(40)
+  .trim()
   .pattern(/^[a-zA-ZÀ-ÿ0-9\s''.\-]+$/)
-  .message('Il nome utente può contenere lettere, numeri, spazi, apostrofi e trattini');
-const objectIdField = Joi.string().pattern(/^[0-9a-fA-F]{24}$/).message("ID non valido");
+  .message(
+    "Il nome utente può contenere lettere, numeri, spazi, apostrofi e trattini",
+  );
+const objectIdField = Joi.string()
+  .pattern(/^[0-9a-fA-F]{24}$/)
+  .message("ID non valido");
 
 export const loginSchema = Joi.object({
   email: emailField.required(),
@@ -65,7 +79,9 @@ export const resetPasswordSchema = Joi.object({
   confirmPassword: passwordField,
 }).custom((value, helpers) => {
   if (value.confirmPassword && value.password !== value.confirmPassword) {
-    return helpers.error("any.invalid", { message: "Le password non corrispondono" });
+    return helpers.error("any.invalid", {
+      message: "Le password non corrispondono",
+    });
   }
   return value;
 });
@@ -85,7 +101,10 @@ const gpxStatsSchema = Joi.object({
   trackPoints: Joi.number().integer().min(0).max(100000),
   elevationProfile: Joi.array().items(Joi.number()).max(50),
   estimatedPoints: Joi.number().integer().min(0).max(100000),
-  gpxDurationSec: Joi.number().integer().min(0).max(7 * 24 * 3600),
+  gpxDurationSec: Joi.number()
+    .integer()
+    .min(0)
+    .max(7 * 24 * 3600),
 });
 
 // Accetta sia "YYYY-MM-DD" (formato legacy del mobile) sia ISO 8601 completo.
@@ -129,19 +148,33 @@ export const updateSessionSchema = Joi.object({
 }).min(1);
 
 export const updateSessionStatusSchema = Joi.object({
-  status: Joi.string().valid("PLANNED", "ACTIVE", "COMPLETED", "CANCELLED").required(),
+  status: Joi.string()
+    .valid("PLANNED", "ACTIVE", "COMPLETED", "CANCELLED")
+    .required(),
 });
 
 export const joinSessionSchema = Joi.object({
-  inviteCode: Joi.string().trim().uppercase().pattern(/^TSM-[A-F0-9]{4}$/).required(),
+  inviteCode: Joi.string()
+    .trim()
+    .uppercase()
+    .pattern(/^TSM-[A-F0-9]{4}$/)
+    .required(),
 });
 
 // Stats opzionali — usate in PATCH /sessions/:id/complete: il client può
 // completare una sessione anche senza metriche (fallback CAI server-side).
 const actualStatsSchema = Joi.object({
-  movingSeconds: Joi.number().integer().min(0).max(7 * 24 * 3600),
-  totalSeconds: Joi.number().integer().min(0).max(7 * 24 * 3600),
-  distanceMeters: Joi.number().min(0).max(1000 * 1000),
+  movingSeconds: Joi.number()
+    .integer()
+    .min(0)
+    .max(7 * 24 * 3600),
+  totalSeconds: Joi.number()
+    .integer()
+    .min(0)
+    .max(7 * 24 * 3600),
+  distanceMeters: Joi.number()
+    .min(0)
+    .max(1000 * 1000),
   elevationGainM: Joi.number().integer().min(0).max(15000),
   finalPoints: Joi.number().integer().min(0).max(100000),
   estimatedCalories: Joi.number().integer().min(0).max(50000),
@@ -163,9 +196,15 @@ export const completeSessionSchema = Joi.object({
 
 export const createActivitySchema = Joi.object({
   name: Joi.string().min(1).max(120).trim().required(),
-  activityType: Joi.string().valid("hiking", "trail", "skitouring", "trekking").default("hiking"),
+  activityType: Joi.string()
+    .valid("hiking", "trail", "skitouring", "trekking")
+    .default("hiking"),
   startTimeMs: Joi.number().integer().min(0).required(),
-  endTimeMs: Joi.number().integer().min(0).greater(Joi.ref("startTimeMs")).required(),
+  endTimeMs: Joi.number()
+    .integer()
+    .min(0)
+    .greater(Joi.ref("startTimeMs"))
+    .required(),
   actualStats: actualStatsRequiredSchema.required(),
   difficultyLevel: difficultyField,
   elevationProfile: Joi.array().items(Joi.number()).max(200),
@@ -188,7 +227,7 @@ export const statsQuerySchema = Joi.object({
 // di registrazione accetta senza problemi.
 export const updateAccountSchema = Joi.object({
   username: usernameField.optional(),
-  email:    emailField.optional(),
+  email: emailField.optional(),
 }).min(1);
 
 export const changePasswordSchema = Joi.object({
@@ -201,7 +240,7 @@ export const deleteAccountSchema = Joi.object({
 });
 
 export const goalsSchema = Joi.object({
-  km:    Joi.number().min(0).max(500).optional(),
+  km: Joi.number().min(0).max(500).optional(),
   elevM: Joi.number().min(0).max(20000).optional(),
   count: Joi.number().min(0).max(50).optional(),
 }).min(1);
@@ -223,21 +262,23 @@ export const quizSubmitSchema = Joi.object({
 // ── NFC ─────────────────────────────────────────────────────────────────
 
 export const nfcScanSchema = Joi.object({
-  tagId:  Joi.string().required(),
+  tagId: Joi.string().required(),
   gpsLon: Joi.number().min(-180).max(180).required(),
   gpsLat: Joi.number().min(-90).max(90).required(),
 });
 
 export const nfcTotemCreateSchema = Joi.object({
-  tagId:         Joi.string().required(),
-  name:          Joi.string().required(),
-  description:   Joi.string().max(500).optional(),
-  lon:           Joi.number().min(-180).max(180).required(),
-  lat:           Joi.number().min(-90).max(90).required(),
-  altitude:      Joi.number().optional(),
-  radius:        Joi.number().min(10).max(500).default(50),
+  tagId: Joi.string().required(),
+  name: Joi.string().required(),
+  description: Joi.string().max(500).optional(),
+  lon: Joi.number().min(-180).max(180).required(),
+  lat: Joi.number().min(-90).max(90).required(),
+  altitude: Joi.number().optional(),
+  radius: Joi.number().min(10).max(500).default(50),
   creditsReward: Joi.number().min(0).max(500).default(25),
-  kind:          Joi.string().valid("checkpoint", "summit", "refuge").default("checkpoint"),
+  kind: Joi.string()
+    .valid("checkpoint", "summit", "refuge")
+    .default("checkpoint"),
 });
 
 // ── Profilo v2 (onboarding + edit) ──────────────────────────────────────
@@ -273,7 +314,12 @@ export const personalInfoSchema = Joi.object({
 
 export const experienceSchema = Joi.object({
   caiLevel: difficultyField,
-  baselineFitness: Joi.string().valid("sedentary", "active", "sport", "athlete"),
+  baselineFitness: Joi.string().valid(
+    "sedentary",
+    "active",
+    "sport",
+    "athlete",
+  ),
   weeklyTrainingFreq: Joi.string().valid("0-1", "2-3", "4+"),
 }).min(1);
 
@@ -282,7 +328,9 @@ export const experienceSchema = Joi.object({
 export const createChallengeSchema = Joi.object({
   title: Joi.string().min(3).max(80).trim().required(),
   description: Joi.string().max(280).trim().allow("", null),
-  metric: Joi.string().valid("distance", "elevation", "count", "points").required(),
+  metric: Joi.string()
+    .valid("distance", "elevation", "count", "points")
+    .required(),
   targetValue: Joi.number().min(0).max(1000000).optional(),
   startDate: Joi.date().iso().required(),
   endDate: Joi.date().iso().greater(Joi.ref("startDate")).required(),

@@ -26,7 +26,9 @@ export async function listTotems({ lon, lat, maxDistance } = {}) {
     };
   }
   return NfcTotem.find(filter)
-    .select("tagId name location kind creditsReward altitude radius description")
+    .select(
+      "tagId name location kind creditsReward altitude radius description",
+    )
     .lean();
 }
 
@@ -86,12 +88,24 @@ export async function scanTotem(userId, { tagId, gpsLon, gpsLat }) {
         creditsAwarded: 0,
         rejectionReason: "RATE_LIMIT",
       });
-      return { ok: true, alreadyScannedToday: true, creditsAwarded: 0, distance, totem };
+      return {
+        ok: true,
+        alreadyScannedToday: true,
+        creditsAwarded: 0,
+        distance,
+        totem,
+      };
     }
     throw err;
   }
 
-  await addCredits({ userId, amount: creditsAwarded, source: "nfc", refId: totem._id, refKind: "NfcTotem" });
+  await addCredits({
+    userId,
+    amount: creditsAwarded,
+    source: "nfc",
+    refId: totem._id,
+    refKind: "NfcTotem",
+  });
   // nfcStats è sotto-documento del discriminator Hiker → usa Hiker (vedi nota in creditService).
   await Hiker.findByIdAndUpdate(userId, {
     $inc: { "nfcStats.scansCount": 1, "nfcStats.scansCredits": creditsAwarded },
@@ -104,7 +118,14 @@ export async function scanTotem(userId, { tagId, gpsLon, gpsLat }) {
     console.error("[nfcService] badge eval fallita:", err.message);
   });
 
-  return { ok: true, alreadyScannedToday: false, creditsAwarded, distance, totem, newTotalCredits: user?.socialCredits };
+  return {
+    ok: true,
+    alreadyScannedToday: false,
+    creditsAwarded,
+    distance,
+    totem,
+    newTotalCredits: user?.socialCredits,
+  };
 }
 
 export async function getNfcHistory(userId, page = 1) {

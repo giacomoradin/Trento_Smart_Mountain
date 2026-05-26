@@ -14,6 +14,7 @@ Database: `tsm` (configurabile via `MONGO_URI` in `.env`).
 ### 1.1 Collezione `users` — pattern Discriminator
 
 **Modelli**:
+
 - `backend/src/models/user.js` — schema BASE condiviso (con `discriminatorKey: "role"`)
 - `backend/src/models/hiker.js` — discriminator `groupLeader`
 - `backend/src/models/refuge.js` — discriminator `rifugio` (con campi struttura)
@@ -24,6 +25,7 @@ Database: `tsm` (configurabile via `MONGO_URI` in `.env`).
 #### Refactor 2026-05: perché discriminator
 
 Prima del refactor lo schema User era "fat" e conteneva `rifugioDetails: null` anche per gli escursionisti. Con i discriminator Mongoose:
+
 - Una sola collection MongoDB → login, populate, JWT auth invariati
 - Schema specializzato per ruolo → no campi inutili nei documenti
 - Route separate (`/hikers`, `/refuges`, `/admin`) → API pulite
@@ -119,16 +121,18 @@ Campi specifici **flat sul documento** (non più subdocument):
 #### Discriminator `Admin` (`role: "admin"`)
 
 Nessun campo extra. Estensioni future:
+
 - `permissions: [String]` — permessi granulari
 - `auditLog: [...]` — tracciamento azioni
 
 // Virtual populate (NON salvato sul documento):
 userSchema.virtual("mySessions", {
-  ref: "HikeSession",
-  localField: "_id",
-  foreignField: "participants.userId"
+ref: "HikeSession",
+localField: "\_id",
+foreignField: "participants.userId"
 });
-```
+
+````
 
 #### Indici
 
@@ -136,7 +140,7 @@ userSchema.virtual("mySessions", {
 // Auto-generati da unique: true
 users.email_1                         // unique
 users.username_1                      // unique
-```
+````
 
 #### Note operative
 
@@ -214,12 +218,12 @@ users.username_1                      // unique
 
 ```javascript
 // Generato da unique: true su inviteCode
-hikesessions.inviteCode_1             // unique
+hikesessions.inviteCode_1; // unique
 
 // Geospatial 2dsphere SPARSE (post-fix M3)
-hikesessions.routeDetails.startPoint_2dsphere
-                                       // sparse: true → documenti senza startPoint non indicizzati
-                                       // evita pollution Null Island [0,0]
+hikesessions.routeDetails.startPoint_2dsphere;
+// sparse: true → documenti senza startPoint non indicizzati
+// evita pollution Null Island [0,0]
 ```
 
 #### Note operative
@@ -297,9 +301,9 @@ hikesessions.routeDetails.startPoint_2dsphere
 #### Indici
 
 ```javascript
-locations.externalId_1                // unique
-locations.location_2dsphere           // GeoJSON Point — query "nearby"
-locations.type_1                      // filtri type=town
+locations.externalId_1; // unique
+locations.location_2dsphere; // GeoJSON Point — query "nearby"
+locations.type_1; // filtri type=town
 ```
 
 #### Note operative
@@ -355,8 +359,8 @@ locations.type_1                      // filtri type=town
 #### Indici
 
 ```javascript
-activities.userId_1_completedAt_-1     // query "Le mie attività" ordinate per data
-activities.startPoint_2dsphere         // sparse, per query geografiche future
+activities.userId_1_completedAt_ - 1; // query "Le mie attività" ordinate per data
+activities.startPoint_2dsphere; // sparse, per query geografiche future
 ```
 
 #### Note operative
@@ -371,6 +375,66 @@ activities.startPoint_2dsphere         // sparse, per query geografiche future
 ## 2. Mobile — Room Database
 
 Database: `TsmDatabase` (file `tsm.db`), **versione 4** (bump Sprint 2: campi `retry_count`, `last_retry_at_ms`, `remote_id` aggiunti a `completed_activities` per il SyncManager con backoff incrementale).
+
+### 3. Collezione `emergencies`
+
+**Modello**: `backend/src/models/emergency.js`  
+**Collection MongoDB**: `emergencies`  
+**Branch**: `SOS` (US-19 MVP)
+
+Segnalazioni SOS legate a una `hikesessions` in stato `ACTIVE`. Il payload sensibile viaggia su HTTPS; il beacon BLE espone solo `beaconInstanceId` (vedi `docs/sos_feature.md`).
+
+#### Schema
+
+```javascript
+{
+  _id: ObjectId,
+  sessionId: ObjectId,              // ref HikeSession, required, indexed
+  senderUserId: ObjectId,           // ref User, required, indexed
+  emergencyType: String,          // INJURY | LOST | AVALANCHE | WEATHER | EQUIPMENT | OTHER
+  coordinates: {                    // GeoJSON Point — snapshot all'invio, non aggiornato
+    type: "Point",
+    coordinates: [Number],          // [longitude, latitude]
+  },
+  profileSnapshot: {
+    displayName: String,            // required (username al momento SOS)
+    personalInfo: { sex, birthDate, heightCm, weightKg },
+    experience: { caiLevel, baselineFitness, weeklyTrainingFreq },
+  },
+  status: String,                   // ACTIVE | SHARED_WITH_GROUP | DISMISSED | CANCELLED_BY_SENDER
+  beaconInstanceId: String,         // 12 hex, required
+  beaconActive: Boolean,            // default true — false se mittente senza beacon BLE
+  idempotencyKey: String,           // UUID v4, unique
+  signature: String,                // null — riservato Ed25519 (Sprint successivo)
+  cancelReason: String,             // MISTAKE | RESOLVED_SELF (solo cancel)
+  leaderAckAt: Date,
+  sharedAt: Date,
+  dismissedAt: Date,
+  dismissedBy: ObjectId,
+  cancelledAt: Date,
+  cancelledBy: ObjectId,
+  createdAt: Date,
+}
+```
+
+#### Indici
+
+```javascript
+emergencies.sessionId_1_status_1_createdAt_ - 1; // lista SOS per sessione
+emergencies.idempotencyKey_1; // unique — idempotenza POST
+```
+
+#### Note operative
+
+- **Visibilità**: capogruppo vede `ACTIVE` + `SHARED_WITH_GROUP`; partecipante vede `SHARED_WITH_GROUP` e proprie `ACTIVE`.
+- **Idempotenza**: stesso `idempotencyKey` + stesso `senderUserId` → `200` con documento esistente.
+- **Nessun TTL** su `idempotencyKey` nel modello attuale (la tabella proposta sotto con TTL 30g non è ancora applicata).
+
+---
+
+## 2. Mobile — Room Database
+
+Database: `TsmDatabase` (file `tsm.db`), **versione 5** (coda `pending_emergencies` per SOS offline). Versione 4: campi sync su `completed_activities`.
 **File**: `mobile/.../data/local/db/TsmDatabase.kt`
 
 ### 2.1 Entità `CachedUserProfileEntity`
@@ -425,11 +489,35 @@ data class CompletedActivityEntity(
 
 ---
 
-### 2.3 Migration strategy
+### 2.3 Entità `PendingEmergencyEntity`
+
+```kotlin
+@Entity(tableName = "pending_emergencies")
+data class PendingEmergencyEntity(
+    @PrimaryKey val idempotencyKey: String,
+    val sessionId: String,
+    val emergencyType: String,
+    val longitude: Double,
+    val latitude: Double,
+    val beaconInstanceId: String,
+    val createdAtMs: Long,
+    val retryCount: Int = 0,
+    val lastError: String? = null,
+)
+```
+
+**Uso**: `POST /emergencies` in coda se offline; flush via `EmergencyUploadWorker` (WorkManager) e retry in `RegistraViewModel`.
+
+**DAO**: `PendingEmergencyDao` — `upsert`, `getAll`, `deleteByKey`, `count`.
+
+---
+
+### 2.4 Migration strategy
 
 Attualmente Room è configurato con `fallbackToDestructiveMigration()` in `TsmDatabase.kt` — accettabile in dev, **da rimuovere prima del Play Store** (Sprint 3+).
 
 Quando si arriva al primo Play Store deploy:
+
 1. Migration esplicita per ogni schema change.
 2. Test su device con dati reali.
 
@@ -527,13 +615,13 @@ Trigger automatico: SessionDetailViewModel.loadMeteo(session)
 
 ### 4.1 Encrypted at rest
 
-| Cosa | Dove | Come |
-|------|------|------|
-| Password | MongoDB `users.passwordHash` | bcrypt cost 10 |
-| Reset/verify tokens | MongoDB `users.passwordResetToken`, `users.verificationToken` | Random 32-byte hex (non hashed — token monouso) |
-| JWT mobile | EncryptedSharedPreferences | AES-256 con master key in Android Keystore |
-| GPX, sessioni, meteo | MongoDB plain | (Da valutare encryption at rest MongoDB Atlas Sprint 4+) |
-| Telemetria Room | Plain SQLite | (Da valutare SQLCipher Sprint 3+) |
+| Cosa                 | Dove                                                          | Come                                                     |
+| -------------------- | ------------------------------------------------------------- | -------------------------------------------------------- |
+| Password             | MongoDB `users.passwordHash`                                  | bcrypt cost 10                                           |
+| Reset/verify tokens  | MongoDB `users.passwordResetToken`, `users.verificationToken` | Random 32-byte hex (non hashed — token monouso)          |
+| JWT mobile           | EncryptedSharedPreferences                                    | AES-256 con master key in Android Keystore               |
+| GPX, sessioni, meteo | MongoDB plain                                                 | (Da valutare encryption at rest MongoDB Atlas Sprint 4+) |
+| Telemetria Room      | Plain SQLite                                                  | (Da valutare SQLCipher Sprint 3+)                        |
 
 ### 4.2 Encrypted in transit
 
@@ -546,37 +634,37 @@ Trigger automatico: SessionDetailViewModel.loadMeteo(session)
 
 ### 5.1 Indici attivi
 
-| Collezione | Indice | Tipo | Uso |
-|------------|--------|------|-----|
-| `users` | `email_1` | unique | login, register check |
-| `users` | `username_1` | unique | register |
-| `hikesessions` | `inviteCode_1` | unique | join sessione |
+| Collezione     | Indice                             | Tipo            | Uso                            |
+| -------------- | ---------------------------------- | --------------- | ------------------------------ |
+| `users`        | `email_1`                          | unique          | login, register check          |
+| `users`        | `username_1`                       | unique          | register                       |
+| `hikesessions` | `inviteCode_1`                     | unique          | join sessione                  |
 | `hikesessions` | `routeDetails.startPoint_2dsphere` | 2dsphere sparse | future query "sessioni vicine" |
-| `locations` | `externalId_1` | unique | upsert seed |
-| `locations` | `location_2dsphere` | 2dsphere | nearby query meteo |
-| `locations` | `type_1` | btree | filtri type=town/poi |
+| `locations`    | `externalId_1`                     | unique          | upsert seed                    |
+| `locations`    | `location_2dsphere`                | 2dsphere        | nearby query meteo             |
+| `locations`    | `type_1`                           | btree           | filtri type=town/poi           |
 
 ### 5.2 Indici proposti Sprint 2+
 
-| Collezione | Indice | Motivo |
-|------------|--------|--------|
-| `hikesessions` | `creatorId_1` | velocizza `getSessionsByUser` |
-| `hikesessions` | `participants.userId_1` | idem |
-| `hikesessions` | `status_1 + meetingDate_1` (compound) | filtro "sessioni future ATTIVE" — dopo migration M2 |
-| `users` | `role_1` | dashboard admin |
-| nuovo `emergencies` | `userId + createdAt_-1` (compound) | history SOS |
-| nuovo `emergencies` | `idempotencyKey_1` (unique, TTL 30g) | idempotenza |
+| Collezione          | Indice                                | Motivo                                              |
+| ------------------- | ------------------------------------- | --------------------------------------------------- |
+| `hikesessions`      | `creatorId_1`                         | velocizza `getSessionsByUser`                       |
+| `hikesessions`      | `participants.userId_1`               | idem                                                |
+| `hikesessions`      | `status_1 + meetingDate_1` (compound) | filtro "sessioni future ATTIVE" — dopo migration M2 |
+| `users`             | `role_1`                              | dashboard admin                                     |
+| nuovo `emergencies` | `userId + createdAt_-1` (compound)    | history SOS                                         |
+| nuovo `emergencies` | `idempotencyKey_1` (unique, TTL 30g)  | idempotenza                                         |
 
 ### 5.3 Query pattern critici
 
-| Query | Indici usati | Complessità |
-|-------|--------------|-------------|
-| Login (email lookup) | `email_1` unique | O(log n) |
-| Join sessione (inviteCode) | `inviteCode_1` unique | O(log n) |
-| Get my sessions (creatorId OR participants) | (collection scan attuale — proposta indice) | O(n) Sprint 1 → O(log n) Sprint 2 |
-| Meteo nearby | `location_2dsphere` | O(log n) |
-| Stats annuali (filter status COMPLETED) | (collection scan — Sprint 2 indice compound) | O(n) |
+| Query                                       | Indici usati                                 | Complessità                       |
+| ------------------------------------------- | -------------------------------------------- | --------------------------------- |
+| Login (email lookup)                        | `email_1` unique                             | O(log n)                          |
+| Join sessione (inviteCode)                  | `inviteCode_1` unique                        | O(log n)                          |
+| Get my sessions (creatorId OR participants) | (collection scan attuale — proposta indice)  | O(n) Sprint 1 → O(log n) Sprint 2 |
+| Meteo nearby                                | `location_2dsphere`                          | O(log n)                          |
+| Stats annuali (filter status COMPLETED)     | (collection scan — Sprint 2 indice compound) | O(n)                              |
 
 ---
 
-*Database schema doc — Sprint 1 chiuso 17/05/2026. Aggiornare ad ogni schema change con script migration documentato.*
+_Database schema doc — Sprint 1 chiuso 17/05/2026. Aggiornare ad ogni schema change con script migration documentato._

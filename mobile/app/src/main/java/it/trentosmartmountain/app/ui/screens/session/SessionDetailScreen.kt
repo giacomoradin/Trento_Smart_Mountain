@@ -94,9 +94,7 @@ import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.SessionDetailViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.ui.components.AvatarImage
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
@@ -122,10 +120,6 @@ fun SessionDetailScreen(
     viewModel: SessionDetailViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val todayFormatted = remember {
-        SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
-    }
-    
     // Per debug: mostra un Toast con l'errore se il ViewModel segnala un errore di caricamento o salvataggio della sessione
     val context = LocalContext.current
 
@@ -147,7 +141,10 @@ fun SessionDetailScreen(
             title = { Text("Avviare in anticipo?", color = Color.White) },
             text = {
                 Text(
-                    "La sessione è pianificata per ${uiState.session?.meetingDate ?: "un altro giorno"}. Vuoi avviarla ugualmente?",
+                    "La sessione è pianificata per ${
+                        SessionDateFormats.formatDisplayFromApi(uiState.session?.meetingDate)
+                            .ifBlank { "un altro giorno" }
+                    }. Vuoi avviarla ugualmente?",
                     color = Color.Gray,
                 )
             },
@@ -186,7 +183,7 @@ fun SessionDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     dateState.selectedDateMillis?.let { millis ->
-                        viewModel.onEditDateChange(SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date(millis)))
+                        viewModel.onEditDateChange(SessionDateFormats.formatApiFromMillis(millis))
                     }
                     showEditDatePicker = false
                 }) { Text("OK", color = TsmAccent) }
@@ -218,7 +215,7 @@ fun SessionDetailScreen(
 
     val session = uiState.session
     val isCreator = session?.creatorId?._id == currentUserId || currentUserId.isBlank()
-    val isToday = session?.meetingDate == todayFormatted
+    val isToday = SessionDateFormats.isTodayApi(session?.meetingDate)
 
     Scaffold(
         containerColor = TsmBackground,
@@ -239,7 +236,9 @@ fun SessionDetailScreen(
                             }
                         }
                         val subtitle = buildString {
-                            session?.meetingDate?.let { append(it) }
+                            session?.meetingDate?.let {
+                                append(SessionDateFormats.formatDisplayFromApi(it))
+                            }
                             session?.meetingTime?.let { append(" · $it") }
                             session?.creatorId?.username?.let { append(" · host $it") }
                         }
@@ -399,7 +398,7 @@ fun SessionDetailScreen(
             }
 
             MeteoCard(
-                meetingDate = session.meetingDate ?: "—",
+                meetingDate = SessionDateFormats.formatDisplayFromApi(session.meetingDate).ifBlank { "—" },
                 uiState = uiState,
                 onRefresh = viewModel::refreshMeteo,
             )
@@ -410,7 +409,7 @@ fun SessionDetailScreen(
 
             Button(
                 onClick = {
-                    viewModel.onAvviaClick(todayFormatted) {
+                    viewModel.onAvviaClick {
                         SessionStartCoordinator.requestStart(sessionId)
                         onAvviaConfirmed(sessionId)
                     }
@@ -447,7 +446,8 @@ private fun EditModeCard(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
-                    value = uiState.editDate, onValueChange = {},
+                    value = SessionDateFormats.formatDisplayFromApi(uiState.editDate),
+                    onValueChange = {},
                     label = { Text("DATA", color = Color.Gray) },
                     modifier = Modifier.weight(1f).clickable { onDateClick() }, readOnly = true, enabled = false,
                     leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null, tint = TsmAccent) },

@@ -41,9 +41,15 @@ import {
 } from "./middleware/securityMiddleware.js";
 import { globalLimiter, authenticatedLimiter, writeLimiter } from "./middleware/rateLimitMiddleware.js";
 
-const swaggerDocument = JSON.parse(
-  readFileSync(new URL("../../swagger-output.json", import.meta.url)),
-);
+// Caricamento sicuro di Swagger (evita crash se il file manca in prod)
+let swaggerDocument;
+try {
+  swaggerDocument = JSON.parse(
+    readFileSync(new URL("../../swagger-output.json", import.meta.url)),
+  );
+} catch (err) {
+  console.warn("[app] WARN: swagger-output.json non trovato. La documentazione API non sarà disponibile.");
+}
 
 const app = express();
 
@@ -84,7 +90,9 @@ app.use(globalLimiter);
 app.use(writeLimiter);
 
 // Swagger UI pubblico per l'esplorazione delle API
-app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
+if (swaggerDocument) {
+  app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
+}
 
 // Route principali
 app.use("/auth", authRoutes);

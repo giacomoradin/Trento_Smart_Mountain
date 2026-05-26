@@ -299,23 +299,24 @@ fun TsmNavHost() {
                     submission = result,
                     quizTitle = pendingQuizTitle,
                     onBackToFormazione = {
-                        // Navighiamo prima, il cleanup avviene dopo o via lifecycle
                         navController.navigate(Routes.FORMAZIONE) {
                             popUpTo(Routes.MAIN_HIKER) { inclusive = false }
                         }
+                        // Cleanup differito per evitare ricolorazioni bianche durante la transizione
+                        pendingQuizResult = null
                     },
                     onRetry = {
                         val qId = pendingQuizId
                         navController.navigate(Routes.quizRoute(qId)) {
                             popUpTo(Routes.QUIZ_RESULT) { inclusive = true }
                         }
+                        pendingQuizResult = null
                     },
                 )
             } else {
                 Box(Modifier.fillMaxSize().background(DarkSurface), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = AccentCyan)
                 }
-                // Se arriviamo qui per errore (es. deep link diretto), torniamo alla formazione
                 LaunchedEffect(Unit) {
                     navController.navigate(Routes.FORMAZIONE) {
                         popUpTo(Routes.MAIN_HIKER) { inclusive = false }

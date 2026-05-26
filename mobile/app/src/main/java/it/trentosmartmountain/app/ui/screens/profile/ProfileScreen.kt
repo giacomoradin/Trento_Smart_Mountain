@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -90,8 +91,6 @@ fun ProfileScreen(
             LocalContext.current.applicationContext as Application,
         ),
     ),
-    // Secondo VM dedicato al profilo v2 — scoped alla Activity (non al NavBackStackEntry)
-    // così tutte le schermate di edit condividono la stessa istanza e lo stato persiste.
     profileV2ViewModel: ProfileV2ViewModel = viewModel(
         viewModelStoreOwner = LocalContext.current as ComponentActivity,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
@@ -104,7 +103,6 @@ fun ProfileScreen(
     val context = LocalContext.current
     val nfcAvailable = NfcAdapter.getDefaultAdapter(context) != null
 
-    // Photo picker per l'upload dell'avatar
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -112,7 +110,6 @@ fun ProfileScreen(
             try {
                 val inputStream = context.contentResolver.openInputStream(it)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
-                // Ridimensioniamo per restare nei 2MB di limite backend (e non appesantire DB)
                 val scaled = if (bitmap.width > 500) {
                     val ratio = 500f / bitmap.width
                     Bitmap.createScaledBitmap(bitmap, 500, (bitmap.height * ratio).toInt(), true)
@@ -120,7 +117,8 @@ fun ProfileScreen(
 
                 val outputStream = ByteArrayOutputStream()
                 scaled.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
-                val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
+                // Usiamo NO_WRAP per evitare newline che potrebbero rompere il JSON o i regex
+                val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
                 profileV2ViewModel.uploadAvatar("data:image/jpeg;base64,$base64")
             } catch (e: Exception) {
                 Toast.makeText(context, "Errore caricamento foto: ${e.message}", Toast.LENGTH_LONG).show()
@@ -142,7 +140,6 @@ fun ProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            // ── Header ──────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -155,7 +152,6 @@ fun ProfileScreen(
                     fontWeight = FontWeight.Bold,
                 )
                 Row {
-                    // Icona "vedi profilo completo" — apre la read-only overview
                     IconButton(onClick = onNavigateToProfileView) {
                         Icon(Icons.Default.AccountCircle, contentDescription = "Vedi profilo", tint = Color.White)
                     }
@@ -167,16 +163,11 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Banner "Completa il tuo profilo" ────────────────────
-            // Visibile solo se l'onboarding non è stato completato (sia "Termina" che
-            // "Salta tutto" lo marcano). Reactive: il VM aggiorna profileCompletedAt
-            // dopo la chiamata POST /me/profile-complete → ricomposizione automatica.
             if (!profileV2State.isLoadingProfile && profileV2State.profileCompletedAt == null) {
                 CompleteProfileBanner(onNavigateToOnboarding = onNavigateToOnboarding)
                 Spacer(Modifier.height(12.dp))
             }
 
-            // ── User card ────────────────────────────────────────
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -186,7 +177,6 @@ fun ProfileScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Avatar
                     Box(
                         modifier = Modifier
                             .size(64.dp)
@@ -205,7 +195,7 @@ fun ProfileScreen(
                                     bitmap = bitmap.asImageBitmap(),
                                     contentDescription = "Foto profilo",
                                     modifier = Modifier.fillMaxSize(),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    contentScale = ContentScale.Crop
                                 )
                             }
                         } else {
@@ -217,7 +207,6 @@ fun ProfileScreen(
                                 fontSize = 22.sp,
                             )
                         }
-                        // Icona overlay per indicare che è modificabile
                         Box(
                             modifier = Modifier
                                 .size(20.dp)
@@ -245,12 +234,10 @@ fun ProfileScreen(
                         Spacer(Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Chip(text = "Trentino", background = ChipBlue, textColor = AccentCyan)
-                            // Mostriamo "Verificato" solo se il backend conferma user.isVerified.
-                            // Per gli utenti non ancora verificati appare invece "Email da confermare".
                             when (uiState.isVerified) {
                                 true -> Chip(text = "Verificato", background = ChipGreen, textColor = AccentGreen)
                                 false -> Chip(text = "Email da confermare", background = Color(0xFF3D2A1A), textColor = Color(0xFFE6B800))
-                                null -> Unit // ancora in caricamento: non mostrare lo stato finché non sappiamo
+                                null -> Unit
                             }
                         }
                     }
@@ -259,7 +246,6 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Social Credits card ───────────────────────────────
             val level = uiState.level
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -317,7 +303,6 @@ fun ProfileScreen(
                         trackColor = Color(0xFF3A3A3C),
                     )
                     Spacer(Modifier.height(16.dp))
-                    // KPI row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -335,9 +320,6 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Weekly goals card ─────────────────────────────────
-            // Visibile solo se l'utente ha impostato almeno un goal > 0. Per chi non li
-            // ha mai configurati mostriamo un CTA "Imposta obiettivi" più discreto.
             WeeklyGoalsCard(
                 goals = profileV2State.weeklyGoals,
                 stats = profileV2State.weeklyStats,
@@ -346,7 +328,6 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── NFC Totem card ───────────────────────────────────
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -419,7 +400,6 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Formazione card ──────────────────────────────────
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -480,7 +460,6 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Bacheca (Badge + Certificati) entry ───────────────
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { onNavigateToBadges() },
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -505,7 +484,6 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Sfide social entry ────────────────────────────────
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { onNavigateToChallenges() },
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -530,7 +508,6 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Account entry row ────────────────────────────────
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { onNavigateToAccount() },
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -552,7 +529,6 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Logout entry row ────────────────────────────────
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { viewModel.logout(onLoggedOut) },
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF2A1A1A)),
@@ -596,29 +572,12 @@ private fun KpiCell(value: String, label: String) {
 
 @Composable
 private fun KpiDivider() {
-    Box(
-        modifier = Modifier
-            .width(1.dp)
-            .height(40.dp)
-            .background(Color(0xFF3A3A3C)),
-    )
+    Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color(0xFF3A3A3C)))
 }
 
-/**
- * Card "Obiettivi settimanali": per ogni metrica mostra "corrente / target" e
- * una barra di progresso. Stato vuoto (nessun goal impostato) mostra un CTA
- * più discreto. La card è interamente cliccabile e apre GoalsEditScreen.
- */
 @Composable
-private fun WeeklyGoalsCard(
-    goals: WeeklyGoals?,
-    stats: WeeklyStatsResponse?,
-    onClick: () -> Unit,
-) {
-    // Edge case: backend ritorna sempre il subdocument weeklyGoals con default 0
-    // → "nessun obiettivo" significa tutti e 3 i campi a 0.
+private fun WeeklyGoalsCard(goals: WeeklyGoals?, stats: WeeklyStatsResponse?, onClick: () -> Unit) {
     val hasAnyGoal = goals != null && (goals.km > 0 || goals.elevM > 0 || goals.count > 0)
-
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -631,137 +590,60 @@ private fun WeeklyGoalsCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "OBIETTIVI SETTIMANALI",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.labelSmall,
-                        letterSpacing = 1.sp,
-                    )
+                    Text("OBIETTIVI SETTIMANALI", color = TextSecondary, style = MaterialTheme.typography.labelSmall, letterSpacing = 1.sp)
                     if (!hasAnyGoal) {
-                        Text(
-                            "Imposta i tuoi target →",
-                            color = AccentCyan,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Text("Imposta i tuoi target →", color = AccentCyan, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     }
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
             }
-
             if (hasAnyGoal) {
                 Spacer(Modifier.height(10.dp))
-                // F12: leggiamo units dal PreferencesHolder così km/m vs mi/ft
-                // riflette la preferenza salvata. Cambio reattivo: switch metric→imperial
-                // in PreferencesEditScreen → ProfileScreen ricomposta automaticamente.
                 val prefs by PreferencesHolder.prefs.collectAsStateWithLifecycle()
                 val units = prefs.units
-                if (goals.km > 0) {
-                    GoalRowFormatted(
-                        label = "Distanza",
-                        currentText = UnitsFormatter.distance(stats?.km ?: 0.0, units, decimals = 1),
-                        targetText = UnitsFormatter.distance(goals.km.toDouble(), units, decimals = 1),
-                        progress = ((stats?.km ?: 0.0) / goals.km).toFloat().coerceIn(0f, 1f),
-                        reached = (stats?.km ?: 0.0) >= goals.km,
-                    )
+                if (goals!!.km > 0) {
+                    GoalRowFormatted("Distanza", UnitsFormatter.distance(stats?.km ?: 0.0, units, 1), UnitsFormatter.distance(goals.km.toDouble(), units, 1), if (goals.km > 0) ((stats?.km ?: 0.0) / goals.km).toFloat().coerceIn(0f, 1f) else 0f, (stats?.km ?: 0.0) >= goals.km)
                     Spacer(Modifier.height(8.dp))
                 }
                 if (goals.elevM > 0) {
-                    GoalRowFormatted(
-                        label = "Dislivello",
-                        currentText = UnitsFormatter.elevation(stats?.elevM ?: 0, units),
-                        targetText = UnitsFormatter.elevation(goals.elevM, units),
-                        progress = ((stats?.elevM ?: 0).toFloat() / goals.elevM).coerceIn(0f, 1f),
-                        reached = (stats?.elevM ?: 0) >= goals.elevM,
-                    )
+                    GoalRowFormatted("Dislivello", UnitsFormatter.elevation(stats?.elevM ?: 0, units), UnitsFormatter.elevation(goals.elevM, units), if (goals.elevM > 0) ((stats?.elevM ?: 0).toFloat() / goals.elevM).coerceIn(0f, 1f) else 0f, (stats?.elevM ?: 0) >= goals.elevM)
                     Spacer(Modifier.height(8.dp))
                 }
                 if (goals.count > 0) {
-                    // Count è adimensionale — nessuna conversione di unità.
-                    GoalRowFormatted(
-                        label = "Escursioni",
-                        currentText = "${stats?.count ?: 0}",
-                        targetText = "${goals.count}",
-                        progress = ((stats?.count ?: 0).toFloat() / goals.count).coerceIn(0f, 1f),
-                        reached = (stats?.count ?: 0) >= goals.count,
-                    )
+                    GoalRowFormatted("Escursioni", "${stats?.count ?: 0}", "${goals.count}", if (goals.count > 0) ((stats?.count ?: 0).toFloat() / goals.count).coerceIn(0f, 1f) else 0f, (stats?.count ?: 0) >= goals.count)
                 }
             }
         }
     }
 }
 
-/**
- * GoalRow disaccoppiata dalla formattazione: il caller passa già `currentText`
- * e `targetText` formattati (via UnitsFormatter). Così la card non deve sapere
- * nulla di km/miles/m/ft e l'aggiunta di nuove unità non richiede modifiche qui.
- */
 @Composable
-private fun GoalRowFormatted(
-    label: String,
-    currentText: String,
-    targetText: String,
-    progress: Float,
-    reached: Boolean,
-) {
+private fun GoalRowFormatted(label: String, currentText: String, targetText: String, progress: Float, reached: Boolean) {
     val accentColor = if (reached) AccentGreen else AccentCyan
     Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = Color.White, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = "$currentText / $targetText",
-                color = accentColor,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Bold,
-            )
+            Text("$currentText / $targetText", color = accentColor, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(4.dp))
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-            color = accentColor,
-            trackColor = Color(0xFF3A3A3C),
-        )
+        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = accentColor, trackColor = Color(0xFF3A3A3C))
     }
 }
 
-/**
- * Banner CTA "Completa il tuo profilo": appare nella schermata Profilo finché
- * l'utente non ha terminato (o esplicitamente saltato) l'onboarding v2.
- * Coerente con la scelta UX "skippable con banner" — non bloccante.
- */
 @Composable
 private fun CompleteProfileBanner(onNavigateToOnboarding: () -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onNavigateToOnboarding() },
+        modifier = Modifier.fillMaxWidth().clickable { onNavigateToOnboarding() },
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2A3A)),
         shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan),
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("👤", fontSize = 28.sp)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Completa il tuo profilo",
-                    color = AccentCyan,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    "Bastano pochi minuti — dati personali, esperienza outdoor, preferenze. Migliora le stime e personalizza i crediti.",
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text("Completa il tuo profilo", color = AccentCyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                Text("Dati personali, esperienza, preferenze. Migliora le stime e i crediti.", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
             }
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = AccentCyan)
         }

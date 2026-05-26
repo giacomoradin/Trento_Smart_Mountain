@@ -1,6 +1,11 @@
 import Emergency from "../models/emergency.js";
 import HikeSession from "../models/hikeSession.js";
 import User from "../models/user.js";
+import {
+  notifySessionGroupLeaders,
+  notifySessionParticipants,
+  sendPushToUsers,
+} from "./notificationService.js";
 
 const OPEN_STATUSES = ["ACTIVE", "SHARED_WITH_GROUP"];
 const TERMINAL_STATUSES = ["DISMISSED", "CANCELLED_BY_SENDER"];
@@ -95,6 +100,24 @@ export async function createEmergency(senderUserId, payload) {
     { path: "senderUserId", select: "username email" },
     { path: "sessionId", select: "routeDetails.name inviteCode status" },
   ]);
+
+  const session = await HikeSession.findById(sessionId);
+  if (session) {
+    await notifySessionGroupLeaders(
+      session,
+      {
+        title: "SOS — emergenza in gruppo",
+        body: `${profileSnapshot.displayName} ha inviato un SOS`,
+        data: {
+          type: "sos_created",
+          emergencyId: populated._id.toString(),
+          sessionId: sessionId.toString(),
+        },
+      },
+      senderUserId,
+    );
+  }
+
   return { emergency: populated, isNew: true };
 }
 
@@ -149,7 +172,10 @@ export async function listSessionEmergencies(sessionId, userId) {
 
   const emergencies = await Emergency.find(filter)
     .sort({ createdAt: -1 })
-    .populate("senderUserId", "username email");
+    .populate([
+      { path: "senderUserId", select: "username email" },
+      { path: "sessionId", select: "routeDetails.name inviteCode status" },
+    ]);
 
   return {
     emergencies,
@@ -202,8 +228,46 @@ export async function patchEmergency(emergencyId, userId, action, extras = {}) {
   }
 
   await emergency.save();
-  return emergency.populate([
+  const populated = await emergency.populate([
     { path: "senderUserId", select: "username email" },
     { path: "sessionId", select: "routeDetails.name inviteCode status" },
   ]);
+
+  const notifyPayload = {
+    data: {
+      emergencyId: populated._id.toString(),
+      sessionId: session._id.toString(),
+    },
+  };
+
+  if (action === "share_with_group") {
+    await notifySessionParticipants(
+      session,
+      {
+        title: "SOS condiviso con il gruppo",
+        body: "Il capogruppo ha condiviso un'allerta SOS",
+        data: { ...notifyPayload.data, type: "sos_shared" },
+      },
+      userId,
+    );
+  } else if (action === "dismiss") {
+    const senderId = populated.senderUserId?._id || populated.senderUserId;
+    await sendPushToUsers([senderId], {
+      title: "SOS chiuso",
+      body: "Il capogruppo ha chiuso la segnalazione",
+      data: { ...notifyPayload.data, type: "sos_dismissed" },
+    });
+  } else if (action === "cancel") {
+    await notifySessionGroupLeaders(
+      session,
+      {
+        title: "SOS revocato",
+        body: "Il partecipante ha annullato il segnale SOS",
+        data: { ...notifyPayload.data, type: "sos_cancelled" },
+      },
+      userId,
+    );
+  }
+
+  return populated;
 }

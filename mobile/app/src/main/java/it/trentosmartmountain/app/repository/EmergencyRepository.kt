@@ -8,7 +8,9 @@ import it.trentosmartmountain.app.data.local.db.PendingEmergencyEntity
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.CreateEmergencyRequest
 import it.trentosmartmountain.app.data.remote.dto.GeoPointDto
+import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
 import it.trentosmartmountain.app.data.remote.dto.PatchEmergencyRequest
+import it.trentosmartmountain.app.data.remote.dto.SessionEmergenciesResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -110,14 +112,55 @@ class EmergencyRepository(private val context: Context) {
         }
     }
 
-    suspend fun listSessionEmergencies(sessionId: String) =
+    suspend fun listSessionEmergencies(sessionId: String): Result<SessionEmergenciesResponse> =
         withContext(Dispatchers.IO) {
-            api.getSessionEmergencies(sessionId)
+            try {
+                val res = api.getSessionEmergencies(sessionId)
+                if (res.isSuccessful && res.body() != null) {
+                    Result.success(res.body()!!)
+                } else {
+                    Result.failure(Exception(res.errorBody()?.string() ?: "HTTP ${res.code()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
 
-    suspend fun cancelEmergency(emergencyId: String, reason: String) =
+    suspend fun getEmergency(emergencyId: String): Result<EmergencyResponse> =
         withContext(Dispatchers.IO) {
-            api.patchEmergency(emergencyId, PatchEmergencyRequest(action = "cancel", reason = reason))
+            try {
+                val res = api.getEmergency(emergencyId)
+                if (res.isSuccessful && res.body() != null) Result.success(res.body()!!)
+                else Result.failure(Exception(res.errorBody()?.string() ?: "HTTP ${res.code()}"))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    suspend fun cancelEmergency(emergencyId: String, reason: String): Result<EmergencyResponse> =
+        patchEmergency(emergencyId, PatchEmergencyRequest(action = "cancel", reason = reason))
+
+    suspend fun dismissEmergency(emergencyId: String): Result<EmergencyResponse> =
+        patchEmergency(emergencyId, PatchEmergencyRequest(action = "dismiss"))
+
+    suspend fun shareEmergencyWithGroup(emergencyId: String): Result<EmergencyResponse> =
+        patchEmergency(emergencyId, PatchEmergencyRequest(action = "share_with_group"))
+
+    suspend fun ackEmergency(emergencyId: String): Result<EmergencyResponse> =
+        patchEmergency(emergencyId, PatchEmergencyRequest(action = "ack"))
+
+    private suspend fun patchEmergency(
+        emergencyId: String,
+        body: PatchEmergencyRequest,
+    ): Result<EmergencyResponse> =
+        withContext(Dispatchers.IO) {
+            try {
+                val res = api.patchEmergency(emergencyId, body)
+                if (res.isSuccessful && res.body() != null) Result.success(res.body()!!)
+                else Result.failure(Exception(res.errorBody()?.string() ?: "HTTP ${res.code()}"))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
 
     suspend fun hasPendingUpload(): Boolean =

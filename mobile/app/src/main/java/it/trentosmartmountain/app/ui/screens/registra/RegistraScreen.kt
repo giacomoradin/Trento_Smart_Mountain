@@ -92,6 +92,10 @@ fun RegistraScreen(
   val notificationLauncher =
     rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+  LaunchedEffect(Unit) {
+    viewModel.syncActiveSessionFromServer()
+  }
+
   LaunchedEffect(hasLocationPermission) {
     if (hasLocationPermission) {
       viewModel.onLocationPermissionResult(true)
@@ -144,6 +148,8 @@ fun RegistraScreen(
     uiState.hasLocationPermission && uiState.userLocation != null
 
   Box(modifier = modifier.fillMaxSize()) {
+    SosAlertBorderOverlay(show = uiState.showSosAlertBorder)
+
     TsmMapView(
       modifier = Modifier.fillMaxSize(),
       userLocation = uiState.userLocation,
@@ -163,6 +169,39 @@ fun RegistraScreen(
       altitudeMeters = uiState.currentAltitudeMeters,
       modifier = Modifier.align(Alignment.TopCenter),
     )
+
+    uiState.incomingSosDebugMessage?.let { debugMsg ->
+      if (!uiState.showIncomingEmergencyIcon) {
+        Surface(
+          modifier =
+            Modifier
+              .align(Alignment.TopCenter)
+              .padding(top = 100.dp, start = 16.dp, end = 16.dp),
+          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+          shape = MaterialTheme.shapes.small,
+        ) {
+          Text(
+            text = debugMsg,
+            modifier = Modifier.padding(8.dp),
+            style = MaterialTheme.typography.labelSmall,
+          )
+        }
+      }
+    }
+
+    if (uiState.showIncomingEmergencyIcon) {
+      IncomingEmergencyIconButton(
+        count = uiState.incomingEmergencies.size,
+        onClick = viewModel::onIncomingEmergencyIconClick,
+        modifier =
+          Modifier
+            .align(Alignment.TopEnd)
+            .padding(
+              top = RegistraLayout.incomingEmergencyIconTop(isTrackingActive),
+              end = 12.dp,
+            ),
+      )
+    }
 
     if (uiState.isAutoPaused) {
       RegistraAutoPauseBanner(
@@ -270,6 +309,26 @@ fun RegistraScreen(
       onMistake = { viewModel.confirmCancelActiveSos("MISTAKE") },
       onResolved = { viewModel.confirmCancelActiveSos("RESOLVED_SELF") },
     )
+  }
+
+  if (uiState.showSosListSheet) {
+    SosIncomingListDialog(
+      emergencies = uiState.incomingEmergencies,
+      onDismiss = viewModel::closeSosListSheet,
+      onSelect = viewModel::openIncomingEmergencyDetail,
+    )
+  }
+
+  uiState.selectedIncomingEmergency?.let { emergency ->
+    if (uiState.showSosDetailSheet) {
+      SosIncomingDetailDialog(
+        emergency = emergency,
+        isGroupLeader = uiState.isSessionGroupLeader,
+        onClose = viewModel::closeSosDetailSheet,
+        onDismissEmergency = viewModel::dismissSelectedIncomingEmergency,
+        onShareWithGroup = viewModel::shareSelectedIncomingEmergency,
+      )
+    }
   }
 
   // ── Dialog "Attività troppo corta" — chiede conferma per attività libere < 50m ──

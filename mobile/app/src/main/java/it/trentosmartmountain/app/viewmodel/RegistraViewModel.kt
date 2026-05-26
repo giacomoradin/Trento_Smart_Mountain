@@ -15,7 +15,11 @@ import it.trentosmartmountain.app.data.location.StationaryDetector
 import it.trentosmartmountain.app.data.location.TrackingLocationBus
 import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.data.location.UserLocationTracker
+import it.trentosmartmountain.app.data.local.TokenStorage
+import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.data.remote.TsmApiClient
+import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
+import it.trentosmartmountain.app.util.SosNotificationHelper
 import it.trentosmartmountain.app.data.remote.dto.ActualStats
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
@@ -32,6 +36,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -97,6 +103,16 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val sosStatusMessage: String? = null,
     val showSosConfirmDialog: Boolean = false,
     val showSosCancelDialog: Boolean = false,
+    /** SOS in entrata (capogruppo o partecipante dopo share). */
+    val incomingEmergencies: List<EmergencyResponse> = emptyList(),
+    val isSessionGroupLeader: Boolean = false,
+    val showIncomingEmergencyIcon: Boolean = false,
+    val showSosAlertBorder: Boolean = false,
+    val showSosListSheet: Boolean = false,
+    val showSosDetailSheet: Boolean = false,
+    val selectedIncomingEmergency: EmergencyResponse? = null,
+    /** Debug ricezione SOS (es. errore API o sessione non collegata). */
+    val incomingSosDebugMessage: String? = null,
   )
 
   enum class SosPhase {
@@ -121,8 +137,13 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private var stillSinceMs: Long? = null
   private var lastSnapshot: LocationSnapshot? = null
   private var activeSosIdempotencyKey: String? = null
+  private var emergencyPollJob: Job? = null
+  private var lastIncomingEmergencyCount = 0
+  private var currentUserId: String? = null
 
   init {
+    currentUserId =
+      TokenStorage.getInstance(app).getToken()?.let { JwtDecoder.userIdFrom(it) }
     viewModelScope.launch {
       locationTracker.location.collect { snapshot ->
         if (_uiState.value.trackingStatus == TrackingStatus.IDLE) {
@@ -150,6 +171,71 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
           _uiState.update { it.copy(activeSessionId = sessionId) }
         }
         SessionStartCoordinator.consume()
+      }
+    }
+    viewModelScope.launch {
+      uiState
+        .map { it.activeSessionId }
+        .distinctUntilChanged()
+        .collect { sessionId ->
+          if (sessionId != null) {
+            startEmergencyPolling(sessionId)
+          } else {
+            stopEmergencyPolling()
+            _uiState.update {
+              it.copy(
+                incomingEmergencies = emptyList(),
+                showIncomingEmergencyIcon = false,
+                showSosAlertBorder = false,
+                isSessionGroupLeader = false,
+                incomingSosDebugMessage = null,
+              )
+            }
+          }
+        }
+    }
+  }
+
+  /**
+   * Collega la sessione ACTIVE dal server se l'utente è su Registra senza aver passato da AVVIA
+   * (es. capogruppo già in escursione o tab cambiata).
+   */
+  fun syncActiveSessionFromServer() {
+    viewModelScope.launch {
+      if (_uiState.value.activeSessionId != null) {
+        refreshIncomingEmergencies()
+        return@launch
+      }
+      runCatching {
+        val res = TsmApiClient.service().getMySessions()
+        if (!res.isSuccessful) {
+          _uiState.update {
+            it.copy(incomingSosDebugMessage = "Sessioni: HTTP ${res.code()}")
+          }
+          return@launch
+        }
+        val active = res.body()?.firstOrNull { it.status == "ACTIVE" }
+        if (active != null) {
+          _uiState.update {
+            it.copy(
+              activeSessionId = active._id,
+              incomingSosDebugMessage = null,
+            )
+          }
+          refreshSessionRole(active._id)
+          refreshIncomingEmergencies()
+        } else {
+          _uiState.update {
+            it.copy(
+              incomingSosDebugMessage =
+                "Nessuna sessione ACTIVE sul server — usa AVVIA dal dettaglio escursione",
+            )
+          }
+        }
+      }.onFailure { e ->
+        _uiState.update {
+          it.copy(incomingSosDebugMessage = "Rete sessioni: ${e.message}")
+        }
       }
     }
   }
@@ -184,6 +270,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
           UpdateSessionStatusRequest(status = "ACTIVE"),
         )
       }
+      refreshSessionRole(sessionId)
     }
     // Avvia solo se permessi GPS + GPS hardware acceso; altrimenti
     // startTracking() stesso setterà i flag di warning corretti e la UI
@@ -656,6 +743,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
               sosStatusMessage = "SOS inviato al capogruppo",
             )
           }
+          refreshIncomingEmergencies()
         },
         onFailure = { err ->
           if (err is OfflineEmergencyException) {
@@ -745,7 +833,142 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     return bytes.joinToString("") { "%02x".format(it) }
   }
 
+  fun onIncomingEmergencyIconClick() {
+    _uiState.update { it.copy(showSosListSheet = true, showSosAlertBorder = false) }
+    viewModelScope.launch {
+      val unacked = _uiState.value.incomingEmergencies.filter { it.leaderAckAt == null }
+      for (emergency in unacked) {
+        emergencyRepo.ackEmergency(emergency.id)
+      }
+      refreshIncomingEmergencies()
+    }
+  }
+
+  fun closeSosListSheet() {
+    _uiState.update { it.copy(showSosListSheet = false) }
+  }
+
+  fun openIncomingEmergencyDetail(emergency: EmergencyResponse) {
+    _uiState.update {
+      it.copy(
+        selectedIncomingEmergency = emergency,
+        showSosDetailSheet = true,
+        showSosListSheet = false,
+      )
+    }
+  }
+
+  fun closeSosDetailSheet() {
+    _uiState.update {
+      it.copy(showSosDetailSheet = false, selectedIncomingEmergency = null, showSosListSheet = true)
+    }
+  }
+
+  fun dismissSelectedIncomingEmergency() {
+    val id = _uiState.value.selectedIncomingEmergency?.id ?: return
+    viewModelScope.launch {
+      emergencyRepo.dismissEmergency(id)
+      _uiState.update { it.copy(showSosDetailSheet = false, selectedIncomingEmergency = null) }
+      refreshIncomingEmergencies()
+      _uiState.update { it.copy(showSosListSheet = it.incomingEmergencies.isNotEmpty()) }
+    }
+  }
+
+  fun shareSelectedIncomingEmergency() {
+    val id = _uiState.value.selectedIncomingEmergency?.id ?: return
+    viewModelScope.launch {
+      emergencyRepo.shareEmergencyWithGroup(id)
+      refreshIncomingEmergencies()
+      val updated = _uiState.value.incomingEmergencies.find { it.id == id }
+      if (updated != null) {
+        _uiState.update { it.copy(selectedIncomingEmergency = updated) }
+      }
+    }
+  }
+
+  private fun startEmergencyPolling(sessionId: String) {
+    emergencyPollJob?.cancel()
+    emergencyPollJob =
+      viewModelScope.launch {
+        refreshSessionRole(sessionId)
+        refreshIncomingEmergencies()
+        while (isActive) {
+          delay(EMERGENCY_POLL_INTERVAL_MS)
+          refreshIncomingEmergencies()
+        }
+      }
+  }
+
+  private fun stopEmergencyPolling() {
+    emergencyPollJob?.cancel()
+    emergencyPollJob = null
+    lastIncomingEmergencyCount = 0
+  }
+
+  private suspend fun refreshSessionRole(sessionId: String) {
+    val userId = currentUserId ?: return
+    runCatching {
+      val res = TsmApiClient.service().getSessionById(sessionId)
+      if (res.isSuccessful && res.body() != null) {
+        val session = res.body()!!
+        val isLeader =
+          session.participants?.any {
+            it.userId?._id == userId && it.role == "groupLeader"
+          } == true
+        _uiState.update { it.copy(isSessionGroupLeader = isLeader) }
+      }
+    }
+  }
+
+  private suspend fun refreshIncomingEmergencies() {
+    val sessionId = _uiState.value.activeSessionId ?: return
+    val result = emergencyRepo.listSessionEmergencies(sessionId)
+    result.fold(
+      onSuccess = { payload ->
+        val list = payload.emergencies
+        val isLeader = payload.isGroupLeader
+        val visible =
+          list.isNotEmpty() &&
+            (isLeader || list.any { it.status == "SHARED_WITH_GROUP" })
+        val showBorder =
+          isLeader && payload.hasUnacked && !_uiState.value.showSosListSheet
+
+        if (isLeader && list.size > lastIncomingEmergencyCount && list.isNotEmpty()) {
+          val newest = list.firstOrNull()
+          val name = newest?.profileSnapshot?.displayName ?: newest?.senderUserId?.username ?: "?"
+          SosNotificationHelper.showIncomingSos(app, name)
+        }
+        lastIncomingEmergencyCount = if (isLeader) list.size else lastIncomingEmergencyCount
+
+        _uiState.update {
+          it.copy(
+            incomingEmergencies = list,
+            isSessionGroupLeader = isLeader,
+            showIncomingEmergencyIcon = visible,
+            showSosAlertBorder = showBorder,
+            incomingSosDebugMessage =
+              if (isLeader && list.isEmpty()) {
+                "In attesa SOS (sessione ${sessionId.takeLast(6)})…"
+              } else {
+                null
+              },
+          )
+        }
+      },
+      onFailure = { err ->
+        _uiState.update {
+          it.copy(
+            incomingSosDebugMessage = "Poll emergenze: ${err.message}",
+            showIncomingEmergencyIcon = false,
+            showSosAlertBorder = false,
+          )
+        }
+      },
+    )
+  }
+
   override fun onCleared() {
+    stopEmergencyPolling()
     sosCountdownJob?.cancel()
     timerJob?.cancel()
     stationaryDetector.stop()
@@ -761,5 +984,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     private const val RESUME_SPEED_MPS = 1.0f
     private const val AUTO_PAUSE_DELAY_MS = 45_000L
     private const val SOS_COUNTDOWN_SEC = 15
+    private const val EMERGENCY_POLL_INTERVAL_MS = 8_000L
   }
 }

@@ -1,5 +1,6 @@
 package it.trentosmartmountain.app.data.remote.dto
 
+import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 
 data class GeoPointDto(
@@ -36,6 +37,7 @@ data class EmergencyRouteRef(
 
 data class EmergencyResponse(
     @SerializedName("_id") val id: String,
+    @JsonAdapter(EmergencySessionRefAdapter::class)
     @SerializedName("sessionId") val sessionId: EmergencySessionRef,
     @SerializedName("senderUserId") val senderUserId: UserRefDto? = null,
     @SerializedName("emergencyType") val emergencyType: String,

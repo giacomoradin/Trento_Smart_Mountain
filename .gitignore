@@ -162,6 +162,10 @@ project.freetime
 *.out
 *.log
 T6_D3_Ingegneria_Del_Software.md
+# Milestone 4 — sorgente LaTeX-in-md mantenuto solo in locale (deliverable finale).
+# Coprire sia il main worktree che eventuali copie in sottocartelle docs/.
+M4_ID6_Ingegneria_del_Software.md
+docs/M4_ID6_Ingegneria_del_Software.md
 
 
 # Ignora tutti i file Excel

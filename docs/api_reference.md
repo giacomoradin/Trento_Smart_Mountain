@@ -229,22 +229,46 @@ Registra un nuovo **rifugio** con metadati struttura (campi flat).
 
 ### `GET /hikers/:id`
 
-Profilo escursionista.
+Profilo escursionista. La response è filtrata dal **privacy gate**
+(`utils/userPrivacy.js`): self/admin riceve il documento intero, gli altri
+ricevono una versione ridotta che conserva solo i campi pubblici
+(`username`, `email`, `isVerified`, `socialCredits`, `nfcStats`, e
+`personalInfo.avatarUrl`). I campi privati di `personalInfo` (sex,
+birthDate, heightCm, weightKg), `experience`, `preferences`, `weeklyGoals`,
+`profileCompletedAt` sono rimossi per i viewer "other".
 
 | Campo | Tipo | Note |
 |-------|------|------|
 | **Auth** | 🔐 JWT | — |
-| **Response 200** | JSON | User document senza `passwordHash` |
+| **Response 200** | JSON | User document filtrato (no `passwordHash`, no token reset, privacy gate applicato) |
 | **Response 404** | JSON | Escursionista non trovato |
 
 ### `PUT /hikers/:id`
 
-Aggiorna profilo escursionista (campi base: `username`, `email`).
+Aggiorna profilo escursionista (campi base: `username`, `email`). Autorizzazione: solo self o admin.
+
+| Campo | Tipo | Note |
+|-------|------|------|
+| **Auth** | 🔐 JWT + (self ‖ admin) | 403 altrimenti |
+| **Body** | JSON | Campi da aggiornare |
+
+### `PATCH /api/v1/users/me/personal-info`
+
+Aggiorna il sotto-documento `personalInfo` dell'utente loggato (sex, birthDate,
+heightCm, weightKg, **avatarUrl**). Update parziale: invia solo i campi che
+vuoi cambiare.
 
 | Campo | Tipo | Note |
 |-------|------|------|
 | **Auth** | 🔐 JWT | — |
-| **Body** | JSON | Campi da aggiornare |
+| **Body** | JSON | `{ sex?, birthDate?, heightCm?, weightKg?, avatarUrl? }` |
+| **avatarUrl** | data URI Base64 | Pattern: `^data:image/(jpeg\|jpg\|png\|webp);base64,...$`, max 7 MB string. Body limit Express: 5 MB. Inviare `""` per **rimuovere** la foto. |
+| **Response 200** | JSON | `{ personalInfo: { ... } }` con tutti i campi aggiornati |
+| **Response 409** | JSON | `LockedFieldError` se si tenta di modificare `birthDate` già impostato (anti-cheat) |
+| **Response 422** | JSON | Joi validation fallita (pattern data URI non rispettato o size eccessiva) |
+
+**NB**: anche `experience.caiLevel` è anti-cheat. Per modificarlo va usato
+`PATCH /api/v1/users/me/experience`, che applica lo stesso lock pattern.
 
 ---
 

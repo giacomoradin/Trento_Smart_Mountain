@@ -65,9 +65,16 @@ export const createRefuge = async (req, res) => {
 
     const saved = await refuge.save();
 
-    sendVerificationEmail(email, verificationToken).catch((err) => {
+    // Invio email sincrono: se fallisce, cancelliamo l'utente e restituiamo errore.
+    try {
+      await sendVerificationEmail(email, verificationToken);
+    } catch (err) {
       console.error("[refugeService] Invio email verifica fallito:", err.message);
-    });
+      await refuge.deleteOne(); // Rollback creazione utente
+      return res.status(500).json({
+        message: "Errore durante l'invio dell'email di verifica. L'account non è stato creato, riprova tra qualche istante.",
+      });
+    }
 
     const { passwordHash: _p, verificationToken: _v, __v, ...refugePublic } =
       saved.toObject();

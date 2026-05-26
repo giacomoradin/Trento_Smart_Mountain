@@ -55,6 +55,5 @@ export const corsOptions = cors({
   credentials: false,
 });
 
-// 100 KB è abbondante per gpxStats (elevationProfile = ~50 numeri = ~1KB) e
-// blocca payload abnormi (JSON bomb).
-export const requestSizeLimit = "100kb";
+// 2 MB è sufficiente per un avatar Base64 compresso e blocca payload abnormi (JSON bomb).
+export const requestSizeLimit = "2mb";

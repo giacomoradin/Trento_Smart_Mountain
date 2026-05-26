@@ -168,6 +168,28 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** Carica l'avatar codificato in Base64 sul server. */
+    fun uploadAvatar(base64: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isSavingSection = true, sectionError = null, sectionSuccess = null)
+            runCatching {
+                api.updatePersonalInfo(PersonalInfo(avatarUrl = base64))
+            }.onSuccess { resp ->
+                if (resp.isSuccessful) {
+                    _state.value = _state.value.copy(
+                        isSavingSection = false,
+                        personalInfo = resp.body()?.personalInfo ?: _state.value.personalInfo,
+                        sectionSuccess = "Foto profilo aggiornata.",
+                    )
+                } else {
+                    _state.value = _state.value.copy(isSavingSection = false, sectionError = parseErrorMessage(resp))
+                }
+            }.onFailure {
+                _state.value = _state.value.copy(isSavingSection = false, sectionError = it.message)
+            }
+        }
+    }
+
     fun saveExperience(data: Experience) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isSavingSection = true, sectionError = null, sectionSuccess = null)

@@ -64,11 +64,31 @@ data class ActualStatsResponse(
     val currentAltitudeM: Int? = null,
 )
 
-/** Utente embedded (creatore o partecipante) nella risposta sessione. */
+/**
+ * Utente embedded (creatore o partecipante) nella risposta sessione.
+ *
+ * NB: `personalInfo` è populated dal backend (`hikeSessionService.js`) con il solo
+ * campo `avatarUrl` (vedi privacy gate in `userPrivacy.js`). Gli altri campi
+ * di `personalInfo` (sex, birthDate, heightCm, weightKg) restano privati e non
+ * arrivano qui quando il viewer non è self/admin.
+ */
 data class SessionUserInfo(
     val _id: String,
     val username: String,
     val email: String?,
+    val personalInfo: SessionUserPersonalInfo? = null,
+) {
+    /** Helper: estrae l'avatar (data URI Base64) dal sotto-documento personalInfo. */
+    val avatarUrl: String? get() = personalInfo?.avatarUrl
+}
+
+/**
+ * Sotto-documento `personalInfo` ridotto al solo `avatarUrl` per la response
+ * sessioni (gli altri campi sono privati). Definito separatamente per non
+ * confondere con il `PersonalInfo` completo del profilo v2 dell'utente loggato.
+ */
+data class SessionUserPersonalInfo(
+    val avatarUrl: String? = null,
 )
 
 /** Partecipante a una sessione con ruolo e timestamp di join. */

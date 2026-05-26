@@ -11,7 +11,10 @@
  */
 
 const SELF_ONLY_FIELDS = [
-  "personalInfo",
+  // NB: `personalInfo` è gestito a parte (vedi `PERSONAL_INFO_PUBLIC_FIELDS`):
+  //     l'avatarUrl resta pubblico per la UI (chip partecipanti, autori post,
+  //     feed sociale), tutti gli altri campi (peso, sesso, data nascita) restano
+  //     privati e vengono cancellati per i viewer "other".
   "experience",
   "preferences",
   "profileCompletedAt",
@@ -24,9 +27,22 @@ const SELF_ONLY_FIELDS = [
 ];
 
 /**
+ * Campi di `personalInfo` visibili anche per viewer "other" (non self/admin).
+ *
+ * `avatarUrl` è esplicitamente pubblico: la UI ne ha bisogno per mostrare la
+ * foto profilo degli altri utenti nelle liste di partecipanti, nei card delle
+ * sessioni, e nel feed sociale. Tutti gli altri campi di `personalInfo`
+ * (sex, birthDate, heightCm, weightKg) restano privati.
+ */
+const PERSONAL_INFO_PUBLIC_FIELDS = ["avatarUrl"];
+
+/**
  * Restituisce una copia dell'oggetto utente con i campi self-only rimossi
  * se `viewerIsSelfOrAdmin` è false. Lavora indifferentemente su documenti
  * Mongoose (passa per `.toObject()`) o su risultati `.lean()`.
+ *
+ * Per `personalInfo`: se viewer è "other", mantiene solo i campi pubblici
+ * (avatarUrl) e cancella il resto. Se viewer è self/admin, lo passa intero.
  */
 export function stripPrivateFields(user, viewerIsSelfOrAdmin) {
   if (!user) return user;
@@ -34,6 +50,22 @@ export function stripPrivateFields(user, viewerIsSelfOrAdmin) {
   if (viewerIsSelfOrAdmin) return plain;
   for (const field of SELF_ONLY_FIELDS) {
     delete plain[field];
+  }
+  // Filtra personalInfo mantenendo solo i campi pubblici (avatarUrl).
+  // Se non c'è nessun campo pubblico valorizzato, rimuoviamo del tutto la chiave
+  // per non sporcare la response con un oggetto vuoto.
+  if (plain.personalInfo && typeof plain.personalInfo === "object") {
+    const publicSlice = {};
+    for (const key of PERSONAL_INFO_PUBLIC_FIELDS) {
+      if (plain.personalInfo[key] !== undefined && plain.personalInfo[key] !== null) {
+        publicSlice[key] = plain.personalInfo[key];
+      }
+    }
+    if (Object.keys(publicSlice).length > 0) {
+      plain.personalInfo = publicSlice;
+    } else {
+      delete plain.personalInfo;
+    }
   }
   return plain;
 }

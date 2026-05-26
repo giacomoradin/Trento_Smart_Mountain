@@ -114,8 +114,8 @@ export async function joinSession(userId, inviteCode) {
   // Populate simmetrico (come getSessionById) per evitare che il client Kotlin
   // riceva ObjectId raw nei campi ref → potenziale Gson IllegalStateException.
   return session.populate([
-    { path: "creatorId", select: "username email" },
-    { path: "participants.userId", select: "username email" },
+    { path: "creatorId", select: "username email personalInfo.avatarUrl" },
+    { path: "participants.userId", select: "username email personalInfo.avatarUrl" },
   ]);
 }
 
@@ -196,8 +196,8 @@ export async function getSessionById(sessionId) {
      #swagger.description = 'Recupera i dettagli completi di una sessione, inclusi i dati di partecipanti e creatore.'
   */
   return HikeSession.findById(sessionId)
-    .populate("creatorId", "username email")
-    .populate("participants.userId", "username email");
+    .populate("creatorId", "username email personalInfo.avatarUrl")
+    .populate("participants.userId", "username email personalInfo.avatarUrl");
 }
 
 // Recupera tutte le sessioni di un utente (come creator o partecipante)
@@ -205,8 +205,8 @@ export async function getSessionsByUser(userId) {
   return HikeSession.find({
     $or: [{ creatorId: userId }, { "participants.userId": userId }],
   })
-    .populate("creatorId", "username email")
-    .populate("participants.userId", "username email")
+    .populate("creatorId", "username email personalInfo.avatarUrl")
+    .populate("participants.userId", "username email personalInfo.avatarUrl")
     .sort({ meetingDate: 1 });
 }
 
@@ -243,8 +243,8 @@ export async function updateSessionDetails(sessionId, userId, updates) {
   // Senza populate("participants.userId"), la risposta contiene ObjectId raw (string)
   // invece dell'oggetto User → Gson crash: "Expected BEGIN_OBJECT but was STRING".
   return session.populate([
-    { path: "creatorId", select: "username email" },
-    { path: "participants.userId", select: "username email" },
+    { path: "creatorId", select: "username email personalInfo.avatarUrl" },
+    { path: "participants.userId", select: "username email personalInfo.avatarUrl" },
   ]);
 }
 

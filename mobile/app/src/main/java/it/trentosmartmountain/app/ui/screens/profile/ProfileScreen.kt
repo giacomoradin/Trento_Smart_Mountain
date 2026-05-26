@@ -1,18 +1,16 @@
 package it.trentosmartmountain.app.ui.screens.profile
 
 import android.app.Application
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.nfc.NfcAdapter
-import android.util.Base64
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,9 +28,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,14 +42,19 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,10 +66,14 @@ import it.trentosmartmountain.app.data.preferences.PreferencesHolder
 import it.trentosmartmountain.app.data.preferences.UnitsFormatter
 import it.trentosmartmountain.app.data.remote.dto.WeeklyGoals
 import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
+import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.theme.TsmPrimary
+import it.trentosmartmountain.app.ui.util.AvatarUtils
 import it.trentosmartmountain.app.viewmodel.ProfileV2ViewModel
 import it.trentosmartmountain.app.viewmodel.ProfileViewModel
-import it.trentosmartmountain.app.ui.theme.TsmPrimary
-import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val DarkSurface = Color(0xFF1C1C1E)
 private val CardBackground = Color(0xFF2C2C2E)
@@ -74,6 +83,7 @@ private val TextSecondary = Color(0xFF8E8E93)
 private val ChipBlue = Color(0xFF1A3A5C)
 private val ChipGreen = Color(0xFF1A3D1A)
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProfileScreen(
     modifier: Modifier = Modifier,
@@ -102,28 +112,70 @@ fun ProfileScreen(
     val profileV2State by profileV2ViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val nfcAvailable = NfcAdapter.getDefaultAdapter(context) != null
+    val coroutineScope = rememberCoroutineScope()
+    var showRemoveAvatarDialog by remember { mutableStateOf(false) }
 
+    // Toast su esito upload/rimozione avatar. Reagisce ai messaggi prodotti
+    // dal ViewModel (sectionSuccess/sectionError) e poi li resetta per non
+    // ri-mostrarsi a ogni ricomposizione.
+    LaunchedEffect(profileV2State.sectionSuccess) {
+        profileV2State.sectionSuccess?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            profileV2ViewModel.clearSectionMessages()
+        }
+    }
+    LaunchedEffect(profileV2State.sectionError) {
+        profileV2State.sectionError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            profileV2ViewModel.clearSectionMessages()
+        }
+    }
+
+    // Photo picker: la conversione URI → data URI Base64 viene fatta in
+    // Dispatchers.IO (read bytes, EXIF, BitmapFactory, downscale, JPEG, Base64)
+    // per non bloccare il main thread su immagini grandi.
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.GetContent(),
     ) { uri ->
-        uri?.let {
-            try {
-                val inputStream = context.contentResolver.openInputStream(it)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                val scaled = if (bitmap.width > 500) {
-                    val ratio = 500f / bitmap.width
-                    Bitmap.createScaledBitmap(bitmap, 500, (bitmap.height * ratio).toInt(), true)
-                } else bitmap
-
-                val outputStream = ByteArrayOutputStream()
-                scaled.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
-                // Usiamo NO_WRAP per evitare newline che potrebbero rompere il JSON o i regex
-                val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
-                profileV2ViewModel.uploadAvatar("data:image/jpeg;base64,$base64")
-            } catch (e: Exception) {
-                Toast.makeText(context, "Errore caricamento foto: ${e.message}", Toast.LENGTH_LONG).show()
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch {
+            val dataUri = withContext(Dispatchers.IO) {
+                AvatarUtils.prepareAvatarForUpload(context.contentResolver, uri)
+            }
+            if (dataUri == null) {
+                Toast.makeText(
+                    context,
+                    "Impossibile leggere la foto selezionata. Riprova.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            } else {
+                profileV2ViewModel.uploadAvatar(dataUri)
             }
         }
+    }
+
+    if (showRemoveAvatarDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemoveAvatarDialog = false },
+            title = { Text("Rimuovere la foto profilo?") },
+            text = {
+                Text(
+                    "L'avatar tornerà a essere visualizzato con le iniziali del tuo username.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRemoveAvatarDialog = false
+                    profileV2ViewModel.removeAvatar()
+                }) { Text("Rimuovi", color = Color(0xFFFF6B6B)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveAvatarDialog = false }) { Text("Annulla") }
+            },
+            containerColor = CardBackground,
+            titleContentColor = Color.White,
+            textContentColor = TextSecondary,
+        )
     }
 
     Surface(modifier = modifier.fillMaxSize(), color = DarkSurface) {
@@ -177,45 +229,43 @@ fun ProfileScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF2D5A2D))
-                            .clickable { photoPickerLauncher.launch("image/*") },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val avatarUrl = profileV2State.personalInfo?.avatarUrl
-                        if (!avatarUrl.isNullOrBlank() && avatarUrl.startsWith("data:image")) {
-                            val base64Data = avatarUrl.substringAfter("base64,")
-                            val imageBytes = Base64.decode(base64Data, Base64.DEFAULT)
-                            val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                            if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = "Foto profilo",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-                        } else {
-                            val initials = uiState.username?.take(2)?.uppercase() ?: "??"
-                            Text(
-                                text = initials,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp,
-                            )
-                        }
+                    // Avatar interattivo: tap = scegli foto, long-press = dialog rimuovi.
+                    // L'overlay loader (isLoading) appare quando il VM sta caricando o
+                    // rimuovendo l'avatar, così l'utente vede chiaramente che qualcosa
+                    // sta succedendo (era il vecchio "click e nessun feedback" che
+                    // confondeva — bug #6 del report).
+                    val hasAvatar = !profileV2State.personalInfo?.avatarUrl.isNullOrBlank()
+                    Box(modifier = Modifier.size(64.dp)) {
+                        AvatarImage(
+                            avatarUrl = profileV2State.personalInfo?.avatarUrl,
+                            fallbackName = uiState.username,
+                            size = 64.dp,
+                            isLoading = profileV2State.isSavingSection,
+                            backgroundColorOverride = Color(0xFF2D5A2D),
+                            modifier = Modifier.combinedClickable(
+                                enabled = !profileV2State.isSavingSection,
+                                onClick = { photoPickerLauncher.launch("image/*") },
+                                onLongClick = {
+                                    if (hasAvatar) showRemoveAvatarDialog = true
+                                },
+                            ),
+                        )
+                        // Badge "fotocamera" in basso a destra: suggerisce visivamente
+                        // che l'avatar è tappabile per cambiare la foto.
                         Box(
                             modifier = Modifier
                                 .size(20.dp)
                                 .align(Alignment.BottomEnd)
                                 .background(TsmPrimary, CircleShape)
                                 .border(1.dp, Color.White, CircleShape),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                            Icon(
+                                Icons.Default.CameraAlt,
+                                contentDescription = "Cambia foto",
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp),
+                            )
                         }
                     }
                     Spacer(Modifier.width(16.dp))

@@ -1,9 +1,10 @@
 // Database import script for Sentieri data
+import "dotenv/config";
 import mongoose from "mongoose";
 import path from "path";
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import "dotenv/config"
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 import KMLParser from '../backend/src/utils/KMLParser.js';

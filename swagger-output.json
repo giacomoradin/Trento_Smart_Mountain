@@ -7,7 +7,12 @@
   },
   "servers": [
     {
-      "url": "https://trento-smart-mountain-xz7u.onrender.com/"
+      "url": "http://localhost:3000",
+      "description": "Local Development"
+    },
+    {
+      "url": "https://trento-smart-mountain-xz7u.onrender.com",
+      "description": "Production (Render)"
     }
   ],
   "tags": [
@@ -34,6 +39,10 @@
     {
       "name": "Weather",
       "description": "Previsioni meteo TINIA con cache MongoDB 1h"
+    },
+    {
+      "name": "Sentieri",
+      "description": "Sentieri SAT (mountain pathways)"
     }
   ],
   "paths": {
@@ -1527,35 +1536,6 @@
         }
       }
     },
-    "/api/v1/sentieri/{codice}": {
-      "get": {
-        "tags": [
-          "Sentieri"
-        ],
-        "description": "Recupera i dettagli completi di un sentiero (include coordinate).",
-        "parameters": [
-          {
-            "name": "codice",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
-      }
-    },
     "/api/v1/sentieri/destinazioni": {
       "get": {
         "tags": [
@@ -1581,6 +1561,35 @@
         "parameters": [
           {
             "name": "nome",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/api/v1/sentieri/{codice}": {
+      "get": {
+        "tags": [
+          "Sentieri"
+        ],
+        "description": "Recupera i dettagli completi di un sentiero (include coordinate).",
+        "parameters": [
+          {
+            "name": "codice",
             "in": "path",
             "required": true,
             "schema": {

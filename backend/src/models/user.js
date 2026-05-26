@@ -27,6 +27,7 @@ const userSchema = new Schema(
     verificationToken: { type: String },
     passwordResetToken: { type: String },
     passwordResetExpires: { type: Date },
+    avatarUrl: { type: String },
 
     /**
      * Ruoli per-sessione dell'utente (popolati da hikeSessionService).

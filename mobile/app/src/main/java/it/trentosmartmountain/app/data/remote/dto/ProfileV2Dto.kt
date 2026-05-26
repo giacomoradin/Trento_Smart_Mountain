@@ -18,6 +18,7 @@ data class PersonalInfo(
     @SerializedName("birthDate") val birthDate: String? = null, // ISO 8601
     @SerializedName("heightCm") val heightCm: Int? = null,
     @SerializedName("weightKg") val weightKg: Double? = null,
+    @SerializedName("avatarUrl") val avatarUrl: String? = null,
 )
 
 data class Experience(

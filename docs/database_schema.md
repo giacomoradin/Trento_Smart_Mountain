@@ -59,10 +59,47 @@ Tutti i discriminatori ereditano questi campi:
 
 #### Discriminator `Hiker` (`role: "groupLeader"`)
 
-Nessun campo extra (Sprint 1). Estensioni future:
-- `saldoSc: Number` — saldo Social Credits
-- `badges: [String]` — gamification
-- `livelloEsperienza: String` — T/E/EE/EEA
+Estensione Sprint 2 con profilo v2, gamification, foto profilo:
+
+```javascript
+{
+  // ... tutti i campi base User, e in più:
+  socialCredits: Number,                 // default 0, indexed
+  weeklyGoals: { km, elevM, count },     // obiettivi settimanali
+  nfcStats: { scansCount, scansCredits },// telemetria scansioni NFC
+  rewardedQuizzes: [ObjectId],           // idempotency claim crediti quiz
+
+  personalInfo: {                        // profilo v2 — opzionali, skippable
+    sex: "M"|"F"|"X"|"N",
+    birthDate: Date,                     // anti-cheat lock (LockedFieldError 409)
+    heightCm: Number,
+    weightKg: Number,
+    avatarUrl: String,                   // ★ data URI Base64 (foto profilo, Sprint 2 serale)
+                                         //   pattern Joi: data:image/(jpeg|png|webp);base64,...
+                                         //   max ~7 MB stringa (body cap 5 MB)
+                                         //   pubblico anche per other-view (vedi userPrivacy.js)
+  },
+  experience: {
+    caiLevel: "T"|"E"|"EE"|"EEA",        // anti-cheat lock
+    baselineFitness: "sedentary"|"active"|"sport"|"athlete",
+    weeklyTrainingFreq: "0-1"|"2-3"|"4+",
+  },
+  preferences: {
+    units: "metric"|"imperial",
+    language: String,                    // ISO 639-1
+    notifications: { pushEnabled, emailDigest, fcmToken },
+    privacy: { profileVisibility },
+  },
+  profileCompletedAt: Date,              // null = primo accesso, mostra banner onboarding
+}
+```
+
+**NB importante (lesson learned 26/05):** tutti i write su questi campi devono
+usare il modello `Hiker` (es. `Hiker.findByIdAndUpdate(...)`), MAI il modello
+base `User`. Lo strict mode di Mongoose applica lo schema del modello con cui
+esegui la query, e l'update via `User.*` viene droppato silenziosamente per
+i campi del discriminator. Vedi sezione `discriminator.test.js` per il
+contratto fissato in test.
 
 #### Discriminator `Refuge` (`role: "rifugio"`)
 

@@ -15,24 +15,22 @@ import it.trentosmartmountain.app.data.location.StationaryDetector
 import it.trentosmartmountain.app.data.location.TrackingLocationBus
 import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.data.location.UserLocationTracker
-import it.trentosmartmountain.app.data.session.SessionStartCoordinator
-import it.trentosmartmountain.app.repository.SessionCommandRepository
-import it.trentosmartmountain.app.repository.TrackingPersistenceRepository
-import it.trentosmartmountain.app.service.ForegroundTrackingService
 import it.trentosmartmountain.app.data.local.TokenStorage
 import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.data.remote.TsmApiClient
-import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
-import it.trentosmartmountain.app.util.SosNotificationHelper
 import it.trentosmartmountain.app.data.remote.dto.ActualStats
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
+import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.data.sync.SyncManager
 import it.trentosmartmountain.app.repository.EmergencyRepository
 import it.trentosmartmountain.app.repository.OfflineEmergencyException
+import it.trentosmartmountain.app.repository.SessionCommandRepository
+import it.trentosmartmountain.app.repository.TrackingPersistenceRepository
 import it.trentosmartmountain.app.service.ForegroundTrackingService
+import it.trentosmartmountain.app.util.SosNotificationHelper
 import it.trentosmartmountain.app.data.ble.BluetoothHelper
 import it.trentosmartmountain.app.service.SosBeaconService
 import java.security.SecureRandom
@@ -104,13 +102,6 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
      * appena il tracking parte o l'utente chiude il dialog.
      */
     val gpsDisabledWarning: Boolean = false,
-
-  private val app = getApplication<Application>()
-  private val locationTracker = UserLocationTracker(app)
-  private val trackingEngine = HikeTrackingEngine()
-  private val stationaryDetector = StationaryDetector(app)
-  private val persistence = TrackingPersistenceRepository(app)
-  private val sessionCommands = SessionCommandRepository(app)
     /** SOS: fase UI (conferma, countdown, attivo, coda offline). */
     val sosPhase: SosPhase = SosPhase.IDLE,
     val sosCountdownSeconds: Int = 0,
@@ -159,26 +150,27 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private val locationTracker = UserLocationTracker(app)
   private val trackingEngine = HikeTrackingEngine()
   private val stationaryDetector = StationaryDetector(app)
+  private val persistence = TrackingPersistenceRepository(app)
+  private val sessionCommands = SessionCommandRepository(app)
 
   private val _uiState = MutableStateFlow(UiState())
   val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
   private var timerJob: Job? = null
+  private var sosCountdownJob: Job? = null
   private var stillSinceMs: Long? = null
   private var lastSnapshot: LocationSnapshot? = null
   // Identifica il tracciato corrente nella WAL Room (crash-safety).
   // Non-null sse trackingStatus != IDLE. Generato da persistence.startTrack().
   private var currentTrackId: String? = null
-  private var sosCountdownJob: Job? = null
-  private var stillSinceMs: Long? = null
-  private var lastSnapshot: LocationSnapshot? = null
   private var activeSosIdempotencyKey: String? = null
   private var emergencyPollJob: Job? = null
   private var lastIncomingEmergencyCount = 0
   private var currentUserId: String? = null
   private var pendingSosLaunch: PendingSosLaunch? = null
 
-  init {currentUserId =
+  init {
+    currentUserId =
       TokenStorage.getInstance(app).getToken()?.let { JwtDecoder.userIdFrom(it) }
     viewModelScope.launch {
       locationTracker.location.collect { snapshot ->

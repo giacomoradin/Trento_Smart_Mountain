@@ -41,6 +41,7 @@ import it.trentosmartmountain.app.ui.screens.register.RegisterScreen
 import it.trentosmartmountain.app.ui.screens.onboarding.OnboardingExperienceScreen
 import it.trentosmartmountain.app.ui.screens.onboarding.OnboardingPersonalInfoScreen
 import it.trentosmartmountain.app.ui.screens.onboarding.OnboardingPreferencesScreen
+import it.trentosmartmountain.app.ui.screens.profile.ProfileViewScreen
 import it.trentosmartmountain.app.ui.screens.profilev2.ExperienceEditScreen
 import it.trentosmartmountain.app.ui.screens.profilev2.GoalsEditScreen
 import it.trentosmartmountain.app.ui.screens.profilev2.PersonalInfoEditScreen
@@ -186,6 +187,7 @@ fun TsmNavHost() {
                 onNavigateToGoals = { navController.navigate(Routes.GOALS_EDIT) },
                 onNavigateToChallenges = { navController.navigate(Routes.CHALLENGES) },
                 onNavigateToBadges = { navController.navigate(Routes.BADGES) },
+                onNavigateToProfileView = { navController.navigate(Routes.PROFILE_VIEW) },
             )
         }
 
@@ -405,6 +407,14 @@ fun TsmNavHost() {
         // ── Bacheca Badges + Certificati ──────────────────────────────────
         composable(Routes.BADGES) {
             BadgesScreen(onBack = { navController.popBackStack() })
+        }
+
+        // ── Vista profilo completo (read-only) ────────────────────────────
+        composable(Routes.PROFILE_VIEW) {
+            ProfileViewScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToEdit = { navController.navigate(Routes.ACCOUNT_EDIT) },
+            )
         }
 
         // ── Onboarding v2 (3 step skippable) ─────────────────────────────────

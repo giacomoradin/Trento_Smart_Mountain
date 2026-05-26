@@ -5,6 +5,9 @@ let mongoServer;
 
 // Set JWT_SECRET for tests
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'tsm-local-2026-x9Qm2pL7vN4kR8f83js055hfj2na17f';
+// Forza NODE_ENV=test: i rate limiter usano questa flag per essere bypassati
+// (test deterministici devono poter eseguire molte richieste consecutive).
+process.env.NODE_ENV = 'test';
 
 /**
  * Setup per i test Jest con MongoDB Memory Server.

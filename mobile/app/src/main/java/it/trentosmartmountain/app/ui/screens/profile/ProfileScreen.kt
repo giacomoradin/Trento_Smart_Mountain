@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.profile
 
 import android.app.Application
 import android.nfc.NfcAdapter
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -71,17 +73,19 @@ fun ProfileScreen(
     onNavigateToGoals: () -> Unit = {},
     onNavigateToChallenges: () -> Unit = {},
     onNavigateToBadges: () -> Unit = {},
+    onNavigateToProfileView: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application,
         ),
     ),
-    // Secondo VM dedicato al profilo v2 — il primo gestiva già troppe responsabilità.
-    // Lo stato `profileCompletedAt` qui pilota il banner "Completa il tuo profilo".
+    // Secondo VM dedicato al profilo v2 — scoped alla Activity (non al NavBackStackEntry)
+    // così tutte le schermate di edit condividono la stessa istanza e lo stato persiste.
     profileV2ViewModel: ProfileV2ViewModel = viewModel(
+        viewModelStoreOwner = LocalContext.current as ComponentActivity,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application,
+            (LocalContext.current as ComponentActivity).application,
         ),
     ),
 ) {
@@ -116,8 +120,14 @@ fun ProfileScreen(
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                 )
-                IconButton(onClick = onNavigateToAccount) {
-                    Icon(Icons.Default.Settings, contentDescription = "Impostazioni", tint = Color.White)
+                Row {
+                    // Icona "vedi profilo completo" — apre la read-only overview
+                    IconButton(onClick = onNavigateToProfileView) {
+                        Icon(Icons.Default.AccountCircle, contentDescription = "Vedi profilo", tint = Color.White)
+                    }
+                    IconButton(onClick = onNavigateToAccount) {
+                        Icon(Icons.Default.Settings, contentDescription = "Impostazioni", tint = Color.White)
+                    }
                 }
             }
 

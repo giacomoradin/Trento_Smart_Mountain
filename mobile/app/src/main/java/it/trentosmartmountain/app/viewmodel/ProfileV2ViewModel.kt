@@ -132,6 +132,19 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * Parser difensivo dell'errore HTTP: cerca il campo `message` nel body JSON
+     * di errore (es. anti-cheat 409 → "Il campo \"birthDate\" non è modificabile...").
+     * Fallback al codice HTTP se il parse fallisce.
+     */
+    private fun parseErrorMessage(resp: retrofit2.Response<*>): String {
+        val raw = runCatching { resp.errorBody()?.string() }.getOrNull().orEmpty()
+        // Estrazione greedy del primo "message":"..." — evita di dipendere da
+        // un parser JSON dedicato per un singolo campo.
+        val match = Regex("\"message\"\\s*:\\s*\"([^\"]*)\"").find(raw)
+        return match?.groupValues?.get(1) ?: "Errore (${resp.code()})."
+    }
+
     fun savePersonalInfo(data: PersonalInfo) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isSavingSection = true, sectionError = null, sectionSuccess = null)
@@ -147,7 +160,7 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
                     } else {
                         _state.value = _state.value.copy(
                             isSavingSection = false,
-                            sectionError = "Errore (${resp.code()}).",
+                            sectionError = parseErrorMessage(resp),
                         )
                     }
                 }
@@ -170,7 +183,7 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
                     } else {
                         _state.value = _state.value.copy(
                             isSavingSection = false,
-                            sectionError = "Errore (${resp.code()}).",
+                            sectionError = parseErrorMessage(resp),
                         )
                     }
                 }
@@ -200,7 +213,7 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
                     } else {
                         _state.value = _state.value.copy(
                             isSavingSection = false,
-                            sectionError = "Errore (${resp.code()}).",
+                            sectionError = parseErrorMessage(resp),
                         )
                     }
                 }
@@ -241,7 +254,7 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
                     } else {
                         _state.value = _state.value.copy(
                             isSavingSection = false,
-                            sectionError = "Errore (${resp.code()}).",
+                            sectionError = parseErrorMessage(resp),
                         )
                     }
                 }

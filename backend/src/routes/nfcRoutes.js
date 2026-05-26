@@ -25,7 +25,6 @@ router.post("/scan", ...mw, async (req, res, next) => {
     if (error) return res.status(422).json({ message: error.details[0].message });
     res.json(await scanTotem(req.user.userId, value));
   } catch (err) {
-    if (err.message === "TOTEM_NOT_FOUND") return res.status(404).json({ message: "Totem non trovato." });
     next(err);
   }
 });
@@ -51,6 +50,9 @@ router.post("/totems", authenticate, requireRoles("admin"), async (req, res, nex
     });
     res.status(201).json(totem);
   } catch (err) {
+    // E11000 duplicate key (tagId univoco) → 409 con messaggio user-friendly.
+    // Manteniamo il check qui perché 11000 può essere lanciato da molteplici
+    // collection: il messaggio dipende dal contesto.
     if (err.code === 11000) return res.status(409).json({ message: "tagId già esistente." });
     next(err);
   }

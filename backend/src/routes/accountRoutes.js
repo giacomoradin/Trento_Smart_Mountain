@@ -41,7 +41,6 @@ router.patch("/me", ...mw, async (req, res, next) => {
     const result = await updateUser(req.user.userId, v.value);
     res.json(result);
   } catch (err) {
-    if (err.message === "EMAIL_TAKEN") return res.status(409).json({ message: "Email già in uso." });
     next(err);
   }
 });
@@ -53,7 +52,6 @@ router.post("/change-password", ...mw, async (req, res, next) => {
     await changePassword(req.user.userId, v.value);
     res.json({ message: "Password aggiornata." });
   } catch (err) {
-    if (err.message === "WRONG_PASSWORD") return res.status(401).json({ message: "Password attuale errata." });
     next(err);
   }
 });
@@ -65,7 +63,6 @@ router.delete("/me", ...mw, async (req, res, next) => {
     await deleteAccount(req.user.userId, v.value);
     res.json({ message: "Account eliminato." });
   } catch (err) {
-    if (err.message === "WRONG_PASSWORD") return res.status(401).json({ message: "Password errata." });
     next(err);
   }
 });

@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +45,8 @@ internal val SelectedBg = Color(0xFF1A2A3A)
  *
  * `labelFromValue` consente di mostrare label localizzate diverse dai value
  * inviati al server (es. value "M" → label "Maschio").
+ *
+ * `locked = true` rende il selettore read-only (anti-cheat per caiLevel).
  */
 @Composable
 fun <T> SegmentedChips(
@@ -52,14 +55,15 @@ fun <T> SegmentedChips(
     labelFromValue: (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    locked: Boolean = false,
 ) {
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier = modifier.fillMaxWidth().then(if (locked) Modifier.alpha(0.6f) else Modifier), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { opt ->
             val isSelected = opt == selected
             Surface(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable { onSelect(opt) },
+                    .clickable(enabled = !locked) { onSelect(opt) },
                 color = if (isSelected) SelectedBg else CardBackground,
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, if (isSelected) AccentCyan else FieldBorder),

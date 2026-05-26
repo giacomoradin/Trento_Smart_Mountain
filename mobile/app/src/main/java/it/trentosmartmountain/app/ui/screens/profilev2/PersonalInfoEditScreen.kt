@@ -1,6 +1,6 @@
 package it.trentosmartmountain.app.ui.screens.profilev2
 
-import android.app.Application
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -47,8 +47,9 @@ import it.trentosmartmountain.app.viewmodel.ProfileV2ViewModel
 fun PersonalInfoEditScreen(
     onBack: () -> Unit,
     viewModel: ProfileV2ViewModel = viewModel(
+        viewModelStoreOwner = LocalContext.current as ComponentActivity,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application,
+            (LocalContext.current as ComponentActivity).application,
         ),
     ),
 ) {
@@ -60,8 +61,8 @@ fun PersonalInfoEditScreen(
     var sex by remember(state.personalInfo) { mutableStateOf(state.personalInfo?.sex) }
     var heightCm by remember(state.personalInfo) { mutableStateOf(state.personalInfo?.heightCm) }
     var weightKg by remember(state.personalInfo) { mutableStateOf(state.personalInfo?.weightKg) }
-    // BirthDate gestita come stringa ISO yyyy-MM-dd per ora — un date picker
-    // dedicato la migliora ma è oltre lo scope di questa iterazione.
+    // birthDate è BLOCCATA dopo la prima compilazione (anti-cheat: l'età impatta il profilo).
+    val birthDateLocked = !state.personalInfo?.birthDate.isNullOrBlank()
     var birthDate by remember(state.personalInfo) { mutableStateOf(state.personalInfo?.birthDate?.take(10).orEmpty()) }
 
     LaunchedEffect(state.sectionSuccess, state.sectionError) {
@@ -108,12 +109,16 @@ fun PersonalInfoEditScreen(
 
             SectionHeader(
                 title = "Data di nascita",
-                subtitle = "Usata lato server per calcolare l'età. Non condivisa pubblicamente.",
+                subtitle = if (birthDateLocked)
+                    "🔒 Campo bloccato — la data di nascita non è modificabile dopo la prima compilazione."
+                else
+                    "Usata lato server per calcolare l'età. Non condivisa pubblicamente.",
             )
-            // Material3 DatePickerDialog wrapped — input ISO yyyy-MM-dd, display localizzato.
+            // Material3 DatePickerDialog wrapped — bloccato se già compilato (anti-cheat).
             BirthDateField(
                 isoValue = birthDate.ifBlank { null },
-                onIsoChange = { iso -> birthDate = iso.orEmpty() },
+                onIsoChange = { iso -> if (!birthDateLocked) birthDate = iso.orEmpty() },
+                enabled = !birthDateLocked,
             )
 
             Spacer(Modifier.height(8.dp))

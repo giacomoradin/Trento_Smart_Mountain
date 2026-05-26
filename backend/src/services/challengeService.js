@@ -1,7 +1,6 @@
 import Challenge from "../models/challenge.js";
 import HikeSession from "../models/hikeSession.js";
 import Activity from "../models/activity.js";
-import User from "../models/user.js";
 
 /**
  * Crea una nuova sfida. Il creator è inserito come partecipante "accepted"
@@ -199,7 +198,7 @@ export async function respondToInvite(challengeId, userId, accept) {
 export async function cancelChallenge(challengeId, userId) {
   const challenge = await Challenge.findById(challengeId);
   if (!challenge) throw new Error("CHALLENGE_NOT_FOUND");
-  if (challenge.creatorId.toString() !== userId.toString()) throw new Error("FORBIDDEN");
+  if (challenge.creatorId.toString() !== userId.toString()) throw new Error("ONLY_CREATOR_CAN_CANCEL_CHALLENGE");
   if (challenge.status === "ACTIVE" || challenge.status === "COMPLETED") {
     throw new Error("CANNOT_CANCEL_RUNNING");
   }

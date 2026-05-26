@@ -1,6 +1,6 @@
 package it.trentosmartmountain.app.ui.screens.onboarding
 
-import android.app.Application
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,8 +41,9 @@ fun OnboardingPreferencesScreen(
     onSkipAll: () -> Unit,
     onFinish: () -> Unit,
     viewModel: ProfileV2ViewModel = viewModel(
+        viewModelStoreOwner = LocalContext.current as ComponentActivity,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application,
+            (LocalContext.current as ComponentActivity).application,
         ),
     ),
 ) {

@@ -25,6 +25,8 @@ import it.trentosmartmountain.app.data.remote.dto.CertificateItem
 import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.LoginRequest
 import it.trentosmartmountain.app.data.remote.dto.LoginResponse
+import it.trentosmartmountain.app.data.remote.dto.LogoutRequest
+import it.trentosmartmountain.app.data.remote.dto.RefreshRequest
 import it.trentosmartmountain.app.data.remote.dto.NfcScanRequest
 import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
 import it.trentosmartmountain.app.data.remote.dto.NextQuizResponse
@@ -72,6 +74,17 @@ interface TsmApiService {
 
   @POST("auth/login")
   suspend fun login(@Body body: LoginRequest): Response<LoginResponse>
+
+  /**
+   * Scambia un refresh token con una nuova coppia (access + refresh ruotato).
+   * Vedi [it.trentosmartmountain.app.data.remote.TsmAuthenticator] per l'uso
+   * trasparente all'interno dell'OkHttp client.
+   */
+  @POST("auth/refresh")
+  suspend fun refresh(@Body body: RefreshRequest): Response<LoginResponse>
+
+  @POST("auth/logout")
+  suspend fun logout(@Body body: LogoutRequest): Response<ApiMessageBody>
 
   @POST("auth/forgot-password")
   suspend fun forgotPassword(@Body body: ForgotPasswordRequest): Response<ApiMessageBody>

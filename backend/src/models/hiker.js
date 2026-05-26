@@ -31,6 +31,13 @@ const hikerSchema = new mongoose.Schema({
     scansCredits: { type: Number, default: 0 },
   },
 
+  // ── Idempotency claim per crediti quiz ───────────────────────────────────
+  // Lista degli `Quiz._id` per cui l'utente ha già ricevuto il primo bonus
+  // crediti. Usata in submitQuiz come "atomic claim" anti race condition:
+  // due submit simultanei vedono entrambi `passed=true`, ma solo uno riesce
+  // a fare $addToSet su questo array (l'altro è no-op) → niente doppio credito.
+  rewardedQuizzes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Quiz" }],
+
   // ── Profilo v2: dati personali ───────────────────────────────────────────
   // Usati per stime kcal, statistiche demo, baseline scoring (vedi userScoringService).
   // Tutti i campi sono opzionali — l'utente può saltare l'onboarding.

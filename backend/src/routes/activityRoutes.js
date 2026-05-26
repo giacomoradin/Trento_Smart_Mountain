@@ -27,46 +27,42 @@ router.use(authenticate);
 router.use(authenticatedLimiter);
 
 // POST /api/v1/activities — crea una nuova attività libera
-router.post("/", validate(createActivitySchema), async (req, res) => {
+router.post("/", validate(createActivitySchema), async (req, res, next) => {
   try {
     const activity = await createActivity(req.user.userId, req.body);
     res.status(201).json(activity);
   } catch (err) {
-    res.status(500).json({ error: "Errore creazione attività" });
+    next(err);
   }
 });
 
 // GET /api/v1/activities — lista attività dell'utente
-router.get("/", async (req, res) => {
+router.get("/", async (req, res, next) => {
   try {
     const activities = await getActivitiesByUser(req.user.userId);
     res.status(200).json(activities);
   } catch (err) {
-    res.status(500).json({ error: "Errore recupero attività" });
+    next(err);
   }
 });
 
 // GET /api/v1/activities/:id — dettaglio singola attività
-router.get("/:id", validate(idParamSchema, "params"), async (req, res) => {
+router.get("/:id", validate(idParamSchema, "params"), async (req, res, next) => {
   try {
     const activity = await getActivityById(req.params.id, req.user.userId);
     res.status(200).json(activity);
   } catch (err) {
-    if (err.message === "ACTIVITY_NOT_FOUND") return res.status(404).json({ error: "Attività non trovata" });
-    if (err.message === "FORBIDDEN") return res.status(403).json({ error: "Non autorizzato" });
-    res.status(500).json({ error: "Errore recupero attività" });
+    next(err);
   }
 });
 
 // DELETE /api/v1/activities/:id — elimina attività (solo proprietario)
-router.delete("/:id", validate(idParamSchema, "params"), async (req, res) => {
+router.delete("/:id", validate(idParamSchema, "params"), async (req, res, next) => {
   try {
     await deleteActivity(req.params.id, req.user.userId);
     res.status(200).json({ message: "Attività eliminata" });
   } catch (err) {
-    if (err.message === "ACTIVITY_NOT_FOUND") return res.status(404).json({ error: "Attività non trovata" });
-    if (err.message === "FORBIDDEN") return res.status(403).json({ error: "Non autorizzato" });
-    res.status(500).json({ error: "Errore eliminazione attività" });
+    next(err);
   }
 });
 

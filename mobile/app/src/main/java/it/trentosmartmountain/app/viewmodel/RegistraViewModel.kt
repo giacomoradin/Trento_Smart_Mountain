@@ -5,23 +5,15 @@ import android.content.Context
 import android.location.LocationManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
-import it.trentosmartmountain.app.TsmApplication
-import it.trentosmartmountain.app.data.estimation.HikeEstimation
-import it.trentosmartmountain.app.data.local.db.CompletedActivityEntity
 import it.trentosmartmountain.app.data.location.HikeTrackingEngine
 import it.trentosmartmountain.app.data.location.LocationSnapshot
 import it.trentosmartmountain.app.data.location.StationaryDetector
 import it.trentosmartmountain.app.data.location.TrackingLocationBus
 import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.data.location.UserLocationTracker
-import it.trentosmartmountain.app.data.remote.TsmApiClient
-import it.trentosmartmountain.app.data.remote.dto.ActualStats
-import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
-import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
-import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
-import it.trentosmartmountain.app.data.sync.SyncManager
+import it.trentosmartmountain.app.repository.SessionCommandRepository
+import it.trentosmartmountain.app.repository.TrackingPersistenceRepository
 import it.trentosmartmountain.app.service.ForegroundTrackingService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -32,16 +24,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.UUID
 
 /**
  * Logica della tab **Registra**: permessi GPS, tracking escursione, metriche e traccia su mappa OSMdroid.
  *
  * Coordina [HikeTrackingEngine], servizio in foreground e [SessionStartCoordinator]
  * quando l'utente avvia una sessione dal dettaglio escursione.
+ *
+ * Refactor audit 2026-05: la persistenza Room (WAL + snapshot finale) è stata
+ * estratta in [TrackingPersistenceRepository], e le chiamate API
+ * (update session status, complete session, create activity) in
+ * [SessionCommandRepository]. La VM resta orchestrator dello UI state +
+ * lifecycle hardware (GPS, foreground service, timer).
  */
 class RegistraViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -89,6 +83,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private val locationTracker = UserLocationTracker(app)
   private val trackingEngine = HikeTrackingEngine()
   private val stationaryDetector = StationaryDetector(app)
+  private val persistence = TrackingPersistenceRepository(app)
+  private val sessionCommands = SessionCommandRepository(app)
 
   private val _uiState = MutableStateFlow(UiState())
   val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -96,6 +92,9 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private var timerJob: Job? = null
   private var stillSinceMs: Long? = null
   private var lastSnapshot: LocationSnapshot? = null
+  // Identifica il tracciato corrente nella WAL Room (crash-safety).
+  // Non-null sse trackingStatus != IDLE. Generato da persistence.startTrack().
+  private var currentTrackId: String? = null
 
   init {
     viewModelScope.launch {
@@ -153,12 +152,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private fun autoStartFromSession(sessionId: String) {
     _uiState.update { it.copy(activeSessionId = sessionId) }
     viewModelScope.launch {
-      runCatching {
-        TsmApiClient.service().updateSessionStatus(
-          sessionId,
-          UpdateSessionStatusRequest(status = "ACTIVE"),
-        )
-      }
+      sessionCommands.markSessionActive(sessionId)
     }
     // Avvia solo se permessi GPS + GPS hardware acceso; altrimenti
     // startTracking() stesso setterà i flag di warning corretti e la UI
@@ -201,6 +195,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     stationaryDetector.start()
     startTimer()
     val now = System.currentTimeMillis()
+    // Crea trackId WAL: ogni snapshot GPS successivo sarà persistito.
+    currentTrackId = persistence.startTrack()
     _uiState.update {
       it.copy(
         trackingStatus = TrackingStatus.RECORDING,
@@ -230,8 +226,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   }
 
   fun requestStopTracking() {
-    val dateSuffix = SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
-    val default = "Escursione – $dateSuffix"
+    val default = persistence.defaultActivityName()
     _uiState.update {
       it.copy(
         showStopConfirm = true,
@@ -250,6 +245,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
    */
   fun discardTracking() {
     stopHardware()
+    val orphanTrackId = currentTrackId
+    currentTrackId = null
     _uiState.update {
       it.copy(
         trackingStatus = TrackingStatus.IDLE,
@@ -264,6 +261,11 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         trackStartTimeMs = 0L,
         activityNameDraft = "",
       )
+    }
+    // Cleanup WAL — i punti raccolti sono ora spazzatura. Fire-and-forget:
+    // anche se fallisce, la prossima `startTrack()` genera un trackId nuovo.
+    if (orphanTrackId != null) {
+      viewModelScope.launch { persistence.discardTrack(orphanTrackId) }
     }
   }
 
@@ -301,6 +303,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     }
     stopHardware()
     val snapState = _uiState.value
+    val trackId = currentTrackId
+    currentTrackId = null
 
     // 1. Resetta subito lo state UI (nasconde i controlli di tracking)
     _uiState.update {
@@ -316,117 +320,50 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       )
     }
 
-    // Salva in Room e poi tenta il sync immediato. Se fallisce, SyncManager
-    // riproverà automaticamente con backoff incrementale.
-    viewModelScope.launch {
-      val savedId = saveCompletedActivity(snapState)
-      attemptImmediateSync(savedId, snapState)
+    // Salva in Room (via WAL → CompletedActivity) e poi tenta il sync immediato.
+    // Se fallisce, SyncManager riproverà automaticamente con backoff incrementale.
+    if (trackId == null) {
+      // Stato anomalo: nessun trackId attivo. Skip salvataggio.
+      return
     }
-  }
+    viewModelScope.launch {
+      val finalize = TrackingPersistenceRepository.FinalizeSnapshot(
+        trackId = trackId,
+        activeSessionId = snapState.activeSessionId,
+        activityName = snapState.activityNameDraft.trim().ifBlank {
+          persistence.defaultActivityName()
+        },
+        startTimeMs = snapState.trackStartTimeMs,
+        movingSeconds = snapState.elapsedSeconds,
+        distanceMeters = snapState.distanceMeters,
+        elevationGainMeters = snapState.elevationGainMeters,
+        currentAltitudeMeters = snapState.currentAltitudeMeters,
+      )
+      val localId = persistence.finalize(finalize)
+      _uiState.update { it.copy(activitySaved = true) }
 
-  private suspend fun attemptImmediateSync(localId: String, state: UiState) {
-    val dao = (app as TsmApplication).database.completedActivityDao()
-    val distKm = state.distanceMeters / 1000.0
-    val actualH = state.elapsedSeconds / 3600.0
-    val finalPts = HikeEstimation.finalPoints(distKm, state.elevationGainMeters, actualH)
-    val payload = ActualStats(
-      movingSeconds = state.elapsedSeconds,
-      totalSeconds = state.elapsedSeconds,
-      distanceMeters = state.distanceMeters,
-      elevationGainM = state.elevationGainMeters,
-      finalPoints = finalPts,
-      estimatedCalories = (70 * distKm * 0.85).toInt(),
-      currentAltitudeM = state.currentAltitudeMeters,
-    )
-
-    val sessionId = state.activeSessionId
-    runCatching {
-      if (sessionId != null) {
-        val resp = TsmApiClient.service().completeSession(
-          sessionId,
-          CompleteSessionRequest(actualStats = payload),
-        )
-        if (resp.isSuccessful) {
-          dao.markSynced(localId, sessionId)
-        } else {
-          SyncManager.enqueueImmediate(app)
-        }
-      } else {
-        val req = CreateActivityRequest(
-          name = state.activityNameDraft.trim().ifBlank { "Escursione" },
-          activityType = "hiking",
-          startTimeMs = if (state.trackStartTimeMs > 0) state.trackStartTimeMs else System.currentTimeMillis() - state.elapsedSeconds * 1000L,
-          endTimeMs = System.currentTimeMillis(),
-          actualStats = payload,
-        )
-        val resp = TsmApiClient.service().createActivity(req)
-        if (resp.isSuccessful) {
-          val remoteId = resp.body()?._id
-          dao.markSynced(localId, remoteId)
-        } else {
-          SyncManager.enqueueImmediate(app)
-        }
+      val result = sessionCommands.completeOrUpload(
+        sessionId = snapState.activeSessionId,
+        activityName = finalize.activityName,
+        startTimeMs = finalize.startTimeMs,
+        movingSeconds = finalize.movingSeconds,
+        distanceMeters = finalize.distanceMeters,
+        elevationGainMeters = finalize.elevationGainMeters,
+        currentAltitudeMeters = finalize.currentAltitudeMeters,
+      )
+      if (result is SessionCommandRepository.SyncResult.Synced) {
+        // Marca sincronizzato con il remoteId emesso dal backend (per attività
+        // libere) o con il sessionId stesso (per sessioni di gruppo).
+        (app as it.trentosmartmountain.app.TsmApplication)
+          .database
+          .completedActivityDao()
+          .markSynced(localId, result.remoteId ?: snapState.activeSessionId)
       }
-    }.onFailure {
-      SyncManager.enqueueImmediate(app)
     }
   }
 
   fun dismissActivitySaved() {
     _uiState.update { it.copy(activitySaved = false) }
-  }
-
-  /**
-   * Salva il tracciato GPS e le metriche in Room al termine del tracking.
-   * I punti vengono campionati a max 200 per non superare i limiti di SQLite.
-   */
-  private suspend fun saveCompletedActivity(state: UiState): String {
-    val dao = (app as TsmApplication).database.completedActivityDao()
-    val gson = Gson()
-
-    // Campionamento: max 200 punti
-    val points = state.trackGeoPoints
-    val sampled = if (points.size > 200) {
-      val step = points.size / 200
-      points.filterIndexed { i, _ -> i % step == 0 }
-    } else points
-
-    val trackJson = gson.toJson(sampled.map { listOf(it.latitude, it.longitude, it.altitude) })
-    val distKm = state.distanceMeters / 1000.0
-    val movingSec = state.elapsedSeconds
-    val elevM = state.elevationGainMeters
-    val actualH = movingSec / 3600.0
-    val points2 = HikeEstimation.finalPoints(distKm, elevM, actualH)
-    val cals = (70 * distKm * 0.85).toInt()
-    val now = System.currentTimeMillis()
-    val startMs = if (state.trackStartTimeMs > 0) state.trackStartTimeMs else now - movingSec * 1000L
-    // Usa il nome che l'utente ha scelto nel dialog; fallback su default se vuoto
-    val dateSuffix = SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date(now))
-    val activityName = state.activityNameDraft.trim().ifBlank { "Escursione – $dateSuffix" }
-    val newId = UUID.randomUUID().toString()
-
-    dao.upsert(CompletedActivityEntity(
-      id = newId,
-      sessionId = state.activeSessionId,
-      name = activityName,
-      activityType = "hiking",
-      startTimeMs = startMs,
-      endTimeMs = now,
-      movingSeconds = movingSec,
-      totalSeconds = movingSec,
-      distanceMeters = state.distanceMeters,
-      elevationGainMeters = elevM,
-      currentAltitudeMeters = state.currentAltitudeMeters,
-      difficultyLevel = null,
-      trackLatLng = trackJson,
-      estimatedCalories = cals,
-      points = points2,
-      isSynced = false,
-      completedAt = now,
-    ))
-
-    _uiState.update { it.copy(activitySaved = true) }
-    return newId
   }
 
   fun centerOnUser() {
@@ -451,6 +388,23 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     }
     lastSnapshot = snapshot
     val metrics = trackingEngine.onLocation(snapshot)
+
+    // WAL append: solo se stiamo registrando attivamente (non in pause/idle).
+    // Crash-safety: anche se l'app muore dopo questo insert, il punto è
+    // recuperabile dalla tabella tracking_wal.
+    val trackId = currentTrackId
+    if (trackId != null && trackingEngine.status == TrackingStatus.RECORDING) {
+      viewModelScope.launch {
+        persistence.appendPoint(
+          trackId = trackId,
+          latitude = snapshot.latitude,
+          longitude = snapshot.longitude,
+          altitudeMeters = snapshot.altitudeMeters,
+          timestampMs = snapshot.timestampMs,
+        )
+      }
+    }
+
     _uiState.update { state ->
       state.copy(
         userLocation = snapshot,

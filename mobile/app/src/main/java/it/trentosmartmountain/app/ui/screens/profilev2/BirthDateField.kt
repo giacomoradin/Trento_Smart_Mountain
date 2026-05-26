@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.profilev2
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -51,6 +52,7 @@ fun BirthDateField(
     onIsoChange: (String?) -> Unit,
     label: String = "Data di nascita",
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     var showPicker by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
@@ -68,17 +70,19 @@ fun BirthDateField(
         readOnly = true,
         label = { Text(label, color = TextSecondary) },
         trailingIcon = {
-            IconButton(onClick = { showPicker = true }) {
-                Icon(Icons.Default.CalendarMonth, contentDescription = "Apri date picker", tint = AccentCyan)
+            IconButton(onClick = { if (enabled) showPicker = true }, enabled = enabled) {
+                Icon(Icons.Default.CalendarMonth, contentDescription = "Apri date picker", tint = if (enabled) AccentCyan else TextSecondary)
             }
         },
         // Intero campo cliccabile → apre il picker. Niente ripple per non confondere
-        // con un input editabile.
+        // con un input editabile. Disabilitato se locked (anti-cheat).
         modifier = modifier
             .fillMaxWidth()
+            .then(if (!enabled) Modifier.alpha(0.6f) else Modifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                enabled = enabled,
                 onClick = { showPicker = true },
             ),
         shape = RoundedCornerShape(10.dp),

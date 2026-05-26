@@ -3,6 +3,12 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendPasswordResetEmail } from "./emailService.js";
+import {
+  generateAccessToken,
+  issueRefreshToken,
+  rotateRefreshToken,
+  revokeRefreshToken,
+} from "./refreshTokenService.js";
 
 export const verifyEmail = async (req, res) => {
   try {
@@ -40,14 +46,77 @@ export const loginUser = async (req, res) => {
         message: "Accesso negato. Eseguire la verifica SMTP inviata via email.",
       });
     }
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
-    );
-    res.status(200).json({ token });
+    // Emette access (JWT breve TTL) + refresh (random opaque, 30d).
+    // BACKWARD COMPAT: il campo `token` continua a esistere per client mobile
+    // pre-Authenticator. Il nuovo campo `accessToken` è la stessa cosa e va
+    // preferito per chiarezza. Il `refreshToken` è opzionale: client che lo
+    // ignorano continueranno a funzionare finché l'access non scade.
+    const accessToken = generateAccessToken(user);
+    const { raw: refreshToken, expiresAt: refreshExpiresAt } =
+      await issueRefreshToken(user._id, {
+        userAgent: req.get("user-agent") || null,
+      });
+
+    res.status(200).json({
+      token: accessToken,
+      accessToken,
+      refreshToken,
+      refreshExpiresAt,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * POST /auth/refresh — scambia un refresh token valido con una nuova coppia
+ * (access + refresh ruotato). Vedi refreshTokenService.rotateRefreshToken
+ * per la logica di detection replay attack.
+ */
+export const refreshTokens = async (req, res) => {
+  try {
+    const rawRefresh = req.body?.refreshToken;
+    if (!rawRefresh) {
+      return res.status(400).json({ message: "refreshToken obbligatorio." });
+    }
+    const result = await rotateRefreshToken(rawRefresh, {
+      userAgent: req.get("user-agent") || null,
+    });
+    res.status(200).json({
+      token: result.accessToken, // alias backward-compat
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      refreshExpiresAt: result.refreshExpiresAt,
+    });
+  } catch (err) {
+    if (err.message === "REFRESH_TOKEN_REUSED") {
+      return res.status(401).json({
+        message:
+          "Refresh token riutilizzato. Per sicurezza tutte le sessioni sono state revocate. Effettua nuovamente il login.",
+      });
+    }
+    if (err.message === "REFRESH_TOKEN_INVALID") {
+      return res
+        .status(401)
+        .json({ message: "Refresh token non valido o scaduto." });
+    }
+    console.error("[authService.refreshTokens] errore:", err);
+    res.status(500).json({ message: "Errore interno." });
+  }
+};
+
+/**
+ * POST /auth/logout — revoca il refresh token. L'access token JWT non è
+ * revocabile (è stateless), ma scadrà entro ACCESS_TTL minuti.
+ */
+export const logout = async (req, res) => {
+  try {
+    const rawRefresh = req.body?.refreshToken;
+    await revokeRefreshToken(rawRefresh);
+    res.status(200).json({ message: "Logout effettuato." });
+  } catch (err) {
+    console.error("[authService.logout] errore:", err);
+    res.status(500).json({ message: "Errore interno." });
   }
 };
 

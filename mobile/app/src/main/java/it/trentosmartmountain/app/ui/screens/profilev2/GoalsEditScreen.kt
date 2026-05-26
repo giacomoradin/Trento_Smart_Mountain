@@ -1,6 +1,6 @@
 package it.trentosmartmountain.app.ui.screens.profilev2
 
-import android.app.Application
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -49,8 +49,9 @@ import it.trentosmartmountain.app.viewmodel.ProfileV2ViewModel
 fun GoalsEditScreen(
     onBack: () -> Unit,
     viewModel: ProfileV2ViewModel = viewModel(
+        viewModelStoreOwner = LocalContext.current as ComponentActivity,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application,
+            (LocalContext.current as ComponentActivity).application,
         ),
     ),
 ) {

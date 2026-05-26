@@ -41,8 +41,6 @@ router.get("/:id", validate(idParamSchema, "params"), async (req, res, next) => 
   try {
     res.json(await getChallengeById(req.params.id, req.user.userId));
   } catch (err) {
-    if (err.message === "CHALLENGE_NOT_FOUND") return res.status(404).json({ message: "Sfida non trovata." });
-    if (err.message === "FORBIDDEN") return res.status(403).json({ message: "Non autorizzato." });
     next(err);
   }
 });
@@ -52,9 +50,6 @@ router.post("/:id/respond", validate(idParamSchema, "params"), validate(challeng
     const challenge = await respondToInvite(req.params.id, req.user.userId, req.body.accept);
     res.json(challenge);
   } catch (err) {
-    if (err.message === "CHALLENGE_NOT_FOUND") return res.status(404).json({ message: "Sfida non trovata." });
-    if (err.message === "NOT_INVITED") return res.status(403).json({ message: "Non invitato a questa sfida." });
-    if (err.message === "ALREADY_RESPONDED") return res.status(409).json({ message: "Hai già risposto a questo invito." });
     next(err);
   }
 });
@@ -64,9 +59,6 @@ router.delete("/:id", validate(idParamSchema, "params"), async (req, res, next) 
     await cancelChallenge(req.params.id, req.user.userId);
     res.json({ message: "Sfida cancellata." });
   } catch (err) {
-    if (err.message === "CHALLENGE_NOT_FOUND") return res.status(404).json({ message: "Sfida non trovata." });
-    if (err.message === "FORBIDDEN") return res.status(403).json({ message: "Solo il creator può cancellare." });
-    if (err.message === "CANNOT_CANCEL_RUNNING") return res.status(409).json({ message: "Impossibile cancellare una sfida attiva o completata." });
     next(err);
   }
 });

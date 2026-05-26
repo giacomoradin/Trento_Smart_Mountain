@@ -46,6 +46,7 @@ const hikerSchema = new mongoose.Schema({
     birthDate: { type: Date }, // età derivata, non memorizzata
     heightCm: { type: Number, min: 100, max: 230 },
     weightKg: { type: Number, min: 30, max: 250 },
+    avatarUrl: { type: String }, // supporta Base64 o URL esterni
   },
 
   // ── Profilo v2: esperienza outdoor ───────────────────────────────────────

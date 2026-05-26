@@ -1,6 +1,7 @@
 import QuizCategory from "../models/quizCategory.js";
 import Quiz from "../models/quiz.js";
 import QuizAttempt from "../models/quizAttempt.js";
+import Hiker from "../models/hiker.js";
 import { addCredits } from "./creditService.js";
 import { evaluateAllBadges } from "./badgeService.js";
 
@@ -192,9 +193,24 @@ export async function submitQuiz(quizId, userId, answers) {
   const score = totalQuestions > 0 ? correctCount / totalQuestions : 0;
   const passed = score >= (quiz.passThreshold ?? 0.7);
 
-  // Idempotency: crediti solo al primo superamento
-  const alreadyPassed = await QuizAttempt.findOne({ userId, quizId, passed: true }).lean();
-  const creditsAwarded = passed && !alreadyPassed ? quiz.creditsReward : 0;
+  // ── Idempotency anti race-condition (fix audit 2026-05) ──────────────────
+  // PRIMA: due submit concorrenti potevano entrambi vedere alreadyPassed=null
+  // e ricevere CREDITI DOPPI. La findOne+create non era atomica.
+  //
+  // ORA: $addToSet su Hiker.rewardedQuizzes è atomico. Solo la PRIMA submit
+  // riuscita "claima" il reward (modifiedCount === 1). Le concorrenti vedono
+  // l'ObjectId già nell'array e fanno no-op (modifiedCount === 0).
+  // Side benefit: il check è veloce (un solo round-trip al DB).
+  let creditsAwarded = 0;
+  if (passed) {
+    const claim = await Hiker.updateOne(
+      { _id: userId, rewardedQuizzes: { $ne: quiz._id } },
+      { $addToSet: { rewardedQuizzes: quiz._id } },
+    );
+    if (claim.modifiedCount === 1) {
+      creditsAwarded = quiz.creditsReward;
+    }
+  }
 
   const attempt = await QuizAttempt.create({
     userId,
@@ -215,7 +231,7 @@ export async function submitQuiz(quizId, userId, answers) {
       refId: quiz._id,
       refKind: "Quiz",
     });
-    const user = await (await import("../models/user.js")).default.findById(userId).select("socialCredits").lean();
+    const user = await Hiker.findById(userId).select("socialCredits").lean();
     newTotalCredits = user?.socialCredits ?? null;
   }
 

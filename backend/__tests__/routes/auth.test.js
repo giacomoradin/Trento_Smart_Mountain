@@ -110,8 +110,8 @@ describe('Authentication Routes', () => {
       expect(response.body.message).toMatch(/email.*già|email.*username.*registrat|already.*exists/i);
     });
 
-    // Note: Your API doesn't validate email format, so this test is skipped
-    test.skip('should fail with invalid email format', async () => {
+    // Joi `.email()` reject malformed addresses con 422 (validate middleware).
+    test('should fail with invalid email format', async () => {
       const response = await request(app)
         .post('/auth/register/hiker')
         .send({
@@ -120,8 +120,13 @@ describe('Authentication Routes', () => {
           password: 'Password123!',
         });
 
-      expect(response.status).toBe(400);
-      expect(response.body.message).toMatch(/email/i);
+      expect(response.status).toBe(422);
+      // L'errore Joi viene wrappato dal middleware in { error, details: [{ path, message }] }
+      expect(response.body.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: 'email' }),
+        ]),
+      );
     });
 
     test('should fail with weak password', async () => {

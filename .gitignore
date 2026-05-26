@@ -135,6 +135,14 @@ captures/
 mobile/.idea/workspace.xml
 mobile/.idea/deploymentTargetSelector.xml
 
+# Android build artifacts
+*.apk
+*.aab
+
+# Android build artifacts
+*.apk
+*.aab
+
 # Keystore files
 *.jks
 *.keystore
@@ -173,5 +181,6 @@ T6_D3_Ingegneria_Del_Software.md
 Thumbs.db
 .claude
 
+Audit_Tecnico_jack.md
 PROJECT_OVERVIEW.md
 swagger-output.json

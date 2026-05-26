@@ -2,7 +2,7 @@
 
 > Reference human-readable degli endpoint REST del backend TSM, complementare al Swagger autogenerato (`swagger-output.json` → UI su `/api-docs`).
 >
-> **Ultima revisione**: 17/05/2026 — Post-refactor discriminator Mongoose (user → hiker/refuge/admin).
+> **Ultima revisione**: 26/05/2026 — Profilo v2 endpoint + anti-cheat enforcement server-side (409 su campi lockati).
 > **Base URL produzione**: `https://trento-smart-mountain-xz7u.onrender.com`
 > **Base URL dev**: `http://10.0.2.2:3000` (emulator) / `http://localhost:3000` (Postman dev).
 
@@ -807,7 +807,50 @@ Popola il DB con towns + POI da API TINIA. Da chiamare al primo avvio.
 
 ---
 
-## 7. Endpoint pianificati Sprint 2+
+## 7. Account & Profilo v2 (`/api/v1/users/me`)
+
+Tutti gli endpoint richiedono **🔐 JWT** + rate limit `authenticatedLimiter`.
+
+| Method | Path | Body | Risposta | Note |
+|---|---|---|---|---|
+| `PATCH` | `/api/v1/users/me` | `{ username?, email? }` | `{ user, requiresEmailVerification }` | Cambio email richiede nuova verifica |
+| `POST`  | `/api/v1/users/me/change-password` | `{ oldPassword, newPassword }` | `{ message }` | 401 se oldPassword errata |
+| `DELETE`| `/api/v1/users/me` | `{ password }` | `{ message }` | Leadership transfer per sessioni ACTIVE/PLANNED; cascade su transactions/scans/quiz/activity |
+| `PATCH` | `/api/v1/users/me/personal-info` | `{ sex?, birthDate?, heightCm?, weightKg? }` | `{ personalInfo }` | **409** se `birthDate` già impostato (anti-cheat) |
+| `PATCH` | `/api/v1/users/me/experience` | `{ caiLevel?, baselineFitness?, weeklyTrainingFreq? }` | `{ experience }` | **409** se `caiLevel` già impostato (anti-cheat) |
+| `PATCH` | `/api/v1/users/me/preferences` | `{ units?, language?, notifications?, privacy? }` | `{ preferences }` | F12: mobile sync `PreferencesHolder` |
+| `PATCH` | `/api/v1/users/me/goals` | `{ km?, elevM?, count? }` | `{ weeklyGoals }` | `.min(1)`: body con almeno 1 campo |
+| `GET`   | `/api/v1/users/me/weekly-stats` | — | `{ weekStart, weekEnd, km, elevM, count }` | Settimana ISO corrente |
+| `POST`  | `/api/v1/users/me/profile-complete` | — | `{ profileCompletedAt }` | Idempotente (timestamp originale preservato) |
+
+### Esempio: anti-cheat 409 su campo lockato
+
+```http
+PATCH /api/v1/users/me/experience
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{ "caiLevel": "T" }
+```
+
+Se `caiLevel` era stato precedentemente impostato a `EE`:
+
+```http
+HTTP/1.1 409 Conflict
+Content-Type: application/json
+
+{
+  "message": "Il campo \"caiLevel\" non è modificabile dopo la prima impostazione.",
+  "field": "caiLevel"
+}
+```
+
+Il client mobile (ProfileV2ViewModel) intercetta il `message` e lo mostra
+nella sezione `sectionError`.
+
+---
+
+## 8. Endpoint pianificati Sprint 2+
 
 | Method | Path | US | Note |
 |--------|------|-----|------|
@@ -821,7 +864,7 @@ Popola il DB con towns + POI da API TINIA. Da chiamare al primo avvio.
 
 ---
 
-## 8. Riferimento alternativo
+## 9. Riferimento alternativo
 
 - **Swagger UI**: `http://localhost:3000/api-docs` (interattivo, prova le request inline)
 - **Swagger JSON**: `swagger-output.json` nella root del repo
@@ -829,4 +872,4 @@ Popola il DB con towns + POI da API TINIA. Da chiamare al primo avvio.
 
 ---
 
-*API Reference — Sprint 1 chiuso 17/05/2026. Aggiornare insieme a Swagger ad ogni nuova route o cambio contract.*
+*API Reference — Sprint 1 chiuso 17/05/2026. Sprint 2: profilo v2 + social/badge/quiz/NFC + anti-cheat (aggiornato 26/05/2026). Aggiornare insieme a Swagger ad ogni nuova route o cambio contract.*

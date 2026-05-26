@@ -11,6 +11,11 @@ function generateInviteCode() {
   return "TSM-" + crypto.randomBytes(2).toString("hex").toUpperCase(); // es. "TSM-7A4F"
 }
 
+// Numero massimo di tentativi per trovare un codice unico. Con 65k combinazioni
+// possibili (16^4), se non riusciamo in 20 tentativi è perché il namespace è
+// quasi saturo o c'è un bug nel generatore — meglio fail-fast che loopare per sempre.
+const MAX_INVITE_CODE_ATTEMPTS = 20;
+
 // Blocca solo se l'utente è in una sessione ATTIVA (tracciamento in corso).
 // Più sessioni PLANNED in parallelo sono consentite: l'utente può pianificare
 // più escursioni future e accettare diversi inviti, ma può essere attivo
@@ -29,13 +34,20 @@ async function checkUserAlreadyInActiveSession(userId) {
 // Crea una nuova sessione — il creator diventa automaticamente Capogruppo
 export async function createSession(creatorId, routeDetails, sessionMeta = {}) {
   await checkUserAlreadyInActiveSession(creatorId);
-  let inviteCode;
-  let isUnique = false;
+  let inviteCode = null;
 
-  while (!isUnique) {
-    inviteCode = generateInviteCode();
-    const existing = await HikeSession.findOne({ inviteCode });
-    if (!existing) isUnique = true;
+  // Loop limitato: vedi MAX_INVITE_CODE_ATTEMPTS sopra. Se sforiamo, lanciamo
+  // un errore esplicito invece di bloccare il thread Express in un while(true).
+  for (let attempt = 0; attempt < MAX_INVITE_CODE_ATTEMPTS; attempt++) {
+    const candidate = generateInviteCode();
+    const existing = await HikeSession.findOne({ inviteCode: candidate }).select("_id").lean();
+    if (!existing) {
+      inviteCode = candidate;
+      break;
+    }
+  }
+  if (!inviteCode) {
+    throw new Error("INVITE_CODE_GENERATION_FAILED");
   }
 
   const session = new HikeSession({
@@ -72,7 +84,7 @@ export async function joinSession(userId, inviteCode) {
   await checkUserAlreadyInActiveSession(userId);
   const session = await HikeSession.findOne({ inviteCode });
   if (!session) {
-    throw new Error("SESSION_NOT_FOUND");
+    throw new Error("INVITE_CODE_INVALID");
   }
 
   if (session.status !== "PLANNED") {
@@ -216,7 +228,7 @@ export async function leaveSession(userId, sessionId) {
 export async function updateSessionDetails(sessionId, userId, updates) {
   const session = await HikeSession.findById(sessionId);
   if (!session) throw new Error("SESSION_NOT_FOUND");
-  if (session.creatorId.toString() !== userId.toString()) throw new Error("FORBIDDEN");
+  if (session.creatorId.toString() !== userId.toString()) throw new Error("ONLY_CREATOR_CAN_UPDATE_SESSION");
 
   if (updates.routeDetails?.name) session.routeDetails.name = updates.routeDetails.name;
   if (updates.routeDetails?.difficultyLevel) session.routeDetails.difficultyLevel = updates.routeDetails.difficultyLevel;
@@ -254,7 +266,7 @@ export async function completeSession(sessionId, userId, actualStats = null) {
   const isParticipant = session.participants.some(
     (p) => p.userId.toString() === userId.toString(),
   );
-  if (!isCreator && !isParticipant) throw new Error("FORBIDDEN");
+  if (!isCreator && !isParticipant) throw new Error("ONLY_CREATOR_CAN_COMPLETE_SESSION");
 
   session.status = "COMPLETED";
   session.endTime = new Date();
@@ -331,7 +343,7 @@ export async function updateSessionStatus(sessionId, creatorId, newStatus) {
   if (!session) throw new Error("SESSION_NOT_FOUND");
 
   if (session.creatorId.toString() !== creatorId) {
-    throw new Error("FORBIDDEN");
+    throw new Error("ONLY_CREATOR_CAN_UPDATE_SESSION");
   }
 
   session.status = newStatus;
@@ -352,7 +364,7 @@ export async function deleteSession(sessionId, creatorId) {
 
   if (!session) throw new Error("SESSION_NOT_FOUND");
   if (session.creatorId.toString() !== creatorId) {
-    throw new Error("FORBIDDEN");
+    throw new Error("ONLY_CREATOR_CAN_DELETE_SESSION");
   }
 
   await session.deleteOne();

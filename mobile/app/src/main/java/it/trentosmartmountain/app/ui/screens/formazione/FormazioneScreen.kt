@@ -87,6 +87,25 @@ fun FormazioneScreen(
             uiState.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(uiState.error ?: "", color = Color.Red)
             }
+            uiState.categories.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("📚", style = MaterialTheme.typography.displayMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Nessuna categoria disponibile",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "I contenuti formativi verranno caricati a breve.",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            }
             else -> LazyColumn(
                 contentPadding = padding,
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),

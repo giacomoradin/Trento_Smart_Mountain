@@ -25,7 +25,6 @@ router.get("/categories/:slug/quizzes", ...mw, async (req, res, next) => {
   try {
     res.json(await listByCategory(req.params.slug, req.user.userId));
   } catch (err) {
-    if (err.message === "CATEGORY_NOT_FOUND") return res.status(404).json({ message: "Categoria non trovata." });
     next(err);
   }
 });
@@ -35,7 +34,6 @@ router.get("/categories/:slug/next", ...mw, async (req, res, next) => {
   try {
     res.json(await getNextQuizForCategory(req.params.slug, req.user.userId));
   } catch (err) {
-    if (err.message === "CATEGORY_NOT_FOUND") return res.status(404).json({ message: "Categoria non trovata." });
     next(err);
   }
 });
@@ -44,7 +42,6 @@ router.get("/:id", ...mw, async (req, res, next) => {
   try {
     res.json(await getQuizForClient(req.params.id, req.user.userId));
   } catch (err) {
-    if (err.message === "QUIZ_NOT_FOUND") return res.status(404).json({ message: "Quiz non trovato." });
     next(err);
   }
 });
@@ -55,7 +52,6 @@ router.post("/:id/submit", ...mw, async (req, res, next) => {
     if (error) return res.status(422).json({ message: error.details[0].message });
     res.json(await submitQuiz(req.params.id, req.user.userId, value.answers));
   } catch (err) {
-    if (err.message === "QUIZ_NOT_FOUND") return res.status(404).json({ message: "Quiz non trovato." });
     next(err);
   }
 });

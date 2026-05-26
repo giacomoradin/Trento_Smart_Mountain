@@ -1,6 +1,39 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+// Setter che accetta sia "YYYY-MM-DD" (formato legacy esposto dal mobile)
+// sia Date/ISO 8601. Output JSON sempre come "YYYY-MM-DD" via toJSON.transform
+// per evitare breaking change al client.
+//
+// Background: prima dell'audit 2026-05, meetingDate era String. Questo
+// impediva $sort cronologico efficiente lato DB (sort lessicografico
+// funzionava per "YYYY-MM-DD" ma non per altri formati eventualmente salvati).
+// Vedi anche scripts/migrate-meeting-date.js per il backfill delle stringhe
+// esistenti.
+function parseMeetingDate(value) {
+  if (value === null || value === undefined || value === "") return value;
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    // "YYYY-MM-DD" → mezzanotte UTC (evita drift timezone)
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+    if (match) {
+      return new Date(Date.UTC(+match[1], +match[2] - 1, +match[3]));
+    }
+    const d = new Date(trimmed);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return value; // lascia che la validation Mongoose segnali l'errore
+}
+
+function formatMeetingDateForJson(value) {
+  if (!value) return value;
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  return value;
+}
+
 const hikSessionSchema = new Schema({
   // Chi ha creato la sessione diventa automaticamente groupLeader
   creatorId: {
@@ -29,7 +62,7 @@ const hikSessionSchema = new Schema({
   },
 
   // Metadati sessione
-  meetingDate: { type: String },
+  meetingDate: { type: Date, set: parseMeetingDate },
   meetingTime: { type: String },
   meetingLocation: { type: String },
   maxParticipants: { type: Number },
@@ -108,6 +141,25 @@ const hikSessionSchema = new Schema({
 
 // Indice geospaziale per query di prossimità
 hikSessionSchema.index({ "routeDetails.startPoint": "2dsphere" }); // Permette di cercare sessioni vicine a una posizione geografica
+
+// Indice composto per la query frequente "sessioni dell'utente ordinate per
+// data crescente" (vedi getSessionsByUser).
+hikSessionSchema.index({ status: 1, meetingDate: 1 });
+
+// Trasforma `meetingDate` (Date) in "YYYY-MM-DD" nei JSON di risposta API.
+// Mantiene la backward compatibility col mobile che si aspetta una stringa.
+// Applicato a entrambi toJSON e toObject perché Mongoose chiama il primo per
+// `res.json(doc)` e il secondo per `doc.toObject()` / `.lean()` (NB: .lean()
+// NON applica i transform — vedi serviceLayerNote nei service per i casi
+// dove serve conversione manuale).
+const meetingDateTransform = function (doc, ret) {
+  if (ret.meetingDate instanceof Date) {
+    ret.meetingDate = formatMeetingDateForJson(ret.meetingDate);
+  }
+  return ret;
+};
+hikSessionSchema.set("toJSON", { transform: meetingDateTransform });
+hikSessionSchema.set("toObject", { transform: meetingDateTransform });
 
 const HikeSession = mongoose.model("HikeSession", hikSessionSchema);
 export default HikeSession;

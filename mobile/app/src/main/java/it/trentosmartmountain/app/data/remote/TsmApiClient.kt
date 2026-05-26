@@ -30,9 +30,14 @@ object TsmApiClient {
     // OkHttp: prima il Bearer (se presente), poi log di base per debug.
     // Timeout estesi a 90s perché Render Free tier va in sleep dopo 15 min di
     // inattività: la prima request dopo lo sleep impiega 30-60s per il cold start.
+    //
+    // Authenticator (audit 2026-05): intercetta i 401 da access token scaduto,
+    // chiama /auth/refresh con il refresh token salvato e rilancia la request
+    // originale con il nuovo Bearer. Trasparente per ViewModel/Repository.
     val client =
       OkHttpClient.Builder()
         .addInterceptor(AuthInterceptor(tokenStorage))
+        .authenticator(TsmAuthenticator(tokenStorage))
         .addInterceptor(logging)
         .connectTimeout(90, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS)

@@ -1,6 +1,6 @@
 import NfcTotem from "../models/nfcTotem.js";
 import NfcScan from "../models/nfcScan.js";
-import User from "../models/user.js";
+import Hiker from "../models/hiker.js";
 import { addCredits } from "./creditService.js";
 import { evaluateAllBadges } from "./badgeService.js";
 
@@ -30,6 +30,12 @@ export async function listTotems({ lon, lat, maxDistance } = {}) {
     .lean();
 }
 
+/** Bucket giornaliero "YYYY-MM-DD" in UTC. Usato come chiave dell'unique
+ *  partial index su NfcScan per la rate-limit atomic 1 scan/totem/user/day. */
+function getScanDayUTC(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
 export async function scanTotem(userId, { tagId, gpsLon, gpsLat }) {
   const totem = await NfcTotem.findOne({ tagId, active: true }).lean();
   if (!totem) throw new Error("TOTEM_NOT_FOUND");
@@ -50,43 +56,48 @@ export async function scanTotem(userId, { tagId, gpsLon, gpsLat }) {
     return { ok: false, reason: "OUT_OF_RANGE", distance, totem };
   }
 
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const existing = await NfcScan.findOne({
-    userId,
-    totemId: totem._id,
-    scannedAt: { $gte: cutoff },
-    creditsAwarded: { $gt: 0 },
-  }).lean();
-
-  if (existing) {
+  // ── Atomic claim del reward giornaliero (fix audit 2026-05) ──────────────
+  // PRIMA: findOne + create non era atomico → doppio tap rapido poteva creare
+  //   due NfcScan con crediti, accreditando doppio bonus.
+  // ORA: insert con scanDay + unique partial index (creditsAwarded > 0).
+  //   Solo la prima scan riesce; le concorrenti falliscono con E11000 → catch.
+  const scanDay = getScanDayUTC();
+  const creditsAwarded = totem.creditsReward;
+  try {
     await NfcScan.create({
       userId,
       totemId: totem._id,
       tagId,
+      scanDay,
       gpsLocation: { type: "Point", coordinates: [gpsLon, gpsLat] },
       distanceFromTotem: distance,
-      creditsAwarded: 0,
-      rejectionReason: "RATE_LIMIT",
+      creditsAwarded,
     });
-    return { ok: true, alreadyScannedToday: true, creditsAwarded: 0, distance, totem };
+  } catch (err) {
+    if (err.code === 11000) {
+      // Già scansionato oggi (anche da una request concorrente). Registriamo
+      // comunque l'attempt per analytics ma senza crediti.
+      await NfcScan.create({
+        userId,
+        totemId: totem._id,
+        tagId,
+        gpsLocation: { type: "Point", coordinates: [gpsLon, gpsLat] },
+        distanceFromTotem: distance,
+        creditsAwarded: 0,
+        rejectionReason: "RATE_LIMIT",
+      });
+      return { ok: true, alreadyScannedToday: true, creditsAwarded: 0, distance, totem };
+    }
+    throw err;
   }
 
-  const creditsAwarded = totem.creditsReward;
-  await NfcScan.create({
-    userId,
-    totemId: totem._id,
-    tagId,
-    gpsLocation: { type: "Point", coordinates: [gpsLon, gpsLat] },
-    distanceFromTotem: distance,
-    creditsAwarded,
-  });
-
   await addCredits({ userId, amount: creditsAwarded, source: "nfc", refId: totem._id, refKind: "NfcTotem" });
-  await User.findByIdAndUpdate(userId, {
+  // nfcStats è sotto-documento del discriminator Hiker → usa Hiker (vedi nota in creditService).
+  await Hiker.findByIdAndUpdate(userId, {
     $inc: { "nfcStats.scansCount": 1, "nfcStats.scansCredits": creditsAwarded },
   });
 
-  const user = await User.findById(userId).select("socialCredits").lean();
+  const user = await Hiker.findById(userId).select("socialCredits").lean();
 
   // Badge evaluation post-scan: potrebbe sbloccare checkpoint_collector / credit_*.
   evaluateAllBadges(userId).catch((err) => {

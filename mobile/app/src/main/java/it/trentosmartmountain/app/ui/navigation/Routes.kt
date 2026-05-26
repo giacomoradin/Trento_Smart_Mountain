@@ -63,6 +63,9 @@ object Routes {
   // ── Bacheca: Badge + Certificati ────────────────────────────────────────────
   const val BADGES = "badges"
 
+  // ── Vista profilo completo (read-only) ──────────────────────────────────────
+  const val PROFILE_VIEW = "profile_view"
+
   fun quizRoute(quizId: String) = "quiz/$quizId"
   fun quizFromCategoryRoute(slug: String) = "quiz_cat/${Uri.encode(slug)}"
 

@@ -58,13 +58,32 @@ Il client mobile NON parla mai direttamente con Brevo, MongoDB o le API meteo. T
 - **NoSQL injection**: `express-mongo-sanitize` rimuove operatori `$` e chiavi con `.` da `req.body`, `req.params`, `req.query` (vedi `securityMiddleware.js`).
 - **Schema validation**: Joi rifiuta campi non dichiarati (`.unknown(false)` di default) → niente mass-assignment.
 - **Mongoose strict mode**: di default true; assegnamenti a campi sconosciuti vengono droppati silenziosamente.
+
+> **⚠ Gotcha discriminator (lesson learned 2026-05):** lo strict mode di Mongoose
+> applica lo schema del **modello con cui esegui la query**. Per i campi del
+> discriminator (es. `socialCredits` su Hiker, `rifugioName` su Refuge), usare
+> `User.findByIdAndUpdate(id, { $set/$inc: { campo: x } })` **scarta
+> silenziosamente l'update** — la risposta è 200 OK ma il DB non cambia. Bug
+> nascosto perché le `findById` con `.select()` proiettano comunque il campo
+> a livello MongoDB. **Regola:** per write su campi discriminator usa SEMPRE
+> il modello del discriminator (`Hiker`/`Refuge`/`Admin`). Coverage in
+> `__tests__/services/discriminator.test.js` (4 test) fissa il contratto.
+
 - **HTML/XSS**: l'API è JSON-only eccetto `/auth/reset-password/:token` (form HTML). I valori dinamici sono escape-d.
 
 ### A04:2021 — Insecure Design
 
-- **Rate limiting differenziato**: globale (300/15min), login (10/15min skipSuccess), register (5/h), forgot-password (5/h), authenticated (1000/15min), write-ops (200/15min).
+- **Rate limiting differenziato**: globale (300/15min), login (10/15min skipSuccess), register (5/h), forgot-password (5/h), authenticated (1000/15min), write-ops (200/15min). In `NODE_ENV=test` i limiter sono bypassati per consentire test deterministici.
 - **Soglie sensate**: il limit di register a 5/h previene account farming; login 10/15min lascia margine all'utente onesto ma blocca brute force.
 - **Body size limit**: 100 KB → DoS bomba JSON impedita.
+- **Anti-cheat sui campi scoring (2026-05)**: `personalInfo.birthDate` e
+  `experience.caiLevel` influenzano direttamente il moltiplicatore
+  `μ_user_baseline` (vedi `userScoringService.js`). Una volta impostati, un
+  utente potrebbe abbassarli prima di una sessione facile per farmare
+  crediti gonfi. Enforcement server-side: `accountService.updatePersonalInfo`
+  e `updateExperience` rilanciano `LockedFieldError → HTTP 409` se il campo
+  è già presente. L'UI mobile mostra anche un lucchetto 🔒 ma il blocco
+  reale è qui — un curl/Postman non può aggirarlo.
 
 ### A05:2021 — Security Misconfiguration
 

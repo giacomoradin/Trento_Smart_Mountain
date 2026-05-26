@@ -54,6 +54,7 @@ fun HikerMainScreen(
   onNavigateToGoals: () -> Unit = {},
   onNavigateToChallenges: () -> Unit = {},
   onNavigateToBadges: () -> Unit = {},
+  onNavigateToProfileView: () -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
 
@@ -117,6 +118,7 @@ fun HikerMainScreen(
         onNavigateToGoals = onNavigateToGoals,
         onNavigateToChallenges = onNavigateToChallenges,
         onNavigateToBadges = onNavigateToBadges,
+        onNavigateToProfileView = onNavigateToProfileView,
         modifier = Modifier.padding(innerPadding),
       )
     }

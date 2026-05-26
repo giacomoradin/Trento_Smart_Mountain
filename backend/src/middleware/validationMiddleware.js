@@ -27,7 +27,11 @@ export function validate(schema, source = "body") {
 
 const emailField = Joi.string().email({ tlds: { allow: false } }).max(254).lowercase().trim();
 const passwordField = Joi.string().min(8).max(128);
-const usernameField = Joi.string().alphanum().min(3).max(40).trim();
+// Accetta nomi composti italiani: "Giacomo Radin", "D'Angelo", "De Luca-Rossi"
+// Caratteri ammessi: lettere (incluse accentate À-ÿ), cifre, spazi, apostrofi, trattini, punti.
+const usernameField = Joi.string().min(2).max(40).trim()
+  .pattern(/^[a-zA-ZÀ-ÿ0-9\s''.\-]+$/)
+  .message('Il nome utente può contenere lettere, numeri, spazi, apostrofi e trattini');
 const objectIdField = Joi.string().pattern(/^[0-9a-fA-F]{24}$/).message("ID non valido");
 
 export const loginSchema = Joi.object({
@@ -84,6 +88,17 @@ const gpxStatsSchema = Joi.object({
   gpxDurationSec: Joi.number().integer().min(0).max(7 * 24 * 3600),
 });
 
+// Accetta sia "YYYY-MM-DD" (formato legacy del mobile) sia ISO 8601 completo.
+// Il setter del model converte a Date — qui validiamo solo il formato in input.
+// Vedi backend/src/models/hikeSession.js per la conversione automatica.
+const meetingDateField = Joi.alternatives()
+  .try(
+    Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/),
+    Joi.string().isoDate(),
+    Joi.date(),
+  )
+  .allow(null, "");
+
 export const createSessionSchema = Joi.object({
   routeDetails: Joi.object({
     name: Joi.string().min(1).max(120).trim().required(),
@@ -92,7 +107,7 @@ export const createSessionSchema = Joi.object({
     startPoint: geoPointSchema,
     endPoint: geoPointSchema,
   }).required(),
-  meetingDate: Joi.string().max(40).trim().allow(null, ""),
+  meetingDate: meetingDateField,
   meetingTime: Joi.string().max(20).trim().allow(null, ""),
   meetingLocation: Joi.string().max(200).trim().allow(null, ""),
   maxParticipants: Joi.number().integer().min(1).max(50),
@@ -106,7 +121,7 @@ export const updateSessionSchema = Joi.object({
     name: Joi.string().min(1).max(120).trim(),
     difficultyLevel: difficultyField,
   }),
-  meetingDate: Joi.string().max(40).trim().allow(null, ""),
+  meetingDate: meetingDateField,
   meetingTime: Joi.string().max(20).trim().allow(null, ""),
   meetingLocation: Joi.string().max(200).trim().allow(null, ""),
   maxParticipants: Joi.number().integer().min(1).max(50),
@@ -168,8 +183,11 @@ export const statsQuerySchema = Joi.object({
 
 // ── Account (self-service) ──────────────────────────────────────────────
 
+// Riusa lo stesso `usernameField` di registrazione: regex per nomi italiani,
+// min 2 / max 40. Evita 422 inattesi su PATCH /account con nomi che il flusso
+// di registrazione accetta senza problemi.
 export const updateAccountSchema = Joi.object({
-  username: Joi.string().min(3).max(30).optional(),
+  username: usernameField.optional(),
   email:    emailField.optional(),
 }).min(1);
 

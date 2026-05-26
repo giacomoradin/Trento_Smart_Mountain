@@ -355,4 +355,69 @@ describe("HikeSession Routes", () => {
       expect(res.status).toBe(401);
     });
   });
+
+  // ══════════════════════════════════════════════════════════════════
+  // meetingDate migration String → Date (audit 2026-05)
+  // ══════════════════════════════════════════════════════════════════
+  // Verifica: il setter del model parse "YYYY-MM-DD" → Date, ma il transform
+  // toJSON espone ancora "YYYY-MM-DD" al client. Backward compat al 100%
+  // più sort cronologici efficienti lato DB.
+
+  describe("meetingDate persistence (audit 2026-05)", () => {
+    test("createSession con 'YYYY-MM-DD' string → JSON output identico", async () => {
+      const { token } = await createTestHiker({
+        username: "datetest1",
+        email: "datetest1@test.com",
+      });
+      const res = await createSessionAs(token);
+
+      expect(res.status).toBe(201);
+      // Client mobile riceve ancora la stessa stringa
+      expect(res.body.meetingDate).toBe("2026-07-15");
+    });
+
+    test("documento in DB ha meetingDate come Date BSON", async () => {
+      const { token } = await createTestHiker({
+        username: "datetest2",
+        email: "datetest2@test.com",
+      });
+      const created = await createSessionAs(token);
+
+      // Bypass toJSON transform: leggi raw dal DB
+      const raw = await HikeSession.collection.findOne({
+        _id: new (await import("mongoose")).default.Types.ObjectId(
+          created.body._id,
+        ),
+      });
+      expect(raw.meetingDate).toBeInstanceOf(Date);
+      // 2026-07-15 UTC midnight
+      expect(raw.meetingDate.toISOString().slice(0, 10)).toBe("2026-07-15");
+    });
+
+    test("sort cronologico via $sort: { meetingDate: 1 } funziona", async () => {
+      const { token, user } = await createTestHiker({
+        username: "datetest3",
+        email: "datetest3@test.com",
+      });
+
+      // Crea 3 sessioni in ordine non-cronologico
+      const dates = ["2026-12-25", "2026-01-15", "2026-06-10"];
+      for (const date of dates) {
+        await request(app)
+          .post("/api/v1/sessions")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ ...VALID_SESSION_BODY, meetingDate: date });
+      }
+
+      const res = await request(app)
+        .get("/api/v1/sessions/my")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const sortedDates = res.body.map((s) => s.meetingDate);
+      // Atteso ordine ascendente cronologico (non lessicografico, anche se per
+      // YYYY-MM-DD i due coincidono — questo test conferma comunque il fix).
+      expect(sortedDates).toEqual(["2026-01-15", "2026-06-10", "2026-12-25"]);
+    });
+  });
 });

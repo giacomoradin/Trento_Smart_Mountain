@@ -1,6 +1,6 @@
 package it.trentosmartmountain.app.ui.screens.profilev2
 
-import android.app.Application
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -50,14 +50,18 @@ import it.trentosmartmountain.app.viewmodel.ProfileV2ViewModel
 fun ExperienceEditScreen(
     onBack: () -> Unit,
     viewModel: ProfileV2ViewModel = viewModel(
+        viewModelStoreOwner = LocalContext.current as ComponentActivity,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            LocalContext.current.applicationContext as Application,
+            (LocalContext.current as ComponentActivity).application,
         ),
     ),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
+    // caiLevel è BLOCCATO dopo la prima compilazione (anti-cheat: determina il
+    // moltiplicatore baseline dei crediti e non deve essere modificabile).
+    val caiLevelLocked = state.experience?.caiLevel != null
     var caiLevel by remember(state.experience) { mutableStateOf(state.experience?.caiLevel) }
     var baselineFitness by remember(state.experience) { mutableStateOf(state.experience?.baselineFitness) }
     var trainingFreq by remember(state.experience) { mutableStateOf(state.experience?.weeklyTrainingFreq) }
@@ -102,13 +106,17 @@ fun ExperienceEditScreen(
 
             SectionHeader(
                 title = "Livello tecnico CAI",
-                subtitle = "Scala ufficiale dei sentieri italiani. Si traduce nel filtro \"esperienza minima\" delle sessioni.",
+                subtitle = if (caiLevelLocked)
+                    "🔒 Campo bloccato — il livello CAI non è modificabile dopo la prima compilazione (anti-cheat)."
+                else
+                    "Scala ufficiale dei sentieri italiani. Si traduce nel filtro \"esperienza minima\" delle sessioni.",
             )
             SegmentedChips(
                 options = ProfileV2Labels.caiLevels,
                 selected = caiLevel,
                 labelFromValue = { ProfileV2Labels.caiLabel(it) },
-                onSelect = { caiLevel = it },
+                onSelect = { if (!caiLevelLocked) caiLevel = it },
+                locked = caiLevelLocked,
             )
 
             SectionHeader(

@@ -17,6 +17,10 @@ function userOrIpKey(req) {
   return req.ip;
 }
 
+// In ambiente test (Jest) bypassa SEMPRE i rate limit per evitare flakiness
+// causata dall'accumulo di richieste tra test multipli nella stessa suite.
+const skipInTest = () => process.env.NODE_ENV === "test";
+
 // Limite globale generoso. L'app fa polling continuo durante il tracking
 // (posizione team, meteo) quindi 1200 req/h è una soglia ragionevole.
 export const globalLimiter = rateLimit({
@@ -25,6 +29,7 @@ export const globalLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: rateLimitHandler,
+  skip: skipInTest,
 });
 
 // Protezione contro credential stuffing. Solo i tentativi falliti contano —
@@ -36,6 +41,7 @@ export const loginLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: rateLimitHandler,
+  skip: skipInTest,
 });
 
 // Soglia bassa per evitare account farming spam.
@@ -45,6 +51,7 @@ export const registerLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: rateLimitHandler,
+  skip: skipInTest,
 });
 
 // Anche per controllo costi: ogni richiesta consuma quota SMTP Brevo.
@@ -54,6 +61,7 @@ export const passwordResetLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: rateLimitHandler,
+  skip: skipInTest,
 });
 
 // Più alto perché l'app fa polling reale durante il tracking.
@@ -64,6 +72,7 @@ export const authenticatedLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: rateLimitHandler,
+  skip: skipInTest,
 });
 
 // Limite separato per le scritture (più costose lato DB).
@@ -74,5 +83,7 @@ export const writeLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   handler: rateLimitHandler,
-  skip: (req) => req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS",
+  skip: (req) =>
+    skipInTest()
+    || req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS",
 });

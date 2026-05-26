@@ -9,6 +9,36 @@ const FORECAST_URL = (id) => `${BASE_URL}/forecasts/${id}.json`;
 const CACHE_TTL_MS      = 60 * 60 * 1000; // 1 ora
 const MAX_FORECAST_DAYS = 7;
 
+// ── Timeout HTTP per le API meteo upstream ────────────────────────────────
+// Centralizzati per evitare incoerenze (prima: 15s venues, 10s forecast).
+// Soglie scelte in base al fatto che siamo OK con stale data (cache 1h
+// server-side) → meglio fallire veloce che bloccare il client mobile.
+//   - VENUES: scaricato 1×/24h, dataset piccolo, ridotto a 8s
+//   - FORECAST: per-location, payload medio, ridotto a 8s
+//   - Numero retry fissato a 1 (un solo retry, breve)
+const HTTP_TIMEOUT_MS = 8_000;
+const HTTP_RETRY_DELAY_MS = 500;
+
+/**
+ * Wrapper fetch con timeout coerente e 1 retry su errori di rete/timeout.
+ * NON ritenta su risposte HTTP non-2xx (es. 4xx/5xx upstream: meglio
+ * propagare l'errore al chiamante che mascherare).
+ */
+async function fetchWithTimeout(url, { retries = 1 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetch(url, { signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, HTTP_RETRY_DELAY_MS));
+      }
+    }
+  }
+  throw lastError;
+}
+
 /* ─── Cache in-memory per venues (towns + POI) ───────────────────────────── */
 // I venues cambiano raramente: li teniamo in RAM per evitare fetch ripetuti.
 // I forecast invece vengono salvati su MongoDB (sono pesanti e per-location).
@@ -74,8 +104,8 @@ async function fetchVenues() {
   }
 
   const [townsRes, poiRes] = await Promise.all([
-    fetch(TOWNS_URL, { signal: AbortSignal.timeout(15_000) }),
-    fetch(POI_URL,   { signal: AbortSignal.timeout(15_000) }),
+    fetchWithTimeout(TOWNS_URL),
+    fetchWithTimeout(POI_URL),
   ]);
 
   if (!townsRes.ok) throw Object.assign(new Error(`Upstream HTTP ${townsRes.status} (towns)`), { statusCode: 502 });
@@ -90,7 +120,7 @@ async function fetchVenues() {
 }
 
 async function fetchForecastFromApi(externalId) {
-  const res = await fetch(FORECAST_URL(externalId), { signal: AbortSignal.timeout(10_000) });
+  const res = await fetchWithTimeout(FORECAST_URL(externalId));
   if (!res.ok) throw Object.assign(new Error(`Upstream HTTP ${res.status} (forecast ${externalId})`), { statusCode: 502 });
 
   const data      = await res.json();

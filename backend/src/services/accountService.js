@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import User from "../models/user.js";
+import Hiker from "../models/hiker.js";
 
 export async function updateUser(userId, { username, email }) {
   const user = await User.findById(userId);
@@ -38,7 +39,7 @@ export async function changePassword(userId, { oldPassword, newPassword }) {
   if (!user) throw new Error("USER_NOT_FOUND");
 
   const valid = await bcrypt.compare(oldPassword, user.passwordHash);
-  if (!valid) throw new Error("WRONG_PASSWORD");
+  if (!valid) throw new Error("WRONG_OLD_PASSWORD");
 
   user.passwordHash = await bcrypt.hash(newPassword, 10);
   await user.save();
@@ -92,7 +93,9 @@ export async function updateGoals(userId, { km, elevM, count }) {
   if (km !== undefined) update["weeklyGoals.km"] = km;
   if (elevM !== undefined) update["weeklyGoals.elevM"] = elevM;
   if (count !== undefined) update["weeklyGoals.count"] = count;
-  const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true }).select("weeklyGoals").lean();
+  // weeklyGoals è un campo del discriminator Hiker → usa Hiker per evitare
+  // che lo strict mode di User base scarti silenziosamente l'$set.
+  const user = await Hiker.findByIdAndUpdate(userId, { $set: update }, { new: true }).select("weeklyGoals").lean();
   if (!user) throw new Error("USER_NOT_FOUND");
   return user.weeklyGoals;
 }
@@ -176,9 +179,37 @@ function flattenForSet(prefix, obj) {
   return set;
 }
 
+// ── Anti-cheat: campi bloccati dopo prima impostazione ──────────────────
+// Alcuni campi del profilo influenzano lo scoring/baseline (anti-cheating):
+//   - personalInfo.birthDate → età → fattore baseline
+//   - experience.caiLevel    → fattore esperienza
+// Per evitare che l'utente abbassi l'asticella prima di una sessione "facile",
+// una volta impostati questi campi diventano immutabili. Il blocco è ESPOSTO
+// anche dall'UI (lock 🔒 nelle screen edit) ma DEVE essere ribadito qui:
+// chiunque potrebbe altrimenti aggirare l'UI con un curl/Postman.
+class LockedFieldError extends Error {
+  constructor(field) {
+    super(`FIELD_LOCKED:${field}`);
+    this.field = field;
+    this.statusCode = 409;
+  }
+}
+
+// IMPORTANTE: per gli update di campi del discriminator (Hiker), usiamo
+// `Hiker.findByIdAndUpdate` invece di `User.findByIdAndUpdate`. Mongoose
+// rispetta lo strict mode dello schema con cui esegui la query, e i campi
+// personalInfo/experience/preferences sono definiti SOLO nel sub-schema
+// Hiker — se interroghiamo User base, il $set viene silenziosamente droppato.
 export async function updatePersonalInfo(userId, data) {
+  // Anti-cheat: blocca update di birthDate se già impostato.
+  if (data.birthDate !== undefined) {
+    const existing = await Hiker.findById(userId).select("personalInfo.birthDate").lean();
+    if (existing?.personalInfo?.birthDate) {
+      throw new LockedFieldError("birthDate");
+    }
+  }
   const set = flattenForSet("personalInfo", data);
-  const user = await User.findByIdAndUpdate(userId, { $set: set }, { new: true })
+  const user = await Hiker.findByIdAndUpdate(userId, { $set: set }, { new: true })
     .select("personalInfo")
     .lean();
   if (!user) throw new Error("USER_NOT_FOUND");
@@ -186,8 +217,15 @@ export async function updatePersonalInfo(userId, data) {
 }
 
 export async function updateExperience(userId, data) {
+  // Anti-cheat: blocca update di caiLevel se già impostato.
+  if (data.caiLevel !== undefined) {
+    const existing = await Hiker.findById(userId).select("experience.caiLevel").lean();
+    if (existing?.experience?.caiLevel) {
+      throw new LockedFieldError("caiLevel");
+    }
+  }
   const set = flattenForSet("experience", data);
-  const user = await User.findByIdAndUpdate(userId, { $set: set }, { new: true })
+  const user = await Hiker.findByIdAndUpdate(userId, { $set: set }, { new: true })
     .select("experience")
     .lean();
   if (!user) throw new Error("USER_NOT_FOUND");
@@ -196,7 +234,7 @@ export async function updateExperience(userId, data) {
 
 export async function updatePreferences(userId, data) {
   const set = flattenForSet("preferences", data);
-  const user = await User.findByIdAndUpdate(userId, { $set: set }, { new: true })
+  const user = await Hiker.findByIdAndUpdate(userId, { $set: set }, { new: true })
     .select("preferences")
     .lean();
   if (!user) throw new Error("USER_NOT_FOUND");
@@ -209,7 +247,9 @@ export async function updatePreferences(userId, data) {
  * Anche "Salta tutto" deve chiamare questo endpoint per non mostrare più il banner.
  */
 export async function markProfileCompleted(userId) {
-  const user = await User.findById(userId).select("profileCompletedAt");
+  // profileCompletedAt è del discriminator Hiker → query con Hiker per
+  // garantire che il save() persista correttamente (vedi nota sopra).
+  const user = await Hiker.findById(userId).select("profileCompletedAt");
   if (!user) throw new Error("USER_NOT_FOUND");
   if (!user.profileCompletedAt) {
     user.profileCompletedAt = new Date();

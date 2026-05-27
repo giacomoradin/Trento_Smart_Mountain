@@ -2,7 +2,6 @@ package it.trentosmartmountain.app.ui.screens.registra
 
 import android.Manifest
 import android.app.Activity
-import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -34,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,6 +48,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.data.ble.BluetoothHelper
 import it.trentosmartmountain.app.data.estimation.HikeEstimation
 import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.ui.theme.TsmAccent
@@ -99,10 +100,41 @@ fun RegistraScreen(
       viewModel.onBluetoothEnableResult(result.resultCode == Activity.RESULT_OK)
     }
 
+  val bleAdvertisePermissions = remember { BluetoothHelper.requiredAdvertisePermissions() }
+
+  val blePermissionLauncher =
+    rememberLauncherForActivityResult(
+      ActivityResultContracts.RequestMultiplePermissions(),
+    ) { results ->
+      val granted =
+        bleAdvertisePermissions.isEmpty() ||
+          bleAdvertisePermissions.all { perm -> results[perm] == true }
+      viewModel.onBlePermissionsResult(granted)
+    }
+
+  LaunchedEffect(uiState.requestBlePermissionsForSos) {
+    if (uiState.requestBlePermissionsForSos) {
+      viewModel.onBlePermissionsRequestLaunched()
+      if (bleAdvertisePermissions.isEmpty()) {
+        viewModel.onBlePermissionsResult(true)
+      } else {
+        blePermissionLauncher.launch(bleAdvertisePermissions)
+      }
+    }
+  }
+
   LaunchedEffect(uiState.launchBluetoothEnableIntent) {
     if (uiState.launchBluetoothEnableIntent) {
       viewModel.onBluetoothEnableIntentLaunched()
-      bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+      if (!BluetoothHelper.canRequestEnableBluetooth(context)) {
+        viewModel.onBluetoothEnableResult(false)
+      } else {
+        runCatching {
+          bluetoothEnableLauncher.launch(BluetoothHelper.createEnableIntent())
+        }.onFailure {
+          viewModel.onBluetoothEnableResult(false)
+        }
+      }
     }
   }
 
@@ -311,6 +343,14 @@ fun RegistraScreen(
       onActivateBluetooth = viewModel::requestBluetoothEnableForSos,
       onContinueWithoutBeacon = viewModel::continueSosWithoutBeacon,
       onCancel = viewModel::dismissBluetoothEnableDialog,
+    )
+  }
+
+  if (uiState.showBlePermissionDeniedDialog) {
+    SosBlePermissionDeniedDialog(
+      onRetryPermission = viewModel::retryBlePermissionsForSos,
+      onContinueWithoutBeacon = viewModel::continueSosWithoutBlePermission,
+      onCancel = viewModel::dismissBlePermissionDeniedDialog,
     )
   }
 

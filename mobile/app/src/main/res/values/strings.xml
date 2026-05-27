@@ -171,6 +171,9 @@
   <string name="sos_beacon_scanning">Scansione in corso…</string>
   <string name="sos_beacon_scanning_hint">Avvicina i due telefoni. Sul mittente la notifica deve indicare «in trasmissione» (non solo «avvio» o «Bluetooth spento»).</string>
   <string name="sos_beacon_permission_denied">Permessi Bluetooth necessari per la scansione.</string>
+  <string name="sos_ble_permission_denied_title">Permesso dispositivi vicini</string>
+  <string name="sos_ble_permission_denied_body">Per trasmettere il beacon di soccorso serve l\'autorizzazione ai dispositivi nelle vicinanze (Bluetooth). Puoi riprovare, inviare l\'SOS senza beacon o annullare.</string>
+  <string name="sos_ble_permission_retry">Riprova autorizzazione</string>
   <string name="sos_beacon_rssi_label">Segnale: %1$d dBm</string>
   <string name="sos_beacon_distance_estimate">Distanza stimata: ~%1$.0f m</string>
   <string name="sos_beacon_distance_disclaimer">Stima indicativa; dipende da ostacoli e dispositivo.</string>

@@ -333,6 +333,3 @@ npm run import
 
 MIT - University Project
 
-## Contributors
-
-Your Team Names Here

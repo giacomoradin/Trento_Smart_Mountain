@@ -10,6 +10,7 @@ import adminRoutes from "./routes/adminRoutes.js";
 import hikeSessionRoutes from "./routes/hikeSessionRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import weatherRoutes from "./routes/weatherRoutes.js";
+import sentieroRoutes from "./routes/sentieroRoutes.js";
 
 // IMPORTANTE: importa i discriminator models per registrarli con Mongoose
 // (devono essere caricati almeno una volta perché User.discriminator() venga eseguito)
@@ -80,6 +81,7 @@ app.use("/admin", adminRoutes);
 app.use("/api/v1/sessions", hikeSessionRoutes);
 app.use("/api/v1/activities", activityRoutes);
 app.use("/weather", weatherRoutes);
+app.use("/api/v1/sentieri", sentieroRoutes);
 
 // ─── Compatibility shim: /users (deprecato, mantenuto per backward-compat) ───
 // Il refactor 2026-05 ha separato la collection in hikers/refuges/admins ma

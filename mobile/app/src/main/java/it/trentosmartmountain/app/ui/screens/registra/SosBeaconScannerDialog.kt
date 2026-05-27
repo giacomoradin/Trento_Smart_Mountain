@@ -1,10 +1,7 @@
 package it.trentosmartmountain.app.ui.screens.registra
 
-import android.Manifest
 import android.app.Activity
-import android.bluetooth.BluetoothAdapter
 import android.content.Intent
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -26,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
@@ -43,23 +39,9 @@ fun SosBeaconScannerDialog(
   val state by viewModel.state.collectAsStateWithLifecycle()
   val context = androidx.compose.ui.platform.LocalContext.current
 
-  val requiredPermissions =
-    buildList {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        add(Manifest.permission.BLUETOOTH_SCAN)
-        add(Manifest.permission.BLUETOOTH_CONNECT)
-        // Su molti device la scan BLE non restituisce risultati senza anche la posizione.
-        add(Manifest.permission.ACCESS_FINE_LOCATION)
-      } else {
-        add(Manifest.permission.ACCESS_FINE_LOCATION)
-      }
-    }.toTypedArray()
+  val requiredPermissions = BluetoothHelper.requiredScanPermissions()
 
-  fun hasAllPermissions(): Boolean =
-    requiredPermissions.all {
-      ContextCompat.checkSelfPermission(context, it) ==
-        android.content.pm.PackageManager.PERMISSION_GRANTED
-    }
+  fun hasAllPermissions(): Boolean = BluetoothHelper.hasScanPermissions(context)
 
   val permissionLauncher =
     rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
@@ -81,15 +63,15 @@ fun SosBeaconScannerDialog(
     }
 
   LaunchedEffect(beaconInstanceId) {
+    if (!hasAllPermissions()) {
+      permissionLauncher.launch(requiredPermissions)
+      return@LaunchedEffect
+    }
     if (!BluetoothHelper.isBluetoothEnabled(context)) {
       // non avviamo la scan; la UI mostra il bottone per attivare BT
       return@LaunchedEffect
     }
-    if (hasAllPermissions()) {
-      viewModel.startScan(beaconInstanceId)
-    } else {
-      permissionLauncher.launch(requiredPermissions)
-    }
+    viewModel.startScan(beaconInstanceId)
   }
 
   DisposableEffect(Unit) {
@@ -116,7 +98,11 @@ fun SosBeaconScannerDialog(
             )
             Button(
               onClick = {
-                bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                if (BluetoothHelper.canRequestEnableBluetooth(context)) {
+                  runCatching {
+                    bluetoothEnableLauncher.launch(BluetoothHelper.createEnableIntent())
+                  }
+                }
               },
               modifier = Modifier.fillMaxWidth(),
             ) {

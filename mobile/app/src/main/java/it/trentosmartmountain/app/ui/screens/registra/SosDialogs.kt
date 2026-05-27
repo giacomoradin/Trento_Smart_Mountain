@@ -143,6 +143,34 @@ fun SosCountdownDialog(
 }
 
 @Composable
+fun SosBlePermissionDeniedDialog(
+  onRetryPermission: () -> Unit,
+  onContinueWithoutBeacon: () -> Unit,
+  onCancel: () -> Unit,
+) {
+  AlertDialog(
+    onDismissRequest = onCancel,
+    title = { Text(stringResource(R.string.sos_ble_permission_denied_title)) },
+    text = { Text(stringResource(R.string.sos_ble_permission_denied_body)) },
+    confirmButton = {
+      Button(onClick = onRetryPermission) {
+        Text(stringResource(R.string.sos_ble_permission_retry))
+      }
+    },
+    dismissButton = {
+      Column {
+        TextButton(onClick = onContinueWithoutBeacon) {
+          Text(stringResource(R.string.sos_bluetooth_enable_without))
+        }
+        TextButton(onClick = onCancel) {
+          Text(stringResource(R.string.sos_bluetooth_enable_cancel))
+        }
+      }
+    },
+  )
+}
+
+@Composable
 fun SosBluetoothEnableDialog(
   onActivateBluetooth: () -> Unit,
   onContinueWithoutBeacon: () -> Unit,

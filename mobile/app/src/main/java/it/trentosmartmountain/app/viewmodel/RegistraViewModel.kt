@@ -126,6 +126,10 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val showBluetoothEnableDialog: Boolean = false,
     /** Evento one-shot per lanciare ACTION_REQUEST_ENABLE dalla UI. */
     val launchBluetoothEnableIntent: Boolean = false,
+    /** Evento one-shot: la UI deve chiedere permessi Bluetooth (dispositivi nelle vicinanze). */
+    val requestBlePermissionsForSos: Boolean = false,
+    /** Permessi BLE rifiutati: offri invio senza beacon o annulla. */
+    val showBlePermissionDeniedDialog: Boolean = false,
   )
 
   private data class PendingSosLaunch(
@@ -683,6 +687,19 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         idempotencyKey = idempotencyKey,
       )
 
+    // Prima i permessi BLE: su Android 12+ non si può leggere lo stato BT senza CONNECT.
+    if (!BluetoothHelper.hasAdvertisePermissions(app)) {
+      pendingSosLaunch = pending
+      _uiState.update {
+        it.copy(
+          sosPhase = SosPhase.SENDING,
+          sosBeaconInstanceId = beaconId,
+          requestBlePermissionsForSos = true,
+        )
+      }
+      return
+    }
+
     if (!BluetoothHelper.isBluetoothEnabled(app)) {
       pendingSosLaunch = pending
       _uiState.update {
@@ -723,11 +740,75 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
 
   fun onBluetoothEnableResult(enabled: Boolean) {
     val pending = pendingSosLaunch ?: return
-    pendingSosLaunch = null
     if (enabled) {
+      if (!BluetoothHelper.hasAdvertisePermissions(app)) {
+        _uiState.update {
+          it.copy(
+            showBluetoothEnableDialog = false,
+            requestBlePermissionsForSos = true,
+          )
+        }
+        return
+      }
+      pendingSosLaunch = null
       executeSosLaunch(pending, startBeacon = true)
     } else {
+      pendingSosLaunch = null
       executeSosLaunch(pending, startBeacon = false)
+    }
+  }
+
+  fun onBlePermissionsRequestLaunched() {
+    _uiState.update { it.copy(requestBlePermissionsForSos = false) }
+  }
+
+  fun onBlePermissionsResult(granted: Boolean) {
+    val pending = pendingSosLaunch ?: return
+    if (granted) {
+      if (!BluetoothHelper.isBluetoothEnabled(app)) {
+        _uiState.update {
+          it.copy(
+            requestBlePermissionsForSos = false,
+            showBluetoothEnableDialog = true,
+          )
+        }
+        return
+      }
+      pendingSosLaunch = null
+      executeSosLaunch(pending, startBeacon = true)
+    } else {
+      _uiState.update {
+        it.copy(
+          showBlePermissionDeniedDialog = true,
+          requestBlePermissionsForSos = false,
+        )
+      }
+    }
+  }
+
+  fun dismissBlePermissionDeniedDialog() {
+    pendingSosLaunch = null
+    _uiState.update {
+      it.copy(
+        showBlePermissionDeniedDialog = false,
+        sosPhase = SosPhase.IDLE,
+        sosBeaconInstanceId = null,
+        sosStatusMessage = null,
+      )
+    }
+    activeSosIdempotencyKey = null
+  }
+
+  fun continueSosWithoutBlePermission() {
+    val pending = pendingSosLaunch ?: return
+    pendingSosLaunch = null
+    _uiState.update { it.copy(showBlePermissionDeniedDialog = false) }
+    executeSosLaunch(pending, startBeacon = false)
+  }
+
+  fun retryBlePermissionsForSos() {
+    _uiState.update {
+      it.copy(showBlePermissionDeniedDialog = false, requestBlePermissionsForSos = true)
     }
   }
 
@@ -748,7 +829,12 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       )
     }
 
-    if (startBeacon && BluetoothHelper.isBluetoothEnabled(app)) {
+    val beaconCanRun =
+      startBeacon &&
+        BluetoothHelper.isBluetoothEnabled(app) &&
+        BluetoothHelper.hasAdvertisePermissions(app)
+
+    if (beaconCanRun) {
       SosBeaconService.start(app, pending.beaconId)
     }
 
@@ -761,15 +847,16 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
           latitude = pending.latitude,
           beaconInstanceId = pending.beaconId,
           idempotencyKey = pending.idempotencyKey,
-          beaconActive = startBeacon && BluetoothHelper.isBluetoothEnabled(app),
+          beaconActive = beaconCanRun,
         )
       result.fold(
         onSuccess = { emergency ->
           val beaconMsg =
-            if (startBeacon && BluetoothHelper.isBluetoothEnabled(app)) {
-              "SOS inviato al capogruppo"
-            } else {
-              "SOS inviato — beacon non attivo (Bluetooth spento)"
+            when {
+              beaconCanRun -> "SOS inviato al capogruppo"
+              startBeacon && !BluetoothHelper.hasAdvertisePermissions(app) ->
+                "SOS inviato — beacon non attivo (permessi Bluetooth negati)"
+              else -> "SOS inviato — beacon non attivo (Bluetooth spento)"
             }
           _uiState.update {
             it.copy(

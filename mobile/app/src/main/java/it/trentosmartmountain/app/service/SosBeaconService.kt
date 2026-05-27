@@ -49,6 +49,14 @@ class SosBeaconService : Service() {
           stopSelf()
           return START_NOT_STICKY
         }
+        if (
+          !BluetoothHelper.hasAdvertisePermissions(this) ||
+          !BluetoothHelper.isBluetoothEnabled(this)
+        ) {
+          Log.e(TAG, "Beacon non avviato: permessi o Bluetooth non disponibili")
+          stopSelf()
+          return START_NOT_STICKY
+        }
         ensureChannel()
         startForeground(NOTIFICATION_ID, buildPreparingNotification())
         startAdvertising(beaconId)
@@ -63,6 +71,13 @@ class SosBeaconService : Service() {
   }
 
   private fun startAdvertising(beaconInstanceId: String) {
+    if (!BluetoothHelper.hasAdvertisePermissions(this)) {
+      Log.e(TAG, "Permessi Bluetooth mancanti — beacon non avviato")
+      showNotification(NotificationKind.FAILED)
+      mainHandler.postDelayed({ stopSelf() }, 2_500)
+      return
+    }
+
     if (!BluetoothHelper.isBluetoothEnabled(this)) {
       Log.e(TAG, "Bluetooth spento — beacon non avviato")
       showNotification(NotificationKind.BLUETOOTH_OFF)
@@ -77,7 +92,14 @@ class SosBeaconService : Service() {
       return
     }
 
-    advertiser = adapter.bluetoothLeAdvertiser
+    val leAdvertiser =
+      runCatching { adapter.bluetoothLeAdvertiser }.getOrElse { err ->
+        Log.e(TAG, "Impossibile ottenere advertiser BLE", err)
+        showNotification(NotificationKind.FAILED)
+        mainHandler.postDelayed({ stopSelf() }, 2_500)
+        return
+      }
+    advertiser = leAdvertiser
     if (advertiser == null) {
       Log.e(TAG, "BluetoothLeAdvertiser null")
       showNotification(NotificationKind.FAILED)
@@ -123,7 +145,13 @@ class SosBeaconService : Service() {
         }
       }
 
-    advertiser?.startAdvertising(settings, data, advertiseCallback)
+    runCatching {
+      advertiser?.startAdvertising(settings, data, advertiseCallback)
+    }.onFailure { err ->
+      Log.e(TAG, "startAdvertising eccezione", err)
+      showNotification(NotificationKind.FAILED)
+      mainHandler.postDelayed({ stopSelf() }, 3_000)
+    }
   }
 
   private fun stopAdvertising() {

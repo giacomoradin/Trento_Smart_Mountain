@@ -9,16 +9,16 @@
 
 ## 1. Sprint Goal proposto
 
-> *"Chiudere il debito tecnico di Sprint 1 (bug critici già fixati + runtime permission flow, schema migration, pattern Repository), implementare il backend SOS (RF9) e introdurre il sistema di sync offline-to-online (WorkManager store-and-forward) per la telemetria GPS — consolidando le fondamenta prima dell'apertura del fronte real-time/BLE in Sprint 3."*
+> _"Chiudere il debito tecnico di Sprint 1 (bug critici già fixati + runtime permission flow, schema migration, pattern Repository), implementare il backend SOS (RF9) e introdurre il sistema di sync offline-to-online (WorkManager store-and-forward) per la telemetria GPS — consolidando le fondamenta prima dell'apertura del fronte real-time/BLE in Sprint 3."_
 
 ### Capacità team prevista
 
-| Membro | h/settimana stimate |
-|--------|---------------------|
-| Federico Cattelan | ~50h |
-| Marco Christian Stoica | ~50h |
-| Giacomo Radin | ~50h |
-| **Totale** | **~150h** (≈ 30-40 SP) |
+| Membro                 | h/settimana stimate    |
+| ---------------------- | ---------------------- |
+| Federico Cattelan      | ~50h                   |
+| Marco Christian Stoica | ~50h                   |
+| Giacomo Radin          | ~50h                   |
+| **Totale**             | **~150h** (≈ 30-40 SP) |
 
 ---
 
@@ -26,11 +26,11 @@
 
 ### Legenda
 
-| Priorità | Significato |
-|----------|-------------|
-| **Must** | Bloccante — deve essere consegnato per chiudere Sprint 2 |
+| Priorità   | Significato                                                     |
+| ---------- | --------------------------------------------------------------- |
+| **Must**   | Bloccante — deve essere consegnato per chiudere Sprint 2        |
 | **Should** | Importante — fortemente desiderato, può scivolare al successivo |
-| **Could** | Nice-to-have — se c'è capacità residua |
+| **Could**  | Nice-to-have — se c'è capacità residua                          |
 
 ---
 
@@ -41,12 +41,14 @@
 **Stato 17/05:** ✅ Pulsante AVVIA gated al creator (UI fix). Partecipanti vedono chip informativo.
 
 **Da fare Sprint 2:**
+
 1. Quando il creator avvia la sessione → server notifica via polling (LongPoll temporaneo, Socket.io in US-22).
 2. UI partecipanti: pulsante "▶ UNISCITI AL TRACKING" appare automaticamente quando `session.status = ACTIVE`.
 3. Implementare polling lato client: `LaunchedEffect` con `delay(30_000)` ogni 30s su sessione PLANNED.
 4. Refactor `RegistraViewModel.autoStartFromSession()`: separare PATCH creator dal pure-tracking di partecipante.
 
 **Acceptance criteria:**
+
 - TC-07 risulta ✅ PASS completo.
 - Partecipante vede "UNISCITI AL TRACKING" entro 30s dall'AVVIA del creator.
 - Local tracking parte senza tentare PATCH inutili.
@@ -63,11 +65,13 @@
 **Stato 17/05:** ✅ `authenticate + requireRoles("admin")` su `POST /seed` e `POST /forecast/:id/refresh`.
 
 **Da fare Sprint 2:**
+
 1. Test Postman automatizzato → collection `tsm_security.postman_collection.json` con asserzioni 401/403.
 2. Documentare procedura seed admin in `docs/setup_backend.md`.
 3. Creare utente admin di default via script `backend/scripts/createAdmin.js` per il seeding iniziale.
 
 **Acceptance criteria:**
+
 - TC-11 risulta ✅ PASS in CI/Postman runner.
 - Esiste un admin user in MongoDB seedato automaticamente al primo `npm run dev`.
 
@@ -83,6 +87,7 @@
 **Stato 17/05:** ✅ `ACCESS_BACKGROUND_LOCATION` + `WAKE_LOCK` nel manifest.
 
 **Da fare Sprint 2:**
+
 1. Implementare flusso runtime permission a 2 step per Android 10+:
    - Step A: richiedere `ACCESS_FINE_LOCATION` (foreground) — rationale dialog.
    - Step B: dopo grant Step A, richiedere `ACCESS_BACKGROUND_LOCATION` — su Android 11+ apre Settings system.
@@ -91,6 +96,7 @@
 4. Eventuale toast "Permesso background necessario" se l'utente skippa lo Step B.
 
 **Acceptance criteria:**
+
 - TC-08 ✅ PASS completo: 5 minuti di camminata a schermo spento = traccia GPS continua senza gap.
 - Su Android 11+ l'app guida l'utente all'impostazione Settings (Intent `ACTION_APPLICATION_DETAILS_SETTINGS`).
 
@@ -108,9 +114,19 @@
 **Da fare Sprint 2:**
 
 #### Backend
+
 1. Modello `Emergency`:
    ```javascript
-   { userId, sessionId, coordinates (GeoJSON), emergencyType, signature (Ed25519), timestamp, hopCount, status (PENDING/VALIDATED/FORWARDED/CANCELLED) }
+   {
+     (userId,
+       sessionId,
+       coordinates(GeoJSON),
+       emergencyType,
+       signature(Ed25519),
+       timestamp,
+       hopCount,
+       status(PENDING / VALIDATED / FORWARDED / CANCELLED));
+   }
    ```
 2. Endpoint `POST /api/v1/emergencies`:
    - Verifica firma ECC Ed25519 con chiave pubblica utente.
@@ -120,17 +136,54 @@
 4. Endpoint `GET /api/v1/sessions/:id/emergencies` per dashboard capogruppo.
 
 #### Mobile
+
 5. Generazione coppia chiavi ECC Ed25519 al primo login (via Android Keystore o Tink).
 6. Salvataggio chiave pubblica su backend al login.
 7. SOS dialog → conferma → API call con timer 5s "Annulla" (Falso Allarme).
 8. Cache locale offline se rete mancante (Room: `pending_emergencies`).
 
 **Acceptance criteria:**
+
 - Nuovo TC-21: SOS con device offline → cache locale → invio automatico al ritorno della rete.
 - Firma ECC verificata server-side.
 
 **Volunteer:** Marco (backend) + Giacomo (mobile)
 **Stima:** 8 SP
+**Stato 26/05 (branch `SOS`):** MVP SOS sessione ACTIVE implementato (backend + mobile). Dettaglio: `docs/sos_feature.md`, API: `docs/api_reference.md` § Emergenze.
+
+#### Implementato (branch `SOS`)
+
+**Backend**
+
+- Modello `Emergency`: snapshot GPS, `profileSnapshot`, `beaconInstanceId`, `beaconActive`, stati `ACTIVE` \| `SHARED_WITH_GROUP` \| `DISMISSED` \| `CANCELLED_BY_SENDER`
+- `POST /api/v1/emergencies` (idempotente su `idempotencyKey` UUID v4)
+- `GET /api/v1/emergencies/:id`, `PATCH` con azioni `cancel`, `dismiss`, `share_with_group`, `unshare_with_group`, `ack`
+- `GET /api/v1/sessions/:id/emergencies` (lista + `isGroupLeader`, `hasUnacked`)
+- Test: `backend/__tests__/routes/emergency.test.js`
+
+**Mobile**
+
+- Invio SOS con countdown, dialog conferma/annulla, beacon BLE TSM (`SosBeaconService`)
+- Dialog BT mittente; invio senza beacon (`beaconActive: false`)
+- Ricezione capogruppo/partecipanti: poll 8s, notifica locale, dettaglio, scanner RSSI
+- Coda offline Room + WorkManager (`pending_emergencies`, `EmergencyUploadWorker`)
+- Revoca condivisione gruppo (`unshare_with_group`)
+
+#### Ancora da fare (US-19 completa / Sprint successivo)
+
+1. Firma **Ed25519** sul payload + verifica server (`signature` opzionale oggi, non verificata).
+2. Registrazione chiave pubblica utente (`POST /users/:id/publicKey`).
+3. Inoltro verso soccorsi / CNSAS (US backlog).
+4. Swagger annotato per emergenze.
+5. Allineare coda offline con `beaconActive` se si invia SOS senza beacon da offline.
+
+**Acceptance criteria (parziale):**
+
+- TC-21: SOS offline → coda Room → upload a rete (WorkManager + retry ViewModel) — **coperto**.
+- Firma ECC verificata server-side — **non ancora**.
+
+**Volunteer:** Marco (backend) + Giacomo (mobile)
+**Stima residua:** ~3 SP (ECC + publicKey + Swagger)
 
 ---
 
@@ -141,12 +194,14 @@
 **Stato 17/05:** `HomeSocialPlaceholder` solo testo placeholder.
 
 **Da fare Sprint 2:**
+
 1. Modello backend: `Activity` (estensione di `HikeSession` COMPLETED con `visibility: "public/friends/private"`).
 2. Endpoint `GET /api/v1/feed/public?limit=20` paginato.
 3. UI feed con card: avatar utente, route name, distanza, dislivello, punti, foto opzionale.
 4. Like + commenti (futura US-24).
 
 **Acceptance criteria:**
+
 - Feed mostra le ultime 20 attività pubbliche.
 - Tap su card → naviga a `ActivityDetailScreen` (anche per attività altrui).
 
@@ -162,6 +217,7 @@
 **Stato 17/05:** `ForegroundTrackingService` traccia, ma upload non implementato.
 
 **Da fare Sprint 2:**
+
 1. Aggiungere dipendenza `androidx.work:work-runtime-ktx:2.10.0`.
 2. Salvare batch GPS in Room (`TelemetryEntity`) durante il tracking, in `RegistraViewModel.applyLocation()`.
 3. Endpoint backend `POST /api/v1/sessions/:id/telemetry` (batch upload, idempotente).
@@ -169,6 +225,7 @@
 5. Cleanup batch già sincronizzati da Room.
 
 **Acceptance criteria:**
+
 - Nuovo TC-24: tracking 5 min offline → ritorno rete → upload batch entro 30s.
 - Idempotenza verificata: chiamare 2 volte la stessa batch non duplica.
 
@@ -184,6 +241,7 @@
 **Stato 17/05:** Solo `LoginViewModel` e `RegisterViewModel` usano Repository. 4 altri ViewModel chiamano `TsmApiClient.service()` direttamente.
 
 **Da fare Sprint 2:**
+
 1. Creare `SessionRepository`:
    ```kotlin
    interface SessionRepository {
@@ -200,6 +258,7 @@
 4. DI manuale via `TsmApplication` (no Hilt ancora — overhead).
 
 **Acceptance criteria:**
+
 - Nessun ViewModel importa direttamente `TsmApiClient`.
 - 1 unit test JUnit per `SessionRepository` con `MockWebServer`.
 
@@ -215,6 +274,7 @@
 **Stato 17/05:** Campo `String` su Mongoose. Sort lessicografico.
 
 **Da fare Sprint 2:**
+
 1. Cambio schema: `meetingDate: { type: Date }`.
 2. Script `backend/scripts/migrateMeetingDate.js`:
    - Trova tutti i documenti con `meetingDate` String.
@@ -224,6 +284,7 @@
 4. Update DatePicker in `SessionPlanViewModel` e `SessionDetailViewModel` per emettere ISO.
 
 **Acceptance criteria:**
+
 - TC-26 (nuovo): creare 3 sessioni con date 16/05, 17/05, 02/06 → sort produce ordine cronologico.
 - Backfill 100% dei documenti esistenti.
 
@@ -234,11 +295,14 @@
 
 ### US-22 — Socket.io real-time positions [Could / Sprint 3]
 
+> **Nota SOS:** le coordinate nel popup Dettaglio SOS restano lo **snapshot** all’invio (`docs/sos_feature.md`). La posizione **live** del mittente (e del gruppo) sarà sulla mappa di questa US, dopo il completamento del flusso SOS.
+
 **User Story:** Come **capogruppo** voglio vedere le posizioni live dei partecipanti sulla mia mappa, così da monitorare la coesione del gruppo in tempo reale.
 
 **Stato 17/05:** `socket.io` installato come dipendenza ma non integrato.
 
 **Da fare:**
+
 1. Backend: namespace `/sessions` con room per sessionId.
 2. Eventi: `position:update`, `participant:joined`, `participant:left`.
 3. Mobile: `SocketManager` singleton con riconnessione automatica.
@@ -255,6 +319,7 @@
 **Stato 17/05:** Architettura pianificata in D2 §3.2.2, nessuna implementazione.
 
 **Da fare:**
+
 1. Studio fattibilità: librerie BLE Mesh per Android (Mesh Provisioner SDK Nordic vs custom GATT).
 2. PoC ricezione/trasmissione SOS firmato Ed25519.
 3. Politiche hopCount (max 10), TTL, idempotency key.
@@ -267,13 +332,13 @@
 
 Action items dalla retrospective Sprint 1 (da pianificare entro le prime 2 giornate di Sprint 2):
 
-| # | Task | Volunteer | Stima |
-|---|------|-----------|-------|
-| 1 | Setup GitHub Actions CI: build APK + ESLint backend + Jest dummy test | Marco | 3 SP |
-| 2 | Aggiornare KDoc orfani in `TsmApplication.kt` + `TsmApiService.kt` (M7) | Giacomo | 1 SP |
-| 3 | Aggiornare `setup_mobile.md` con i nuovi permessi runtime | Federico | 1 SP |
-| 4 | Aggiungere unit test JUnit minimi (almeno 1 per ViewModel) | Federico | 3 SP |
-| 5 | Aggiungere unit test Jest minimi backend (auth + sessions) | Marco | 3 SP |
+| #   | Task                                                                    | Volunteer | Stima |
+| --- | ----------------------------------------------------------------------- | --------- | ----- |
+| 1   | Setup GitHub Actions CI: build APK + ESLint backend + Jest dummy test   | Marco     | 3 SP  |
+| 2   | Aggiornare KDoc orfani in `TsmApplication.kt` + `TsmApiService.kt` (M7) | Giacomo   | 1 SP  |
+| 3   | Aggiornare `setup_mobile.md` con i nuovi permessi runtime               | Federico  | 1 SP  |
+| 4   | Aggiungere unit test JUnit minimi (almeno 1 per ViewModel)              | Federico  | 3 SP  |
+| 5   | Aggiungere unit test Jest minimi backend (auth + sessions)              | Marco     | 3 SP  |
 
 ---
 
@@ -281,15 +346,15 @@ Action items dalla retrospective Sprint 1 (da pianificare entro le prime 2 giorn
 
 Distribuzione proposta su 7 giorni (D1-D7) — totale ~40 SP.
 
-| Giorno | Focus principale | SP |
-|--------|------------------|-----|
-| D1 | Kickoff + US-16 (polling partecipanti) + US-18 (runtime perm flow A) | 5 |
-| D2 | US-18 completion + US-fix-M5 (Repository refactor sessione) | 5 |
-| D3 | US-19 backend (modello Emergency + endpoint) | 4 |
-| D4 | US-19 mobile (firma ECC + UI) | 4 |
-| D5 | US-21 (WorkManager + telemetry endpoint) | 8 |
-| D6 | US-fix-M2 (migration) + US-17 (Postman tests) + CI setup | 6 |
-| D7 | US-20 (Home Social Feed) + unit tests + buffer per regressioni | 8 |
+| Giorno | Focus principale                                                     | SP  |
+| ------ | -------------------------------------------------------------------- | --- |
+| D1     | Kickoff + US-16 (polling partecipanti) + US-18 (runtime perm flow A) | 5   |
+| D2     | US-18 completion + US-fix-M5 (Repository refactor sessione)          | 5   |
+| D3     | US-19 backend (modello Emergency + endpoint)                         | 4   |
+| D4     | US-19 mobile (firma ECC + UI)                                        | 4   |
+| D5     | US-21 (WorkManager + telemetry endpoint)                             | 8   |
+| D6     | US-fix-M2 (migration) + US-17 (Postman tests) + CI setup             | 6   |
+| D7     | US-20 (Home Social Feed) + unit tests + buffer per regressioni       | 8   |
 
 ---
 
@@ -317,13 +382,13 @@ Al termine di Sprint 2, la demo dovrebbe includere:
 
 ## 7. Rischi noti per Sprint 2
 
-| Rischio | Impatto | Mitigazione |
-|---------|---------|-------------|
-| Android Keystore Ed25519 complessità | Alto | Iniziare con libreria Google Tink come fallback se Keystore problematico |
-| WorkManager backoff su batch grandi (>1MB) | Medio | Splittare batch in chunk di max 500 punti |
-| Sync polling 30s troppo lento UX | Medio | Considerare Server-Sent Events come transition layer prima di Socket.io |
-| Refactor Repository introduce regressioni | Alto | Refactor incrementale 1 ViewModel/PR + smoke test ogni merge |
+| Rischio                                    | Impatto | Mitigazione                                                              |
+| ------------------------------------------ | ------- | ------------------------------------------------------------------------ |
+| Android Keystore Ed25519 complessità       | Alto    | Iniziare con libreria Google Tink come fallback se Keystore problematico |
+| WorkManager backoff su batch grandi (>1MB) | Medio   | Splittare batch in chunk di max 500 punti                                |
+| Sync polling 30s troppo lento UX           | Medio   | Considerare Server-Sent Events come transition layer prima di Socket.io  |
+| Refactor Repository introduce regressioni  | Alto    | Refactor incrementale 1 ViewModel/PR + smoke test ogni merge             |
 
 ---
 
-*Sprint 2 plan generato il 17/05/2026 — Pre-kickoff Sprint 2. Documento da revisionare nel meeting di Sprint Planning del team.*
+_Sprint 2 plan generato il 17/05/2026 — Pre-kickoff Sprint 2. Documento da revisionare nel meeting di Sprint Planning del team._

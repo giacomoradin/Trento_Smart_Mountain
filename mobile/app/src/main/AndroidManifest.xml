@@ -2,17 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
   <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.NFC" />
+  <uses-feature android:name="android.hardware.nfc" android:required="false" />
+  <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-  <!-- Richiesto su Android 10+ per ricevere update GPS a schermo spento (D2 RNF9).
-       Va richiesto runtime DOPO aver già ottenuto ACCESS_FINE_LOCATION. -->
-  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-  <!-- Evita che il CPU si spenga durante un'escursione lunga con schermo spento. -->
-  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+  <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+  <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
   <application
     android:name=".TsmApplication"
@@ -37,11 +41,23 @@
         <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="tsm" android:host="auth" />
       </intent-filter>
+      <intent-filter>
+        <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.nfc.action.TAG_DISCOVERED" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
     </activity>
 
     <service
       android:name=".service.ForegroundTrackingService"
       android:exported="false"
       android:foregroundServiceType="location" />
+    <service
+      android:name=".service.SosBeaconService"
+      android:exported="false"
+      android:foregroundServiceType="connectedDevice" />
   </application>
 </manifest>

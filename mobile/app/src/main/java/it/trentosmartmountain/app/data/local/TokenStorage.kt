@@ -9,11 +9,21 @@ import androidx.security.crypto.MasterKey
 private const val ENCRYPTED_PREFS_FILE = "tsm_auth_encrypted"
 private const val LEGACY_PREFS_FILE = "tsm_auth"
 private const val KEY_JWT = "jwt_access_token"
+private const val KEY_REFRESH = "refresh_token"
+private const val KEY_REFRESH_EXPIRES = "refresh_expires_at_iso"
 
 /**
- * Persistenza locale del JWT dopo login tramite [EncryptedSharedPreferences].
+ * Persistenza locale dei token auth in [EncryptedSharedPreferences].
  *
- * Alla prima apertura dopo l’aggiornamento migra un eventuale token salvato nel file legacy in chiaro.
+ * Memorizza:
+ *  - access token JWT (chiave [KEY_JWT]) — TTL breve, default 15 min server-side.
+ *  - refresh token opaco (chiave [KEY_REFRESH]) — TTL 30 giorni server-side.
+ *  - scadenza refresh (chiave [KEY_REFRESH_EXPIRES]) — solo per logica UI
+ *    ("la tua sessione scade fra X giorni"), non per validazione: il backend
+ *    è la fonte di verità.
+ *
+ * Alla prima apertura dopo l'aggiornamento migra un eventuale token salvato
+ * nel file legacy in chiaro.
  */
 class TokenStorage private constructor(
   context: Context,
@@ -30,6 +40,23 @@ class TokenStorage private constructor(
   }
 
   fun getToken(): String? = prefs.getString(KEY_JWT, null)
+
+  /**
+   * Salva la coppia access + refresh emessa da `/auth/login` o `/auth/refresh`.
+   * `refreshExpiresAtIso` può essere null per backward compat con server vecchi.
+   */
+  fun saveTokens(accessToken: String, refreshToken: String?, refreshExpiresAtIso: String?) {
+    prefs.edit().apply {
+      putString(KEY_JWT, accessToken)
+      if (refreshToken != null) putString(KEY_REFRESH, refreshToken)
+      if (refreshExpiresAtIso != null) putString(KEY_REFRESH_EXPIRES, refreshExpiresAtIso)
+      apply()
+    }
+  }
+
+  fun getRefreshToken(): String? = prefs.getString(KEY_REFRESH, null)
+
+  fun getRefreshExpiresAtIso(): String? = prefs.getString(KEY_REFRESH_EXPIRES, null)
 
   fun clearToken() {
     prefs.edit().clear().apply()

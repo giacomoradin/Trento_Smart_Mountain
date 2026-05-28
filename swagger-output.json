@@ -254,9 +254,7 @@
     },
     "/auth/register/hiker": {
       "post": {
-        "tags": [
-          "Hikers"
-        ],
+        "tags": ["Hikers"],
         "description": "Registra un nuovo escursionista (groupLeader).",
         "responses": {
           "201": {
@@ -296,9 +294,7 @@
     },
     "/auth/register/refuge": {
       "post": {
-        "tags": [
-          "Refuges"
-        ],
+        "tags": ["Refuges"],
         "description": "Registra un nuovo account rifugio con metadati struttura.",
         "responses": {
           "201": {
@@ -353,9 +349,7 @@
     },
     "/hikers/": {
       "post": {
-        "tags": [
-          "Hikers"
-        ],
+        "tags": ["Hikers"],
         "description": "Registra un nuovo escursionista (groupLeader).",
         "responses": {
           "201": {
@@ -395,9 +389,7 @@
     },
     "/hikers/{id}": {
       "get": {
-        "tags": [
-          "Hikers"
-        ],
+        "tags": ["Hikers"],
         "description": "Recupera il profilo di un escursionista.",
         "parameters": [
           {
@@ -428,9 +420,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Hikers"
-        ],
+        "tags": ["Hikers"],
         "description": "Aggiorna i dati di un escursionista (solo self o admin).",
         "parameters": [
           {
@@ -469,9 +459,7 @@
     },
     "/refuges/": {
       "post": {
-        "tags": [
-          "Refuges"
-        ],
+        "tags": ["Refuges"],
         "description": "Registra un nuovo account rifugio con metadati struttura.",
         "responses": {
           "201": {
@@ -524,9 +512,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Refuges"
-        ],
+        "tags": ["Refuges"],
         "description": "Lista tutti i rifugi registrati (solo dati pubblici).",
         "responses": {
           "200": {
@@ -540,9 +526,7 @@
     },
     "/refuges/{id}": {
       "get": {
-        "tags": [
-          "Refuges"
-        ],
+        "tags": ["Refuges"],
         "description": "Recupera il profilo di un rifugio inclusi i metadati struttura.",
         "parameters": [
           {
@@ -573,9 +557,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Refuges"
-        ],
+        "tags": ["Refuges"],
         "description": "Aggiorna i metadati di un rifugio (solo self o admin).",
         "parameters": [
           {
@@ -614,9 +596,7 @@
     },
     "/admin/users": {
       "post": {
-        "tags": [
-          "Admin"
-        ],
+        "tags": ["Admin"],
         "description": "Crea un nuovo utente con ruolo admin. Solo admin autenticati.",
         "responses": {
           "201": {
@@ -657,9 +637,7 @@
         }
       },
       "get": {
-        "tags": [
-          "Admin"
-        ],
+        "tags": ["Admin"],
         "description": "Lista tutti gli utenti registrati. Solo admin.",
         "responses": {
           "200": {
@@ -676,9 +654,7 @@
     },
     "/admin/users/{id}": {
       "get": {
-        "tags": [
-          "Admin"
-        ],
+        "tags": ["Admin"],
         "description": "Recupera dati di qualunque utente. Solo admin.",
         "parameters": [
           {
@@ -709,9 +685,7 @@
         }
       },
       "put": {
-        "tags": [
-          "Admin"
-        ],
+        "tags": ["Admin"],
         "description": "Aggiorna dati di un utente (incluso il role). Solo admin.",
         "parameters": [
           {
@@ -745,9 +719,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "Admin"
-        ],
+        "tags": ["Admin"],
         "description": "Elimina definitivamente un utente. Solo admin.",
         "parameters": [
           {
@@ -1236,6 +1208,16 @@
         }
       }
     },
+    "/weather/test": {
+      "get": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/weather/locations/search": {
       "get": {
         "description": "",
@@ -1313,13 +1295,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -1353,35 +1328,11 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
           "200": {
             "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
           },
           "401": {
             "description": "Unauthorized"
@@ -1400,35 +1351,11 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
           "200": {
             "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
           },
           "401": {
             "description": "Unauthorized"
@@ -1442,35 +1369,9 @@
     "/weather/seed": {
       "post": {
         "description": "",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request"
           },
           "401": {
             "description": "Unauthorized"
@@ -1483,9 +1384,7 @@
     },
     "/api/v1/sentieri/": {
       "get": {
-        "tags": [
-          "Sentieri"
-        ],
+        "tags": ["Sentieri"],
         "description": "Recupera tutti i sentieri con filtri opzionali (difficoltà, destinazione).",
         "parameters": [
           {
@@ -1522,9 +1421,7 @@
     },
     "/api/v1/sentieri/stats": {
       "get": {
-        "tags": [
-          "Sentieri"
-        ],
+        "tags": ["Sentieri"],
         "description": "Recupera statistiche aggregate (totale sentieri, difficoltà, destinazioni).",
         "responses": {
           "200": {
@@ -1538,9 +1435,7 @@
     },
     "/api/v1/sentieri/destinazioni": {
       "get": {
-        "tags": [
-          "Sentieri"
-        ],
+        "tags": ["Sentieri"],
         "description": "Recupera tutte le destinazioni uniche (punti finali dei sentieri).",
         "responses": {
           "200": {
@@ -1554,9 +1449,7 @@
     },
     "/api/v1/sentieri/destinazioni/{nome}/sentieri": {
       "get": {
-        "tags": [
-          "Sentieri"
-        ],
+        "tags": ["Sentieri"],
         "description": "Recupera tutti i sentieri che conducono a una destinazione specifica.",
         "parameters": [
           {
@@ -1583,9 +1476,7 @@
     },
     "/api/v1/sentieri/{codice}": {
       "get": {
-        "tags": [
-          "Sentieri"
-        ],
+        "tags": ["Sentieri"],
         "description": "Recupera i dettagli completi di un sentiero (include coordinate).",
         "parameters": [
           {

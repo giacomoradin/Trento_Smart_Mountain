@@ -17,14 +17,15 @@ import {
   createSession,
   getSessionById,
   getSessionsByUser,
-  getActivityStats,
   updateSessionStatus,
   updateSessionDetails,
   deleteSession,
   joinSession,
   leaveSession,
   completeSession,
+  getActivityStats,
 } from "../services/hikeSessionService.js";
+import { listSessionEmergencies } from "../services/emergencyService.js";
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ router.use(authenticate);
 router.use(authenticatedLimiter);
 
 // POST /api/v1/sessions — crea una nuova sessione
-router.post("/", validate(createSessionSchema), async (req, res) => {
+router.post("/", validate(createSessionSchema), async (req, res, next) => {
   const {
     routeDetails,
     meetingDate,
@@ -59,17 +60,19 @@ router.post("/", validate(createSessionSchema), async (req, res) => {
       ...(gpxFileName && { gpxFileName }),
       ...(gpxStats && { gpxStats }),
     };
-    const session = await createSession(req.user.userId, routeDetails, sessionMeta);
+    const session = await createSession(
+      req.user.userId,
+      routeDetails,
+      sessionMeta,
+    );
     res.status(201).json(session);
   } catch (err) {
-    if (err.message === "USER_ALREADY_IN_SESSION")
-      return res.status(409).json({ error: "Hai una sessione attualmente in corso (tracciamento ATTIVO). Concludila prima di crearne un'altra." });
-    res.status(500).json({ error: "Errore creazione sessione" });
+    next(err);
   }
 });
 
 // POST /api/v1/sessions/join — si unisce a una sessione tramite codice invito
-router.post("/join", validate(joinSessionSchema), async (req, res) => {
+router.post("/join", validate(joinSessionSchema), async (req, res, next) => {
   const { inviteCode } = req.body;
 
   if (!inviteCode) {
@@ -80,150 +83,173 @@ router.post("/join", validate(joinSessionSchema), async (req, res) => {
     const session = await joinSession(req.user.userId, inviteCode);
     res.status(200).json(session);
   } catch (err) {
-    if (err.message === "USER_ALREADY_IN_SESSION")
-      return res.status(409).json({ error: "Hai una sessione attualmente in corso (tracciamento ATTIVO). Concludila prima di unirti a una nuova." });
-    if (err.message === "SESSION_NOT_FOUND")
-      return res.status(404).json({ error: "Codice invito non valido" });
-    if (err.message === "SESSION_NOT_JOINABLE")
-      return res.status(409).json({ error: "La sessione non è più aperta" });
-    if (err.message === "ALREADY_IN_SESSION")
-      return res.status(409).json({ error: "Sei già in questa sessione" });
-    res.status(500).json({ error: "Errore durante l'accesso alla sessione" });
+    next(err);
   }
 });
 
 // GET /api/v1/sessions/stats — statistiche aggregate attività completate (per anno)
 // Query: ?year=2026 (default: anno corrente)
-router.get("/stats", validate(statsQuerySchema, "query"), async (req, res) => {
-  const year = req.query.year || new Date().getFullYear();
-  try {
-    const stats = await getActivityStats(req.user.userId, year);
-    res.status(200).json(stats);
-  } catch (err) {
-    res.status(500).json({ error: "Errore nel calcolo statistiche" });
-  }
-});
+router.get(
+  "/stats",
+  validate(statsQuerySchema, "query"),
+  async (req, res, next) => {
+    const year = req.query.year || new Date().getFullYear();
+    try {
+      const stats = await getActivityStats(req.user.userId, year);
+      res.status(200).json(stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // GET /api/v1/sessions/my — sessioni dell'utente loggato
-router.get("/my", async (req, res) => {
+router.get("/my", async (req, res, next) => {
   try {
     const sessions = await getSessionsByUser(req.user.userId);
     res.status(200).json(sessions);
   } catch (err) {
-    res.status(500).json({ error: "Errore recupero sessioni" });
+    next(err);
+  }
+});
+
+// GET /api/v1/sessions/:id/emergencies — SOS attivi per sessione
+router.get("/:id/emergencies", validate(idParamSchema, "params"), async (req, res) => {
+  try {
+    const result = await listSessionEmergencies(req.params.id, req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    if (err.message === "SESSION_NOT_FOUND") {
+      return res.status(404).json({ error: err.message });
+    }
+    if (err.message === "FORBIDDEN") {
+      return res.status(403).json({ error: err.message });
+    }
+    res.status(500).json({ error: "Errore recupero emergenze" });
   }
 });
 
 // GET /api/v1/sessions/:id — dettaglio singola sessione (solo partecipanti o admin)
-router.get("/:id", validate(idParamSchema, "params"), async (req, res) => {
-  try {
-    const session = await getSessionById(req.params.id);
-    if (!session)
-      return res.status(404).json({ error: "Sessione non trovata" });
+router.get(
+  "/:id",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const session = await getSessionById(req.params.id);
+      if (!session)
+        return res.status(404).json({ error: "Sessione non trovata" });
 
-    // Restringi la lettura ai partecipanti (creator incluso) e agli admin.
-    // Evita che chiunque con un ObjectId valido possa leggere sessioni altrui.
-    const userId = req.user.userId.toString();
-    const isAdmin = req.user.role === "admin";
-    const creatorId = (session.creatorId?._id || session.creatorId)?.toString();
-    const isParticipant = (session.participants || []).some((p) => {
-      const pid = (p.userId?._id || p.userId)?.toString();
-      return pid === userId;
-    });
-    if (!isAdmin && creatorId !== userId && !isParticipant) {
-      return res.status(403).json({ error: "Non sei autorizzato a vedere questa sessione" });
+      // Restringi la lettura ai partecipanti (creator incluso) e agli admin.
+      // Evita che chiunque con un ObjectId valido possa leggere sessioni altrui.
+      const userId = req.user.userId.toString();
+      const isAdmin = req.user.role === "admin";
+      const creatorId = (
+        session.creatorId?._id || session.creatorId
+      )?.toString();
+      const isParticipant = (session.participants || []).some((p) => {
+        const pid = (p.userId?._id || p.userId)?.toString();
+        return pid === userId;
+      });
+      if (!isAdmin && creatorId !== userId && !isParticipant) {
+        return res
+          .status(403)
+          .json({ error: "Non sei autorizzato a vedere questa sessione" });
+      }
+      res.status(200).json(session);
+    } catch (err) {
+      // CastError di Mongoose per ObjectId malformato → 400 (semantica diversa
+      // dal generic 500 del global handler).
+      if (err.name === "CastError")
+        return res.status(400).json({ error: "ID non valido" });
+      next(err);
     }
-    res.status(200).json(session);
-  } catch (err) {
-    res.status(400).json({ error: "ID non valido" });
-  }
-});
+  },
+);
 
 // PATCH /api/v1/sessions/:id/status — aggiorna stato sessione
 router.patch(
   "/:id/status",
   validate(idParamSchema, "params"),
   validate(updateSessionStatusSchema),
-  async (req, res) => {
-  const { status } = req.body;
-  try {
-    const session = await updateSessionStatus(
-      req.params.id,
-      req.user.userId,
-      status,
-    );
-    res.status(200).json(session);
-  } catch (err) {
-    if (err.message === "SESSION_NOT_FOUND")
-      return res.status(404).json({ error: "Sessione non trovata" });
-    if (err.message === "FORBIDDEN")
-      return res
-        .status(403)
-        .json({ error: "Solo il Capogruppo può modificare la sessione" });
-    res.status(500).json({ error: "Errore aggiornamento stato" });
-  }
-});
+  async (req, res, next) => {
+    const { status } = req.body;
+    try {
+      const session = await updateSessionStatus(
+        req.params.id,
+        req.user.userId,
+        status,
+      );
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // PATCH /api/v1/sessions/:id/complete — termina sessione e persiste statistiche reali
 router.patch(
   "/:id/complete",
   validate(idParamSchema, "params"),
   validate(completeSessionSchema),
-  async (req, res) => {
+  async (req, res, next) => {
     try {
-      const session = await completeSession(req.params.id, req.user.userId, req.body?.actualStats);
+      const session = await completeSession(
+        req.params.id,
+        req.user.userId,
+        req.body?.actualStats,
+      );
       res.status(200).json(session);
     } catch (err) {
-      if (err.message === "SESSION_NOT_FOUND") return res.status(404).json({ error: "Sessione non trovata" });
-      if (err.message === "FORBIDDEN") return res.status(403).json({ error: "Non sei autorizzato a completare questa sessione" });
-      res.status(500).json({ error: "Errore completamento sessione" });
+      next(err);
     }
   },
 );
 
 // POST /api/v1/sessions/:id/leave — abbandona sessione
-router.post("/:id/leave", validate(idParamSchema, "params"), async (req, res) => {
-  try {
-    const session = await leaveSession(req.user.userId, req.params.id);
-    res.status(200).json(session);
-  } catch (err) {
-    if (err.message === "SESSION_NOT_FOUND") return res.status(404).json({ error: "Sessione non trovata" });
-    if (err.message === "CREATOR_CANNOT_LEAVE") return res.status(403).json({ error: "Il Capogruppo non può abbandonare la sessione. Eliminala se vuoi rimuoverla." });
-    res.status(500).json({ error: "Errore durante l'abbandono della sessione" });
-  }
-});
+router.post(
+  "/:id/leave",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const session = await leaveSession(req.user.userId, req.params.id);
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // PATCH /api/v1/sessions/:id — modifica dettagli sessione (solo creator, inviteCode immutabile)
 router.patch(
   "/:id",
   validate(idParamSchema, "params"),
   validate(updateSessionSchema),
-  async (req, res) => {
+  async (req, res, next) => {
     try {
-      const session = await updateSessionDetails(req.params.id, req.user.userId, req.body);
+      const session = await updateSessionDetails(
+        req.params.id,
+        req.user.userId,
+        req.body,
+      );
       res.status(200).json(session);
     } catch (err) {
-      if (err.message === "SESSION_NOT_FOUND") return res.status(404).json({ error: "Sessione non trovata" });
-      if (err.message === "FORBIDDEN") return res.status(403).json({ error: "Solo il Capogruppo può modificare la sessione" });
-      res.status(500).json({ error: "Errore aggiornamento sessione" });
+      next(err);
     }
   },
 );
 
 // DELETE /api/v1/sessions/:id — elimina sessione
-router.delete("/:id", validate(idParamSchema, "params"), async (req, res) => {
-  try {
-    await deleteSession(req.params.id, req.user.userId);
-    res.status(200).json({ message: "Sessione eliminata" });
-  } catch (err) {
-    if (err.message === "SESSION_NOT_FOUND")
-      return res.status(404).json({ error: "Sessione non trovata" });
-    if (err.message === "FORBIDDEN")
-      return res
-        .status(403)
-        .json({ error: "Solo il Capogruppo può eliminare la sessione" });
-    res.status(500).json({ error: "Errore eliminazione sessione" });
-  }
-});
+router.delete(
+  "/:id",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      await deleteSession(req.params.id, req.user.userId);
+      res.status(200).json({ message: "Sessione eliminata" });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export default router;

@@ -22,13 +22,13 @@ class ProfileRepositoryImpl(
     flow {
       val token = tokenStorage.getToken()
       if (token.isNullOrBlank()) {
-        emit(ProfileObserveState(null, false, false, "Sessione non disponibile."))
+        emit(ProfileObserveState(username = null, isRefreshing = false, isStale = false, errorMessage = "Sessione non disponibile."))
         return@flow
       }
 
       val userId = JwtDecoder.userIdFrom(token)
       if (userId.isNullOrBlank()) {
-        emit(ProfileObserveState(null, false, false, "Token non valido."))
+        emit(ProfileObserveState(username = null, isRefreshing = false, isStale = false, errorMessage = "Token non valido."))
         return@flow
       }
 
@@ -50,7 +50,8 @@ class ProfileRepositoryImpl(
       try {
         val response = withContext(Dispatchers.IO) { api.getUserById(userId) }
         if (response.isSuccessful) {
-          val username = response.body()?.username
+          val body = response.body()
+          val username = body?.username
           if (username.isNullOrBlank()) {
             emit(
               ProfileObserveState(
@@ -73,6 +74,8 @@ class ProfileRepositoryImpl(
             emit(
               ProfileObserveState(
                 username = username,
+                email = body.email,
+                isVerified = body.isVerified,
                 isRefreshing = false,
                 isStale = false,
                 errorMessage = null,

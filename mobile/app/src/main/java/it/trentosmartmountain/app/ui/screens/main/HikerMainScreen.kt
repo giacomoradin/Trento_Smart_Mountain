@@ -19,10 +19,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
-import it.trentosmartmountain.app.ui.screens.home.ActivityListScreen
 import it.trentosmartmountain.app.ui.screens.home.HomeScreen
 import it.trentosmartmountain.app.ui.screens.profile.ProfileScreen
 import it.trentosmartmountain.app.ui.screens.registra.RegistraScreen
@@ -41,21 +39,34 @@ private enum class HikerTab { Home, Session, Registra, Profile }
  * - Profilo — dati utente e logout
  *
  * @param onLoggedOut callback dopo logout (navigazione verso auth)
- * @param onNavigateToSessionDetail apre il dettaglio sessione sul grafo root ([Routes.SESSION_DETAIL])
+ * @param onNavigateToSessionDetail apre il dettaglio sessione sul grafo root ([it.trentosmartmountain.app.ui.navigation.Routes.SESSION_DETAIL])
+ * @param onNavigateToActivityDetail apre il dettaglio attività completata sul grafo root ([it.trentosmartmountain.app.ui.navigation.Routes.ACTIVITY_DETAIL])
  */
 @Composable
 fun HikerMainScreen(
   onLoggedOut: () -> Unit,
   onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
   onNavigateToActivityDetail: (activityId: String, sessionId: String?) -> Unit = { _, _ -> },
+  onNavigateToFormazione: () -> Unit = {},
+  onNavigateToNfcScan: () -> Unit = {},
+  onNavigateToAccount: () -> Unit = {},
+  onNavigateToOnboarding: () -> Unit = {},
+  onNavigateToGoals: () -> Unit = {},
+  onNavigateToChallenges: () -> Unit = {},
+  onNavigateToBadges: () -> Unit = {},
+  onNavigateToProfileView: () -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
 
-  // Quando SessionDetail.AVVIA conferma, il Coordinator emette un sessionId:
-  // switchiamo automaticamente alla tab Registra (RegistraViewModel auto-avvia il tracking).
-  val pendingStart by SessionStartCoordinator.pendingSessionStart.collectAsStateWithLifecycle()
-  LaunchedEffect(pendingStart) {
-    if (pendingStart != null) selectedTab = HikerTab.Registra
+  // Quando SessionDetail / SessionHub.AVVIA conferma, il Coordinator emette un sessionId:
+  // switchiamo automaticamente alla tab Registra. Il consume() avviene nel VM dopo
+  // l'autoStart (vedi RegistraViewModel.init). Usiamo collect su SharedFlow invece
+  // di collectAsStateWithLifecycle: i due osservatori (HikerMainScreen + VM) devono
+  // ricevere ogni emit in modo indipendente, e StateFlow conflated saltava la transizione.
+  LaunchedEffect(Unit) {
+    SessionStartCoordinator.pendingSessionStart.collect {
+      selectedTab = HikerTab.Registra
+    }
   }
 
   Scaffold(
@@ -98,7 +109,18 @@ fun HikerMainScreen(
         onNavigateToDetail = onNavigateToSessionDetail,
       )
       HikerTab.Registra -> RegistraScreen(Modifier.padding(innerPadding))
-      HikerTab.Profile -> ProfileScreen(onLoggedOut = onLoggedOut, modifier = Modifier.padding(innerPadding))
+      HikerTab.Profile -> ProfileScreen(
+        onLoggedOut = onLoggedOut,
+        onNavigateToFormazione = onNavigateToFormazione,
+        onNavigateToNfcScan = onNavigateToNfcScan,
+        onNavigateToAccount = onNavigateToAccount,
+        onNavigateToOnboarding = onNavigateToOnboarding,
+        onNavigateToGoals = onNavigateToGoals,
+        onNavigateToChallenges = onNavigateToChallenges,
+        onNavigateToBadges = onNavigateToBadges,
+        onNavigateToProfileView = onNavigateToProfileView,
+        modifier = Modifier.padding(innerPadding),
+      )
     }
   }
 }

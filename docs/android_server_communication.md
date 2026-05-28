@@ -86,7 +86,8 @@ Ordine di priorità:
 
 1. proprietà Gradle `TSM_API_BASE_URL` (se impostata)
 2. `tsm.api.baseUrl` in `mobile/local.properties` (file locale, di solito non versionato)
-3. default per **emulatore**: `http://10.0.2.2:3000/` (`10.0.2.2` = localhost del PC visto dall’emulatore)
+3. default per **emulatore in dev locale**: `http://10.0.2.2:3000/` (`10.0.2.2` = localhost del PC visto dall'emulatore)
+4. per build contro **deploy Render**: `tsm.api.baseUrl=https://trento-smart-mountain-xz7u.onrender.com/` (vedi `setup_backend.md` §11)
 
 Dopo ogni modifica a `local.properties` o alla proprietà Gradle serve **ricompilare** l’app (rebuild / reinstall), perché `BASE_URL` è generato a compile-time.
 

@@ -2,8 +2,8 @@
 
 > Documento di riferimento per gli **standard architetturali** del progetto. Descrive i pattern adottati, le decisioni progettuali e le convenzioni di codice condivise dal team.
 >
-> **Ultima revisione**: 17/05/2026 — Fine Sprint 1.
-> **Riferimenti**: D1 §3, D2 §3-4, `TSM_PROJECT_STATE.md` §10.3 M5.
+> **Ultima revisione**: 24/05/2026 — Sprint 2 in corso. Patterns invariati; aggiunto modulo Activity (libere) con stesso layer routes→services→models; JWT esteso a 7d.
+> **Riferimenti**: D1 §3, D2 §3-4, `TSM_PROJECT_STATE.md`, `sprint2_social.md`, `sprint2_profilo_formazione.md`.
 
 ---
 

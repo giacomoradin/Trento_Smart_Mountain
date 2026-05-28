@@ -1,12 +1,20 @@
 import HikeSession from "../models/hikeSession.js";
 import User from "../models/user.js";
 import { getCombinedActivityStats } from "./activityService.js";
+import { addCredits } from "./creditService.js";
+import { applyBaselineMultiplier } from "./userScoringService.js";
+import { evaluateAllBadges } from "./badgeService.js";
 import crypto from "crypto";
 
 // Genera codice invito nel formato "TSM-XXXX" (4 hex uppercase)
 function generateInviteCode() {
   return "TSM-" + crypto.randomBytes(2).toString("hex").toUpperCase(); // es. "TSM-7A4F"
 }
+
+// Numero massimo di tentativi per trovare un codice unico. Con 65k combinazioni
+// possibili (16^4), se non riusciamo in 20 tentativi è perché il namespace è
+// quasi saturo o c'è un bug nel generatore — meglio fail-fast che loopare per sempre.
+const MAX_INVITE_CODE_ATTEMPTS = 20;
 
 // Blocca solo se l'utente è in una sessione ATTIVA (tracciamento in corso).
 // Più sessioni PLANNED in parallelo sono consentite: l'utente può pianificare
@@ -26,13 +34,22 @@ async function checkUserAlreadyInActiveSession(userId) {
 // Crea una nuova sessione — il creator diventa automaticamente Capogruppo
 export async function createSession(creatorId, routeDetails, sessionMeta = {}) {
   await checkUserAlreadyInActiveSession(creatorId);
-  let inviteCode;
-  let isUnique = false;
+  let inviteCode = null;
 
-  while (!isUnique) {
-    inviteCode = generateInviteCode();
-    const existing = await HikeSession.findOne({ inviteCode });
-    if (!existing) isUnique = true;
+  // Loop limitato: vedi MAX_INVITE_CODE_ATTEMPTS sopra. Se sforiamo, lanciamo
+  // un errore esplicito invece di bloccare il thread Express in un while(true).
+  for (let attempt = 0; attempt < MAX_INVITE_CODE_ATTEMPTS; attempt++) {
+    const candidate = generateInviteCode();
+    const existing = await HikeSession.findOne({ inviteCode: candidate })
+      .select("_id")
+      .lean();
+    if (!existing) {
+      inviteCode = candidate;
+      break;
+    }
+  }
+  if (!inviteCode) {
+    throw new Error("INVITE_CODE_GENERATION_FAILED");
   }
 
   const session = new HikeSession({
@@ -52,7 +69,7 @@ export async function createSession(creatorId, routeDetails, sessionMeta = {}) {
       sessionRoles: {
         groupId: session._id,
         role: "groupLeader",
-        createdBy: creatorId, 
+        createdBy: creatorId,
       },
     },
   });
@@ -69,7 +86,7 @@ export async function joinSession(userId, inviteCode) {
   await checkUserAlreadyInActiveSession(userId);
   const session = await HikeSession.findOne({ inviteCode });
   if (!session) {
-    throw new Error("SESSION_NOT_FOUND");
+    throw new Error("INVITE_CODE_INVALID");
   }
 
   if (session.status !== "PLANNED") {
@@ -77,7 +94,7 @@ export async function joinSession(userId, inviteCode) {
   }
 
   const alreadyIn = session.participants.some(
-    (p) => p.userId.toString() === userId.toString()
+    (p) => p.userId.toString() === userId.toString(),
   );
   if (alreadyIn) {
     throw new Error("ALREADY_IN_SESSION");
@@ -99,8 +116,11 @@ export async function joinSession(userId, inviteCode) {
   // Populate simmetrico (come getSessionById) per evitare che il client Kotlin
   // riceva ObjectId raw nei campi ref → potenziale Gson IllegalStateException.
   return session.populate([
-    { path: "creatorId", select: "username email" },
-    { path: "participants.userId", select: "username email" },
+    { path: "creatorId", select: "username email personalInfo.avatarUrl" },
+    {
+      path: "participants.userId",
+      select: "username email personalInfo.avatarUrl",
+    },
   ]);
 }
 
@@ -144,11 +164,14 @@ export async function getActivityStats(userId, year) {
     yearCount++;
     // Preferisci sempre i dati REALI registrati dal client (actualStats);
     // fallback alle stime CAI del GPX quando il client non li ha caricati.
-    const actualDistKm = s.actualStats?.distanceMeters != null
-      ? s.actualStats.distanceMeters / 1000.0
-      : s.gpxStats?.distanceKm || 0;
-    const actualElev = s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
-    const actualPts = s.actualStats?.finalPoints ?? s.gpxStats?.estimatedPoints ?? 0;
+    const actualDistKm =
+      s.actualStats?.distanceMeters != null
+        ? s.actualStats.distanceMeters / 1000.0
+        : s.gpxStats?.distanceKm || 0;
+    const actualElev =
+      s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
+    const actualPts =
+      s.actualStats?.finalPoints ?? s.gpxStats?.estimatedPoints ?? 0;
     totalDist += actualDistKm;
     totalElev += actualElev;
     totalPoints += actualPts;
@@ -181,8 +204,8 @@ export async function getSessionById(sessionId) {
      #swagger.description = 'Recupera i dettagli completi di una sessione, inclusi i dati di partecipanti e creatore.'
   */
   return HikeSession.findById(sessionId)
-    .populate("creatorId", "username email")
-    .populate("participants.userId", "username email");
+    .populate("creatorId", "username email personalInfo.avatarUrl")
+    .populate("participants.userId", "username email personalInfo.avatarUrl");
 }
 
 // Recupera tutte le sessioni di un utente (come creator o partecipante)
@@ -190,8 +213,8 @@ export async function getSessionsByUser(userId) {
   return HikeSession.find({
     $or: [{ creatorId: userId }, { "participants.userId": userId }],
   })
-    .populate("creatorId", "username email")
-    .populate("participants.userId", "username email")
+    .populate("creatorId", "username email personalInfo.avatarUrl")
+    .populate("participants.userId", "username email personalInfo.avatarUrl")
     .sort({ meetingDate: 1 });
 }
 
@@ -199,7 +222,8 @@ export async function getSessionsByUser(userId) {
 export async function leaveSession(userId, sessionId) {
   const session = await HikeSession.findById(sessionId);
   if (!session) throw new Error("SESSION_NOT_FOUND");
-  if (session.creatorId.toString() === userId.toString()) throw new Error("CREATOR_CANNOT_LEAVE");
+  if (session.creatorId.toString() === userId.toString())
+    throw new Error("CREATOR_CANNOT_LEAVE");
   session.participants = session.participants.filter(
     (p) => p.userId.toString() !== userId.toString(),
   );
@@ -213,23 +237,34 @@ export async function leaveSession(userId, sessionId) {
 export async function updateSessionDetails(sessionId, userId, updates) {
   const session = await HikeSession.findById(sessionId);
   if (!session) throw new Error("SESSION_NOT_FOUND");
-  if (session.creatorId.toString() !== userId.toString()) throw new Error("FORBIDDEN");
+  if (session.creatorId.toString() !== userId.toString())
+    throw new Error("ONLY_CREATOR_CAN_UPDATE_SESSION");
 
-  if (updates.routeDetails?.name) session.routeDetails.name = updates.routeDetails.name;
-  if (updates.routeDetails?.difficultyLevel) session.routeDetails.difficultyLevel = updates.routeDetails.difficultyLevel;
-  if (updates.meetingDate !== undefined) session.meetingDate = updates.meetingDate;
-  if (updates.meetingTime !== undefined) session.meetingTime = updates.meetingTime;
-  if (updates.meetingLocation !== undefined) session.meetingLocation = updates.meetingLocation;
-  if (updates.maxParticipants !== undefined) session.maxParticipants = updates.maxParticipants;
-  if (updates.minExperienceLevel !== undefined) session.minExperienceLevel = updates.minExperienceLevel;
+  if (updates.routeDetails?.name)
+    session.routeDetails.name = updates.routeDetails.name;
+  if (updates.routeDetails?.difficultyLevel)
+    session.routeDetails.difficultyLevel = updates.routeDetails.difficultyLevel;
+  if (updates.meetingDate !== undefined)
+    session.meetingDate = updates.meetingDate;
+  if (updates.meetingTime !== undefined)
+    session.meetingTime = updates.meetingTime;
+  if (updates.meetingLocation !== undefined)
+    session.meetingLocation = updates.meetingLocation;
+  if (updates.maxParticipants !== undefined)
+    session.maxParticipants = updates.maxParticipants;
+  if (updates.minExperienceLevel !== undefined)
+    session.minExperienceLevel = updates.minExperienceLevel;
   // inviteCode is never updated
   await session.save();
   // Popola entrambi i campi ref in modo simmetrico a getSessionById/getSessionsByUser.
   // Senza populate("participants.userId"), la risposta contiene ObjectId raw (string)
   // invece dell'oggetto User → Gson crash: "Expected BEGIN_OBJECT but was STRING".
   return session.populate([
-    { path: "creatorId", select: "username email" },
-    { path: "participants.userId", select: "username email" },
+    { path: "creatorId", select: "username email personalInfo.avatarUrl" },
+    {
+      path: "participants.userId",
+      select: "username email personalInfo.avatarUrl",
+    },
   ]);
 }
 
@@ -251,7 +286,8 @@ export async function completeSession(sessionId, userId, actualStats = null) {
   const isParticipant = session.participants.some(
     (p) => p.userId.toString() === userId.toString(),
   );
-  if (!isCreator && !isParticipant) throw new Error("FORBIDDEN");
+  if (!isCreator && !isParticipant)
+    throw new Error("ONLY_CREATOR_CAN_COMPLETE_SESSION");
 
   session.status = "COMPLETED";
   session.endTime = new Date();
@@ -269,6 +305,56 @@ export async function completeSession(sessionId, userId, actualStats = null) {
   }
 
   await session.save();
+
+  // Accredito crediti per-utente con idempotency atomic: ogni partecipante riceve
+  // i propri crediti UNA volta sola, indipendentemente da quante volte chiama /complete.
+  // Il $ne + $push in un solo round-trip impedisce race condition (doppio tap).
+  const basePoints = session.actualStats?.finalPoints ?? 0;
+  if (basePoints > 0) {
+    // Lookup PER-UTENTE del profilo: ogni partecipante può avere baseline diverso
+    // (es. capogruppo atleta, partecipante sedentario → boost diversi per la stessa sessione).
+    const user = await User.findById(userId).select("experience").lean();
+    const credits = applyBaselineMultiplier(
+      basePoints,
+      user,
+      session.routeDetails?.difficultyLevel,
+    );
+
+    const claimed = await HikeSession.findOneAndUpdate(
+      { _id: sessionId, creditsAwardedTo: { $ne: userId } },
+      {
+        $addToSet: { creditsAwardedTo: userId },
+        $setOnInsert: {},
+        ...(session.creditsAwardedAt
+          ? {}
+          : { $set: { creditsAwardedAt: new Date() } }),
+      },
+      { new: true },
+    );
+    if (claimed) {
+      await addCredits({
+        userId,
+        amount: credits,
+        source: "session",
+        refId: session._id,
+        refKind: "HikeSession",
+        // Note diagnostica: se in futuro vediamo crediti diversi tra utenti per
+        // la stessa sessione, il log conferma che è atteso (baseline differenti).
+        note:
+          credits !== basePoints
+            ? `baseline μ applicato (base=${basePoints}, final=${credits})`
+            : undefined,
+      });
+    }
+  }
+
+  // Badge evaluation post-completion: completare la sessione può sbloccare
+  // first_steps / veteran / credit_*. Fire-and-forget — un errore qui non
+  // deve bloccare la response del complete.
+  evaluateAllBadges(userId).catch((err) => {
+    console.error("[hikeSessionService] badge eval fallita:", err.message);
+  });
+
   return session;
 }
 
@@ -283,7 +369,7 @@ export async function updateSessionStatus(sessionId, creatorId, newStatus) {
   if (!session) throw new Error("SESSION_NOT_FOUND");
 
   if (session.creatorId.toString() !== creatorId) {
-    throw new Error("FORBIDDEN");
+    throw new Error("ONLY_CREATOR_CAN_UPDATE_SESSION");
   }
 
   session.status = newStatus;
@@ -304,7 +390,7 @@ export async function deleteSession(sessionId, creatorId) {
 
   if (!session) throw new Error("SESSION_NOT_FOUND");
   if (session.creatorId.toString() !== creatorId) {
-    throw new Error("FORBIDDEN");
+    throw new Error("ONLY_CREATOR_CAN_DELETE_SESSION");
   }
 
   await session.deleteOne();

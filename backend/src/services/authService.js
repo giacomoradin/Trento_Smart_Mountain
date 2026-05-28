@@ -3,6 +3,12 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendPasswordResetEmail } from "./emailService.js";
+import {
+  generateAccessToken,
+  issueRefreshToken,
+  rotateRefreshToken,
+  revokeRefreshToken,
+} from "./refreshTokenService.js";
 
 export const verifyEmail = async (req, res) => {
   try {
@@ -17,7 +23,7 @@ export const verifyEmail = async (req, res) => {
     const jwtToken = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "1d" },
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
     );
     res.redirect(`tsm://auth/success?jwt=${jwtToken}`);
   } catch (error) {
@@ -30,24 +36,89 @@ export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ message: "Credenziali non valide." });
+    if (!user)
+      return res.status(401).json({ message: "Credenziali non valide." });
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isPasswordValid) return res.status(401).json({ message: "Credenziali non valide." });
+    if (!isPasswordValid)
+      return res.status(401).json({ message: "Credenziali non valide." });
 
     if (!user.isVerified) {
       return res.status(403).json({
         message: "Accesso negato. Eseguire la verifica SMTP inviata via email.",
       });
     }
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "1d" },
-    );
-    res.status(200).json({ token });
+    // Emette access (JWT breve TTL) + refresh (random opaque, 30d).
+    // BACKWARD COMPAT: il campo `token` continua a esistere per client mobile
+    // pre-Authenticator. Il nuovo campo `accessToken` è la stessa cosa e va
+    // preferito per chiarezza. Il `refreshToken` è opzionale: client che lo
+    // ignorano continueranno a funzionare finché l'access non scade.
+    const accessToken = generateAccessToken(user);
+    const { raw: refreshToken, expiresAt: refreshExpiresAt } =
+      await issueRefreshToken(user._id, {
+        userAgent: req.get("user-agent") || null,
+      });
+
+    res.status(200).json({
+      token: accessToken,
+      accessToken,
+      refreshToken,
+      refreshExpiresAt,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * POST /auth/refresh — scambia un refresh token valido con una nuova coppia
+ * (access + refresh ruotato). Vedi refreshTokenService.rotateRefreshToken
+ * per la logica di detection replay attack.
+ */
+export const refreshTokens = async (req, res) => {
+  try {
+    const rawRefresh = req.body?.refreshToken;
+    if (!rawRefresh) {
+      return res.status(400).json({ message: "refreshToken obbligatorio." });
+    }
+    const result = await rotateRefreshToken(rawRefresh, {
+      userAgent: req.get("user-agent") || null,
+    });
+    res.status(200).json({
+      token: result.accessToken, // alias backward-compat
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      refreshExpiresAt: result.refreshExpiresAt,
+    });
+  } catch (err) {
+    if (err.message === "REFRESH_TOKEN_REUSED") {
+      return res.status(401).json({
+        message:
+          "Refresh token riutilizzato. Per sicurezza tutte le sessioni sono state revocate. Effettua nuovamente il login.",
+      });
+    }
+    if (err.message === "REFRESH_TOKEN_INVALID") {
+      return res
+        .status(401)
+        .json({ message: "Refresh token non valido o scaduto." });
+    }
+    console.error("[authService.refreshTokens] errore:", err);
+    res.status(500).json({ message: "Errore interno." });
+  }
+};
+
+/**
+ * POST /auth/logout — revoca il refresh token. L'access token JWT non è
+ * revocabile (è stateless), ma scadrà entro ACCESS_TTL minuti.
+ */
+export const logout = async (req, res) => {
+  try {
+    const rawRefresh = req.body?.refreshToken;
+    await revokeRefreshToken(rawRefresh);
+    res.status(200).json({ message: "Logout effettuato." });
+  } catch (err) {
+    console.error("[authService.logout] errore:", err);
+    res.status(500).json({ message: "Errore interno." });
   }
 };
 
@@ -69,7 +140,11 @@ export const forgotPassword = async (req, res) => {
       }
     }
     // Risposta generica per evitare user enumeration
-    res.status(200).json({ message: "Se l'indirizzo è registrato, riceverai un link per il reset." });
+    res
+      .status(200)
+      .json({
+        message: "Se l'indirizzo è registrato, riceverai un link per il reset.",
+      });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -106,18 +181,27 @@ export const getResetPasswordForm = (req, res) => {
 };
 
 export const resetPassword = async (req, res) => {
-  const isJson = req.is('application/json');
+  const isJson = req.is("application/json");
   try {
     const { token } = req.params;
     const password = req.body.password;
     const confirmPassword = req.body.confirmPassword;
 
     if (!isJson && password !== confirmPassword) {
-      return res.status(400).send('<p style="color:red">Le password non corrispondono.</p>');
+      return res
+        .status(400)
+        .send('<p style="color:red">Le password non corrispondono.</p>');
     }
     if (!password || password.length < 8) {
-      if (isJson) return res.status(400).json({ message: "Password di almeno 8 caratteri." });
-      return res.status(400).send('<p style="color:red">Password di almeno 8 caratteri richiesta.</p>');
+      if (isJson)
+        return res
+          .status(400)
+          .json({ message: "Password di almeno 8 caratteri." });
+      return res
+        .status(400)
+        .send(
+          '<p style="color:red">Password di almeno 8 caratteri richiesta.</p>',
+        );
     }
 
     const user = await User.findOne({
@@ -125,8 +209,13 @@ export const resetPassword = async (req, res) => {
       passwordResetExpires: { $gt: new Date() },
     });
     if (!user) {
-      if (isJson) return res.status(400).json({ message: "Token non valido o scaduto." });
-      return res.status(400).send('<p style="color:red">Token non valido o scaduto. Richiedi un nuovo link.</p>');
+      if (isJson)
+        return res.status(400).json({ message: "Token non valido o scaduto." });
+      return res
+        .status(400)
+        .send(
+          '<p style="color:red">Token non valido o scaduto. Richiedi un nuovo link.</p>',
+        );
     }
 
     user.passwordHash = await bcrypt.hash(password, 10);
@@ -134,7 +223,10 @@ export const resetPassword = async (req, res) => {
     user.passwordResetExpires = undefined;
     await user.save();
 
-    if (isJson) return res.status(200).json({ message: "Password aggiornata con successo." });
+    if (isJson)
+      return res
+        .status(200)
+        .json({ message: "Password aggiornata con successo." });
     res.send(`<html><body style="font-family:sans-serif;background:#121212;color:#fff;text-align:center;padding:60px">
       <h2 style="color:#2E5A27">✓ Password aggiornata!</h2>
       <p>Torna all'app Trento Smart Mountain per accedere.</p>

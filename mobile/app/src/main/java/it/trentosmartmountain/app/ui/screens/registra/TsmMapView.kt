@@ -42,6 +42,8 @@ fun TsmMapView(
   trackGeoPoints: List<GeoPoint>,
   centerOnUserTick: Int,
   hasLocationPermission: Boolean,
+  liveLocations: List<it.trentosmartmountain.app.data.remote.dto.LiveLocationItemDto> = emptyList(),
+  onLiveMarkerTap: (it.trentosmartmountain.app.data.remote.dto.LiveUserDto) -> Unit = {},
 ) {
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
@@ -123,7 +125,37 @@ fun TsmMapView(
     val snap = userLocation ?: return@LaunchedEffect
     mapView.controller.animateTo(GeoPoint(snap.latitude, snap.longitude))
   }
+// ── Marker partecipanti live ──
+  LaunchedEffect(liveLocations) {
+    // Rimuovi i vecchi marker live (quelli con id che inizia con "live_")
+    mapView.overlays.removeAll(
+      mapView.overlays.filterIsInstance<Marker>().filter {
+        it.id?.startsWith("live_") == true
+      }.toSet()
+    )
 
+    for (item in liveLocations) {
+      val point = GeoPoint(item.location.lat, item.location.lon)
+      val marker = Marker(mapView).apply {
+        id = "live_${item.user.id}"
+        position = point
+        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+        title = item.user.username
+        // Icona diversa per il capogruppo
+        icon = if (item.user.role == "groupLeader") {
+          ContextCompat.getDrawable(context, R.drawable.ic_leader_location)
+        } else {
+          ContextCompat.getDrawable(context, R.drawable.ic_user_location)
+        }
+        setOnMarkerClickListener { _, _ ->
+          onLiveMarkerTap(item.user)
+          true
+        }
+      }
+      mapView.overlays.add(marker)
+    }
+    mapView.invalidate()
+  }
   AndroidView(
     factory = { mapView },
     modifier = modifier,

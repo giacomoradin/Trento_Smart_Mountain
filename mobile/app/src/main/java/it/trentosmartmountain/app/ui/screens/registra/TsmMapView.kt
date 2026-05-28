@@ -44,6 +44,8 @@ fun TsmMapView(
   isCurrentUserLeader: Boolean,
   liveLocations: List<LiveLocationItemDto> = emptyList(),
   sosUserIds: Set<String> = emptySet(),
+  /** SOS inviato da questo dispositivo (fase ACTIVE / coda offline). */
+  hasOwnActiveSos: Boolean = false,
   sosOnlyMarkers: List<SosMapMarkerDto> = emptyList(),
   onLiveMarkerTap: (LiveLocationItemDto) -> Unit = {},
   onSelfMarkerTap: () -> Unit = {},
@@ -96,6 +98,9 @@ fun TsmMapView(
         id = TRACK_POLYLINE_ID
         outlinePaint.color = android.graphics.Color.parseColor("#4FC3F7")
         outlinePaint.strokeWidth = 10f
+        // Non intercettare tap: evita il popup OSMdroid sul tracciato.
+        isEnabled = false
+        infoWindow = null
       }
     }
 
@@ -108,11 +113,20 @@ fun TsmMapView(
     mapView.invalidate()
   }
 
-  LaunchedEffect(hasLocationPermission, userLocation, currentUserId, isCurrentUserLeader, sosUserIds) {
+  LaunchedEffect(
+    hasLocationPermission,
+    userLocation,
+    currentUserId,
+    isCurrentUserLeader,
+    sosUserIds,
+    hasOwnActiveSos,
+  ) {
     if (hasLocationPermission && userLocation != null) {
       val point = GeoPoint(userLocation.latitude, userLocation.longitude)
       userMarker.position = point
-      val selfHasSos = currentUserId != null && sosUserIds.contains(currentUserId)
+      val selfHasSos =
+        currentUserId != null &&
+          (hasOwnActiveSos || sosUserIds.contains(currentUserId))
       val kind =
         MapMarkerIcons.kindForUser(
           isSelf = true,

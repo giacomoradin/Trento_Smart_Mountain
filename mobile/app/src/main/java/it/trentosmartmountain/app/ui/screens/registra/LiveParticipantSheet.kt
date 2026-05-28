@@ -85,16 +85,7 @@ fun LiveParticipantContent(
           style = MaterialTheme.typography.titleMedium,
           color = Color.LightGray,
         )
-        if (user.role == "groupLeader") {
-          Surface(color = TsmAccent.copy(alpha = 0.2f), shape = MaterialTheme.shapes.small) {
-            Text(
-              text = stringResource(R.string.live_participant_badge_leader),
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-              style = MaterialTheme.typography.labelSmall,
-              color = TsmAccent,
-            )
-          }
-        }
+        ParticipantRoleBadge(role = user.role)
       }
     }
 
@@ -124,6 +115,29 @@ fun LiveParticipantContent(
         )
       }
     }
+  }
+}
+
+@Composable
+private fun ParticipantRoleBadge(role: String) {
+  val isLeader = role == "groupLeader"
+  Surface(
+    color = (if (isLeader) TsmAccent else Color(0xFF29B6F6)).copy(alpha = 0.2f),
+    shape = MaterialTheme.shapes.small,
+  ) {
+    Text(
+      text =
+        stringResource(
+          if (isLeader) {
+            R.string.live_participant_badge_leader
+          } else {
+            R.string.live_participant_badge_participant
+          },
+        ),
+      modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+      style = MaterialTheme.typography.labelSmall,
+      color = if (isLeader) TsmAccent else Color(0xFF29B6F6),
+    )
   }
 }
 

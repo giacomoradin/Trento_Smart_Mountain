@@ -117,9 +117,9 @@ object MapMarkerIcons {
   fun markerSizeDp(kind: LiveMarkerKind, isSelf: Boolean): Float =
     when {
       kind == LiveMarkerKind.SOS -> 38f
-      isSelf -> 42f
+      isSelf -> 36f
       kind == LiveMarkerKind.LEADER -> 34f
-      else -> 30f
+      else -> 28f
     }
 
   fun kindForUser(

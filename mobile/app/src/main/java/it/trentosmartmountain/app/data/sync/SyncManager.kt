@@ -55,21 +55,31 @@ object SyncManager {
         }
     }
 
+    /**
+     * Forza un giro di sync ignorando il backoff. Usato dal bottone "Risincronizza"
+     * (e da pull-to-refresh). A differenza del poll loop normale, retry IMMEDIATO
+     * su ogni entità non sincronizzata anche se il cooldown del backoff non è ancora
+     * scaduto. Senza questo, le entità con retryCount alto (backoff fino a 1h) erano
+     * saltate silenziosamente, dando l'impressione che il bottone non facesse nulla.
+     */
     fun enqueueImmediate(context: Context) {
         val app = context.applicationContext as TsmApplication
-        scope.launch { runOnce(app) }
+        scope.launch { runOnce(app, ignoreBackoff = true) }
     }
 
-    private suspend fun runOnce(app: TsmApplication) = pollMutex.withLock {
+    private suspend fun runOnce(
+        app: TsmApplication,
+        ignoreBackoff: Boolean = false,
+    ) = pollMutex.withLock {
         val dao = app.database.completedActivityDao()
         val unsynced = dao.getUnsynced()
         if (unsynced.isEmpty()) return@withLock
 
         val now = System.currentTimeMillis()
-        Log.d(TAG, "Polling: ${unsynced.size} attività da sincronizzare")
+        Log.d(TAG, "Polling: ${unsynced.size} attività da sincronizzare (ignoreBackoff=$ignoreBackoff)")
 
         for (entity in unsynced) {
-            if (entity.lastRetryAtMs > 0) {
+            if (!ignoreBackoff && entity.lastRetryAtMs > 0) {
                 val elapsed = now - entity.lastRetryAtMs
                 val needed = computeBackoffMs(entity.retryCount)
                 if (elapsed < needed) continue

@@ -85,6 +85,8 @@ dependencies {
   implementation(libs.osmdroid.android)
   implementation(libs.play.services.location)
   implementation(libs.reorderable)
+  implementation(libs.androidx.exifinterface)
+  implementation(libs.androidx.work.runtime.ktx)
   debugImplementation("androidx.compose.ui:ui-tooling")
   debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

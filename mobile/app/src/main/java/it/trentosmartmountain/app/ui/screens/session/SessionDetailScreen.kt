@@ -94,10 +94,8 @@ import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.SessionDetailViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.abs
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
+import it.trentosmartmountain.app.ui.components.AvatarImage
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 
@@ -122,10 +120,6 @@ fun SessionDetailScreen(
     viewModel: SessionDetailViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val todayFormatted = remember {
-        SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
-    }
-    
     // Per debug: mostra un Toast con l'errore se il ViewModel segnala un errore di caricamento o salvataggio della sessione
     val context = LocalContext.current
 
@@ -147,7 +141,10 @@ fun SessionDetailScreen(
             title = { Text("Avviare in anticipo?", color = Color.White) },
             text = {
                 Text(
-                    "La sessione è pianificata per ${uiState.session?.meetingDate ?: "un altro giorno"}. Vuoi avviarla ugualmente?",
+                    "La sessione è pianificata per ${
+                        SessionDateFormats.formatDisplayFromApi(uiState.session?.meetingDate)
+                            .ifBlank { "un altro giorno" }
+                    }. Vuoi avviarla ugualmente?",
                     color = Color.Gray,
                 )
             },
@@ -186,7 +183,7 @@ fun SessionDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     dateState.selectedDateMillis?.let { millis ->
-                        viewModel.onEditDateChange(SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date(millis)))
+                        viewModel.onEditDateChange(SessionDateFormats.formatApiFromMillis(millis))
                     }
                     showEditDatePicker = false
                 }) { Text("OK", color = TsmAccent) }
@@ -218,7 +215,7 @@ fun SessionDetailScreen(
 
     val session = uiState.session
     val isCreator = session?.creatorId?._id == currentUserId || currentUserId.isBlank()
-    val isToday = session?.meetingDate == todayFormatted
+    val isToday = SessionDateFormats.isTodayApi(session?.meetingDate)
 
     Scaffold(
         containerColor = TsmBackground,
@@ -239,7 +236,9 @@ fun SessionDetailScreen(
                             }
                         }
                         val subtitle = buildString {
-                            session?.meetingDate?.let { append(it) }
+                            session?.meetingDate?.let {
+                                append(SessionDateFormats.formatDisplayFromApi(it))
+                            }
                             session?.meetingTime?.let { append(" · $it") }
                             session?.creatorId?.username?.let { append(" · host $it") }
                         }
@@ -399,7 +398,7 @@ fun SessionDetailScreen(
             }
 
             MeteoCard(
-                meetingDate = session.meetingDate ?: "—",
+                meetingDate = SessionDateFormats.formatDisplayFromApi(session.meetingDate).ifBlank { "—" },
                 uiState = uiState,
                 onRefresh = viewModel::refreshMeteo,
             )
@@ -410,7 +409,7 @@ fun SessionDetailScreen(
 
             Button(
                 onClick = {
-                    viewModel.onAvviaClick(todayFormatted) {
+                    viewModel.onAvviaClick {
                         SessionStartCoordinator.requestStart(sessionId)
                         onAvviaConfirmed(sessionId)
                     }
@@ -447,7 +446,8 @@ private fun EditModeCard(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
-                    value = uiState.editDate, onValueChange = {},
+                    value = SessionDateFormats.formatDisplayFromApi(uiState.editDate),
+                    onValueChange = {},
                     label = { Text("DATA", color = Color.Gray) },
                     modifier = Modifier.weight(1f).clickable { onDateClick() }, readOnly = true, enabled = false,
                     leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null, tint = TsmAccent) },
@@ -885,19 +885,19 @@ private fun ParticipantsCard(session: SessionResponse) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             participants.forEach { p ->
                 val username = p.userId?.username ?: "?"
-                val initials = username.split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercaseChar()?.toString() }.joinToString("")
-                val avatarColor = avatarColorFor(username)
                 val isCreator = p.role == "groupLeader"
-
+                // Borda accent solo per il creator; usiamo un Box wrapper così la
+                // border non interferisce con il clip circolare dell'AvatarImage.
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(CircleShape)
-                        .background(avatarColor)
                         .then(if (isCreator) Modifier.border(2.dp, TsmAccent, CircleShape) else Modifier),
-                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(initials.take(2), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                    AvatarImage(
+                        avatarUrl = p.userId?.avatarUrl,
+                        fallbackName = username,
+                        size = 40.dp,
+                    )
                 }
             }
             val emptySlots = (max - participants.size).coerceIn(0, 4)
@@ -911,14 +911,6 @@ private fun ParticipantsCard(session: SessionResponse) {
             }
         }
     }
-}
-
-private fun avatarColorFor(username: String): Color {
-    val palette = listOf(
-        Color(0xFF1B5E20), Color(0xFF01579B), Color(0xFF37474F),
-        Color(0xFF4A148C), Color(0xFF006064), Color(0xFF3E2723),
-    )
-    return palette[abs(username.hashCode()) % palette.size]
 }
 
 @Composable

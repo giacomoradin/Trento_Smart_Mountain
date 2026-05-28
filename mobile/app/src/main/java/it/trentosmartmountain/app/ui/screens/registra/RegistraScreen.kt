@@ -202,6 +202,8 @@ fun RegistraScreen(
       trackGeoPoints = uiState.trackGeoPoints,
       centerOnUserTick = uiState.centerOnUserTick,
       hasLocationPermission = uiState.hasLocationPermission,
+      liveLocations = uiState.liveLocations,
+      onLiveMarkerTap = viewModel::onLiveMarkerTap,
     )
 
     RegistraTopHud(

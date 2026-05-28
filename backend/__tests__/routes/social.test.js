@@ -642,6 +642,131 @@ describe("Social Routes", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────
+  // Social Row — GET /api/v1/users/me/social-row
+  // ──────────────────────────────────────────────────────────────────
+
+  describe("GET /api/v1/users/me/social-row", () => {
+    test("empty row when not following anyone", async () => {
+      const me = await createTestHiker({
+        username: "lonely60",
+        email: "lonely60@test.com",
+      });
+      const res = await request(app)
+        .get("/api/v1/users/me/social-row")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items).toEqual([]);
+    });
+
+    test("followed user with no activity → neutral status", async () => {
+      const me = await createTestHiker({
+        username: "viewer61",
+        email: "viewer61@test.com",
+      });
+      const friend = await createTestHiker({
+        username: "friend61",
+        email: "friend61@test.com",
+      });
+      await request(app)
+        .post(`/api/v1/users/${friend.user._id}/follow`)
+        .set("Authorization", `Bearer ${me.token}`);
+      const res = await request(app)
+        .get("/api/v1/users/me/social-row")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.items[0].status).toBe("neutral");
+      expect(res.body.items[0].user.username).toBe("friend61");
+    });
+
+    test("followed user with recent share → story status with ref", async () => {
+      const me = await createTestHiker({
+        username: "viewer62",
+        email: "viewer62@test.com",
+      });
+      const friend = await createTestHiker({
+        username: "friend62",
+        email: "friend62@test.com",
+      });
+      await request(app)
+        .post(`/api/v1/users/${friend.user._id}/follow`)
+        .set("Authorization", `Bearer ${me.token}`);
+      const act = await createTestActivity(friend.user._id);
+      await request(app)
+        .post(`/api/v1/activities/${act._id}/share`)
+        .set("Authorization", `Bearer ${friend.token}`)
+        .send({});
+      const res = await request(app)
+        .get("/api/v1/users/me/social-row")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.body.items[0].status).toBe("story");
+      expect(res.body.items[0].storyActivityRef).toMatchObject({
+        id: String(act._id),
+        kind: "activity",
+      });
+    });
+
+    test("followed user with ACTIVE session → live status with sessionId", async () => {
+      const me = await createTestHiker({
+        username: "viewer63",
+        email: "viewer63@test.com",
+      });
+      const friend = await createTestHiker({
+        username: "friend63",
+        email: "friend63@test.com",
+      });
+      await request(app)
+        .post(`/api/v1/users/${friend.user._id}/follow`)
+        .set("Authorization", `Bearer ${me.token}`);
+      const session = await HikeSession.create({
+        creatorId: friend.user._id,
+        routeDetails: { name: "Live escursione", difficultyLevel: "E" },
+        meetingDate: "2026-08-01",
+        inviteCode: "TSM-LIVE",
+        status: "ACTIVE",
+        participants: [{ userId: friend.user._id, role: "groupLeader" }],
+      });
+      const res = await request(app)
+        .get("/api/v1/users/me/social-row")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.body.items[0].status).toBe("live");
+      expect(res.body.items[0].liveSessionId).toBe(String(session._id));
+    });
+
+    test("live takes priority over story when both apply", async () => {
+      const me = await createTestHiker({
+        username: "viewer64",
+        email: "viewer64@test.com",
+      });
+      const friend = await createTestHiker({
+        username: "friend64",
+        email: "friend64@test.com",
+      });
+      await request(app)
+        .post(`/api/v1/users/${friend.user._id}/follow`)
+        .set("Authorization", `Bearer ${me.token}`);
+      // Story
+      const act = await createTestActivity(friend.user._id);
+      await request(app)
+        .post(`/api/v1/activities/${act._id}/share`)
+        .set("Authorization", `Bearer ${friend.token}`)
+        .send({});
+      // Live (priority sopra)
+      await HikeSession.create({
+        creatorId: friend.user._id,
+        routeDetails: { name: "Live", difficultyLevel: "E" },
+        meetingDate: "2026-08-01",
+        inviteCode: "TSM-LIV2",
+        status: "ACTIVE",
+        participants: [{ userId: friend.user._id, role: "groupLeader" }],
+      });
+      const res = await request(app)
+        .get("/api/v1/users/me/social-row")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.body.items[0].status).toBe("live");
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
   // User posts — GET /api/v1/users/:id/posts
   // ──────────────────────────────────────────────────────────────────
 

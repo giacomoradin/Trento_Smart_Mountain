@@ -27,6 +27,7 @@ import it.trentosmartmountain.app.data.remote.dto.CreateChallengeRequest
 import it.trentosmartmountain.app.data.remote.dto.BadgeItem
 import it.trentosmartmountain.app.data.remote.dto.CertificateItem
 import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
+import it.trentosmartmountain.app.data.remote.dto.LiveLocationsResponse
 import it.trentosmartmountain.app.data.remote.dto.LoginRequest
 import it.trentosmartmountain.app.data.remote.dto.LoginResponse
 import it.trentosmartmountain.app.data.remote.dto.LogoutRequest
@@ -36,6 +37,7 @@ import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
 import it.trentosmartmountain.app.data.remote.dto.NextQuizResponse
 import it.trentosmartmountain.app.data.remote.dto.PersonalInfo
 import it.trentosmartmountain.app.data.remote.dto.PersonalInfoResponse
+import it.trentosmartmountain.app.data.remote.dto.PostLiveLocationRequest
 import it.trentosmartmountain.app.data.remote.dto.Experience
 import it.trentosmartmountain.app.data.remote.dto.ExperienceResponse
 import it.trentosmartmountain.app.data.remote.dto.Preferences
@@ -62,6 +64,7 @@ import it.trentosmartmountain.app.data.remote.dto.CommentListResponse
 import it.trentosmartmountain.app.data.remote.dto.CreateCommentRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateCommentResponse
 import it.trentosmartmountain.app.data.remote.dto.PublicUserProfile
+import it.trentosmartmountain.app.data.remote.dto.SocialRowResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.remote.dto.UserResponse
@@ -183,6 +186,17 @@ interface TsmApiService {
   suspend fun completeSession(
     @Path("id") id: String,
     @Body body: CompleteSessionRequest,
+  ): Response<ApiMessageBody>
+
+  // ── Realtime Monitoring ──
+
+  @GET("api/v1/sessions/{id}/live-locations")
+  suspend fun getLiveLocations(@Path("id") id: String): Response<LiveLocationsResponse>
+
+  @POST("api/v1/sessions/{id}/live-location")
+  suspend fun postLiveLocation(
+    @Path("id") id: String,
+    @Body body: PostLiveLocationRequest,
   ): Response<ApiMessageBody>
 
   @GET("api/v1/sessions/{id}/emergencies")
@@ -457,6 +471,14 @@ interface TsmApiService {
    */
   @GET("hikers/{id}")
   suspend fun getPublicHiker(@Path("id") id: String): Response<PublicUserProfile>
+
+  /**
+   * Avatar Row del feed Social: per ogni utente seguito ritorna uno
+   * status (live/story/goal/neutral) e i dati derivati. Refresh tipico
+   * 30s mentre la tab Social è attiva (lo stato live deve essere fresco).
+   */
+  @GET("api/v1/users/me/social-row")
+  suspend fun getSocialRow(): Response<SocialRowResponse>
 
   // ── Commenti su attività libere ──
 

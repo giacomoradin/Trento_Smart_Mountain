@@ -29,7 +29,11 @@ import {
   getFollowers,
   getFollowStats,
 } from "../services/followService.js";
-import { getFeedForUser, getPostsByUser } from "../services/socialService.js";
+import {
+  getFeedForUser,
+  getPostsByUser,
+  getSocialRowForUser,
+} from "../services/socialService.js";
 
 const router = express.Router();
 
@@ -81,6 +85,24 @@ router.get("/me/feed", async (req, res, next) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const result = await getFeedForUser(req.user.userId, { page, limit });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/users/me/social-row — avatar row in cima alla HomeSocialScreen.
+ *
+ * Per ogni utente seguito calcola uno status in priorità (live > story > goal
+ * > neutral). Vedi `socialService.getSocialRowForUser` per il dettaglio.
+ *
+ * Refresh suggerito ogni 30s mentre la tab Social è attiva (lo stato "live"
+ * deve essere fresco). La UI tipicamente fa polling oppure pull-to-refresh.
+ */
+router.get("/me/social-row", async (req, res, next) => {
+  try {
+    const result = await getSocialRowForUser(req.user.userId);
     res.status(200).json(result);
   } catch (err) {
     next(err);

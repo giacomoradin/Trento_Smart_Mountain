@@ -142,3 +142,39 @@ data class PublicUserProfile(
 ) {
     val avatarUrl: String? get() = personalInfo?.avatarUrl
 }
+
+// ── Social Row (avatar row in cima al feed) ────────────────────────────────
+
+/** Risposta di `GET /api/v1/users/me/social-row`. */
+data class SocialRowResponse(
+    @SerializedName("items") val items: List<SocialRowItem> = emptyList(),
+)
+
+/**
+ * Singolo elemento della Avatar Row.
+ *
+ * Status (vedi sprint2_social.md §1):
+ *  - "live"     → utente con HikeSession ACTIVE (anello giallo animato)
+ *  - "story"    → utente con shared in last 24h (anello azzurro pieno);
+ *                 filtrato lato client contro `viewed_stories` per "viste"
+ *  - "goal"     → progresso settimanale (anello verde arco proporzionale)
+ *  - "neutral"  → nessuno stato (anello grigio)
+ *
+ * Campi opzionali popolati solo per il loro status:
+ *  - [liveSessionId] solo per "live" → deep link a SessionDetail
+ *  - [storyActivityRef] solo per "story" → apre StoryViewerScreen
+ *  - [weeklyProgressPct] solo per "goal" ∈ [0,1]
+ */
+data class SocialRowItem(
+    @SerializedName("user") val user: FeedUser,
+    @SerializedName("status") val status: String,
+    @SerializedName("liveSessionId") val liveSessionId: String? = null,
+    @SerializedName("storyActivityRef") val storyActivityRef: StoryActivityRef? = null,
+    @SerializedName("weeklyProgressPct") val weeklyProgressPct: Float? = null,
+)
+
+data class StoryActivityRef(
+    @SerializedName("id") val id: String,
+    @SerializedName("kind") val kind: String,         // "activity" | "session"
+    @SerializedName("sharedAt") val sharedAt: String?,
+)

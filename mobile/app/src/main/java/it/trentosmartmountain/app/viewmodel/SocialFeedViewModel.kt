@@ -3,9 +3,14 @@ package it.trentosmartmountain.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.local.db.ViewedStoryEntity
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.data.remote.dto.ShareRequest
+import it.trentosmartmountain.app.data.remote.dto.SocialRowItem
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +36,14 @@ data class SocialFeedState(
     val error: String? = null,
     val shareSuccess: String? = null,
     val shareError: String? = null,
+    /**
+     * Avatar row mostrata in cima al feed. Filtrata client-side per le
+     * "story" già viste localmente (vedi `socialRowDisplay`). Aggiornata
+     * insieme a `refresh()`.
+     */
+    val socialRow: List<SocialRowItem> = emptyList(),
+    /** Set degli `activityRefId` già marcati come "vista" dal viewer. */
+    val viewedStoryIds: Set<String> = emptySet(),
 )
 
 /**
@@ -52,43 +65,73 @@ data class SocialFeedState(
  */
 class SocialFeedViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val app = application as TsmApplication
     private val api = TsmApiClient.service()
+    private val viewedStoryDao = app.database.viewedStoryDao()
 
     private val _state = MutableStateFlow(SocialFeedState())
     val state: StateFlow<SocialFeedState> = _state.asStateFlow()
 
     init { refresh() }
 
-    /** Reset paginazione + fetch pagina 1 (pull-to-refresh). */
+    /** Reset paginazione + fetch pagina 1 (pull-to-refresh).
+     *  Carica in parallelo feed + social-row + viewed-stories locali. */
     fun refresh() {
         viewModelScope.launch {
             _state.value = _state.value.copy(
                 isLoading = true,
                 error = null,
             )
-            runCatching { api.getFeed(page = 1, limit = 20) }
-                .onSuccess { resp ->
-                    if (resp.isSuccessful) {
-                        val body = resp.body()
-                        _state.value = _state.value.copy(
-                            isLoading = false,
-                            items = body?.items.orEmpty(),
-                            hasMore = body?.hasMore == true,
-                            currentPage = 1,
-                        )
-                    } else {
-                        _state.value = _state.value.copy(
-                            isLoading = false,
-                            error = "Errore caricamento feed (${resp.code()}).",
-                        )
-                    }
+            coroutineScope {
+                val feedJob = async { runCatching { api.getFeed(page = 1, limit = 20) } }
+                val rowJob = async { runCatching { api.getSocialRow() } }
+                // 24h window: tutte le viste rilevanti per filtrare le story.
+                val since24h = System.currentTimeMillis() - 24 * 3600 * 1000L
+                val viewedJob = async {
+                    runCatching { viewedStoryDao.getViewedSince(since24h) }
                 }
-                .onFailure {
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        error = it.message ?: "Errore di rete.",
-                    )
-                }
+                val feedResp = feedJob.await().getOrNull()
+                val rowResp = rowJob.await().getOrNull()
+                val viewedIds = viewedJob.await().getOrNull().orEmpty().toSet()
+
+                _state.value = _state.value.copy(
+                    isLoading = false,
+                    items = feedResp?.body()?.items.orEmpty().takeIf { feedResp?.isSuccessful == true }
+                        ?: _state.value.items,
+                    hasMore = feedResp?.body()?.hasMore == true,
+                    currentPage = 1,
+                    socialRow = rowResp?.body()?.items.orEmpty().takeIf { rowResp?.isSuccessful == true }
+                        ?: _state.value.socialRow,
+                    viewedStoryIds = viewedIds,
+                    error = when {
+                        feedResp == null || !feedResp.isSuccessful ->
+                            "Errore caricamento feed (${feedResp?.code() ?: "rete"})."
+                        else -> null
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * Marca una "story" come visualizzata localmente. Persiste su Room
+     * (`viewed_stories`) + aggiorna lo state in-memory così l'anello story
+     * sparisce subito senza dover ri-fetchare la social-row.
+     */
+    fun markStoryViewed(activityRefId: String, kind: String) {
+        viewModelScope.launch {
+            runCatching {
+                viewedStoryDao.markViewed(
+                    ViewedStoryEntity(
+                        activityRefId = activityRefId,
+                        kind = kind,
+                        viewedAtMs = System.currentTimeMillis(),
+                    ),
+                )
+            }
+            _state.value = _state.value.copy(
+                viewedStoryIds = _state.value.viewedStoryIds + activityRefId,
+            )
         }
     }
 

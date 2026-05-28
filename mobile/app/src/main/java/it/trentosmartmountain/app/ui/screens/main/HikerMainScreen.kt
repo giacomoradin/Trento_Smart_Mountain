@@ -58,6 +58,8 @@ fun HikerMainScreen(
   // Apertura del profilo pubblico di un altro utente: chiamato dal tap su
   // avatar nel feed Social. Default no-op per backward-compat con i preview.
   onNavigateToUserProfile: (userId: String) -> Unit = {},
+  // Tap su anello story della AvatarRow → apre StoryViewerScreen full-screen.
+  onNavigateToStoryViewer: (refId: String, kind: String) -> Unit = { _, _ -> },
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
 
@@ -107,6 +109,8 @@ fun HikerMainScreen(
         modifier = Modifier.padding(innerPadding),
         onActivityClick = onNavigateToActivityDetail,
         onNavigateToUserProfile = onNavigateToUserProfile,
+        onNavigateToSessionDetail = onNavigateToSessionDetail,
+        onNavigateToStoryViewer = onNavigateToStoryViewer,
       )
       HikerTab.Session -> SessionHubScreen(
         modifier = Modifier.padding(innerPadding),

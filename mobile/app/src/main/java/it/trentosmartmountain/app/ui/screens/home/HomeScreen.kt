@@ -32,6 +32,8 @@ fun HomeScreen(
   modifier: Modifier = Modifier,
   onActivityClick: (activityId: String, sessionId: String?) -> Unit = { _, _ -> },
   onNavigateToUserProfile: (userId: String) -> Unit = {},
+  onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
+  onNavigateToStoryViewer: (refId: String, kind: String) -> Unit = { _, _ -> },
 ) {
   var subTab by rememberSaveable { mutableIntStateOf(0) }
 
@@ -49,7 +51,11 @@ fun HomeScreen(
       )
     }
     when (subTab) {
-      0 -> HomeSocialScreen(onUserClick = onNavigateToUserProfile)
+      0 -> HomeSocialScreen(
+        onUserClick = onNavigateToUserProfile,
+        onLiveClick = onNavigateToSessionDetail,
+        onStoryClick = onNavigateToStoryViewer,
+      )
       1 -> ActivityListScreen(onActivityClick = onActivityClick)
     }
   }

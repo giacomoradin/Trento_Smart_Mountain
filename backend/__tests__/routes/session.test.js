@@ -42,6 +42,13 @@ describe("HikeSession Routes", () => {
     return res;
   }
 
+  async function activateSession(sessionId, token) {
+    return request(app)
+      .patch(`/api/v1/sessions/${sessionId}/status`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ status: "ACTIVE" });
+  }
+
   // ══════════════════════════════════════════════════════════════════
   // POST /api/v1/sessions — Crea sessione
   // ══════════════════════════════════════════════════════════════════
@@ -418,6 +425,182 @@ describe("HikeSession Routes", () => {
       // Atteso ordine ascendente cronologico (non lessicografico, anche se per
       // YYYY-MM-DD i due coincidono — questo test conferma comunque il fix).
       expect(sortedDates).toEqual(["2026-01-15", "2026-06-10", "2026-12-25"]);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // Live tracking (realtime polling endpoints)
+  // ══════════════════════════════════════════════════════════════════
+
+  describe("Live tracking endpoints", () => {
+    test("POST /:id/live-location stores last location (upsert)", async () => {
+      const { token } = await createTestHiker({
+        username: "liveu1",
+        email: "liveu1@test.com",
+      });
+
+      const created = await createSessionAs(token);
+      await activateSession(created.body._id, token);
+
+      const body1 = { lat: 46.07, lon: 11.12, accuracyM: 8.5, timestampMs: Date.now() };
+      const res1 = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-location`)
+        .set("Authorization", `Bearer ${token}`)
+        .send(body1);
+      expect(res1.status).toBe(200);
+
+      const body2 = { lat: 46.071, lon: 11.121, accuracyM: 10 };
+      const res2 = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-location`)
+        .set("Authorization", `Bearer ${token}`)
+        .send(body2);
+      expect(res2.status).toBe(200);
+
+      const doc = await HikeSession.findById(created.body._id).lean();
+      expect(Array.isArray(doc.liveLocations)).toBe(true);
+      expect(doc.liveLocations.length).toBe(1);
+      expect(doc.liveLocations[0].lat).toBeCloseTo(46.071, 6);
+    });
+
+    test("POST /:id/live-location returns 409 if session not ACTIVE", async () => {
+      const { token } = await createTestHiker({
+        username: "liveu2",
+        email: "liveu2@test.com",
+      });
+      const created = await createSessionAs(token);
+
+      const res = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-location`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ lat: 46.07, lon: 11.12 });
+
+      expect(res.status).toBe(409);
+    });
+
+    test("GET /:id/live-locations excludes stale locations and suspended users", async () => {
+      const { token: creatorToken, user: creator } = await createTestHiker({
+        username: "leaderlive",
+        email: "leaderlive@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+
+      const { token: joinerToken, user: joiner } = await createTestHiker({
+        username: "joinerlive",
+        email: "joinerlive@test.com",
+      });
+      const joinRes = await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+      expect([200, 201]).toContain(joinRes.status);
+
+      await activateSession(created.body._id, creatorToken);
+
+      // Entrambi caricano una location
+      const cUp = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-location`)
+        .set("Authorization", `Bearer ${creatorToken}`)
+        .send({ lat: 46.07, lon: 11.12 });
+      expect(cUp.status).toBe(200);
+
+      const jUp = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-location`)
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ lat: 46.08, lon: 11.13 });
+      expect(jUp.status).toBe(200);
+
+      // Rendi la location del joiner stale
+      await HikeSession.updateOne(
+        { _id: created.body._id, "liveLocations.userId": joiner._id },
+        { $set: { "liveLocations.$.updatedAt": new Date(Date.now() - 60 * 1000) } },
+      );
+
+      // Sospendi il creator
+      await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-tracking/suspend`)
+        .set("Authorization", `Bearer ${creatorToken}`)
+        .send({ userId: creator._id.toString(), reason: "MANUAL" });
+
+      const res = await request(app)
+        .get(`/api/v1/sessions/${created.body._id}/live-locations?maxAgeSec=30`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("data");
+      expect(Array.isArray(res.body.data)).toBe(true);
+      // Creator sospeso → escluso. Joiner stale → escluso. Quindi vuoto.
+      expect(res.body.data.length).toBe(0);
+    });
+
+    test("suspended user cannot POST /:id/live-location (403 + reason)", async () => {
+      const { token: creatorToken, user: creator } = await createTestHiker({
+        username: "leaderlive2",
+        email: "leaderlive2@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+
+      const { token: joinerToken, user: joiner } = await createTestHiker({
+        username: "joinerlive2",
+        email: "joinerlive2@test.com",
+      });
+      const joinRes = await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+      expect([200, 201]).toContain(joinRes.status);
+
+      await activateSession(created.body._id, creatorToken);
+
+      // creator sospende joiner
+      await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-tracking/suspend`)
+        .set("Authorization", `Bearer ${creatorToken}`)
+        .send({ userId: joiner._id.toString(), reason: "TOO_FAR_FROM_ROUTE" });
+
+      const res = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-location`)
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ lat: 46.07, lon: 11.12 });
+
+      expect(res.status).toBe(403);
+      expect(res.body).toHaveProperty("reason", "TOO_FAR_FROM_ROUTE");
+    });
+
+    test("only group leader can suspend/resume", async () => {
+      const { token: creatorToken } = await createTestHiker({
+        username: "leaderlive3",
+        email: "leaderlive3@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+
+      const { token: joinerToken, user: joiner } = await createTestHiker({
+        username: "joinerlive3",
+        email: "joinerlive3@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+
+      // joiner prova a sospendere creator → 403
+      const resSuspend = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-tracking/suspend`)
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ userId: joiner._id.toString(), reason: "MANUAL" });
+      expect(resSuspend.status).toBe(403);
+
+      // creator sospende e poi riprende joiner → 200
+      const resSuspend2 = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-tracking/suspend`)
+        .set("Authorization", `Bearer ${creatorToken}`)
+        .send({ userId: joiner._id.toString(), reason: "MANUAL" });
+      expect(resSuspend2.status).toBe(200);
+
+      const resResume = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/live-tracking/resume`)
+        .set("Authorization", `Bearer ${creatorToken}`)
+        .send({ userId: joiner._id.toString() });
+      expect(resResume.status).toBe(200);
     });
   });
 });

@@ -86,6 +86,53 @@ const hikSessionSchema = new Schema({
     gpxDurationSec: { type: Number },
   },
 
+  // Polyline del percorso pianificato (necessaria per controllo distanza lato client)
+  plannedRoute: {
+    source: { type: String, enum: ["GPX", "SAT"] },
+    polylinePoints: {
+      type: [
+        {
+          lat: { type: Number, required: true, min: -90, max: 90 },
+          lon: { type: Number, required: true, min: -180, max: 180 },
+        },
+      ],
+      default: undefined,
+    },
+    pointsCountOriginal: { type: Number },
+    pointsCountStored: { type: Number },
+    bbox: {
+      minLat: { type: Number },
+      minLon: { type: Number },
+      maxLat: { type: Number },
+      maxLon: { type: Number },
+    },
+    updatedAt: { type: Date },
+  },
+
+  // Live tracking (last known position per utente)
+  liveLocations: [
+    {
+      userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+      lat: { type: Number, required: true, min: -90, max: 90 },
+      lon: { type: Number, required: true, min: -180, max: 180 },
+      accuracyM: { type: Number, min: 0, max: 1000 },
+      updatedAt: { type: Date, default: Date.now },
+    },
+  ],
+
+  // Stato live tracking per utente (ACTIVE/SUSPENDED)
+  liveTracking: [
+    {
+      userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+      status: { type: String, enum: ["ACTIVE", "SUSPENDED"], required: true },
+      reason: {
+        type: String,
+        enum: ["TOO_FAR_FROM_ROUTE", "MANUAL", "OTHER"],
+      },
+      updatedAt: { type: Date, default: Date.now },
+    },
+  ],
+
   // Statistiche effettive registrate dal client al termine del tracking GPS.
   // Popolate da PATCH /api/v1/sessions/:id/complete quando la sessione diventa COMPLETED.
   // Se presenti, sostituiscono completamente le stime CAI nella UI.
@@ -145,6 +192,10 @@ hikSessionSchema.index({ "routeDetails.startPoint": "2dsphere" }); // Permette d
 // Indice composto per la query frequente "sessioni dell'utente ordinate per
 // data crescente" (vedi getSessionsByUser).
 hikSessionSchema.index({ status: 1, meetingDate: 1 });
+
+// Indici per lookup live tracking per utente
+hikSessionSchema.index({ "liveLocations.userId": 1 });
+hikSessionSchema.index({ "liveTracking.userId": 1 });
 
 // Trasforma `meetingDate` (Date) in "YYYY-MM-DD" nei JSON di risposta API.
 // Mantiene la backward compatibility col mobile che si aspetta una stringa.

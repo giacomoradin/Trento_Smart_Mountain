@@ -6,6 +6,12 @@ import it.trentosmartmountain.app.data.remote.dto.ActivityResponse
 import it.trentosmartmountain.app.data.remote.dto.ActivityStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.ApiMessageBody
 import it.trentosmartmountain.app.data.remote.dto.ChangePasswordRequest
+import it.trentosmartmountain.app.data.remote.dto.BadgeItem
+import it.trentosmartmountain.app.data.remote.dto.CertificateItem
+import it.trentosmartmountain.app.data.remote.dto.ChangePasswordRequest
+import it.trentosmartmountain.app.data.remote.dto.Challenge
+import it.trentosmartmountain.app.data.remote.dto.ChallengeDetailResponse
+import it.trentosmartmountain.app.data.remote.dto.ChallengeRespondRequest
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreditHistoryResponse
 import it.trentosmartmountain.app.data.remote.dto.CreditsResponse
@@ -26,6 +32,18 @@ import it.trentosmartmountain.app.data.remote.dto.ChallengeRespondRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateChallengeRequest
 import it.trentosmartmountain.app.data.remote.dto.BadgeItem
 import it.trentosmartmountain.app.data.remote.dto.CertificateItem
+import it.trentosmartmountain.app.data.remote.dto.CreateChallengeRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateEmergencyRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateSessionRequest
+import it.trentosmartmountain.app.data.remote.dto.CreditHistoryResponse
+import it.trentosmartmountain.app.data.remote.dto.CreditsResponse
+import it.trentosmartmountain.app.data.remote.dto.DeleteAccountRequest
+import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
+import it.trentosmartmountain.app.data.remote.dto.Experience
+import it.trentosmartmountain.app.data.remote.dto.ExperienceResponse
+import it.trentosmartmountain.app.data.remote.dto.ForgotPasswordRequest
+import it.trentosmartmountain.app.data.remote.dto.GoalsResponse
+import it.trentosmartmountain.app.data.remote.dto.GoalsUpdateRequest
 import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.LiveLocationsResponse
 import it.trentosmartmountain.app.data.remote.dto.LoginRequest
@@ -44,6 +62,17 @@ import it.trentosmartmountain.app.data.remote.dto.Preferences
 import it.trentosmartmountain.app.data.remote.dto.PreferencesResponse
 import it.trentosmartmountain.app.data.remote.dto.ProfileCompleteResponse
 import it.trentosmartmountain.app.data.remote.dto.NfcTotemResponse
+import it.trentosmartmountain.app.data.remote.dto.NextQuizResponse
+import it.trentosmartmountain.app.data.remote.dto.NfcScanRequest
+import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
+import it.trentosmartmountain.app.data.remote.dto.NfcTotemResponse
+import it.trentosmartmountain.app.data.remote.dto.PatchEmergencyRequest
+import it.trentosmartmountain.app.data.remote.dto.PersonalInfo
+import it.trentosmartmountain.app.data.remote.dto.PersonalInfoResponse
+import it.trentosmartmountain.app.data.remote.dto.PostLiveLocationRequest
+import it.trentosmartmountain.app.data.remote.dto.Preferences
+import it.trentosmartmountain.app.data.remote.dto.PreferencesResponse
+import it.trentosmartmountain.app.data.remote.dto.ProfileCompleteResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizCategoryProgressResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizDetailResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizListItemResponse
@@ -53,6 +82,7 @@ import it.trentosmartmountain.app.data.remote.dto.RegisterRequest
 import it.trentosmartmountain.app.data.remote.dto.RegisterResponse
 import it.trentosmartmountain.app.data.remote.dto.RegisterRifugioRequest
 import it.trentosmartmountain.app.data.remote.dto.SessionCreatedResponse
+import it.trentosmartmountain.app.data.remote.dto.SessionEmergenciesResponse
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.remote.dto.FeedResponse
 import it.trentosmartmountain.app.data.remote.dto.FollowStatsResponse
@@ -70,6 +100,7 @@ import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.remote.dto.UserResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherForecastResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherLocationsResponse
+import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -87,7 +118,7 @@ import retrofit2.http.Query
  */
 interface TsmApiService {
 
-  // ── Auth ──
+  // ├ö├Â├ç├ö├Â├ç Auth ├ö├Â├ç├ö├Â├ç
 
   @POST("auth/login")
   suspend fun login(@Body body: LoginRequest): Response<LoginResponse>
@@ -106,42 +137,26 @@ interface TsmApiService {
   @POST("auth/forgot-password")
   suspend fun forgotPassword(@Body body: ForgotPasswordRequest): Response<ApiMessageBody>
 
-  // ── Registrazione per ruolo (post-refactor discriminator) ──
-  // Endpoints semantici sotto /auth/register/* preferiti rispetto a /hikers e /refuges
-  // perché tengono il flusso "registrazione" raccolto sotto la categoria auth in Swagger.
+  // ├ö├Â├ç├ö├Â├ç Registrazione per ruolo (post-refactor discriminator) ├ö├Â├ç├ö├Â├ç
 
-  /** POST /auth/register/hiker → crea un account escursionista (groupLeader). */
   @POST("auth/register/hiker")
   suspend fun register(@Body body: RegisterRequest): Response<RegisterResponse>
 
-  /** POST /auth/register/refuge → crea un account rifugio con metadati flat. */
   @POST("auth/register/refuge")
   suspend fun registerRifugio(@Body body: RegisterRifugioRequest): Response<RegisterResponse>
 
-  // ── Hiker (profilo escursionista) ──
+  // ├ö├Â├ç├ö├Â├ç Hiker / Refuge ├ö├Â├ç├ö├Â├ç
 
-  /** GET /hikers/:id → profilo escursionista (richiede JWT). */
   @GET("hikers/{id}")
   suspend fun getHikerById(@Path("id") id: String): Response<UserResponse>
 
-  // ── Refuge (profilo rifugio) ──
-
-  /** GET /refuges/:id → profilo rifugio con metadati struttura. */
   @GET("refuges/{id}")
   suspend fun getRefugeById(@Path("id") id: String): Response<UserResponse>
 
-  /**
-   * GET /users/{id} — alias retro-compatibile.
-   *
-   * Mantenuto temporaneamente per non rompere il [ProfileViewModel] che legge il
-   * profilo senza conoscere a priori il ruolo dell'utente. In Sprint 2 verrà
-   * sostituito da una chiamata a `/hikers/{id}` o `/refuges/{id}` in base al ruolo
-   * decodificato dal JWT. Il backend mantiene un'alias route per smistare.
-   */
   @GET("users/{id}")
   suspend fun getUserById(@Path("id") id: String): Response<UserResponse>
 
-  // ── Sessions ──
+  // ├ö├Â├ç├ö├Â├ç Sessions ├ö├Â├ç├ö├Â├ç
 
   @POST("api/v1/sessions")
   suspend fun createSession(@Body body: CreateSessionRequest): Response<SessionCreatedResponse>
@@ -161,34 +176,22 @@ interface TsmApiService {
   @DELETE("api/v1/sessions/{id}")
   suspend fun deleteSession(@Path("id") id: String): Response<ApiMessageBody>
 
-  // Return type ApiMessageBody invece di SessionResponse:
-  // Gson deserializza il response body in modo eager nel thread Retrofit.
-  // Se il backend restituisce participants.userId come ObjectId raw (non popolato),
-  // Gson crashava con "Expected BEGIN_OBJECT but was STRING" (IllegalStateException).
-  // saveEdit() non legge il body — ricarica la sessione via getSessionById() — quindi
-  // ApiMessageBody (solo { message? }) è il contratto corretto e non crash su nessun JSON.
   @PATCH("api/v1/sessions/{id}")
   suspend fun updateSession(@Path("id") id: String, @Body body: UpdateSessionRequest): Response<ApiMessageBody>
 
-  // Stesso principio: updateSessionStatus non necessita del payload SessionResponse completo.
-  // Se si ha bisogno della sessione aggiornata, richiamare getSessionById() dopo.
   @PATCH("api/v1/sessions/{id}/status")
   suspend fun updateSessionStatus(
     @Path("id") id: String,
     @Body body: UpdateSessionStatusRequest,
   ): Response<ApiMessageBody>
 
-  /**
-   * Marca la sessione COMPLETED e persiste le metriche reali del tracking.
-   * Usato da [RegistraViewModel.confirmStopTracking] al termine di una sessione live.
-   */
   @PATCH("api/v1/sessions/{id}/complete")
   suspend fun completeSession(
     @Path("id") id: String,
     @Body body: CompleteSessionRequest,
   ): Response<ApiMessageBody>
 
-  // ── Realtime Monitoring ──
+  // ├ö├Â├ç├ö├Â├ç Realtime Monitoring ├ö├Â├ç├ö├Â├ç
 
   @GET("api/v1/sessions/{id}/live-locations")
   suspend fun getLiveLocations(@Path("id") id: String): Response<LiveLocationsResponse>
@@ -199,10 +202,17 @@ interface TsmApiService {
     @Body body: PostLiveLocationRequest,
   ): Response<ApiMessageBody>
 
+  /** GET /api/v1/sessions/:id/live-locations ├ö├Ñ├å recupera le posizioni di tutti i partecipanti */
+  @GET("api/v1/sessions/{id}/live-locations")
+  suspend fun getLiveLocations(
+    @Path("id") sessionId: String,
+    @Query("maxAgeSec") maxAgeSec: Int? = 30,
+  ): Response<LiveLocationsResponse>
+
   @GET("api/v1/sessions/{id}/emergencies")
   suspend fun getSessionEmergencies(@Path("id") sessionId: String): Response<SessionEmergenciesResponse>
 
-  // ── Emergenze SOS ──
+  // ├ö├Â├ç├ö├Â├ç Emergenze SOS ├ö├Â├ç├ö├Â├ç
 
   @POST("api/v1/emergencies")
   suspend fun createEmergency(@Body body: CreateEmergencyRequest): Response<EmergencyResponse>
@@ -216,37 +226,29 @@ interface TsmApiService {
     @Body body: PatchEmergencyRequest,
   ): Response<EmergencyResponse>
 
-  // ── Activity (attività libere senza sessione di gruppo) ──
+  // ├ö├Â├ç├ö├Â├ç Activity (attivitÔö£├í libere senza sessione di gruppo) ├ö├Â├ç├ö├Â├ç
 
-  /** Crea una nuova attività libera sul server. Usato dal sync worker dopo il tracking. */
   @POST("api/v1/activities")
   suspend fun createActivity(@Body body: CreateActivityRequest): Response<ActivityResponse>
 
-  /** Lista delle attività libere dell'utente loggato (sync cloud → locale). */
   @GET("api/v1/activities")
   suspend fun getMyActivities(): Response<List<ActivityResponse>>
 
   /**
    * Statistiche aggregate annuali/mensili per l'utente loggato (sessioni completate
-   * + attività libere). L'endpoint è esposto da hikeSessionRoutes (non activityRoutes)
-   * perché aggrega entrambe le sorgenti: vedi backend/src/services/hikeSessionService.js.
+   * + attivitÔö£├í libere). L'endpoint Ôö£┬┐ esposto da hikeSessionRoutes (non activityRoutes)
+   * perchÔö£┬« aggrega entrambe le sorgenti: vedi backend/src/services/hikeSessionService.js.
+   * Statistiche aggregate annuali/mensili (sessioni completate + attivitÔö£├í libere).
+   * Esposto da hikeSessionRoutes perchÔö£┬« aggrega entrambe le sorgenti lato backend.
    */
   @GET("api/v1/sessions/stats")
   suspend fun getActivityStats(@Query("year") year: Int): Response<ActivityStatsResponse>
 
-  /** Elimina un'attività libera. Solo il proprietario è autorizzato (verificato lato server). */
   @DELETE("api/v1/activities/{id}")
   suspend fun deleteActivity(@Path("id") id: String): Response<ApiMessageBody>
 
-  // ── Weather (implementazione di Marco via meteo.report / TINIA) ──
+  // ├ö├Â├ç├ö├Â├ç Weather ├ö├Â├ç├ö├Â├ç
 
-  /**
-   * Trova le location meteo più vicine a una coordinata GPS.
-   * Backend: GET /weather/locations/nearby?lon=&lat=&maxDistance=&type=&limit=
-   *
-   * type: "town" per previsioni complete, "poi" per punti di interesse.
-   * Il DB deve essere seedato una volta con POST /weather/seed (admin, eseguito dal server).
-   */
   @GET("weather/locations/nearby")
   suspend fun getWeatherLocationsNearby(
     @Query("lon") lon: Double,
@@ -256,10 +258,6 @@ interface TsmApiService {
     @Query("limit") limit: Int? = null,
   ): Response<WeatherLocationsResponse>
 
-  /**
-   * Cerca location meteo per nome.
-   * Backend: GET /weather/locations/search?q=Trento&type=town
-   */
   @GET("weather/locations/search")
   suspend fun searchWeatherLocations(
     @Query("q") query: String,
@@ -267,20 +265,13 @@ interface TsmApiService {
     @Query("limit") limit: Int? = null,
   ): Response<WeatherLocationsResponse>
 
-  /**
-   * Restituisce le previsioni complete per una location (3h + 24h).
-   * Backend: GET /weather/forecast/:externalId
-   *
-   * Cache server-side 1h. Se forceRefresh=true, bypassa la cache.
-   * I POI vengono automaticamente risolti alla loro town di riferimento.
-   */
   @GET("weather/forecast/{externalId}")
   suspend fun getWeatherForecast(
     @Path("externalId") externalId: String,
     @Query("forceRefresh") forceRefresh: Boolean? = null,
   ): Response<WeatherForecastResponse>
 
-  // ── Credits & Level ──
+  // ├ö├Â├ç├ö├Â├ç Credits & Level ├ö├Â├ç├ö├Â├ç
 
   @GET("api/v1/users/me/credits")
   suspend fun getMyCredits(): Response<CreditsResponse>
@@ -292,7 +283,7 @@ interface TsmApiService {
     @Query("source") source: String? = null,
   ): Response<CreditHistoryResponse>
 
-  // ── Quiz ──
+  // ├ö├Â├ç├ö├Â├ç Quiz ├ö├Â├ç├ö├Â├ç
 
   @GET("api/v1/quiz/categories")
   suspend fun getQuizCategories(): Response<List<QuizCategoryProgressResponse>>
@@ -300,7 +291,7 @@ interface TsmApiService {
   @GET("api/v1/quiz/categories/{slug}/quizzes")
   suspend fun getQuizzesByCategory(@Path("slug") slug: String): Response<List<QuizListItemResponse>>
 
-  /** Risolve "Continua →" della FormazioneScreen al primo quiz non superato. */
+  /** Risolve "Continua ├ö├Ñ├å" della FormazioneScreen al primo quiz non superato. */
   @GET("api/v1/quiz/categories/{slug}/next")
   suspend fun getNextQuizForCategory(@Path("slug") slug: String): Response<NextQuizResponse>
 
@@ -313,7 +304,7 @@ interface TsmApiService {
     @Body body: QuizSubmissionRequest,
   ): Response<QuizSubmissionResponse>
 
-  // ── NFC ──
+  // ├ö├Â├ç├ö├Â├ç NFC ├ö├Â├ç├ö├Â├ç
 
   @GET("api/v1/nfc/totems")
   suspend fun getNfcTotems(
@@ -328,7 +319,7 @@ interface TsmApiService {
   @GET("api/v1/users/me/nfc-history")
   suspend fun getNfcHistory(@Query("page") page: Int = 1): Response<List<NfcScanResponse>>
 
-  // ── Account management ──
+  // ├ö├Â├ç├ö├Â├ç Account management ├ö├Â├ç├ö├Â├ç
 
   @PATCH("api/v1/users/me")
   suspend fun updateAccount(@Body body: AccountUpdateRequest): Response<AccountUpdateResponse>
@@ -337,12 +328,13 @@ interface TsmApiService {
   suspend fun changePassword(@Body body: ChangePasswordRequest): Response<ApiMessageBody>
 
   @retrofit2.http.HTTP(method = "DELETE", path = "api/v1/users/me", hasBody = true)
+  @DELETE("api/v1/users/me")
   suspend fun deleteAccount(@Body body: DeleteAccountRequest): Response<ApiMessageBody>
 
   @PATCH("api/v1/users/me/goals")
   suspend fun updateGoals(@Body body: GoalsUpdateRequest): Response<GoalsResponse>
 
-  // ── Profilo v2 ──
+  // ├ö├Â├ç├ö├Â├ç Profilo v2 ├ö├Â├ç├ö├Â├ç
 
   @PATCH("api/v1/users/me/personal-info")
   suspend fun updatePersonalInfo(@Body body: PersonalInfo): Response<PersonalInfoResponse>
@@ -359,7 +351,7 @@ interface TsmApiService {
   @GET("api/v1/users/me/weekly-stats")
   suspend fun getWeeklyStats(): Response<WeeklyStatsResponse>
 
-  // ── Challenges ──
+  // ├ö├Â├ç├ö├Â├ç Challenges ├ö├Â├ç├ö├Â├ç
 
   @GET("api/v1/challenges")
   suspend fun listChallenges(): Response<List<Challenge>>
@@ -372,11 +364,15 @@ interface TsmApiService {
 
   @POST("api/v1/challenges/{id}/respond")
   suspend fun respondToChallenge(@Path("id") id: String, @Body body: ChallengeRespondRequest): Response<Challenge>
+  suspend fun respondToChallenge(
+    @Path("id") id: String,
+    @Body body: ChallengeRespondRequest,
+  ): Response<Challenge>
 
   @DELETE("api/v1/challenges/{id}")
   suspend fun cancelChallenge(@Path("id") id: String): Response<ApiMessageBody>
 
-  // ── Badges + Certificates ──
+  // ├ö├Â├ç├ö├Â├ç Badges + Certificates ├ö├Â├ç├ö├Â├ç
 
   @GET("api/v1/users/me/badges")
   suspend fun getMyBadges(): Response<List<BadgeItem>>
@@ -384,7 +380,7 @@ interface TsmApiService {
   @GET("api/v1/users/me/certificates")
   suspend fun getMyCertificates(): Response<List<CertificateItem>>
 
-  // ── Social — Sprint 2 (feed, share, like, follow) ──
+  // ├ö├Â├ç├ö├Â├ç Social ├ö├ç├Â Sprint 2 (feed, share, like, follow) ├ö├Â├ç├ö├Â├ç
 
   /**
    * Feed sociale paginato (Activity + HikeSession condivise di chi seguo + me).
@@ -396,7 +392,7 @@ interface TsmApiService {
     @Query("limit") limit: Int = 20,
   ): Response<FeedResponse>
 
-  // ── Share / Unshare attività ──
+  // ├ö├Â├ç├ö├Â├ç Share / Unshare attivitÔö£├í ├ö├Â├ç├ö├Â├ç
 
   @POST("api/v1/activities/{id}/share")
   suspend fun shareActivity(
@@ -416,7 +412,7 @@ interface TsmApiService {
   @DELETE("api/v1/sessions/{id}/share")
   suspend fun unshareSession(@Path("id") id: String): Response<ApiMessageBody>
 
-  // ── Like / Unlike ──
+  // ├ö├Â├ç├ö├Â├ç Like / Unlike ├ö├Â├ç├ö├Â├ç
 
   @POST("api/v1/activities/{id}/like")
   suspend fun likeActivity(@Path("id") id: String): Response<LikeResponse>
@@ -430,7 +426,7 @@ interface TsmApiService {
   @DELETE("api/v1/sessions/{id}/like")
   suspend fun unlikeSession(@Path("id") id: String): Response<LikeResponse>
 
-  // ── Follow / Unfollow + stats ──
+  // ├ö├Â├ç├ö├Â├ç Follow / Unfollow + stats ├ö├Â├ç├ö├Â├ç
 
   @POST("api/v1/users/{id}/follow")
   suspend fun followUser(@Path("id") id: String): Response<ApiMessageBody>
@@ -475,12 +471,12 @@ interface TsmApiService {
   /**
    * Avatar Row del feed Social: per ogni utente seguito ritorna uno
    * status (live/story/goal/neutral) e i dati derivati. Refresh tipico
-   * 30s mentre la tab Social è attiva (lo stato live deve essere fresco).
+   * 30s mentre la tab Social Ôö£┬┐ attiva (lo stato live deve essere fresco).
    */
   @GET("api/v1/users/me/social-row")
   suspend fun getSocialRow(): Response<SocialRowResponse>
 
-  // ── Commenti su attività libere ──
+  // ├ö├Â├ç├ö├Â├ç Commenti su attivitÔö£├í libere ├ö├Â├ç├ö├Â├ç
 
   @POST("api/v1/activities/{id}/comments")
   suspend fun addActivityComment(
@@ -501,7 +497,7 @@ interface TsmApiService {
     @Path("cid") cid: String,
   ): Response<ApiMessageBody>
 
-  // ── Commenti su sessioni di gruppo ──
+  // ├ö├Â├ç├ö├Â├ç Commenti su sessioni di gruppo ├ö├Â├ç├ö├Â├ç
 
   @POST("api/v1/sessions/{id}/comments")
   suspend fun addSessionComment(

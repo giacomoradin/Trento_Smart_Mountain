@@ -7,12 +7,16 @@ const TERMINAL_STATUSES = ["DISMISSED", "CANCELLED_BY_SENDER"];
 
 export function isSessionGroupLeader(session, userId) {
   return session.participants.some(
-    (p) => p.userId.toString() === userId.toString() && p.role === "groupLeader",
+    (p) =>
+      (p.userId?._id || p.userId).toString() === userId.toString() &&
+      p.role === "groupLeader",
   );
 }
 
 export function isSessionParticipant(session, userId) {
-  return session.participants.some((p) => p.userId.toString() === userId.toString());
+  return session.participants.some(
+    (p) => (p.userId?._id || p.userId).toString() === userId.toString(),
+  );
 }
 
 async function loadActiveSession(sessionId, userId) {

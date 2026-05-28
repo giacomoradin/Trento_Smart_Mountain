@@ -11,7 +11,8 @@
     "dev:no-adb": "nodemon backend/src/server.js",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage --verbose",
     "test:watch": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --watch",
-    "swagger": "node swagger.js"
+    "swagger": "node swagger.js",
+    "import": "node scripts/importSentieri.js"
   },
   "keywords": [],
   "author": "Giacomo Radin",
@@ -23,6 +24,7 @@
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
+    "docker": "^1.0.0",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "express-mongo-sanitize": "^2.2.0",
@@ -36,7 +38,8 @@
     "mqtt": "^5.0.0",
     "nodemailer": "^8.0.7",
     "socket.io": "^4.7.0",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

@@ -14,6 +14,10 @@ import {
   shareSchema,
   commentSchema,
   activityAndCommentIdParamSchema,
+  liveLocationSchema,
+  liveLocationsQuerySchema,
+  liveTrackingSuspendSchema,
+  liveTrackingResumeSchema,
 } from "../middleware/validationMiddleware.js";
 
 import {
@@ -27,6 +31,10 @@ import {
   leaveSession,
   completeSession,
   getActivityStats,
+  postLiveLocation,
+  getLiveLocations,
+  suspendLiveTracking,
+  resumeLiveTracking,
 } from "../services/hikeSessionService.js";
 import { listSessionEmergencies } from "../services/emergencyService.js";
 import {
@@ -58,6 +66,7 @@ router.post("/", validate(createSessionSchema), async (req, res, next) => {
     minExperienceLevel,
     gpxFileName,
     gpxStats,
+    plannedRoute,
   } = req.body;
 
   if (!routeDetails || !routeDetails.name) {
@@ -73,6 +82,7 @@ router.post("/", validate(createSessionSchema), async (req, res, next) => {
       ...(minExperienceLevel && { minExperienceLevel }),
       ...(gpxFileName && { gpxFileName }),
       ...(gpxStats && { gpxStats }),
+      ...(plannedRoute && { plannedRoute }),
     };
     const session = await createSession(
       req.user.userId,
@@ -84,6 +94,148 @@ router.post("/", validate(createSessionSchema), async (req, res, next) => {
     next(err);
   }
 });
+
+// POST /api/v1/sessions/:id/live-location — upload posizione live (self)
+router.post(
+  "/:id/live-location",
+  validate(idParamSchema, "params"),
+  validate(liveLocationSchema),
+  async (req, res, next) => {
+    /* 
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Upload della posizione live (last known) dell’utente chiamante. Richiede sessione ACTIVE e utente non sospeso.'
+      #swagger.parameters['id'] = { description: 'Session ID', required: true, type: 'string' }
+      #swagger.requestBody = {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["lat","lon"],
+              properties: {
+                lat: { type: "number", example: 46.07 },
+                lon: { type: "number", example: 11.12 },
+                accuracyM: { type: "number", example: 8.5 },
+                timestampMs: { type: "integer", example: 1716900000000 }
+              }
+            }
+          }
+        }
+      }
+      #swagger.responses[200] = { description: 'OK' }
+      #swagger.responses[403] = { description: 'Forbidden (NOT_IN_SESSION / LIVE_TRACKING_SUSPENDED)' }
+      #swagger.responses[404] = { description: 'Session not found' }
+      #swagger.responses[409] = { description: 'Conflict (SESSION_NOT_ACTIVE)' }
+    */
+    try {
+      const result = await postLiveLocation(req.params.id, req.user.userId, req.body);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/v1/sessions/:id/live-locations — fetch posizioni live (polling)
+router.get(
+  "/:id/live-locations",
+  validate(idParamSchema, "params"),
+  validate(liveLocationsQuerySchema, "query"),
+  async (req, res, next) => {
+    /* 
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Fetch delle posizioni live dei partecipanti (esclude suspended e posizioni stale oltre maxAgeSec).'
+      #swagger.parameters['id'] = { description: 'Session ID', required: true, type: 'string' }
+      #swagger.parameters['maxAgeSec'] = { in: 'query', description: 'Età massima location in secondi', required: false, type: 'integer', example: 30 }
+      #swagger.responses[200] = { description: 'OK' }
+      #swagger.responses[403] = { description: 'Forbidden (NOT_IN_SESSION)' }
+      #swagger.responses[404] = { description: 'Session not found' }
+    */
+    try {
+      const result = await getLiveLocations(req.params.id, req.user.userId, req.query);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/v1/sessions/:id/live-tracking/suspend — sospendi utente
+router.post(
+  "/:id/live-tracking/suspend",
+  validate(idParamSchema, "params"),
+  validate(liveTrackingSuspendSchema),
+  async (req, res, next) => {
+    /* 
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Sospende il live tracking di un utente: non può più caricare e non compare nel feed live. Solo Capogruppo.'
+      #swagger.parameters['id'] = { description: 'Session ID', required: true, type: 'string' }
+      #swagger.requestBody = {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["userId"],
+              properties: {
+                userId: { type: "string", example: "6650abcdef1234567890abcd" },
+                reason: { type: "string", example: "TOO_FAR_FROM_ROUTE" }
+              }
+            }
+          }
+        }
+      }
+      #swagger.responses[200] = { description: 'OK' }
+      #swagger.responses[400] = { description: 'Bad request (USER_NOT_PARTICIPANT)' }
+      #swagger.responses[403] = { description: 'Forbidden (ONLY_CREATOR / NOT_IN_SESSION)' }
+      #swagger.responses[404] = { description: 'Session not found' }
+    */
+    try {
+      const result = await suspendLiveTracking(req.params.id, req.user.userId, req.body);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/v1/sessions/:id/live-tracking/resume — riattiva utente (opzionale)
+router.post(
+  "/:id/live-tracking/resume",
+  validate(idParamSchema, "params"),
+  validate(liveTrackingResumeSchema),
+  async (req, res, next) => {
+    /* 
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Riattiva il live tracking di un utente sospeso. Solo Capogruppo.'
+      #swagger.parameters['id'] = { description: 'Session ID', required: true, type: 'string' }
+      #swagger.requestBody = {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["userId"],
+              properties: {
+                userId: { type: "string", example: "6650abcdef1234567890abcd" }
+              }
+            }
+          }
+        }
+      }
+      #swagger.responses[200] = { description: 'OK' }
+      #swagger.responses[400] = { description: 'Bad request (USER_NOT_PARTICIPANT)' }
+      #swagger.responses[403] = { description: 'Forbidden (ONLY_CREATOR / NOT_IN_SESSION)' }
+      #swagger.responses[404] = { description: 'Session not found' }
+    */
+    try {
+      const result = await resumeLiveTracking(req.params.id, req.user.userId, req.body);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // POST /api/v1/sessions/join — si unisce a una sessione tramite codice invito
 router.post("/join", validate(joinSessionSchema), async (req, res, next) => {

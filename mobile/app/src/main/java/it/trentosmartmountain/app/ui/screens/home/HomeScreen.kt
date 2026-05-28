@@ -24,7 +24,7 @@ import it.trentosmartmountain.app.R
  * Tab **Home**: due sotto-tab interni (navigazione locale, non Jetpack Navigation).
  *
  * - Sociale — feed community (placeholder)
- * - Personale — storico attività (placeholder)
+ * - Personale — storico attività ([ActivityListScreen])
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

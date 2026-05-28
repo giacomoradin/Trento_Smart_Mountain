@@ -1,13 +1,16 @@
 package it.trentosmartmountain.app.data.remote.dto
 
+/**
+ * Statistiche aggregate per l'escursionista (uscite totali, km, metri di dislivello, punti).
+ * Include dati per il grafico mensile (count e difficoltà media).
+ */
 data class ActivityStatsResponse(
-    val year: Int,
     val totalActivities: Int,
     val totalDistanceKm: Double,
     val totalElevationGainM: Int,
     val totalPoints: Int,
-    /** 12 valori (Jan=0 ... Dec=11): numero di attività completate per mese. */
+    /** Conteggio attività per ogni mese (12 elementi). */
     val monthlyActivityCount: List<Int>,
-    /** 12 valori (0.0–1.0): difficoltà media per mese. T=0.25, E=0.5, EE=0.75, EEA=1.0 */
+    /** Difficoltà media per ogni mese (12 elementi). */
     val monthlyAvgDifficulty: List<Double>,
 )

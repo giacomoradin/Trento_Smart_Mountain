@@ -65,15 +65,31 @@ export const createRefuge = async (req, res) => {
 
     const saved = await refuge.save();
 
-    sendVerificationEmail(email, verificationToken).catch((err) => {
-      console.error("[refugeService] Invio email verifica fallito:", err.message);
-    });
+    // Invio email sincrono: se fallisce, cancelliamo l'utente e restituiamo errore.
+    try {
+      await sendVerificationEmail(email, verificationToken);
+    } catch (err) {
+      console.error(
+        "[refugeService] Invio email verifica fallito:",
+        err.message,
+      );
+      await refuge.deleteOne(); // Rollback creazione utente
+      return res.status(500).json({
+        message:
+          "Errore durante l'invio dell'email di verifica. L'account non è stato creato, riprova tra qualche istante.",
+      });
+    }
 
-    const { passwordHash: _p, verificationToken: _v, __v, ...refugePublic } =
-      saved.toObject();
+    const {
+      passwordHash: _p,
+      verificationToken: _v,
+      __v,
+      ...refugePublic
+    } = saved.toObject();
 
     res.status(201).json({
-      message: "Account rifugio creato. Verifica la tua email per attivare l'account.",
+      message:
+        "Account rifugio creato. Verifica la tua email per attivare l'account.",
       user: refugePublic,
     });
   } catch (error) {
@@ -95,7 +111,9 @@ export const getRefugeById = async (req, res) => {
      #swagger.description = 'Recupera il profilo di un rifugio inclusi i metadati struttura.'
   */
   try {
-    const refuge = await Refuge.findById(req.params.id).select("-passwordHash -__v");
+    const refuge = await Refuge.findById(req.params.id).select(
+      "-passwordHash -__v",
+    );
     if (!refuge) {
       return res.status(404).json({ message: "Rifugio non trovato." });
     }
@@ -139,7 +157,9 @@ export const updateRefuge = async (req, res) => {
     const isSelf = req.user?.userId?.toString() === req.params.id;
     const isAdmin = req.user?.role === "admin";
     if (!isSelf && !isAdmin) {
-      return res.status(403).json({ message: "Non sei autorizzato a modificare questo profilo." });
+      return res
+        .status(403)
+        .json({ message: "Non sei autorizzato a modificare questo profilo." });
     }
 
     const allowedUpdates = [

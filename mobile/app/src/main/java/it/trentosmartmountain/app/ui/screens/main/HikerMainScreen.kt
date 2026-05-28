@@ -19,6 +19,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.viewmodel.RegistraViewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.ui.screens.home.HomeScreen
@@ -57,6 +59,12 @@ fun HikerMainScreen(
   onNavigateToProfileView: () -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
+  // Scope Activity: il polling live/SOS continua anche se l'utente è su un'altra tab.
+  val registraViewModel: RegistraViewModel = viewModel()
+
+  LaunchedEffect(Unit) {
+    registraViewModel.syncActiveSessionFromServer()
+  }
 
   // Quando SessionDetail / SessionHub.AVVIA conferma, il Coordinator emette un sessionId:
   // switchiamo automaticamente alla tab Registra. Il consume() avviene nel VM dopo
@@ -108,7 +116,10 @@ fun HikerMainScreen(
         modifier = Modifier.padding(innerPadding),
         onNavigateToDetail = onNavigateToSessionDetail,
       )
-      HikerTab.Registra -> RegistraScreen(Modifier.padding(innerPadding))
+      HikerTab.Registra -> RegistraScreen(
+        modifier = Modifier.padding(innerPadding),
+        viewModel = registraViewModel,
+      )
       HikerTab.Profile -> ProfileScreen(
         onLoggedOut = onLoggedOut,
         onNavigateToFormazione = onNavigateToFormazione,

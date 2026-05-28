@@ -116,6 +116,12 @@ const hikSessionSchema = new Schema({
       lat: { type: Number, required: true, min: -90, max: 90 },
       lon: { type: Number, required: true, min: -180, max: 180 },
       accuracyM: { type: Number, min: 0, max: 1000 },
+      altitudeM: { type: Number, min: -500, max: 9000 },
+      trackingStatus: {
+        type: String,
+        enum: ["MOVING", "PAUSED"],
+        default: "MOVING",
+      },
       updatedAt: { type: Date, default: Date.now },
     },
   ],

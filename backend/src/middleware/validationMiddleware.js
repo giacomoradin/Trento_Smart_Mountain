@@ -223,6 +223,8 @@ export const liveLocationSchema = Joi.object({
   lat: Joi.number().min(-90).max(90).required(),
   lon: Joi.number().min(-180).max(180).required(),
   accuracyM: Joi.number().min(0).max(1000).optional(),
+  altitudeM: Joi.number().min(-500).max(9000).optional(),
+  trackingStatus: Joi.string().valid("MOVING", "PAUSED").optional(),
   timestampMs: Joi.number().integer().min(0).optional(),
 });
 

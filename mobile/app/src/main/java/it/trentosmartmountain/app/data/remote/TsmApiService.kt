@@ -5,34 +5,18 @@ import it.trentosmartmountain.app.data.remote.dto.AccountUpdateResponse
 import it.trentosmartmountain.app.data.remote.dto.ActivityResponse
 import it.trentosmartmountain.app.data.remote.dto.ActivityStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.ApiMessageBody
-import it.trentosmartmountain.app.data.remote.dto.ChangePasswordRequest
 import it.trentosmartmountain.app.data.remote.dto.BadgeItem
 import it.trentosmartmountain.app.data.remote.dto.CertificateItem
-import it.trentosmartmountain.app.data.remote.dto.ChangePasswordRequest
 import it.trentosmartmountain.app.data.remote.dto.Challenge
 import it.trentosmartmountain.app.data.remote.dto.ChallengeDetailResponse
 import it.trentosmartmountain.app.data.remote.dto.ChallengeRespondRequest
+import it.trentosmartmountain.app.data.remote.dto.ChangePasswordRequest
+import it.trentosmartmountain.app.data.remote.dto.CommentListResponse
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
-import it.trentosmartmountain.app.data.remote.dto.CreditHistoryResponse
-import it.trentosmartmountain.app.data.remote.dto.CreditsResponse
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
-import it.trentosmartmountain.app.data.remote.dto.CreateEmergencyRequest
-import it.trentosmartmountain.app.data.remote.dto.CreateSessionRequest
-import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
-import it.trentosmartmountain.app.data.remote.dto.PatchEmergencyRequest
-import it.trentosmartmountain.app.data.remote.dto.SessionEmergenciesResponse
-import it.trentosmartmountain.app.data.remote.dto.DeleteAccountRequest
-import it.trentosmartmountain.app.data.remote.dto.ForgotPasswordRequest
-import it.trentosmartmountain.app.data.remote.dto.GoalsResponse
-import it.trentosmartmountain.app.data.remote.dto.GoalsUpdateRequest
-import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
-import it.trentosmartmountain.app.data.remote.dto.Challenge
-import it.trentosmartmountain.app.data.remote.dto.ChallengeDetailResponse
-import it.trentosmartmountain.app.data.remote.dto.ChallengeRespondRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateChallengeRequest
-import it.trentosmartmountain.app.data.remote.dto.BadgeItem
-import it.trentosmartmountain.app.data.remote.dto.CertificateItem
-import it.trentosmartmountain.app.data.remote.dto.CreateChallengeRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateCommentRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateCommentResponse
 import it.trentosmartmountain.app.data.remote.dto.CreateEmergencyRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreditHistoryResponse
@@ -41,27 +25,18 @@ import it.trentosmartmountain.app.data.remote.dto.DeleteAccountRequest
 import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
 import it.trentosmartmountain.app.data.remote.dto.Experience
 import it.trentosmartmountain.app.data.remote.dto.ExperienceResponse
+import it.trentosmartmountain.app.data.remote.dto.FeedResponse
+import it.trentosmartmountain.app.data.remote.dto.FollowListResponse
+import it.trentosmartmountain.app.data.remote.dto.FollowStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.ForgotPasswordRequest
 import it.trentosmartmountain.app.data.remote.dto.GoalsResponse
 import it.trentosmartmountain.app.data.remote.dto.GoalsUpdateRequest
 import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
+import it.trentosmartmountain.app.data.remote.dto.LikeResponse
 import it.trentosmartmountain.app.data.remote.dto.LiveLocationsResponse
 import it.trentosmartmountain.app.data.remote.dto.LoginRequest
 import it.trentosmartmountain.app.data.remote.dto.LoginResponse
 import it.trentosmartmountain.app.data.remote.dto.LogoutRequest
-import it.trentosmartmountain.app.data.remote.dto.RefreshRequest
-import it.trentosmartmountain.app.data.remote.dto.NfcScanRequest
-import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
-import it.trentosmartmountain.app.data.remote.dto.NextQuizResponse
-import it.trentosmartmountain.app.data.remote.dto.PersonalInfo
-import it.trentosmartmountain.app.data.remote.dto.PersonalInfoResponse
-import it.trentosmartmountain.app.data.remote.dto.PostLiveLocationRequest
-import it.trentosmartmountain.app.data.remote.dto.Experience
-import it.trentosmartmountain.app.data.remote.dto.ExperienceResponse
-import it.trentosmartmountain.app.data.remote.dto.Preferences
-import it.trentosmartmountain.app.data.remote.dto.PreferencesResponse
-import it.trentosmartmountain.app.data.remote.dto.ProfileCompleteResponse
-import it.trentosmartmountain.app.data.remote.dto.NfcTotemResponse
 import it.trentosmartmountain.app.data.remote.dto.NextQuizResponse
 import it.trentosmartmountain.app.data.remote.dto.NfcScanRequest
 import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
@@ -73,27 +48,21 @@ import it.trentosmartmountain.app.data.remote.dto.PostLiveLocationRequest
 import it.trentosmartmountain.app.data.remote.dto.Preferences
 import it.trentosmartmountain.app.data.remote.dto.PreferencesResponse
 import it.trentosmartmountain.app.data.remote.dto.ProfileCompleteResponse
+import it.trentosmartmountain.app.data.remote.dto.PublicUserProfile
 import it.trentosmartmountain.app.data.remote.dto.QuizCategoryProgressResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizDetailResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizListItemResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizSubmissionRequest
 import it.trentosmartmountain.app.data.remote.dto.QuizSubmissionResponse
+import it.trentosmartmountain.app.data.remote.dto.RefreshRequest
 import it.trentosmartmountain.app.data.remote.dto.RegisterRequest
 import it.trentosmartmountain.app.data.remote.dto.RegisterResponse
 import it.trentosmartmountain.app.data.remote.dto.RegisterRifugioRequest
 import it.trentosmartmountain.app.data.remote.dto.SessionCreatedResponse
 import it.trentosmartmountain.app.data.remote.dto.SessionEmergenciesResponse
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
-import it.trentosmartmountain.app.data.remote.dto.FeedResponse
-import it.trentosmartmountain.app.data.remote.dto.FollowStatsResponse
-import it.trentosmartmountain.app.data.remote.dto.FollowListResponse
-import it.trentosmartmountain.app.data.remote.dto.LikeResponse
 import it.trentosmartmountain.app.data.remote.dto.ShareRequest
 import it.trentosmartmountain.app.data.remote.dto.ShareResponse
-import it.trentosmartmountain.app.data.remote.dto.CommentListResponse
-import it.trentosmartmountain.app.data.remote.dto.CreateCommentRequest
-import it.trentosmartmountain.app.data.remote.dto.CreateCommentResponse
-import it.trentosmartmountain.app.data.remote.dto.PublicUserProfile
 import it.trentosmartmountain.app.data.remote.dto.SocialRowResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
@@ -101,6 +70,7 @@ import it.trentosmartmountain.app.data.remote.dto.UserResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherForecastResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherLocationsResponse
 import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
+
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -193,8 +163,12 @@ interface TsmApiService {
 
   // ├ö├Â├ç├ö├Â├ç Realtime Monitoring ├ö├Â├ç├ö├Â├ç
 
+  /** GET /api/v1/sessions/:id/live-locations ├ö├Ñ├å recupera le posizioni di tutti i partecipanti */
   @GET("api/v1/sessions/{id}/live-locations")
-  suspend fun getLiveLocations(@Path("id") id: String): Response<LiveLocationsResponse>
+  suspend fun getLiveLocations(
+    @Path("id") sessionId: String,
+    @Query("maxAgeSec") maxAgeSec: Int? = 30,
+  ): Response<LiveLocationsResponse>
 
   @POST("api/v1/sessions/{id}/live-location")
   suspend fun postLiveLocation(
@@ -202,12 +176,6 @@ interface TsmApiService {
     @Body body: PostLiveLocationRequest,
   ): Response<ApiMessageBody>
 
-  /** GET /api/v1/sessions/:id/live-locations ├ö├Ñ├å recupera le posizioni di tutti i partecipanti */
-  @GET("api/v1/sessions/{id}/live-locations")
-  suspend fun getLiveLocations(
-    @Path("id") sessionId: String,
-    @Query("maxAgeSec") maxAgeSec: Int? = 30,
-  ): Response<LiveLocationsResponse>
 
   @GET("api/v1/sessions/{id}/emergencies")
   suspend fun getSessionEmergencies(@Path("id") sessionId: String): Response<SessionEmergenciesResponse>
@@ -238,11 +206,10 @@ interface TsmApiService {
    * Statistiche aggregate annuali/mensili per l'utente loggato (sessioni completate
    * + attivitÔö£├í libere). L'endpoint Ôö£┬┐ esposto da hikeSessionRoutes (non activityRoutes)
    * perchÔö£┬« aggrega entrambe le sorgenti: vedi backend/src/services/hikeSessionService.js.
-   * Statistiche aggregate annuali/mensili (sessioni completate + attivitÔö£├í libere).
-   * Esposto da hikeSessionRoutes perchÔö£┬« aggrega entrambe le sorgenti lato backend.
    */
   @GET("api/v1/sessions/stats")
   suspend fun getActivityStats(@Query("year") year: Int): Response<ActivityStatsResponse>
+
 
   @DELETE("api/v1/activities/{id}")
   suspend fun deleteActivity(@Path("id") id: String): Response<ApiMessageBody>
@@ -363,11 +330,11 @@ interface TsmApiService {
   suspend fun getChallengeDetail(@Path("id") id: String): Response<ChallengeDetailResponse>
 
   @POST("api/v1/challenges/{id}/respond")
-  suspend fun respondToChallenge(@Path("id") id: String, @Body body: ChallengeRespondRequest): Response<Challenge>
   suspend fun respondToChallenge(
     @Path("id") id: String,
     @Body body: ChallengeRespondRequest,
   ): Response<Challenge>
+
 
   @DELETE("api/v1/challenges/{id}")
   suspend fun cancelChallenge(@Path("id") id: String): Response<ApiMessageBody>

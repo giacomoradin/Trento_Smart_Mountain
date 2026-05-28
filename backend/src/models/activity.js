@@ -47,10 +47,39 @@ const activitySchema = new Schema({
 
   // profilo altimetrico campionato (max 200 punti, metri assoluti)
   elevationProfile: { type: [Number], default: undefined },
+
+  // ── Social (Sprint 2 — schermata Social) ──────────────────────────────────
+  // L'attività è privata di default (visibile solo al proprietario nell'app).
+  // Diventa "pubblica sul feed" quando il proprietario preme + Condividi: viene
+  // settato `sharedAt = now` e l'attività appare nel feed dei follower.
+  // Pattern: NO entity Post separata — riutilizziamo l'attività stessa come
+  // "post" + caption opzionale. Vedi docs/sprint2_social.md §2.
+  sharedAt: { type: Date, default: null, index: true },
+  caption: { type: String, default: null, maxlength: 200 },
+
+  // Likes come sub-document per evitare $lookup nelle card del feed: ogni feed
+  // item può così calcolare `likedByMe` con $in/array check sul documento già
+  // proiettato. Trade-off: array unbounded → in pratica tetto naturale ~10k
+  // per attività universitarie (no scaling Twitter). Per scalare oltre,
+  // estrarre in collection separata `Like` con indice {targetId, userId}.
+  likes: [
+    {
+      userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+      createdAt: { type: Date, default: Date.now },
+    },
+  ],
+
+  // Denormalizzato per evitare aggregation nel feed: ogni POST/DELETE commento
+  // fa $inc. Verità è la count effettiva su Comment collection — eventuale
+  // drift sanabile con job nightly. Per ora: max 50/giorno per anti-spam.
+  commentsCount: { type: Number, default: 0, min: 0 },
 });
 
 activitySchema.index({ userId: 1, completedAt: -1 });
 activitySchema.index({ startPoint: "2dsphere" }, { sparse: true });
+// Indice composto per il feed query "tutte le activity dei seguiti, ordinate
+// per data di condivisione discendente". Usato in socialService.getFeed.
+activitySchema.index({ userId: 1, sharedAt: -1 }, { sparse: true });
 
 const Activity = mongoose.model("Activity", activitySchema);
 export default Activity;

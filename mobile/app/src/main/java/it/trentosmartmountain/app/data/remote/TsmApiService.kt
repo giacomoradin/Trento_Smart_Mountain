@@ -52,6 +52,16 @@ import it.trentosmartmountain.app.data.remote.dto.RegisterResponse
 import it.trentosmartmountain.app.data.remote.dto.RegisterRifugioRequest
 import it.trentosmartmountain.app.data.remote.dto.SessionCreatedResponse
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
+import it.trentosmartmountain.app.data.remote.dto.FeedResponse
+import it.trentosmartmountain.app.data.remote.dto.FollowStatsResponse
+import it.trentosmartmountain.app.data.remote.dto.FollowListResponse
+import it.trentosmartmountain.app.data.remote.dto.LikeResponse
+import it.trentosmartmountain.app.data.remote.dto.ShareRequest
+import it.trentosmartmountain.app.data.remote.dto.ShareResponse
+import it.trentosmartmountain.app.data.remote.dto.CommentListResponse
+import it.trentosmartmountain.app.data.remote.dto.CreateCommentRequest
+import it.trentosmartmountain.app.data.remote.dto.CreateCommentResponse
+import it.trentosmartmountain.app.data.remote.dto.PublicUserProfile
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.remote.dto.UserResponse
@@ -359,4 +369,134 @@ interface TsmApiService {
 
   @GET("api/v1/users/me/certificates")
   suspend fun getMyCertificates(): Response<List<CertificateItem>>
+
+  // ── Social — Sprint 2 (feed, share, like, follow) ──
+
+  /**
+   * Feed sociale paginato (Activity + HikeSession condivise di chi seguo + me).
+   * Server cap: limit max 50, default 20. Vedi `socialService.getFeedForUser`.
+   */
+  @GET("api/v1/users/me/feed")
+  suspend fun getFeed(
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<FeedResponse>
+
+  // ── Share / Unshare attività ──
+
+  @POST("api/v1/activities/{id}/share")
+  suspend fun shareActivity(
+    @Path("id") id: String,
+    @Body body: ShareRequest,
+  ): Response<ShareResponse>
+
+  @DELETE("api/v1/activities/{id}/share")
+  suspend fun unshareActivity(@Path("id") id: String): Response<ApiMessageBody>
+
+  @POST("api/v1/sessions/{id}/share")
+  suspend fun shareSession(
+    @Path("id") id: String,
+    @Body body: ShareRequest,
+  ): Response<ShareResponse>
+
+  @DELETE("api/v1/sessions/{id}/share")
+  suspend fun unshareSession(@Path("id") id: String): Response<ApiMessageBody>
+
+  // ── Like / Unlike ──
+
+  @POST("api/v1/activities/{id}/like")
+  suspend fun likeActivity(@Path("id") id: String): Response<LikeResponse>
+
+  @DELETE("api/v1/activities/{id}/like")
+  suspend fun unlikeActivity(@Path("id") id: String): Response<LikeResponse>
+
+  @POST("api/v1/sessions/{id}/like")
+  suspend fun likeSession(@Path("id") id: String): Response<LikeResponse>
+
+  @DELETE("api/v1/sessions/{id}/like")
+  suspend fun unlikeSession(@Path("id") id: String): Response<LikeResponse>
+
+  // ── Follow / Unfollow + stats ──
+
+  @POST("api/v1/users/{id}/follow")
+  suspend fun followUser(@Path("id") id: String): Response<ApiMessageBody>
+
+  @DELETE("api/v1/users/{id}/follow")
+  suspend fun unfollowUser(@Path("id") id: String): Response<ApiMessageBody>
+
+  @GET("api/v1/users/{id}/follow-stats")
+  suspend fun getFollowStats(@Path("id") id: String): Response<FollowStatsResponse>
+
+  @GET("api/v1/users/me/following")
+  suspend fun getMyFollowing(
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<FollowListResponse>
+
+  @GET("api/v1/users/me/followers")
+  suspend fun getMyFollowers(
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<FollowListResponse>
+
+  /**
+   * Bacheca pubblica di un utente (post condivisi).
+   * Per il viewer == author, ritorna anche i post non condivisi.
+   */
+  @GET("api/v1/users/{id}/posts")
+  suspend fun getUserPosts(
+    @Path("id") id: String,
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<FeedResponse>
+
+  /**
+   * Profilo pubblico di un hiker (post-privacy gate). Filtrato lato server
+   * via `utils/userPrivacy.js`: per viewer "other" rimuove sex/birthDate/peso
+   * ma preserva username e `personalInfo.avatarUrl`.
+   */
+  @GET("hikers/{id}")
+  suspend fun getPublicHiker(@Path("id") id: String): Response<PublicUserProfile>
+
+  // ── Commenti su attività libere ──
+
+  @POST("api/v1/activities/{id}/comments")
+  suspend fun addActivityComment(
+    @Path("id") id: String,
+    @Body body: CreateCommentRequest,
+  ): Response<CreateCommentResponse>
+
+  @GET("api/v1/activities/{id}/comments")
+  suspend fun getActivityComments(
+    @Path("id") id: String,
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<CommentListResponse>
+
+  @DELETE("api/v1/activities/{id}/comments/{cid}")
+  suspend fun deleteActivityComment(
+    @Path("id") id: String,
+    @Path("cid") cid: String,
+  ): Response<ApiMessageBody>
+
+  // ── Commenti su sessioni di gruppo ──
+
+  @POST("api/v1/sessions/{id}/comments")
+  suspend fun addSessionComment(
+    @Path("id") id: String,
+    @Body body: CreateCommentRequest,
+  ): Response<CreateCommentResponse>
+
+  @GET("api/v1/sessions/{id}/comments")
+  suspend fun getSessionComments(
+    @Path("id") id: String,
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<CommentListResponse>
+
+  @DELETE("api/v1/sessions/{id}/comments/{cid}")
+  suspend fun deleteSessionComment(
+    @Path("id") id: String,
+    @Path("cid") cid: String,
+  ): Response<ApiMessageBody>
 }

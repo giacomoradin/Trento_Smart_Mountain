@@ -66,6 +66,10 @@ object Routes {
   // ── Vista profilo completo (read-only) ──────────────────────────────────────
   const val PROFILE_VIEW = "profile_view"
 
+  // ── Social: profilo pubblico di un altro utente ─────────────────────────────
+  const val USER_PROFILE = "user_profile/{userId}"
+  fun userProfileRoute(userId: String) = "user_profile/${Uri.encode(userId)}"
+
   fun quizRoute(quizId: String) = "quiz/$quizId"
   fun quizFromCategoryRoute(slug: String) = "quiz_cat/${Uri.encode(slug)}"
 

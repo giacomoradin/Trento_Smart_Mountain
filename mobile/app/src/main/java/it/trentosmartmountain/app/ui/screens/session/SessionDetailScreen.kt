@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -94,10 +95,14 @@ import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.SessionDetailViewModel
+import it.trentosmartmountain.app.viewmodel.SocialFeedViewModel
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.screens.home.ShareActivityDialog
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
 
 /**
  * Dettaglio escursione (navigazione full-screen sopra [HikerMainScreen]).
@@ -118,10 +123,46 @@ fun SessionDetailScreen(
     onAvviaConfirmed: (sessionId: String) -> Unit = {},
     currentUserId: String = "",
     viewModel: SessionDetailViewModel = viewModel(),
+    // VM social Activity-scoped: stesso usato da HomeSocialScreen + Activity
+    // Detail. Il dialog "Pubblica" chiama `shareSession()` e poi `refresh()`
+    // del feed così la sessione appare immediatamente nel feed dell'utente.
+    socialFeedViewModel: SocialFeedViewModel = viewModel(
+        viewModelStoreOwner = LocalContext.current as ComponentActivity,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+            (LocalContext.current as ComponentActivity).application,
+        ),
+    ),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val socialState by socialFeedViewModel.state.collectAsStateWithLifecycle()
+    var showShareDialog by remember { mutableStateOf(false) }
     // Per debug: mostra un Toast con l'errore se il ViewModel segnala un errore di caricamento o salvataggio della sessione
     val context = LocalContext.current
+
+    // Toast per esiti share (VM Activity-scoped → notifica visibile qui).
+    LaunchedEffect(socialState.shareSuccess) {
+        socialState.shareSuccess?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            socialFeedViewModel.clearShareMessages()
+        }
+    }
+    LaunchedEffect(socialState.shareError) {
+        socialState.shareError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            socialFeedViewModel.clearShareMessages()
+        }
+    }
+
+    if (showShareDialog) {
+        ShareActivityDialog(
+            activityName = uiState.session?.routeDetails?.name.orEmpty(),
+            onDismiss = { showShareDialog = false },
+            onShare = { caption ->
+                showShareDialog = false
+                socialFeedViewModel.shareSession(sessionId, caption)
+            },
+        )
+    }
 
     // TELEMETRIA: Se il ViewModel genera un errore (es. dal salvataggio), stampalo a schermo
     LaunchedEffect(uiState.error) {
@@ -419,6 +460,30 @@ fun SessionDetailScreen(
                 shape = RoundedCornerShape(8.dp),
             ) {
                 Text("▶ AVVIA ESCURSIONE", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+            }
+
+            // Bottone Condividi sul feed — solo creator (lato server stesso
+            // vincolo via FORBIDDEN_NOT_CREATOR). Visibile in qualsiasi stato
+            // della sessione (PLANNED → "annuncia uscita", COMPLETED → "racconta").
+            if (isCreator) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { showShareDialog = true },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmAccent),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    androidx.compose.material3.Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "CONDIVIDI SUL FEED",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

@@ -17,7 +17,10 @@ import accountRoutes from "./routes/accountRoutes.js";
 import challengeRoutes from "./routes/challengeRoutes.js";
 import badgeRoutes from "./routes/badgeRoutes.js";
 import emergencyRoutes from "./routes/emergencyRoutes.js";
+import followRoutes from "./routes/followRoutes.js";
 import "./models/emergency.js";
+import "./models/follow.js";
+import "./models/comment.js";
 
 // IMPORTANTE: importa i discriminator models per registrarli con Mongoose
 // (devono essere caricati almeno una volta perché User.discriminator() venga eseguito)
@@ -118,6 +121,7 @@ app.use("/api/v1/users", creditsRoutes);
 app.use("/api/v1/quiz", quizRoutes);
 app.use("/api/v1/nfc", nfcRoutes);
 app.use("/api/v1/users", accountRoutes);
+app.use("/api/v1/users", followRoutes);
 app.use("/api/v1/challenges", challengeRoutes);
 app.use("/api/v1/users/me", badgeRoutes);
 

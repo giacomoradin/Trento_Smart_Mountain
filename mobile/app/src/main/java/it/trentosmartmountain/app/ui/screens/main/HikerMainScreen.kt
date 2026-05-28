@@ -55,6 +55,9 @@ fun HikerMainScreen(
   onNavigateToChallenges: () -> Unit = {},
   onNavigateToBadges: () -> Unit = {},
   onNavigateToProfileView: () -> Unit = {},
+  // Apertura del profilo pubblico di un altro utente: chiamato dal tap su
+  // avatar nel feed Social. Default no-op per backward-compat con i preview.
+  onNavigateToUserProfile: (userId: String) -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
 
@@ -103,6 +106,7 @@ fun HikerMainScreen(
       HikerTab.Home -> HomeScreen(
         modifier = Modifier.padding(innerPadding),
         onActivityClick = onNavigateToActivityDetail,
+        onNavigateToUserProfile = onNavigateToUserProfile,
       )
       HikerTab.Session -> SessionHubScreen(
         modifier = Modifier.padding(innerPadding),

@@ -136,6 +136,23 @@ const hikSessionSchema = new Schema({
   // Manteniamo creditsAwardedAt per documentare il primo completion; non più usato
   // come idempotency key (sostituito da creditsAwardedTo).
   creditsAwardedAt: { type: Date },
+
+  // ── Social (Sprint 2 — schermata Social) ──────────────────────────────────
+  // La sessione è privata di default sul feed. Diventa visibile ai follower
+  // del creator quando viene settato `sharedAt = now` via POST /sessions/:id/share.
+  // Pattern identico ad Activity (vedi models/activity.js + docs/sprint2_social.md §2).
+  // Authorization: solo `creatorId` può condividere (i partecipanti non-creator
+  // hanno una propria Activity post-complete se vogliono condividere).
+  sharedAt: { type: Date, default: null, index: true },
+  caption: { type: String, default: null, maxlength: 200 },
+  likes: [
+    {
+      userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+      createdAt: { type: Date, default: Date.now },
+    },
+  ],
+  commentsCount: { type: Number, default: 0, min: 0 },
+
   createdAt: { type: Date, default: Date.now },
 });
 
@@ -145,6 +162,12 @@ hikSessionSchema.index({ "routeDetails.startPoint": "2dsphere" }); // Permette d
 // Indice composto per la query frequente "sessioni dell'utente ordinate per
 // data crescente" (vedi getSessionsByUser).
 hikSessionSchema.index({ status: 1, meetingDate: 1 });
+
+// Indice per la query feed: "sessioni dei creator/partecipanti che ho seguito,
+// ordinate per data di condivisione discendente". Sparse perché la maggior
+// parte dei documenti ha sharedAt=null (privati).
+hikSessionSchema.index({ creatorId: 1, sharedAt: -1 }, { sparse: true });
+hikSessionSchema.index({ "participants.userId": 1, sharedAt: -1 }, { sparse: true });
 
 // Trasforma `meetingDate` (Date) in "YYYY-MM-DD" nei JSON di risposta API.
 // Mantiene la backward compatibility col mobile che si aspetta una stringa.

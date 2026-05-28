@@ -23,7 +23,7 @@ import it.trentosmartmountain.app.R
 /**
  * Tab **Home**: due sotto-tab interni (navigazione locale, non Jetpack Navigation).
  *
- * - Sociale — feed community (placeholder)
+ * - Sociale — feed community ([HomeSocialScreen])
  * - Personale — storico attività ([ActivityListScreen])
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,6 +31,7 @@ import it.trentosmartmountain.app.R
 fun HomeScreen(
   modifier: Modifier = Modifier,
   onActivityClick: (activityId: String, sessionId: String?) -> Unit = { _, _ -> },
+  onNavigateToUserProfile: (userId: String) -> Unit = {},
 ) {
   var subTab by rememberSaveable { mutableIntStateOf(0) }
 
@@ -48,24 +49,8 @@ fun HomeScreen(
       )
     }
     when (subTab) {
-      0 -> HomeSocialPlaceholder(Modifier.padding(24.dp))
+      0 -> HomeSocialScreen(onUserClick = onNavigateToUserProfile)
       1 -> ActivityListScreen(onActivityClick = onActivityClick)
     }
-  }
-}
-
-@Composable
-private fun HomeSocialPlaceholder(modifier: Modifier = Modifier) {
-  Column(modifier = modifier) {
-    Text(
-      text = stringResource(R.string.home_social_title),
-      style = MaterialTheme.typography.headlineSmall,
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-    Text(
-      text = stringResource(R.string.home_social_placeholder),
-      style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
   }
 }

@@ -341,6 +341,52 @@ export const challengeRespondSchema = Joi.object({
   accept: Joi.boolean().required(),
 });
 
+// ── Social (Sprint 2 — schermata Social) ────────────────────────────────
+// Body opzionale: l'utente può condividere senza caption. La presenza del
+// body vuoto `{}` è ammessa per chi vuole condividere senza scrivere niente.
+// `.allow(null, "")` su caption coerente con i pattern degli altri field.
+
+export const shareSchema = Joi.object({
+  caption: Joi.string().max(200).trim().allow(null, "").default(null),
+}).default({});
+
+// Schema per il path param `:id` dei follow: stesso `objectIdField` riusato.
+// Definito esplicitamente per dare un messaggio Joi più chiaro nei test.
+export const followIdParamSchema = Joi.object({
+  id: objectIdField.required(),
+});
+
+/**
+ * Body POST commento. Text obbligatorio, 1..500 caratteri, trim applicato
+ * lato Joi così il service riceve una stringa già normalizzata. Niente
+ * pattern: i commenti accettano qualsiasi unicode (emoji, accenti, ecc.).
+ * Sanitizzazione XSS è demandata al rendering lato client (Compose Text
+ * non interpreta HTML by default → safe).
+ */
+export const commentSchema = Joi.object({
+  text: Joi.string().min(1).max(500).trim().required(),
+});
+
+/**
+ * Params per DELETE /comments/:cid. ObjectId del commento.
+ * Nominato `cid` per distinguerlo dal `:id` del parent nelle route nested.
+ */
+export const commentIdParamSchema = Joi.object({
+  cid: objectIdField.required(),
+});
+
+/**
+ * Params combinati per le route /activities/:id/comments/:cid (e analoghe
+ * sessions) che validano entrambi gli ObjectId in un colpo. Le route
+ * possono comunque scegliere di usare solo `commentIdParamSchema` se
+ * `:id` del parent non è semanticamente strettamente necessario (il
+ * commento conosce già il suo parent via activityRefId).
+ */
+export const activityAndCommentIdParamSchema = Joi.object({
+  id: objectIdField.required(),
+  cid: objectIdField.required(),
+});
+
 export const preferencesSchema = Joi.object({
   units: Joi.string().valid("metric", "imperial"),
   language: Joi.string().length(2), // ISO 639-1: it, en, de, ...

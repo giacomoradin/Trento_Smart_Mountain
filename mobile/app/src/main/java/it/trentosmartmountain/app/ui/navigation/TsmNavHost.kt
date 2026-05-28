@@ -199,6 +199,9 @@ fun TsmNavHost() {
                 onNavigateToChallenges = { navController.navigate(Routes.CHALLENGES) },
                 onNavigateToBadges = { navController.navigate(Routes.BADGES) },
                 onNavigateToProfileView = { navController.navigate(Routes.PROFILE_VIEW) },
+                onNavigateToUserProfile = { userId ->
+                    navController.navigate(Routes.userProfileRoute(userId))
+                },
             )
         }
 
@@ -434,6 +437,20 @@ fun TsmNavHost() {
             ProfileViewScreen(
                 onBack = { navController.popBackStack() },
                 onNavigateToEdit = { navController.navigate(Routes.ACCOUNT_EDIT) },
+            )
+        }
+
+        // ── Profilo pubblico altri utenti (Social, Sprint 2) ──────────────
+        // Path arg `userId`. Aperto da FeedCard.tap su avatar e da future
+        // entry-point (es. CommentsBottomSheet → autore del commento).
+        composable(
+            route = Routes.USER_PROFILE,
+            arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId").orEmpty()
+            it.trentosmartmountain.app.ui.screens.home.UserProfileScreen(
+                userId = userId,
+                onBack = { navController.popBackStack() },
             )
         }
 

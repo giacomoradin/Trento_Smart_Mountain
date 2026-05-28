@@ -11,6 +11,9 @@ import {
   completeSessionSchema,
   statsQuerySchema,
   idParamSchema,
+  shareSchema,
+  commentSchema,
+  activityAndCommentIdParamSchema,
 } from "../middleware/validationMiddleware.js";
 
 import {
@@ -26,6 +29,17 @@ import {
   getActivityStats,
 } from "../services/hikeSessionService.js";
 import { listSessionEmergencies } from "../services/emergencyService.js";
+import {
+  shareSession,
+  unshareSession,
+  likeSession,
+  unlikeSession,
+} from "../services/socialService.js";
+import {
+  addComment,
+  getComments,
+  deleteComment,
+} from "../services/commentService.js";
 
 const router = express.Router();
 
@@ -246,6 +260,119 @@ router.delete(
     try {
       await deleteSession(req.params.id, req.user.userId);
       res.status(200).json({ message: "Sessione eliminata" });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── Social: share + like (Sprint 2 schermata Social) ───────────────────────
+
+// POST /api/v1/sessions/:id/share — condivide la sessione sul feed (solo creator)
+router.post(
+  "/:id/share",
+  validate(idParamSchema, "params"),
+  validate(shareSchema),
+  async (req, res, next) => {
+    try {
+      const result = await shareSession(req.params.id, req.user.userId, {
+        caption: req.body?.caption,
+      });
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.delete(
+  "/:id/share",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const result = await unshareSession(req.params.id, req.user.userId);
+      res.status(200).json({ message: "Condivisione rimossa.", ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.post(
+  "/:id/like",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const result = await likeSession(req.params.id, req.user.userId);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.delete(
+  "/:id/like",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const result = await unlikeSession(req.params.id, req.user.userId);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── Comments su HikeSession ────────────────────────────────────────────────
+
+router.post(
+  "/:id/comments",
+  validate(idParamSchema, "params"),
+  validate(commentSchema),
+  async (req, res, next) => {
+    try {
+      const comment = await addComment(
+        req.params.id,
+        "session",
+        req.user.userId,
+        req.body.text,
+      );
+      res.status(201).json({ comment });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.get(
+  "/:id/comments",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const result = await getComments(
+        req.params.id,
+        "session",
+        req.user.userId,
+        { page, limit },
+      );
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.delete(
+  "/:id/comments/:cid",
+  validate(activityAndCommentIdParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const isAdmin = req.user?.role === "admin";
+      await deleteComment(req.params.cid, req.user.userId, { isAdmin });
+      res.status(200).json({ message: "Commento eliminato." });
     } catch (err) {
       next(err);
     }

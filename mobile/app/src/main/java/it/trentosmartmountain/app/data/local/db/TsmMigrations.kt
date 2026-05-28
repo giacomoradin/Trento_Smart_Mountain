@@ -94,8 +94,27 @@ object TsmMigrations {
   }
 
   /**
+   * v6 → v7: tabella `viewed_stories` per la Avatar Row del feed Social.
+   * Locale-only, non sincronizzata col backend. `IF NOT EXISTS` come safety net.
+   */
+  val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+      db.execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS `viewed_stories` (
+          `activity_ref_id` TEXT NOT NULL,
+          `kind` TEXT NOT NULL,
+          `viewed_at_ms` INTEGER NOT NULL,
+          PRIMARY KEY(`activity_ref_id`)
+        )
+        """.trimIndent(),
+      )
+    }
+  }
+
+  /**
    * Tutte le migration esplicite registrate, in ordine cronologico.
    * Passate a Room via `Room.databaseBuilder(...).addMigrations(*ALL)`.
    */
-  val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6)
+  val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
 }

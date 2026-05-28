@@ -202,6 +202,9 @@ fun TsmNavHost() {
                 onNavigateToUserProfile = { userId ->
                     navController.navigate(Routes.userProfileRoute(userId))
                 },
+                onNavigateToStoryViewer = { refId, kind ->
+                    navController.navigate(Routes.storyViewerRoute(refId, kind))
+                },
             )
         }
 
@@ -451,6 +454,37 @@ fun TsmNavHost() {
             it.trentosmartmountain.app.ui.screens.home.UserProfileScreen(
                 userId = userId,
                 onBack = { navController.popBackStack() },
+            )
+        }
+
+        // ── Story viewer full-screen (5s timer, Instagram-like) ──────────
+        composable(
+            route = Routes.STORY_VIEWER,
+            arguments = listOf(
+                navArgument("refId") { type = NavType.StringType },
+                navArgument("kind") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = "activity"
+                },
+            ),
+        ) { backStackEntry ->
+            val refId = backStackEntry.arguments?.getString("refId").orEmpty()
+            val kind = backStackEntry.arguments?.getString("kind") ?: "activity"
+            it.trentosmartmountain.app.ui.screens.home.StoryViewerScreen(
+                refId = refId,
+                kind = kind,
+                onClose = { navController.popBackStack() },
+                onOpenFullActivity = { rid, k ->
+                    // Story → Activity Detail. Per kind="session" non c'è una
+                    // ActivityDetailScreen dedicata per il viewer, ma quella
+                    // attuale gestisce entrambi i casi (sessionId opzionale).
+                    if (k == "session") {
+                        navController.navigate(Routes.sessionDetailRoute(rid))
+                    } else {
+                        navController.navigate(Routes.activityDetailRoute(rid, null))
+                    }
+                },
             )
         }
 

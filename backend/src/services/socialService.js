@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Activity from "../models/activity.js";
 import HikeSession from "../models/hikeSession.js";
+import Hiker from "../models/hiker.js";
 import { getFollowingIds } from "./followService.js";
 
 /**
@@ -295,6 +296,238 @@ export async function getFeedForUser(userId, { page = 1, limit = 20 } = {}) {
   const skip = (Math.max(1, page) - 1) * limit;
   const items = merged.slice(skip, skip + limit);
   return { items, hasMore: skip + limit < total };
+}
+
+// ── SOCIAL ROW (avatar in cima al feed) ─────────────────────────────────────
+
+const STORY_WINDOW_MS = 24 * 3600 * 1000; // 24 ore — vedi sprint2_social.md §1
+
+/**
+ * Calcola il `weeklyProgressPct` di un utente come media delle tre metriche
+ * (km, dislivello, conteggio) normalizzate sui rispettivi goal. Skip metric
+ * con goal === 0 (l'utente non l'ha impostata). Se nessun goal è impostato,
+ * ritorna 0 (la UI mostrerà un anello vuoto neutro).
+ *
+ * NB: usiamo i dati grezzi delle Activity + HikeSession completed degli
+ * ultimi 7 giorni rolling (week ISO è troppo stretta per il rolling window).
+ */
+function computeProgressPct(goals, totals) {
+  if (!goals) return 0;
+  const components = [];
+  if (goals.km > 0 && totals.km != null) components.push(Math.min(totals.km / goals.km, 1));
+  if (goals.elevM > 0 && totals.elevM != null) components.push(Math.min(totals.elevM / goals.elevM, 1));
+  if (goals.count > 0 && totals.count != null) components.push(Math.min(totals.count / goals.count, 1));
+  if (components.length === 0) return 0;
+  return components.reduce((a, b) => a + b, 0) / components.length;
+}
+
+/**
+ * Restituisce la "Avatar Row" mostrata in cima alla HomeSocialScreen.
+ *
+ * Per ogni utente seguito da `viewerId`, calcola uno **status** in priorità
+ * decrescente (vedi docs/sprint2_social.md §1):
+ *
+ *   1. "live"    — esiste HikeSession con `status: "ACTIVE"` di cui l'utente
+ *                  è creator o partecipante
+ *   2. "story"   — esiste Activity o HikeSession con `sharedAt` negli ultimi
+ *                  24h (il client filtra ulteriormente per "viewed" via Room
+ *                  locale, ma il server espone l'esistenza)
+ *   3. "goal"    — nessuno stato sopra → ritorna `weeklyProgressPct` ∈ [0,1]
+ *                  derivato da `Hiker.weeklyGoals` + Activity/HikeSession
+ *                  completed last 7 days
+ *   4. "neutral" — nessun dato (utente senza goal e senza attività recenti)
+ *
+ * Risposta:
+ *   { items: SocialRowItem[] }
+ *
+ * SocialRowItem = {
+ *   user: { _id, username, avatarColor?, personalInfo?.avatarUrl },
+ *   status: "live" | "story" | "goal" | "neutral",
+ *   liveSessionId?: string,             // solo per status === "live"
+ *   storyActivityRef?: { id, kind, sharedAt },  // solo per status === "story"
+ *   weeklyProgressPct?: number,          // 0..1, solo per status === "goal"
+ * }
+ *
+ * Implementazione: 5 query parallele Promise.all → merge per userId → priority assignment.
+ */
+export async function getSocialRowForUser(viewerId) {
+  const followingIds = await getFollowingIds(viewerId);
+  if (followingIds.length === 0) return { items: [] };
+
+  const since24h = new Date(Date.now() - STORY_WINDOW_MS);
+  const since7d = new Date(Date.now() - 7 * STORY_WINDOW_MS);
+
+  // 5 query parallele per minimizzare la latenza totale.
+  const [
+    hikers,            // anagrafica + weeklyGoals
+    liveSessions,      // ACTIVE sessions
+    storyActivities,   // shared in last 24h
+    storySessions,
+    weekActivities,    // completed in last 7 days (per progress)
+    weekSessions,
+  ] = await Promise.all([
+    Hiker.find({ _id: { $in: followingIds } })
+      .select("username personalInfo.avatarUrl weeklyGoals")
+      .lean(),
+    HikeSession.find({
+      status: "ACTIVE",
+      $or: [
+        { creatorId: { $in: followingIds } },
+        { "participants.userId": { $in: followingIds } },
+      ],
+    })
+      .select("_id creatorId participants")
+      .lean(),
+    Activity.find({
+      userId: { $in: followingIds },
+      sharedAt: { $gte: since24h },
+    })
+      .select("_id userId sharedAt")
+      .sort({ sharedAt: -1 })
+      .lean(),
+    HikeSession.find({
+      creatorId: { $in: followingIds },
+      sharedAt: { $gte: since24h },
+    })
+      .select("_id creatorId sharedAt")
+      .sort({ sharedAt: -1 })
+      .lean(),
+    Activity.find({
+      userId: { $in: followingIds },
+      completedAt: { $gte: since7d },
+    })
+      .select("userId actualStats")
+      .lean(),
+    HikeSession.find({
+      status: "COMPLETED",
+      $or: [
+        { creatorId: { $in: followingIds } },
+        { "participants.userId": { $in: followingIds } },
+      ],
+      endTime: { $gte: since7d },
+    })
+      .select("creatorId participants actualStats gpxStats")
+      .lean(),
+  ]);
+
+  // ── 1. Mappa live sessions per userId (creator O partecipante) ──
+  // Un utente può essere "live" come creator del proprio gruppo O come
+  // partecipante di un altrui — entrambi contano. Memorizziamo sessionId
+  // per il deep-link.
+  const liveByUser = new Map();
+  for (const s of liveSessions) {
+    const ids = new Set([String(s.creatorId)]);
+    for (const p of (s.participants || [])) ids.add(String(p.userId));
+    for (const uid of ids) {
+      if (followingIds.some((f) => String(f) === uid) && !liveByUser.has(uid)) {
+        liveByUser.set(uid, String(s._id));
+      }
+    }
+  }
+
+  // ── 2. Mappa story refs per userId (più recente vince) ──
+  // Iteriamo le activities + sessions già ordinate sharedAt desc così la
+  // prima vista per ciascun userId è la più recente (anti N+1 per Date max).
+  const storyByUser = new Map();
+  for (const a of storyActivities) {
+    const uid = String(a.userId);
+    if (!storyByUser.has(uid)) {
+      storyByUser.set(uid, {
+        id: String(a._id),
+        kind: "activity",
+        sharedAt: a.sharedAt,
+      });
+    }
+  }
+  for (const s of storySessions) {
+    const uid = String(s.creatorId);
+    if (!storyByUser.has(uid)) {
+      storyByUser.set(uid, {
+        id: String(s._id),
+        kind: "session",
+        sharedAt: s.sharedAt,
+      });
+    }
+  }
+
+  // ── 3. Aggrega totals per progress weekly per ogni userId ──
+  const totalsByUser = new Map();
+  function bump(uid, km, elev, count) {
+    const cur = totalsByUser.get(uid) ?? { km: 0, elevM: 0, count: 0 };
+    cur.km += km || 0;
+    cur.elevM += elev || 0;
+    cur.count += count || 0;
+    totalsByUser.set(uid, cur);
+  }
+  for (const a of weekActivities) {
+    const km = (a.actualStats?.distanceMeters ?? 0) / 1000.0;
+    const elev = a.actualStats?.elevationGainM ?? 0;
+    bump(String(a.userId), km, elev, 1);
+  }
+  for (const s of weekSessions) {
+    const km =
+      (s.actualStats?.distanceMeters ?? 0) / 1000.0 ||
+      (s.gpxStats?.distanceKm ?? 0);
+    const elev = s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
+    // Aggrega per il creator E per i partecipanti (chi partecipa "fa" l'escursione).
+    const userIds = new Set([String(s.creatorId)]);
+    for (const p of (s.participants || [])) userIds.add(String(p.userId));
+    for (const uid of userIds) {
+      if (followingIds.some((f) => String(f) === uid)) {
+        bump(uid, km, elev, 1);
+      }
+    }
+  }
+
+  // ── 4. Costruisci items con priority assignment ──
+  const items = hikers.map((h) => {
+    const uid = String(h._id);
+    const userPayload = {
+      _id: uid,
+      username: h.username,
+      personalInfo: h.personalInfo
+        ? { avatarUrl: h.personalInfo.avatarUrl ?? null }
+        : null,
+    };
+    if (liveByUser.has(uid)) {
+      return {
+        user: userPayload,
+        status: "live",
+        liveSessionId: liveByUser.get(uid),
+      };
+    }
+    if (storyByUser.has(uid)) {
+      return {
+        user: userPayload,
+        status: "story",
+        storyActivityRef: storyByUser.get(uid),
+      };
+    }
+    const goals = h.weeklyGoals;
+    const totals = totalsByUser.get(uid) ?? { km: 0, elevM: 0, count: 0 };
+    const pct = computeProgressPct(goals, totals);
+    if (pct > 0) {
+      return {
+        user: userPayload,
+        status: "goal",
+        weeklyProgressPct: pct,
+      };
+    }
+    return { user: userPayload, status: "neutral" };
+  });
+
+  // Ordina: live first, story second, goal by pct desc, neutral last.
+  // L'UI ha così l'ordine naturale "più interessante prima" nella row.
+  const priority = { live: 0, story: 1, goal: 2, neutral: 3 };
+  items.sort((a, b) => {
+    const pa = priority[a.status];
+    const pb = priority[b.status];
+    if (pa !== pb) return pa - pb;
+    if (a.status === "goal") return (b.weeklyProgressPct || 0) - (a.weeklyProgressPct || 0);
+    return 0;
+  });
+
+  return { items };
 }
 
 /**

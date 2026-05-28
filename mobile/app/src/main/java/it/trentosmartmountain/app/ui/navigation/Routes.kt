@@ -70,6 +70,12 @@ object Routes {
   const val USER_PROFILE = "user_profile/{userId}"
   fun userProfileRoute(userId: String) = "user_profile/${Uri.encode(userId)}"
 
+  // ── Social: story viewer full-screen ────────────────────────────────────────
+  // refId = `_id` Activity/HikeSession, kind = "activity"|"session" (query arg).
+  const val STORY_VIEWER = "story_viewer/{refId}?kind={kind}"
+  fun storyViewerRoute(refId: String, kind: String): String =
+    "story_viewer/${Uri.encode(refId)}?kind=${Uri.encode(kind)}"
+
   fun quizRoute(quizId: String) = "quiz/$quizId"
   fun quizFromCategoryRoute(slug: String) = "quiz_cat/${Uri.encode(slug)}"
 

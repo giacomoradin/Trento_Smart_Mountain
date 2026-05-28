@@ -14,13 +14,16 @@ import androidx.room.RoomDatabase
     CompletedActivityEntity::class,
     TrackingWalEntity::class,
     PendingEmergencyEntity::class,
+    ViewedStoryEntity::class,
   ],
   // v4: aggiunti retry_count, last_retry_at_ms, remote_id per il sync incrementale
   //     (sync libere → POST /activities, sync sessioni → PATCH /complete).
   // v5: nuova tabella `tracking_wal` (crash-safety GPS — vedi TrackingWalEntity).
   //     Migration esplicita in TsmMigrations.MIGRATION_4_5 → niente data loss.
   // v6: coda SOS offline (`pending_emergencies`) — merge branch SOS.
-  version = 6,
+  // v7: tabella `viewed_stories` per la priority-row Social (locale-only,
+  //     vedi ViewedStoryEntity). Migration esplicita MIGRATION_6_7.
+  version = 7,
   exportSchema = false,
 )
 abstract class TsmDatabase : RoomDatabase() {
@@ -28,4 +31,5 @@ abstract class TsmDatabase : RoomDatabase() {
   abstract fun completedActivityDao(): CompletedActivityDao
   abstract fun trackingWalDao(): TrackingWalDao
   abstract fun pendingEmergencyDao(): PendingEmergencyDao
+  abstract fun viewedStoryDao(): ViewedStoryDao
 }

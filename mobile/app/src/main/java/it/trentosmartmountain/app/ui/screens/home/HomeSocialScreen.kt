@@ -70,6 +70,10 @@ fun HomeSocialScreen(
     ),
     onUserClick: (userId: String) -> Unit = {},
     onCommentClick: (itemId: String, kind: String) -> Unit = { _, _ -> },
+    /** Tap su anello LIVE: apre la SessionDetail della sessione in corso. */
+    onLiveClick: (sessionId: String) -> Unit = {},
+    /** Tap su anello STORY: apre lo StoryViewerScreen full-screen. */
+    onStoryClick: (refId: String, kind: String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -118,6 +122,11 @@ fun HomeSocialScreen(
                         // a livello globale se serve in futuro.
                         onCommentClick(id, kind)
                     },
+                    socialRow = state.socialRow,
+                    viewedStoryIds = state.viewedStoryIds,
+                    onUserAvatarClick = onUserClick,
+                    onLiveClick = onLiveClick,
+                    onStoryClick = onStoryClick,
                 )
             }
         }
@@ -144,6 +153,11 @@ private fun FeedList(
     onLikeToggle: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
     onUserClick: (String) -> Unit,
     onCommentClick: (String, String) -> Unit,
+    socialRow: List<it.trentosmartmountain.app.data.remote.dto.SocialRowItem> = emptyList(),
+    viewedStoryIds: Set<String> = emptySet(),
+    onUserAvatarClick: (String) -> Unit = {},
+    onLiveClick: (String) -> Unit = {},
+    onStoryClick: (String, String) -> Unit = { _, _ -> },
 ) {
     val listState = rememberLazyListState()
 
@@ -164,6 +178,20 @@ private fun FeedList(
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // Avatar Row in cima (header sticky-feel): mostra live/story/goal
+        // per ogni utente seguito. Rimane visibile mentre l'utente scrolla
+        // — non è "sticky" nel senso Material ma resta in cima al feed.
+        if (socialRow.isNotEmpty()) {
+            item(key = "avatar-row") {
+                AvatarRow(
+                    items = socialRow,
+                    viewedStoryIds = viewedStoryIds,
+                    onUserClick = onUserAvatarClick,
+                    onLiveClick = onLiveClick,
+                    onStoryClick = onStoryClick,
+                )
+            }
+        }
         items(
             items = items,
             key = { "${it.kind}-${it.id}" },

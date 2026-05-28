@@ -1,0 +1,232 @@
+package it.trentosmartmountain.app.viewmodel
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import it.trentosmartmountain.app.data.remote.TsmApiClient
+import it.trentosmartmountain.app.data.remote.dto.FeedItem
+import it.trentosmartmountain.app.data.remote.dto.ShareRequest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+/**
+ * UI state della schermata Social.
+ *
+ *  - [items]            lista corrente del feed (accumulo via append on loadMore)
+ *  - [isLoading]        true durante refresh iniziale o pull-to-refresh
+ *  - [isLoadingMore]    true mentre paginazione "next page" è in volo
+ *  - [hasMore]          dal server: se false, niente più infinite scroll
+ *  - [currentPage]      1-based; loadMore incrementa post-fetch riuscito
+ *  - [error]            messaggio user-facing l'ultima volta che qualcosa è andato male
+ *  - [shareSuccess] / [shareError]  feedback transiente per il dialog "Pubblica"
+ */
+data class SocialFeedState(
+    val items: List<FeedItem> = emptyList(),
+    val isLoading: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val hasMore: Boolean = true,
+    val currentPage: Int = 1,
+    val error: String? = null,
+    val shareSuccess: String? = null,
+    val shareError: String? = null,
+)
+
+/**
+ * ViewModel per la schermata Social (HomeScreen sotto-tab Social).
+ *
+ * Pattern:
+ *  - **Refresh totale** = reset paginazione + GET feed?page=1.
+ *  - **loadMore** = chiamata in coda quando lo scroll arriva vicino al fondo
+ *    della LazyColumn. Server cap a 50 items/page; default 20.
+ *  - **toggleLike** è **ottimistico**: aggiorniamo lo state in-memory PRIMA
+ *    della response per UX snappy, rollback se 4xx/5xx.
+ *  - **shareActivity / shareSession** sono usati dal dialog "Pubblica" che vive
+ *    in ActivityDetailScreen/SessionDetailScreen. Su success ricarichiamo il
+ *    feed così l'utente vede subito il proprio post in cima.
+ *
+ * Scope: AndroidViewModel a livello Activity (vedi HikerMainScreen che lo
+ * costruisce con `LocalContext.current as ComponentActivity`). Il ricaricamento
+ * automatico avviene in `init` la prima volta che il VM viene istanziato.
+ */
+class SocialFeedViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val api = TsmApiClient.service()
+
+    private val _state = MutableStateFlow(SocialFeedState())
+    val state: StateFlow<SocialFeedState> = _state.asStateFlow()
+
+    init { refresh() }
+
+    /** Reset paginazione + fetch pagina 1 (pull-to-refresh). */
+    fun refresh() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                isLoading = true,
+                error = null,
+            )
+            runCatching { api.getFeed(page = 1, limit = 20) }
+                .onSuccess { resp ->
+                    if (resp.isSuccessful) {
+                        val body = resp.body()
+                        _state.value = _state.value.copy(
+                            isLoading = false,
+                            items = body?.items.orEmpty(),
+                            hasMore = body?.hasMore == true,
+                            currentPage = 1,
+                        )
+                    } else {
+                        _state.value = _state.value.copy(
+                            isLoading = false,
+                            error = "Errore caricamento feed (${resp.code()}).",
+                        )
+                    }
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        isLoading = false,
+                        error = it.message ?: "Errore di rete.",
+                    )
+                }
+        }
+    }
+
+    /** Carica la pagina successiva. No-op se già in fetch o se !hasMore. */
+    fun loadMore() {
+        val current = _state.value
+        if (current.isLoadingMore || !current.hasMore) return
+        viewModelScope.launch {
+            val nextPage = current.currentPage + 1
+            _state.value = current.copy(isLoadingMore = true)
+            runCatching { api.getFeed(page = nextPage, limit = 20) }
+                .onSuccess { resp ->
+                    if (resp.isSuccessful) {
+                        val body = resp.body()
+                        _state.value = _state.value.copy(
+                            isLoadingMore = false,
+                            items = _state.value.items + body?.items.orEmpty(),
+                            hasMore = body?.hasMore == true,
+                            currentPage = nextPage,
+                        )
+                    } else {
+                        _state.value = _state.value.copy(isLoadingMore = false)
+                    }
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(isLoadingMore = false)
+                }
+        }
+    }
+
+    /**
+     * Toggle like ottimistico: aggiorna lo state PRIMA della chiamata server,
+     * poi rollback se la risposta è errore. Il counter visivo cambia istantaneo
+     * per UX percepita "snappy" (vedi piano `sprint2_social.md` fase E1).
+     */
+    fun toggleLike(item: FeedItem) {
+        val previous = item
+        val willLike = !item.likedByMe
+        val optimistic = item.copy(
+            likedByMe = willLike,
+            likesCount = (item.likesCount + if (willLike) 1 else -1).coerceAtLeast(0),
+        )
+        replaceItem(optimistic)
+
+        viewModelScope.launch {
+            val result = runCatching {
+                if (item.kind == "activity") {
+                    if (willLike) api.likeActivity(item.id) else api.unlikeActivity(item.id)
+                } else {
+                    if (willLike) api.likeSession(item.id) else api.unlikeSession(item.id)
+                }
+            }
+            result.onSuccess { resp ->
+                if (resp.isSuccessful && resp.body() != null) {
+                    val server = resp.body()!!
+                    replaceItem(
+                        optimistic.copy(
+                            likesCount = server.likesCount,
+                            likedByMe = server.likedByMe,
+                        ),
+                    )
+                } else {
+                    replaceItem(previous) // rollback
+                }
+            }.onFailure { replaceItem(previous) }
+        }
+    }
+
+    /**
+     * Pubblica un'attività libera (POST /activities/:id/share). Su success
+     * ricarica il feed: l'utente vedrà il proprio post in cima entro 1-2 sec.
+     * `caption` può essere null o vuoto — server normalizza.
+     */
+    fun shareActivity(activityId: String, caption: String?) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(shareError = null, shareSuccess = null)
+            runCatching {
+                api.shareActivity(activityId, ShareRequest(caption = caption?.takeIf { it.isNotBlank() }))
+            }.onSuccess { resp ->
+                if (resp.isSuccessful) {
+                    _state.value = _state.value.copy(shareSuccess = "Pubblicato sul feed.")
+                    refresh()
+                } else {
+                    _state.value = _state.value.copy(
+                        shareError = "Impossibile pubblicare (${resp.code()}).",
+                    )
+                }
+            }.onFailure {
+                _state.value = _state.value.copy(shareError = it.message ?: "Errore di rete.")
+            }
+        }
+    }
+
+    /** Pubblica una sessione di gruppo (solo creator). */
+    fun shareSession(sessionId: String, caption: String?) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(shareError = null, shareSuccess = null)
+            runCatching {
+                api.shareSession(sessionId, ShareRequest(caption = caption?.takeIf { it.isNotBlank() }))
+            }.onSuccess { resp ->
+                if (resp.isSuccessful) {
+                    _state.value = _state.value.copy(shareSuccess = "Pubblicato sul feed.")
+                    refresh()
+                } else {
+                    _state.value = _state.value.copy(
+                        shareError = "Impossibile pubblicare (${resp.code()}).",
+                    )
+                }
+            }.onFailure {
+                _state.value = _state.value.copy(shareError = it.message ?: "Errore di rete.")
+            }
+        }
+    }
+
+    /** Rimuove la condivisione di un'attività dal feed (DELETE share). */
+    fun unshareActivity(activityId: String) {
+        viewModelScope.launch {
+            runCatching { api.unshareActivity(activityId) }
+                .onSuccess { resp ->
+                    if (resp.isSuccessful) refresh()
+                }
+        }
+    }
+
+    /** Pulisce i messaggi transienti dopo che la UI li ha mostrati. */
+    fun clearShareMessages() {
+        _state.value = _state.value.copy(shareError = null, shareSuccess = null)
+    }
+
+    fun clearError() {
+        _state.value = _state.value.copy(error = null)
+    }
+
+    /** Sostituisce in-place un item nel feed (matching per id+kind). */
+    private fun replaceItem(updated: FeedItem) {
+        val newItems = _state.value.items.map { current ->
+            if (current.id == updated.id && current.kind == updated.kind) updated else current
+        }
+        _state.value = _state.value.copy(items = newItems)
+    }
+}

@@ -40,6 +40,24 @@ const BUSINESS_ERROR_MAP = {
     status: 403,
     message: "Solo il creator può cancellare.",
   },
+  FORBIDDEN_NOT_OWNER: {
+    status: 403,
+    message: "Solo il proprietario può eseguire questa azione.",
+  },
+  FORBIDDEN_NOT_CREATOR: {
+    status: 403,
+    message: "Solo il creator della sessione può eseguire questa azione.",
+  },
+  NOT_SHARED: {
+    status: 403,
+    message: "Questa attività non è condivisa sul feed.",
+  },
+  FORBIDDEN_NOT_AUTHOR: {
+    status: 403,
+    message: "Puoi cancellare solo i tuoi commenti.",
+  },
+  // 400 — input semanticamente invalido
+  SELF_FOLLOW: { status: 400, message: "Non puoi seguire te stesso." },
   // 404 — risorsa non trovata
   USER_NOT_FOUND: { status: 404, message: "Utente non trovato." },
   SESSION_NOT_FOUND: { status: 404, message: "Sessione non trovata." },
@@ -49,6 +67,9 @@ const BUSINESS_ERROR_MAP = {
   CATEGORY_NOT_FOUND: { status: 404, message: "Categoria non trovata." },
   TOTEM_NOT_FOUND: { status: 404, message: "Totem non trovato." },
   CHALLENGE_NOT_FOUND: { status: 404, message: "Sfida non trovata." },
+  COMMENT_NOT_FOUND: { status: 404, message: "Commento non trovato." },
+  // 400
+  COMMENT_EMPTY: { status: 400, message: "Il commento non può essere vuoto." },
   // 409 — conflitti
   EMAIL_TAKEN: { status: 409, message: "Email già in uso." },
   USERNAME_TAKEN: { status: 409, message: "Username già in uso." },
@@ -71,6 +92,14 @@ const BUSINESS_ERROR_MAP = {
     message: "Impossibile cancellare una sfida attiva o completata.",
   },
   TOTEM_TAG_DUPLICATE: { status: 409, message: "tagId già esistente." },
+  ALREADY_FOLLOWING: {
+    status: 409,
+    message: "Stai già seguendo questo utente.",
+  },
+  NOT_FOLLOWING: {
+    status: 404,
+    message: "Non stai seguendo questo utente.",
+  },
   // 500 — server-side ma con messaggio utile
   INVITE_CODE_GENERATION_FAILED: {
     status: 500,

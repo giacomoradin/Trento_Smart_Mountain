@@ -34,9 +34,11 @@ import it.trentosmartmountain.app.util.SosNotificationHelper
 import it.trentosmartmountain.app.data.ble.BluetoothHelper
 import it.trentosmartmountain.app.service.SosBeaconService
 import java.security.SecureRandom
+import it.trentosmartmountain.app.data.remote.dto.LiveLocationDto
 import it.trentosmartmountain.app.data.remote.dto.LiveLocationItemDto
 import it.trentosmartmountain.app.data.remote.dto.LiveUserDto
 import it.trentosmartmountain.app.data.remote.dto.PostLiveLocationRequest
+import java.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,8 +101,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
      */
     val shortActivityConfirm: Boolean = false,
     val liveLocations: List<LiveLocationItemDto> = emptyList(),
-    val selectedLiveUser: LiveUserDto? = null,
-    val showLiveUserPopup: Boolean = false,
+    val selectedLiveParticipant: LiveLocationItemDto? = null,
+    val showLiveParticipantSheet: Boolean = false,
     val isRealtimeSuspended: Boolean = false,
     val realtimeSuspendReason: String? = null,
     /**
@@ -179,6 +181,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private var emergencyPollJob: Job? = null
   private var lastIncomingEmergencyCount = 0
   private var currentUserId: String? = null
+  private var cachedSelfUsername: String? = null
   private var pendingSosLaunch: PendingSosLaunch? = null
 
   private var liveFetchJob: Job? = null
@@ -187,6 +190,13 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   init {
     currentUserId =
       TokenStorage.getInstance(app).getToken()?.let { JwtDecoder.userIdFrom(it) }
+    viewModelScope.launch {
+      currentUserId?.let { uid ->
+        (app as? TsmApplication)?.database?.profileDao()?.getByUserId(uid)?.username?.let { name ->
+          cachedSelfUsername = name
+        }
+      }
+    }
     viewModelScope.launch {
       locationTracker.location.collect { snapshot ->
         if (_uiState.value.trackingStatus == TrackingStatus.IDLE) {
@@ -222,9 +232,12 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         .distinctUntilChanged()
         .collect { sessionId ->
           if (sessionId != null) {
+            viewModelScope.launch { refreshSessionRole(sessionId) }
             startEmergencyPolling(sessionId)
+            startLivePolling(sessionId)
           } else {
             stopEmergencyPolling()
+            stopLivePolling()
             _uiState.update {
               it.copy(
                 incomingEmergencies = emptyList(),
@@ -245,6 +258,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   fun syncActiveSessionFromServer() {
     viewModelScope.launch {
       if (_uiState.value.activeSessionId != null) {
+        startLivePolling(_uiState.value.activeSessionId!!)
         refreshIncomingEmergencies()
         return@launch
       }
@@ -285,12 +299,13 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private fun autoStartFromSession(sessionId: String) {
     _uiState.update { it.copy(activeSessionId = sessionId) }
     viewModelScope.launch {
-      sessionCommands.markSessionActive(sessionId)
+      refreshSessionRole(sessionId)
+      // Solo il capogruppo può portare la sessione da PLANNED → ACTIVE (backend).
+      if (_uiState.value.isSessionGroupLeader) {
+        sessionCommands.markSessionActive(sessionId)
+      }
     }
-    // Avvia solo se permessi GPS + GPS hardware acceso; altrimenti
-    // startTracking() stesso setterà i flag di warning corretti e la UI
-    // chiederà permessi o di accendere il GPS.
-    startLivePolling(sessionId)
+    // Live polling parte dal collector su activeSessionId (vedi init).
     if (_uiState.value.hasLocationPermission) {
       startTracking()
     }
@@ -1078,8 +1093,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       if (res.isSuccessful && res.body() != null) {
         val session = res.body()!!
         val isLeader =
-          session.participants?.any {
-            it.userId?._id == userId && it.role == "groupLeader"
+          session.participants?.any { p ->
+            p.userId?._id?.toString() == userId && p.role == "groupLeader"
           } == true
         _uiState.update { it.copy(isSessionGroupLeader = isLeader) }
       }
@@ -1145,47 +1160,72 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
 
     liveFetchJob = viewModelScope.launch {
       while (isActive) {
-        runCatching {
-          val resp = TsmApiClient.service().getLiveLocations(sessionId)
-          if (resp.isSuccessful) {
-            val items = resp.body()?.data ?: emptyList()
-            _uiState.update { it.copy(liveLocations = items) }
-          }
-        }
+        fetchLiveLocations(sessionId)
         delay(LIVE_POLLING_INTERVAL_MS)
       }
     }
 
     liveUploadJob = viewModelScope.launch {
       while (isActive) {
-        val state = _uiState.value
-        val location = state.userLocation
-        if (
-          state.trackingStatus != TrackingStatus.IDLE &&
-          !state.isRealtimeSuspended &&
-          location != null
-        ) {
-          runCatching {
-            val resp = TsmApiClient.service().postLiveLocation(
-              sessionId,
-              PostLiveLocationRequest(
-                lat = location.latitude,
-                lon = location.longitude,
-                accuracyM = location.accuracyMeters,
-                timestampMs = location.timestampMs,
-              ),
+        uploadLiveLocation(sessionId)
+        delay(LIVE_POLLING_INTERVAL_MS)
+      }
+    }
+  }
+
+  private suspend fun fetchLiveLocations(sessionId: String) {
+    runCatching {
+      val resp = TsmApiClient.service().getLiveLocations(sessionId)
+      if (resp.isSuccessful) {
+        val selfId = currentUserId
+        val items =
+          resp.body()?.data.orEmpty().filter { item ->
+            selfId == null || item.user.id != selfId
+          }
+        _uiState.update { it.copy(liveLocations = items) }
+      }
+    }
+  }
+
+  private suspend fun uploadLiveLocation(sessionId: String) {
+    val state = _uiState.value
+    val location = state.userLocation
+    if (
+      state.trackingStatus == TrackingStatus.IDLE ||
+      state.isRealtimeSuspended ||
+      location == null
+    ) {
+      return
+    }
+    runCatching {
+      val resp =
+        TsmApiClient.service().postLiveLocation(
+          sessionId,
+          PostLiveLocationRequest(
+            lat = location.latitude,
+            lon = location.longitude,
+            accuracyM = location.accuracyMeters,
+            altitudeM = location.altitudeMeters,
+            trackingStatus = liveTrackingStatusPayload(state.trackingStatus),
+            timestampMs = location.timestampMs,
+          ),
+        )
+      when (resp.code()) {
+        403 -> {
+          _uiState.update {
+            it.copy(
+              isRealtimeSuspended = true,
+              realtimeSuspendReason = "Realtime sospeso: troppo lontano dal percorso",
             )
-            if (resp.code() == 403) {
-              _uiState.update {
-                it.copy(
-                  isRealtimeSuspended = true,
-                  realtimeSuspendReason = "Realtime sospeso: troppo lontano dal percorso",
-                )
-              }
-            }
           }
         }
-        delay(LIVE_POLLING_INTERVAL_MS)
+        409 -> {
+          // Sessione ancora PLANNED: solo il capogruppo può attivarla.
+          refreshSessionRole(sessionId)
+          if (_uiState.value.isSessionGroupLeader) {
+            sessionCommands.markSessionActive(sessionId)
+          }
+        }
       }
     }
   }
@@ -1198,12 +1238,109 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     _uiState.update { it.copy(liveLocations = emptyList(), isRealtimeSuspended = false) }
   }
 
-  fun dismissLiveUserPopup() {
-    _uiState.update { it.copy(showLiveUserPopup = false, selectedLiveUser = null) }
+  fun dismissLiveParticipantSheet() {
+    _uiState.update { it.copy(showLiveParticipantSheet = false, selectedLiveParticipant = null) }
   }
 
-  fun onLiveMarkerTap(user: LiveUserDto) {
-    _uiState.update { it.copy(selectedLiveUser = user, showLiveUserPopup = true) }
+  fun onLiveMarkerTap(item: LiveLocationItemDto) {
+    _uiState.update { it.copy(selectedLiveParticipant = item, showLiveParticipantSheet = true) }
+    if (_uiState.value.isSessionGroupLeader) {
+      viewModelScope.launch { enrichParticipantForLeader(item.user.id) }
+    }
+  }
+
+  private suspend fun enrichParticipantForLeader(userId: String) {
+    runCatching {
+      val resp = TsmApiClient.service().getUserById(userId)
+      if (!resp.isSuccessful) return
+      val body = resp.body() ?: return
+      val (first, last) = splitDisplayName(body.username)
+      val current = _uiState.value.selectedLiveParticipant ?: return
+      if (current.user.id != userId) return
+      _uiState.update {
+        it.copy(
+          selectedLiveParticipant =
+            current.copy(
+              user =
+                current.user.copy(
+                  username = body.username,
+                  firstName = first,
+                  lastName = last,
+                  avatarUrl = body.personalInfo?.avatarUrl,
+                  sex = body.personalInfo?.sex,
+                ),
+            ),
+        )
+      }
+    }
+  }
+
+  fun onSelfMarkerTap() {
+    val state = _uiState.value
+    val userId = currentUserId ?: return
+    val location = state.userLocation ?: return
+    val (first, last) = splitDisplayName(cachedSelfUsername)
+    val item =
+      LiveLocationItemDto(
+        user =
+          LiveUserDto(
+            id = userId,
+            username = cachedSelfUsername,
+            firstName = first,
+            lastName = last,
+            avatarUrl = null,
+            role = if (state.isSessionGroupLeader) "groupLeader" else "hiker",
+          ),
+        location =
+          LiveLocationDto(
+            lat = location.latitude,
+            lon = location.longitude,
+            altitudeM = location.altitudeMeters,
+            trackingStatus = liveTrackingStatusPayload(state.trackingStatus),
+            updatedAt = Instant.now().toString(),
+          ),
+      )
+    _uiState.update { it.copy(selectedLiveParticipant = item, showLiveParticipantSheet = true) }
+    if (state.isSessionGroupLeader) {
+      viewModelScope.launch { enrichSelfParticipantForLeader(userId) }
+    }
+  }
+
+  private suspend fun enrichSelfParticipantForLeader(userId: String) {
+    runCatching {
+      val resp = TsmApiClient.service().getUserById(userId)
+      if (!resp.isSuccessful) return
+      val body = resp.body() ?: return
+      val (first, last) = splitDisplayName(body.username)
+      val current = _uiState.value.selectedLiveParticipant ?: return
+      if (current.user.id != userId) return
+      _uiState.update {
+        it.copy(
+          selectedLiveParticipant =
+            current.copy(
+              user =
+                current.user.copy(
+                  username = body.username,
+                  firstName = first,
+                  lastName = last,
+                  avatarUrl = body.personalInfo?.avatarUrl,
+                  sex = body.personalInfo?.sex,
+                ),
+            ),
+        )
+      }
+    }
+  }
+
+  private fun liveTrackingStatusPayload(status: TrackingStatus): String =
+    if (status == TrackingStatus.PAUSED) "PAUSED" else "MOVING"
+
+  private fun splitDisplayName(fullName: String?): Pair<String?, String?> {
+    if (fullName.isNullOrBlank()) return null to null
+    val trimmed = fullName.trim()
+    val space = trimmed.indexOf(' ')
+    if (space < 0) return trimmed to null
+    return trimmed.substring(0, space) to trimmed.substring(space + 1).trim().ifBlank { null }
   }
 
   companion object {

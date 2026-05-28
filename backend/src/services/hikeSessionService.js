@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import HikeSession from "../models/hikeSession.js";
 import User from "../models/user.js";
 import { getCombinedActivityStats } from "./activityService.js";
@@ -210,6 +211,22 @@ function assertInSession(session, userId) {
   if (!isIn) throw new Error("NOT_IN_SESSION");
 }
 
+/** Username registrato come "Nome Cognome" → campi separati per la UI. */
+function splitDisplayName(username) {
+  if (!username || typeof username !== "string") {
+    return { firstName: null, lastName: null };
+  }
+  const trimmed = username.trim();
+  const spaceIdx = trimmed.indexOf(" ");
+  if (spaceIdx === -1) {
+    return { firstName: trimmed, lastName: null };
+  }
+  return {
+    firstName: trimmed.slice(0, spaceIdx),
+    lastName: trimmed.slice(spaceIdx + 1).trim() || null,
+  };
+}
+
 /**
  * Upload last known live location for calling user (upsert per userId).
  */
@@ -227,19 +244,23 @@ export async function postLiveLocation(sessionId, userId, payload) {
   }
 
   const now = new Date();
-  const { lat, lon, accuracyM } = payload;
+  const { lat, lon, accuracyM, altitudeM, trackingStatus } = payload;
+  const uid = new mongoose.Types.ObjectId(userId);
+  const status = trackingStatus === "PAUSED" ? "PAUSED" : "MOVING";
+
+  const locationSet = {
+    "liveLocations.$.lat": lat,
+    "liveLocations.$.lon": lon,
+    "liveLocations.$.trackingStatus": status,
+    "liveLocations.$.updatedAt": now,
+  };
+  if (accuracyM !== undefined) locationSet["liveLocations.$.accuracyM"] = accuracyM;
+  if (altitudeM !== undefined) locationSet["liveLocations.$.altitudeM"] = altitudeM;
 
   // Atomic: update existing subdoc if present, otherwise push new.
   const updated = await HikeSession.findOneAndUpdate(
-    { _id: sessionId, "liveLocations.userId": userId },
-    {
-      $set: {
-        "liveLocations.$.lat": lat,
-        "liveLocations.$.lon": lon,
-        ...(accuracyM !== undefined ? { "liveLocations.$.accuracyM": accuracyM } : {}),
-        "liveLocations.$.updatedAt": now,
-      },
-    },
+    { _id: sessionId, "liveLocations.userId": uid },
+    { $set: locationSet },
     { new: true },
   );
 
@@ -247,10 +268,12 @@ export async function postLiveLocation(sessionId, userId, payload) {
     await HikeSession.findByIdAndUpdate(sessionId, {
       $push: {
         liveLocations: {
-          userId,
+          userId: uid,
           lat,
           lon,
+          trackingStatus: status,
           ...(accuracyM !== undefined ? { accuracyM } : {}),
+          ...(altitudeM !== undefined ? { altitudeM } : {}),
           updatedAt: now,
         },
       },
@@ -264,11 +287,19 @@ export async function postLiveLocation(sessionId, userId, payload) {
  * Fetch live locations of ACTIVE (non-suspended) participants, excluding stale.
  */
 export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {}) {
+  const sessionDoc = await HikeSession.findById(sessionId);
+  if (!sessionDoc) throw new Error("SESSION_NOT_FOUND");
+  assertInSession(sessionDoc, userId);
+  const viewerIsLeader = isSessionGroupLeader(sessionDoc, userId);
+
+  const participantFields = viewerIsLeader
+    ? "username personalInfo.avatarUrl personalInfo.sex"
+    : "username personalInfo.avatarUrl";
+
   const session = await HikeSession.findById(sessionId)
-    .populate("participants.userId", "username personalInfo.avatarUrl")
-    .populate("creatorId", "username personalInfo.avatarUrl");
+    .populate("participants.userId", participantFields)
+    .populate("creatorId", participantFields);
   if (!session) throw new Error("SESSION_NOT_FOUND");
-  assertInSession(session, userId);
 
   const cutoff = new Date(Date.now() - maxAgeSec * 1000);
 
@@ -297,18 +328,26 @@ export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {
         (p) => (p.userId?._id || p.userId).toString() === uid,
       );
       const u = participant?.userId;
+      const { firstName, lastName } = splitDisplayName(u?.username);
 
       return {
         user: {
           id: uid,
           username: u?.username,
+          firstName,
+          lastName,
           avatarUrl: u?.personalInfo?.avatarUrl,
           role,
+          ...(viewerIsLeader && u?.personalInfo?.sex
+            ? { sex: u.personalInfo.sex }
+            : {}),
         },
         location: {
           lat: l.lat,
           lon: l.lon,
           ...(l.accuracyM !== undefined ? { accuracyM: l.accuracyM } : {}),
+          ...(l.altitudeM !== undefined ? { altitudeM: l.altitudeM } : {}),
+          trackingStatus: l.trackingStatus || "MOVING",
           updatedAt: l.updatedAt,
         },
       };
@@ -330,10 +369,11 @@ export async function suspendLiveTracking(sessionId, callerUserId, { userId, rea
   if (!targetIsParticipant) throw new Error("USER_NOT_PARTICIPANT");
 
   const now = new Date();
+  const uid = new mongoose.Types.ObjectId(userId);
 
   // update existing entry if present
   const updated = await HikeSession.findOneAndUpdate(
-    { _id: sessionId, "liveTracking.userId": userId },
+    { _id: sessionId, "liveTracking.userId": uid },
     {
       $set: {
         "liveTracking.$.status": "SUSPENDED",
@@ -347,7 +387,7 @@ export async function suspendLiveTracking(sessionId, callerUserId, { userId, rea
   if (!updated) {
     await HikeSession.findByIdAndUpdate(sessionId, {
       $push: {
-        liveTracking: { userId, status: "SUSPENDED", reason, updatedAt: now },
+        liveTracking: { userId: uid, status: "SUSPENDED", reason, updatedAt: now },
       },
     });
   }
@@ -366,8 +406,9 @@ export async function resumeLiveTracking(sessionId, callerUserId, { userId }) {
   if (!targetIsParticipant) throw new Error("USER_NOT_PARTICIPANT");
 
   const now = new Date();
+  const uid = new mongoose.Types.ObjectId(userId);
   const updated = await HikeSession.findOneAndUpdate(
-    { _id: sessionId, "liveTracking.userId": userId },
+    { _id: sessionId, "liveTracking.userId": uid },
     {
       $set: {
         "liveTracking.$.status": "ACTIVE",
@@ -380,7 +421,7 @@ export async function resumeLiveTracking(sessionId, callerUserId, { userId }) {
 
   if (!updated) {
     await HikeSession.findByIdAndUpdate(sessionId, {
-      $push: { liveTracking: { userId, status: "ACTIVE", updatedAt: now } },
+      $push: { liveTracking: { userId: uid, status: "ACTIVE", updatedAt: now } },
     });
   }
 

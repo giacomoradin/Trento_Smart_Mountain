@@ -48,9 +48,13 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.TsmApplication
 import it.trentosmartmountain.app.data.ble.BluetoothHelper
 import it.trentosmartmountain.app.data.estimation.HikeEstimation
 import it.trentosmartmountain.app.data.location.TrackingStatus
+import it.trentosmartmountain.app.data.remote.JwtDecoder
+import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
+import it.trentosmartmountain.app.data.remote.dto.SosMapMarkerDto
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSurface
@@ -138,10 +142,6 @@ fun RegistraScreen(
     }
   }
 
-  LaunchedEffect(Unit) {
-    viewModel.syncActiveSessionFromServer()
-  }
-
   LaunchedEffect(hasLocationPermission) {
     if (hasLocationPermission) {
       viewModel.onLocationPermissionResult(true)
@@ -193,6 +193,25 @@ fun RegistraScreen(
   val canCenterOnUser =
     uiState.hasLocationPermission && uiState.userLocation != null
 
+  val currentUserId =
+    remember {
+      (context.applicationContext as TsmApplication).tokenStorage.getToken()?.let {
+        JwtDecoder.userIdFrom(it)
+      }
+    }
+  val sosUserIds =
+    remember(uiState.incomingEmergencies, uiState.isSessionGroupLeader) {
+      buildVisibleSosUserIds(uiState.incomingEmergencies, uiState.isSessionGroupLeader)
+    }
+  val sosOnlyMarkers =
+    remember(uiState.incomingEmergencies, uiState.liveLocations, uiState.isSessionGroupLeader) {
+      buildSosOnlyMarkers(
+        emergencies = uiState.incomingEmergencies,
+        liveLocations = uiState.liveLocations,
+        isGroupLeader = uiState.isSessionGroupLeader,
+      )
+    }
+
   Box(modifier = modifier.fillMaxSize()) {
     SosAlertBorderOverlay(show = uiState.showSosAlertBorder)
 
@@ -202,8 +221,13 @@ fun RegistraScreen(
       trackGeoPoints = uiState.trackGeoPoints,
       centerOnUserTick = uiState.centerOnUserTick,
       hasLocationPermission = uiState.hasLocationPermission,
+      currentUserId = currentUserId,
+      isCurrentUserLeader = uiState.isSessionGroupLeader,
       liveLocations = uiState.liveLocations,
+      sosUserIds = sosUserIds,
+      sosOnlyMarkers = sosOnlyMarkers,
       onLiveMarkerTap = viewModel::onLiveMarkerTap,
+      onSelfMarkerTap = viewModel::onSelfMarkerTap,
     )
 
     RegistraTopHud(
@@ -445,6 +469,14 @@ fun RegistraScreen(
     )
   }
 
+  if (uiState.showLiveParticipantSheet) {
+    LiveParticipantSheet(
+      participant = uiState.selectedLiveParticipant,
+      isGroupLeaderViewer = uiState.isSessionGroupLeader,
+      onDismiss = viewModel::dismissLiveParticipantSheet,
+    )
+  }
+
   if (uiState.showStopConfirm) {
     val distKm = uiState.distanceMeters / 1000.0
     val movingH = uiState.elapsedSeconds / 3600.0
@@ -509,6 +541,41 @@ fun RegistraScreen(
           }
         }
       },
+    )
+  }
+}
+
+private fun buildVisibleSosUserIds(
+  emergencies: List<EmergencyResponse>,
+  isGroupLeader: Boolean,
+): Set<String> =
+  emergencies
+    .filter { isGroupLeader || it.status == "SHARED_WITH_GROUP" }
+    .mapNotNull { it.senderUserId?.id }
+    .toSet()
+
+private fun buildSosOnlyMarkers(
+  emergencies: List<EmergencyResponse>,
+  liveLocations: List<it.trentosmartmountain.app.data.remote.dto.LiveLocationItemDto>,
+  isGroupLeader: Boolean,
+): List<SosMapMarkerDto> {
+  val liveIds = liveLocations.map { it.user.id }.toSet()
+  return emergencies.mapNotNull { emergency ->
+    if (!isGroupLeader && emergency.status != "SHARED_WITH_GROUP") return@mapNotNull null
+    val userId = emergency.senderUserId?.id ?: return@mapNotNull null
+    if (userId in liveIds) return@mapNotNull null
+    val coords = emergency.coordinates.coordinates
+    if (coords.size < 2) return@mapNotNull null
+    val displayName = emergency.profileSnapshot.displayName
+    val nameParts = displayName.trim().split("\\s+".toRegex(), limit = 2)
+    SosMapMarkerDto(
+      userId = userId,
+      lat = coords[1],
+      lon = coords[0],
+      displayName = displayName,
+      avatarUrl = emergency.profileSnapshot.personalInfo?.avatarUrl,
+      firstName = nameParts.getOrNull(0),
+      lastName = nameParts.getOrNull(1),
     )
   }
 }

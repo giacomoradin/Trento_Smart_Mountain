@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+
+    <!-- Cerchio sfondo giallo/oro per distinguerlo dall'utente normale -->
+    <path
+        android:fillColor="#FFC107"
+        android:pathData="M16,2 C10.477,2 6,6.477 6,12 C6,19.5 16,30 16,30 C16,30 26,19.5 26,12 C26,6.477 21.523,2 16,2 Z"/>
+
+    <!-- Stellina bianca al centro per indicare il leader -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M16,7 L17.5,11.5 L22,11.5 L18.5,14.5 L20,19 L16,16.5 L12,19 L13.5,14.5 L10,11.5 L14.5,11.5 Z"/>
+
+</vector>

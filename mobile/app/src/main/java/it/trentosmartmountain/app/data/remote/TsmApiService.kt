@@ -20,6 +20,8 @@ import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.remote.dto.UserResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherForecastResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherLocationsResponse
+import it.trentosmartmountain.app.data.remote.dto.LiveLocationsResponse
+import it.trentosmartmountain.app.data.remote.dto.PostLiveLocationRequest
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -127,6 +129,19 @@ interface TsmApiService {
     @Body body: CompleteSessionRequest,
   ): Response<ApiMessageBody>
 
+  /** POST /api/v1/sessions/:id/live-location → invia la posizione live dell'utente */
+  @POST("api/v1/sessions/{id}/live-location")
+  suspend fun postLiveLocation(
+    @Path("id") sessionId: String,
+    @Body body: PostLiveLocationRequest,
+  ): Response<ApiMessageBody>
+
+  /** GET /api/v1/sessions/:id/live-locations → recupera le posizioni di tutti i partecipanti */
+  @GET("api/v1/sessions/{id}/live-locations")
+  suspend fun getLiveLocations(
+    @Path("id") sessionId: String,
+    @Query("maxAgeSec") maxAgeSec: Int? = 30,
+  ): Response<LiveLocationsResponse>
   // ── Activity (attività libere senza sessione di gruppo) ──
 
   /** Crea una nuova attività libera sul server. Usato dal sync worker dopo il tracking. */

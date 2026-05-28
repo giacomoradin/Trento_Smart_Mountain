@@ -21,6 +21,9 @@ import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.data.sync.SyncManager
 import it.trentosmartmountain.app.service.ForegroundTrackingService
+import it.trentosmartmountain.app.data.remote.dto.LiveLocationItemDto
+import it.trentosmartmountain.app.data.remote.dto.LiveUserDto
+import it.trentosmartmountain.app.data.remote.dto.PostLiveLocationRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,6 +77,11 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
      * NON viene mostrato (il backend è già stato avvisato della partenza).
      */
     val shortActivityConfirm: Boolean = false,
+    val liveLocations: List<LiveLocationItemDto> = emptyList(),
+    val selectedLiveUser: LiveUserDto? = null,
+    val showLiveUserPopup: Boolean = false,
+    val isRealtimeSuspended: Boolean = false,
+    val realtimeSuspendReason: String? = null,
   )
 
   private val app = getApplication<Application>()
@@ -88,6 +96,9 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   private var stillSinceMs: Long? = null
   private var lastSnapshot: LocationSnapshot? = null
 
+  private var liveFetchJob: Job? = null
+
+  private var liveUploadJob: Job? = null
   init {
     viewModelScope.launch {
       locationTracker.location.collect { snapshot ->
@@ -135,6 +146,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         )
       }
     }
+    startLivePolling(sessionId)
     if (_uiState.value.hasLocationPermission) {
       startTracking()
     }
@@ -204,6 +216,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
    * Usato dal bottone "Scarta" nel dialog di salvataggio.
    */
   fun discardTracking() {
+    stopLivePolling()
     stopHardware()
     _uiState.update {
       it.copy(
@@ -255,6 +268,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       return
     }
     stopHardware()
+    stopLivePolling()
     val snapState = _uiState.value
 
     // 1. Resetta subito lo state UI (nasconde i controlli di tracking)
@@ -485,6 +499,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   }
 
   override fun onCleared() {
+    stopLivePolling()
     timerJob?.cancel()
     stationaryDetector.stop()
     locationTracker.stop()
@@ -494,9 +509,78 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     super.onCleared()
   }
 
+  /** Avvia i job di polling live (fetch + upload) quando entra in una sessione. */
+  fun startLivePolling(sessionId: String) {
+    stopLivePolling()
+
+    liveFetchJob = viewModelScope.launch {
+      while (isActive) {
+        runCatching {
+          val resp = TsmApiClient.service().getLiveLocations(sessionId)
+          if (resp.isSuccessful) {
+            val items = resp.body()?.data ?: emptyList()
+            _uiState.update { it.copy(liveLocations = items) }
+          }
+        }
+        delay(LIVE_POLLING_INTERVAL_MS)
+      }
+    }
+
+    liveUploadJob = viewModelScope.launch {
+      while (isActive) {
+        val state = _uiState.value
+        val location = state.userLocation
+        if (
+          state.trackingStatus != TrackingStatus.IDLE &&
+          !state.isRealtimeSuspended &&
+          location != null
+        ) {
+          runCatching {
+            val resp = TsmApiClient.service().postLiveLocation(
+              sessionId,
+              PostLiveLocationRequest(
+                lat = location.latitude,
+                lon = location.longitude,
+                accuracyM = location.accuracyMeters,
+                timestampMs = location.timestampMs,
+              ),
+            )
+            if (resp.code() == 403) {
+              _uiState.update {
+                it.copy(
+                  isRealtimeSuspended = true,
+                  realtimeSuspendReason = "Realtime sospeso: troppo lontano dal percorso",
+                )
+              }
+            }
+          }
+        }
+        delay(LIVE_POLLING_INTERVAL_MS)
+      }
+    }
+  }
+
+  fun stopLivePolling() {
+    liveFetchJob?.cancel()
+    liveUploadJob?.cancel()
+    liveFetchJob = null
+    liveUploadJob = null
+    _uiState.update { it.copy(liveLocations = emptyList(), isRealtimeSuspended = false) }
+  }
+
+  fun dismissLiveUserPopup() {
+    _uiState.update { it.copy(showLiveUserPopup = false, selectedLiveUser = null) }
+  }
+
+  fun onLiveMarkerTap(user: LiveUserDto) {
+    _uiState.update { it.copy(selectedLiveUser = user, showLiveUserPopup = true) }
+  }
+
   companion object {
     private const val STATIONARY_SPEED_MPS = 0.5f
     private const val RESUME_SPEED_MPS = 1.0f
     private const val AUTO_PAUSE_DELAY_MS = 45_000L
+
+    private const val LIVE_POLLING_INTERVAL_MS = 5_000L
   }
 }

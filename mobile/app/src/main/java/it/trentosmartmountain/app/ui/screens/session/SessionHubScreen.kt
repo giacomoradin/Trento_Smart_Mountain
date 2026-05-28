@@ -102,9 +102,7 @@ import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
 import it.trentosmartmountain.app.viewmodel.SessionJoinViewModel
 import it.trentosmartmountain.app.viewmodel.SessionPlanViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
 
 /**
  * Tab **Sessione** nella shell escursionista: due sotto-tab interni.
@@ -191,6 +189,9 @@ private fun SessionPlanTab(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val meetingDateDisplay = remember(uiState.meetingDate) {
+        SessionDateFormats.formatDisplayFromApi(uiState.meetingDate)
+    }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -231,8 +232,7 @@ private fun SessionPlanTab(
             confirmButton = {
                 TextButton(onClick = {
                     dateState.selectedDateMillis?.let { millis ->
-                        val fmt = SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN)
-                        viewModel.onMeetingDateChange(fmt.format(Date(millis)))
+                        viewModel.onMeetingDateChange(SessionDateFormats.formatApiFromMillis(millis))
                     }
                     showDatePicker = false
                 }) { Text("OK", color = TsmAccent) }
@@ -374,10 +374,10 @@ private fun SessionPlanTab(
                 Column(modifier = Modifier.weight(1f)) {
                     SessionFieldLabel(stringResource(R.string.session_date_label))
                     OutlinedTextField(
-                        value = uiState.meetingDate,
+                        value = meetingDateDisplay,
                         onValueChange = {},
                         modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true },
-                        placeholder = { Text("20 Mag 2026", color = Color.Gray) },
+                        placeholder = { Text(SessionDateFormats.formatDisplayFromApi("2026-05-26"), color = Color.Gray) },
                         singleLine = true,
                         readOnly = true,
                         enabled = false,
@@ -541,10 +541,6 @@ private fun SessionJoinTab(
     viewModel: SessionJoinViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val todayFormatted = remember {
-        SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
-    }
-
     // Dialog conferma AVVIA quando la data della sessione non è oggi
     // (identico al flusso di SessionDetailScreen.showAvviaConfirm)
     var avviaConfirmSession by remember { mutableStateOf<SessionResponse?>(null) }
@@ -555,7 +551,9 @@ private fun SessionJoinTab(
             title = { Text("Avviare in anticipo?", color = Color.White) },
             text = {
                 Text(
-                    "La sessione è pianificata per ${session.meetingDate ?: "un altro giorno"}. Vuoi avviarla ugualmente?",
+                    "La sessione è pianificata per ${
+                        SessionDateFormats.formatDisplayFromApi(session.meetingDate).ifBlank { "un altro giorno" }
+                    }. Vuoi avviarla ugualmente?",
                     color = Color.Gray,
                 )
             },
@@ -719,7 +717,7 @@ private fun SessionJoinTab(
                     Text(uiState.sessions.size.toString(), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = TsmAccent)
                 }
                 uiState.sessions.forEach { session ->
-                    val isToday = session.meetingDate == todayFormatted
+                    val isToday = SessionDateFormats.isTodayApi(session.meetingDate)
                     val isCreator = session.creatorId?._id == uiState.currentUserId
                     SessionCard(
                         session = session,
@@ -855,7 +853,8 @@ private fun SessionCard(
     onRemoveClick: () -> Unit,
 ) {
     val name = session.routeDetails?.name ?: "Sessione"
-    val dateTime = listOfNotNull(session.meetingDate, session.meetingTime).joinToString(" · ")
+    val dateLabel = session.meetingDate?.let { SessionDateFormats.formatDisplayFromApi(it) }.orEmpty()
+    val dateTime = listOfNotNull(dateLabel.takeIf { it.isNotBlank() }, session.meetingTime).joinToString(" · ")
     val host = session.creatorId?.username?.let { "host $it" } ?: ""
     val subtitle = listOf(dateTime, host).filter { it.isNotBlank() }.joinToString(" · ")
     val distKm = session.gpxStats?.distanceKm?.let { "%.1f km".format(it) }

@@ -60,6 +60,11 @@ function htmlToPlainText(html) {
 }
 
 async function sendEmail(toEmail, subject, htmlContent) {
+  // Nei test Jest non chiamiamo Brevo: evita 500 su registrazione quando le env non sono impostate.
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
+
   const apiKey = process.env.BREVO_API_KEY;
   const rawFrom = process.env.EMAIL_FROM_ADDRESS;
   const fromAddress = extractEmail(rawFrom);

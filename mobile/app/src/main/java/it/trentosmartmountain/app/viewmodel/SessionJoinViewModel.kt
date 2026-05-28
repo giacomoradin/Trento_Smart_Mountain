@@ -59,7 +59,12 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 val response = TsmApiClient.service().getMySessions()
                 if (response.isSuccessful) {
-                    val sorted = (response.body() ?: emptyList()).sortedBy { it.meetingDate ?: "" }
+                    // Mostriamo solo sessioni ancora "vive" nella tab Unisciti:
+                    // PLANNED (in programma) o ACTIVE (in corso). Le COMPLETED/CANCELLED
+                    // finiscono in "Le mie attività" e non devono comparire qui.
+                    val sorted = (response.body() ?: emptyList())
+                        .filter { it.status == "PLANNED" || it.status == "ACTIVE" }
+                        .sortedBy { it.meetingDate ?: "" }
                     _uiState.update { it.copy(isLoadingSessions = false, sessions = sorted) }
                 } else {
                     _uiState.update {

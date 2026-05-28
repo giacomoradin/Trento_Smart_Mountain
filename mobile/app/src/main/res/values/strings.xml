@@ -216,6 +216,7 @@
   <string name="profile_load_error">Impossibile caricare il profilo.</string>
   <string name="profile_logout_button">Esci</string>
   <string name="live_participant_badge_leader">Capogruppo</string>
+  <string name="live_participant_badge_participant">Partecipante</string>
   <string name="live_participant_leader_section">Dettagli capogruppo</string>
   <string name="live_participant_altitude">Quota</string>
   <string name="live_participant_sex">Sesso</string>

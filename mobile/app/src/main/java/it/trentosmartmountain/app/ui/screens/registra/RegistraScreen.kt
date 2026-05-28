@@ -199,16 +199,35 @@ fun RegistraScreen(
         JwtDecoder.userIdFrom(it)
       }
     }
+  val hasOwnActiveSos =
+    uiState.sosPhase == RegistraViewModel.SosPhase.ACTIVE ||
+      uiState.sosPhase == RegistraViewModel.SosPhase.QUEUED_OFFLINE
   val sosUserIds =
-    remember(uiState.incomingEmergencies, uiState.isSessionGroupLeader) {
-      buildVisibleSosUserIds(uiState.incomingEmergencies, uiState.isSessionGroupLeader)
+    remember(
+      uiState.incomingEmergencies,
+      uiState.isSessionGroupLeader,
+      currentUserId,
+      hasOwnActiveSos,
+    ) {
+      buildVisibleSosUserIds(
+        emergencies = uiState.incomingEmergencies,
+        isGroupLeader = uiState.isSessionGroupLeader,
+        currentUserId = currentUserId,
+        hasOwnActiveSos = hasOwnActiveSos,
+      )
     }
   val sosOnlyMarkers =
-    remember(uiState.incomingEmergencies, uiState.liveLocations, uiState.isSessionGroupLeader) {
+    remember(
+      uiState.incomingEmergencies,
+      uiState.liveLocations,
+      uiState.isSessionGroupLeader,
+      currentUserId,
+    ) {
       buildSosOnlyMarkers(
         emergencies = uiState.incomingEmergencies,
         liveLocations = uiState.liveLocations,
         isGroupLeader = uiState.isSessionGroupLeader,
+        currentUserId = currentUserId,
       )
     }
 
@@ -225,6 +244,7 @@ fun RegistraScreen(
       isCurrentUserLeader = uiState.isSessionGroupLeader,
       liveLocations = uiState.liveLocations,
       sosUserIds = sosUserIds,
+      hasOwnActiveSos = hasOwnActiveSos,
       sosOnlyMarkers = sosOnlyMarkers,
       onLiveMarkerTap = viewModel::onLiveMarkerTap,
       onSelfMarkerTap = viewModel::onSelfMarkerTap,
@@ -548,21 +568,46 @@ fun RegistraScreen(
 private fun buildVisibleSosUserIds(
   emergencies: List<EmergencyResponse>,
   isGroupLeader: Boolean,
-): Set<String> =
-  emergencies
-    .filter { isGroupLeader || it.status == "SHARED_WITH_GROUP" }
-    .mapNotNull { it.senderUserId?.id }
-    .toSet()
+  currentUserId: String?,
+  hasOwnActiveSos: Boolean,
+): Set<String> {
+  val ids =
+    emergencies
+      .filter { emergency ->
+        when {
+          isGroupLeader -> true
+          emergency.status == "SHARED_WITH_GROUP" -> true
+          currentUserId != null &&
+            emergency.senderUserId?.id == currentUserId &&
+            (emergency.status == "ACTIVE" || emergency.status == "SHARED_WITH_GROUP") -> true
+          else -> false
+        }
+      }
+      .mapNotNull { it.senderUserId?.id }
+      .toMutableSet()
+  if (hasOwnActiveSos && currentUserId != null) {
+    ids.add(currentUserId)
+  }
+  return ids
+}
 
 private fun buildSosOnlyMarkers(
   emergencies: List<EmergencyResponse>,
   liveLocations: List<it.trentosmartmountain.app.data.remote.dto.LiveLocationItemDto>,
   isGroupLeader: Boolean,
+  currentUserId: String?,
 ): List<SosMapMarkerDto> {
   val liveIds = liveLocations.map { it.user.id }.toSet()
   return emergencies.mapNotNull { emergency ->
-    if (!isGroupLeader && emergency.status != "SHARED_WITH_GROUP") return@mapNotNull null
+    val visibleToParticipant =
+      emergency.status == "SHARED_WITH_GROUP" ||
+        (currentUserId != null &&
+          emergency.senderUserId?.id == currentUserId &&
+          emergency.status == "ACTIVE")
+    if (!isGroupLeader && !visibleToParticipant) return@mapNotNull null
     val userId = emergency.senderUserId?.id ?: return@mapNotNull null
+    // Il proprio marker è già sul puntino GPS (userMarker).
+    if (userId == currentUserId) return@mapNotNull null
     if (userId in liveIds) return@mapNotNull null
     val coords = emergency.coordinates.coordinates
     if (coords.size < 2) return@mapNotNull null

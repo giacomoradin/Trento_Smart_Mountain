@@ -220,7 +220,10 @@ hikSessionSchema.index({ status: 1, meetingDate: 1 });
 // ordinate per data di condivisione discendente". Sparse perché la maggior
 // parte dei documenti ha sharedAt=null (privati).
 hikSessionSchema.index({ creatorId: 1, sharedAt: -1 }, { sparse: true });
-hikSessionSchema.index({ "participants.userId": 1, sharedAt: -1 }, { sparse: true });
+hikSessionSchema.index(
+  { "participants.userId": 1, sharedAt: -1 },
+  { sparse: true },
+);
 
 // Indici per lookup live tracking per utente.
 hikSessionSchema.index({ "liveLocations.userId": 1 });

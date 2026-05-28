@@ -128,7 +128,11 @@ router.post(
       #swagger.responses[409] = { description: 'Conflict (SESSION_NOT_ACTIVE)' }
     */
     try {
-      const result = await postLiveLocation(req.params.id, req.user.userId, req.body);
+      const result = await postLiveLocation(
+        req.params.id,
+        req.user.userId,
+        req.body,
+      );
       res.status(200).json(result);
     } catch (err) {
       next(err);
@@ -152,7 +156,11 @@ router.get(
       #swagger.responses[404] = { description: 'Session not found' }
     */
     try {
-      const result = await getLiveLocations(req.params.id, req.user.userId, req.query);
+      const result = await getLiveLocations(
+        req.params.id,
+        req.user.userId,
+        req.query,
+      );
       res.status(200).json(result);
     } catch (err) {
       next(err);
@@ -191,7 +199,11 @@ router.post(
       #swagger.responses[404] = { description: 'Session not found' }
     */
     try {
-      const result = await suspendLiveTracking(req.params.id, req.user.userId, req.body);
+      const result = await suspendLiveTracking(
+        req.params.id,
+        req.user.userId,
+        req.body,
+      );
       res.status(200).json(result);
     } catch (err) {
       next(err);
@@ -229,7 +241,11 @@ router.post(
       #swagger.responses[404] = { description: 'Session not found' }
     */
     try {
-      const result = await resumeLiveTracking(req.params.id, req.user.userId, req.body);
+      const result = await resumeLiveTracking(
+        req.params.id,
+        req.user.userId,
+        req.body,
+      );
       res.status(200).json(result);
     } catch (err) {
       next(err);
@@ -280,20 +296,27 @@ router.get("/my", async (req, res, next) => {
 });
 
 // GET /api/v1/sessions/:id/emergencies — SOS attivi per sessione
-router.get("/:id/emergencies", validate(idParamSchema, "params"), async (req, res) => {
-  try {
-    const result = await listSessionEmergencies(req.params.id, req.user.userId);
-    res.status(200).json(result);
-  } catch (err) {
-    if (err.message === "SESSION_NOT_FOUND") {
-      return res.status(404).json({ error: err.message });
+router.get(
+  "/:id/emergencies",
+  validate(idParamSchema, "params"),
+  async (req, res) => {
+    try {
+      const result = await listSessionEmergencies(
+        req.params.id,
+        req.user.userId,
+      );
+      res.status(200).json(result);
+    } catch (err) {
+      if (err.message === "SESSION_NOT_FOUND") {
+        return res.status(404).json({ error: err.message });
+      }
+      if (err.message === "FORBIDDEN") {
+        return res.status(403).json({ error: err.message });
+      }
+      res.status(500).json({ error: "Errore recupero emergenze" });
     }
-    if (err.message === "FORBIDDEN") {
-      return res.status(403).json({ error: err.message });
-    }
-    res.status(500).json({ error: "Errore recupero emergenze" });
-  }
-});
+  },
+);
 
 // GET /api/v1/sessions/:id — dettaglio singola sessione (solo partecipanti o admin)
 router.get(
@@ -503,7 +526,10 @@ router.get(
   async (req, res, next) => {
     try {
       const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const limit = Math.min(
+        100,
+        Math.max(1, parseInt(req.query.limit, 10) || 20),
+      );
       const result = await getComments(
         req.params.id,
         "session",

@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.nfc.NfcAdapter
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -62,7 +64,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
@@ -91,8 +96,29 @@ fun NfcScanScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context as? ComponentActivity
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     var location by remember { mutableStateOf<Location?>(null) }
+
+    // Stato hardware NFC: distinguiamo 3 condizioni che vanno trattate diversamente.
+    //  - Hardware:   NfcAdapter.getDefaultAdapter() != null → device ha il chip NFC
+    //  - Enabled:    adapter.isEnabled → utente ha attivato NFC nelle impostazioni
+    // Lo stato `nfcEnabled` viene rivalutato a ogni ON_RESUME perché l'utente
+    // può uscire dall'app, attivare NFC nelle Impostazioni, tornare indietro →
+    // dobbiamo accorgercene senza richiedere un restart manuale.
+    val nfcAdapter = remember { NfcAdapter.getDefaultAdapter(context) }
+    val hasNfcHardware = nfcAdapter != null
+    var nfcEnabled by remember { mutableStateOf(nfcAdapter?.isEnabled == true) }
+
+    DisposableEffect(lifecycleOwner, nfcAdapter) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                nfcEnabled = nfcAdapter?.isEnabled == true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val locationPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -117,10 +143,15 @@ fun NfcScanScreen(
         }
     }
 
-    // NFC foreground dispatch
-    DisposableEffect(activity) {
-        val nfcAdapter = NfcAdapter.getDefaultAdapter(context) ?: return@DisposableEffect onDispose {}
-        if (activity == null) return@DisposableEffect onDispose {}
+    // NFC foreground dispatch — attivo SOLO se l'adapter c'è ed è enabled.
+    // Se NFC è disabilitato (utente non l'ha attivato), saltiamo l'enable: tanto
+    // non riceveremmo mai il tag, e Android lancerebbe SecurityException.
+    // Dipendiamo da `nfcEnabled` così che riattivando NFC dalle Impostazioni e
+    // tornando in-app, il DisposableEffect si ri-esegua e abiliti il dispatch.
+    DisposableEffect(activity, nfcEnabled) {
+        if (!nfcEnabled || nfcAdapter == null || activity == null) {
+            return@DisposableEffect onDispose {}
+        }
 
         val pendingIntent = PendingIntent.getActivity(
             context, 0,
@@ -159,35 +190,135 @@ fun NfcScanScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            when (state) {
-                is NfcScanUiState.Waiting -> WaitingAnimation()
-                is NfcScanUiState.Scanning -> {
-                    CircularProgressIndicator(color = AccentCyan, modifier = Modifier.size(80.dp))
-                    Spacer(Modifier.height(16.dp))
-                    Text("Verifica in corso…", color = TextSecondary)
-                }
-                is NfcScanUiState.Success -> {
-                    // Handled by LaunchedEffect above — show brief success feedback
-                    Icon(Icons.Default.Nfc, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(80.dp))
-                    Text("Scansione completata!", color = AccentGreen, fontWeight = FontWeight.Bold)
-                }
-                is NfcScanUiState.Error -> {
-                    val err = (state as NfcScanUiState.Error).message
-                    Card(colors = CardDefaults.cardColors(containerColor = CardBackground), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Errore", color = AccentRed, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(8.dp))
-                            Text(err, color = TextSecondary, textAlign = TextAlign.Center)
-                            Spacer(Modifier.height(16.dp))
-                            Button(
-                                onClick = { viewModel.reset() },
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
-                                shape = RoundedCornerShape(8.dp),
-                            ) { Text("Riprova", color = Color.White, fontWeight = FontWeight.Bold) }
+            when {
+                // Priorità ai problemi hardware: se il device non ha NFC,
+                // mostriamo un blocco definitivo (no retry, no settings).
+                !hasNfcHardware -> NfcUnsupportedView(onBack = onBack)
+                // Hardware presente ma disabilitato → CTA verso Impostazioni NFC.
+                !nfcEnabled -> NfcDisabledView(
+                    onOpenSettings = {
+                        context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
+                    },
+                )
+                else -> when (state) {
+                    is NfcScanUiState.Waiting -> WaitingAnimation()
+                    is NfcScanUiState.Scanning -> {
+                        CircularProgressIndicator(color = AccentCyan, modifier = Modifier.size(80.dp))
+                        Spacer(Modifier.height(16.dp))
+                        Text("Verifica in corso…", color = TextSecondary)
+                    }
+                    is NfcScanUiState.Success -> {
+                        // Handled by LaunchedEffect above — show brief success feedback
+                        Icon(Icons.Default.Nfc, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(80.dp))
+                        Text("Scansione completata!", color = AccentGreen, fontWeight = FontWeight.Bold)
+                    }
+                    is NfcScanUiState.Error -> {
+                        val err = (state as NfcScanUiState.Error).message
+                        Card(colors = CardDefaults.cardColors(containerColor = CardBackground), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Errore", color = AccentRed, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(8.dp))
+                                Text(err, color = TextSecondary, textAlign = TextAlign.Center)
+                                Spacer(Modifier.height(16.dp))
+                                Button(
+                                    onClick = { viewModel.reset() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                                    shape = RoundedCornerShape(8.dp),
+                                ) { Text("Riprova", color = Color.White, fontWeight = FontWeight.Bold) }
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Mostrata quando il device NON ha hardware NFC (es. tablet economici, alcuni emulatori).
+ * Niente CTA: blocco definitivo che invita solo a tornare indietro.
+ */
+@Composable
+private fun NfcUnsupportedView(onBack: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                tint = AccentRed,
+                modifier = Modifier.size(72.dp),
+            )
+            Text(
+                "NFC non supportato",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+            )
+            Text(
+                "Il tuo dispositivo non ha un chip NFC, quindi non puoi scansionare i totem dei sentieri.",
+                color = TextSecondary,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = onBack,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                shape = RoundedCornerShape(8.dp),
+            ) { Text("Torna indietro", color = Color.White, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+/**
+ * Mostrata quando il device ha NFC ma è disabilitato dalle Impostazioni di sistema.
+ * Apre direttamente la schermata Impostazioni NFC: tornando in-app, l'osservatore
+ * di lifecycle ricontrolla `isEnabled` e mostra la schermata di scansione.
+ */
+@Composable
+private fun NfcDisabledView(onOpenSettings: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                Icons.Default.Nfc,
+                contentDescription = null,
+                tint = AccentRed,
+                modifier = Modifier.size(72.dp),
+            )
+            Text(
+                "NFC disattivato",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+            )
+            Text(
+                "Per scansionare i totem devi attivare l'NFC dalle impostazioni del telefono.",
+                color = TextSecondary,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = onOpenSettings,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                shape = RoundedCornerShape(8.dp),
+            ) { Text("Apri impostazioni NFC", color = Color.White, fontWeight = FontWeight.Bold) }
         }
     }
 }

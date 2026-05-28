@@ -3,7 +3,10 @@ package it.trentosmartmountain.app.ui.screens.registra
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -61,9 +64,30 @@ fun TsmMapView(
         zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
         isTilesScaledToDpi = true
         controller.setZoom(13.0)
+        // Centro provvisorio (Trento) — verrà sostituito appena il primo fix GPS
+        // arriva da [LaunchedEffect autoCenterOnFirstFix] sotto. Lo lasciamo come
+        // fallback per il caso in cui il GPS non sia mai disponibile (no permission
+        // o GPS spento): meglio vedere Trento che una mappa centrata su (0,0).
         controller.setCenter(TSM_DEFAULT_MAP_CENTER)
       }
     }
+
+  // Flag che ricorda se abbiamo già centrato la mappa sulla posizione utente.
+  // Vogliamo farlo UNA volta sola al primo fix GPS valido — successivi
+  // ri-centramenti devono passare da [centerOnUserTick] (FAB "centra su di me")
+  // altrimenti l'animazione disturberebbe il panning manuale dell'utente.
+  // Si resetta quando il composable viene ricreato (tab switch + ritorno),
+  // così tornando alla schermata la mappa ricentra sulla posizione corrente.
+  var hasCenteredOnUser by remember { mutableStateOf(false) }
+
+  LaunchedEffect(hasLocationPermission, userLocation) {
+    if (!hasCenteredOnUser && hasLocationPermission && userLocation != null) {
+      mapView.controller.animateTo(
+        GeoPoint(userLocation.latitude, userLocation.longitude),
+      )
+      hasCenteredOnUser = true
+    }
+  }
 
   val userMarker =
     remember(mapView) {

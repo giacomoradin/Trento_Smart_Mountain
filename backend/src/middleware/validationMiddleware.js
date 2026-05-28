@@ -107,6 +107,29 @@ const gpxStatsSchema = Joi.object({
     .max(7 * 24 * 3600),
 });
 
+const plannedRouteSchema = Joi.object({
+  source: Joi.string().valid("GPX", "SAT").required(),
+  polylinePoints: Joi.array()
+    .items(
+      Joi.object({
+        lat: Joi.number().min(-90).max(90).required(),
+        lon: Joi.number().min(-180).max(180).required(),
+      }),
+    )
+    .min(2)
+    .max(2000)
+    .required(),
+  pointsCountOriginal: Joi.number().integer().min(0).max(200000).optional(),
+  pointsCountStored: Joi.number().integer().min(0).max(200000).optional(),
+  bbox: Joi.object({
+    minLat: Joi.number().min(-90).max(90),
+    minLon: Joi.number().min(-180).max(180),
+    maxLat: Joi.number().min(-90).max(90),
+    maxLon: Joi.number().min(-180).max(180),
+  }).optional(),
+  updatedAt: Joi.date().iso().optional(),
+});
+
 // Accetta sia "YYYY-MM-DD" (formato legacy del mobile) sia ISO 8601 completo.
 // Il setter del model converte a Date — qui validiamo solo il formato in input.
 // Vedi backend/src/models/hikeSession.js per la conversione automatica.
@@ -133,6 +156,7 @@ export const createSessionSchema = Joi.object({
   minExperienceLevel: difficultyField,
   gpxFileName: Joi.string().max(200),
   gpxStats: gpxStatsSchema,
+  plannedRoute: plannedRouteSchema.optional(),
 });
 
 export const updateSessionSchema = Joi.object({
@@ -145,6 +169,7 @@ export const updateSessionSchema = Joi.object({
   meetingLocation: Joi.string().max(200).trim().allow(null, ""),
   maxParticipants: Joi.number().integer().min(1).max(50),
   minExperienceLevel: difficultyField,
+  plannedRoute: plannedRouteSchema.optional(),
 }).min(1);
 
 export const updateSessionStatusSchema = Joi.object({
@@ -190,6 +215,30 @@ const actualStatsRequiredSchema = actualStatsSchema.fork(
 
 export const completeSessionSchema = Joi.object({
   actualStats: actualStatsSchema,
+});
+
+// ── Live tracking ────────────────────────────────────────────────────────
+
+export const liveLocationSchema = Joi.object({
+  lat: Joi.number().min(-90).max(90).required(),
+  lon: Joi.number().min(-180).max(180).required(),
+  accuracyM: Joi.number().min(0).max(1000).optional(),
+  timestampMs: Joi.number().integer().min(0).optional(),
+});
+
+export const liveLocationsQuerySchema = Joi.object({
+  maxAgeSec: Joi.number().integer().min(1).max(300).default(30),
+});
+
+export const liveTrackingSuspendSchema = Joi.object({
+  userId: objectIdField.required(),
+  reason: Joi.string()
+    .valid("TOO_FAR_FROM_ROUTE", "MANUAL", "OTHER")
+    .default("MANUAL"),
+});
+
+export const liveTrackingResumeSchema = Joi.object({
+  userId: objectIdField.required(),
 });
 
 // ── Activity (libere) ───────────────────────────────────────────────────

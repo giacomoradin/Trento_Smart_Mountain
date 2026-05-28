@@ -18,6 +18,16 @@ const BUSINESS_ERROR_MAP = {
   INVALID_CREDENTIALS: { status: 401, message: "Credenziali non valide." },
   // 403 — autorizzazione
   FORBIDDEN: { status: 403, message: "Non autorizzato." },
+  NOT_IN_SESSION: { status: 403, message: "Non fai parte di questa sessione." },
+  ONLY_CREATOR: { status: 403, message: "Solo il Capogruppo può eseguire questa operazione." },
+  LIVE_TRACKING_SUSPENDED: {
+    status: 403,
+    message: "Live tracking sospeso per questo utente.",
+  },
+  USER_NOT_PARTICIPANT: {
+    status: 400,
+    message: "L'utente indicato non è un partecipante della sessione.",
+  },
   NOT_INVITED: { status: 403, message: "Non invitato a questa sfida." },
   CREATOR_CANNOT_LEAVE: {
     status: 403,
@@ -61,6 +71,10 @@ const BUSINESS_ERROR_MAP = {
   SESSION_NOT_JOINABLE: {
     status: 409,
     message: "La sessione non è più aperta.",
+  },
+  SESSION_NOT_ACTIVE: {
+    status: 409,
+    message: "La sessione non è attiva.",
   },
   ALREADY_RESPONDED: {
     status: 409,
@@ -111,6 +125,7 @@ export const globalErrorHandler = (err, req, res, next) => {
     return res.status(business.status).json({
       message: business.message,
       ...(business.field ? { field: business.field } : {}),
+      ...(err?.reason ? { reason: err.reason } : {}),
     });
   }
 

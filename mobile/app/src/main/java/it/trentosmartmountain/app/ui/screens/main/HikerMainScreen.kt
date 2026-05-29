@@ -74,6 +74,7 @@ fun HikerMainScreen(
   LaunchedEffect(Unit) {
     SessionStartCoordinator.pendingSessionStart.collect {
       selectedTab = HikerTab.Registra
+      SessionStartCoordinator.consume()
     }
   }
 

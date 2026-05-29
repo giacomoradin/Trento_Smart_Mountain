@@ -58,6 +58,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -80,12 +81,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
-import it.trentosmartmountain.app.data.session.SessionStartCoordinator
+import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.ui.components.SessionParticipationActions
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmBorder
@@ -98,6 +101,9 @@ import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.ui.components.AvatarImage
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 /**
  * Dettaglio escursione (navigazione full-screen sopra [HikerMainScreen]).
@@ -133,27 +139,31 @@ fun SessionDetailScreen(
     }
 
     LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
+    LaunchedEffect(currentUserId) { viewModel.bindCurrentUserId(currentUserId) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, sessionId) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.loadSession(sessionId)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     if (uiState.showAvviaConfirm) {
         AlertDialog(
             onDismissRequest = viewModel::dismissAvviaConfirm,
             containerColor = TsmSurface,
-            title = { Text("Avviare in anticipo?", color = Color.White) },
+            title = { Text(stringResource(R.string.session_avvia_confirm_title), color = Color.White) },
             text = {
                 Text(
-                    "La sessione è pianificata per ${
-                        SessionDateFormats.formatDisplayFromApi(uiState.session?.meetingDate)
-                            .ifBlank { "un altro giorno" }
-                    }. Vuoi avviarla ugualmente?",
+                    stringResource(R.string.session_avvia_confirm_body),
                     color = Color.Gray,
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.dismissAvviaConfirm()
-                        SessionStartCoordinator.requestStart(sessionId)
-                        onAvviaConfirmed(sessionId)
+                        viewModel.confirmLeaderStartEarly { onAvviaConfirmed(sessionId) }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
                 ) { Text("Avvia") }
@@ -407,18 +417,25 @@ fun SessionDetailScreen(
 
             ParticipantsCard(session = session)
 
-            Button(
-                onClick = {
-                    viewModel.onAvviaClick {
-                        SessionStartCoordinator.requestStart(sessionId)
-                        onAvviaConfirmed(sessionId)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
-                shape = RoundedCornerShape(8.dp),
-            ) {
-                Text("▶ AVVIA ESCURSIONE", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+            val participation = remember(uiState.session, uiState.liveUiEpoch, currentUserId) {
+                viewModel.participationUi()
+            }
+            if (participation != null) {
+                SessionParticipationActions(
+                    ui = participation,
+                    onLeaderStart = {
+                        viewModel.requestLeaderStart { onAvviaConfirmed(sessionId) }
+                    },
+                    onLeaderStop = { viewModel.leaderStop() },
+                    onJoinLive = {
+                        viewModel.joinLive { onAvviaConfirmed(sessionId) }
+                    },
+                    onSoloPractice = {
+                        viewModel.startSoloPractice { onAvviaConfirmed(sessionId) }
+                    },
+                    onLeaveLive = { viewModel.leaveLive() },
+                    compact = false,
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))

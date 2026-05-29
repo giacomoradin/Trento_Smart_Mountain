@@ -33,7 +33,108 @@ function formatMeetingDateForJson(value) {
   }
   return value;
 }
-
+// ── Sub-schema: singolo item della checklist ──────────────────────────────────
+const checklistItemSchema = new Schema({
+  // Nome leggibile dell'item — es. "Scarponi con suola rigida"
+  nome: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+ 
+  // Motivazione contestuale — es. "Quota massima > 2500 m con possibile ghiaccio"
+  // Rende la checklist educativa: l'utente capisce *perché* portare quell'item.
+  motivo: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+}, { _id: false });
+ 
+// ── Sub-schema: categoria (raggruppa item per tipo + livello) ─────────────────
+const checklistCategoriaSchema = new Schema({
+  // Tipo di categoria — es. "Abbigliamento", "Alimentazione", "Attrezzatura", "Sicurezza"
+  nome: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+ 
+  // Livello di priorità dell'intera categoria:
+  //   base       → indispensabile, senza questo non si parte
+  //   consigliato → fortemente raccomandato in base al contesto
+  //   opzionale  → utile ma non critico
+  livello: {
+    type: String,
+    enum: ['base', 'consigliato', 'opzionale'],
+    required: true,
+  },
+ 
+  items: {
+    type: [checklistItemSchema],
+    default: [],
+  },
+}, { _id: false });
+ 
+// ── Sub-schema: snapshot meteo usato al momento della generazione ─────────────
+// Serve per debug e per mostrare all'utente su quali previsioni si basava la checklist.
+const checklistWeatherSnapshotSchema = new Schema({
+  // externalId della town di riferimento (dal modello Location)
+  locationId:  { type: String, default: null },
+  locationName: { type: String, default: null },
+ 
+  // Quando è stato fatto il fetch del forecast
+  forecastFetchedAt: { type: Date, default: null },
+ 
+  // Range di validità del forecast usato
+  forecastValidFrom: { type: Date, default: null },
+  forecastValidTo:   { type: Date, default: null },
+ 
+  // Metriche aggregate estratte dagli slot coperti dalla durata dell'escursione.
+  // Sono i valori su cui il checklistService ha preso decisioni.
+  temperaturaMinPrevista: { type: Number, default: null }, // °C
+  temperaturaMedPrevista: { type: Number, default: null }, // °C
+  pioggiaProbMax:         { type: Number, default: null }, // % (max tra gli slot)
+  neveFrescaPrevista:     { type: Number, default: null }, // cm
+  ventoMaxPrevisto:       { type: Number, default: null }, // km/h
+  quotaZeroTermico:       { type: Number, default: null }, // m slm (min tra gli slot)
+}, { _id: false });
+ 
+// ── Sub-schema: checklist completa ────────────────────────────────────────────
+const checklistSchema = new Schema({
+  // Timestamp di creazione (prima generate chiamata)
+  generatedAt: { type: Date, default: null },
+ 
+  // Timestamp dell'ultimo aggiornamento (chiamata update)
+  updatedAt: { type: Date, default: null },
+ 
+  // true quando è scattato il freeze (mezzanotte del giorno prima della sessione).
+  // Dopo il freeze il backend rifiuta qualsiasi update.
+  isFrozen: { type: Boolean, default: false },
+ 
+  // Timestamp in cui è scattato il freeze (per trasparenza verso il client)
+  frozenAt: { type: Date, default: null },
+ 
+  // Snapshot del meteo usato per la generazione/aggiornamento
+  meteoSnapshot: {
+    type: checklistWeatherSnapshotSchema,
+    default: null,
+  },
+ 
+  // Lista ordinata di categorie con i rispettivi item
+  // Ordine convenzionale: base → consigliato → opzionale
+  categorie: {
+    type: [checklistCategoriaSchema],
+    default: [],
+  },
+ 
+  // Idratazione consigliata in litri (calcolata da durata + difficoltà + meteo)
+  acquaLitri: { type: Number, default: null },
+ 
+  // Cibo calcolato in kcal stimate necessarie (calcolate da durata + dislivello)
+  calorieFabbisogno: { type: Number, default: null },
+}, { _id: false });
+ 
 const hikSessionSchema = new Schema({
   // Chi ha creato la sessione diventa automaticamente groupLeader
   creatorId: {
@@ -60,7 +161,10 @@ const hikSessionSchema = new Schema({
     },
     elevationGain: { type: Number },
   },
-
+   checklist: {
+      type: checklistSchema,
+      default: null,
+    },
   // Metadati sessione
   meetingDate: { type: Date, set: parseMeetingDate },
   meetingTime: { type: String },

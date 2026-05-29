@@ -43,16 +43,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.CommentItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.theme.TsmColors
+import it.trentosmartmountain.app.ui.util.RelativeTime
 import it.trentosmartmountain.app.viewmodel.CommentsViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
 
-private val SheetSurface = Color(0xFF1C1C1E)
-private val InputBackground = Color(0xFF2C2C2E)
-private val TextSecondary = Color(0xFF8E8E93)
-private val AccentCyan = Color(0xFF4DD0E1)
+private val SheetSurface = TsmColors.FeedBackground
+private val TextSecondary = TsmColors.TextSecondary
+private val AccentCyan = TsmColors.Cyan
 
 /**
  * BottomSheet modale dei commenti per un singolo target (Activity o Session).
@@ -73,6 +70,12 @@ private val AccentCyan = Color(0xFF4DD0E1)
 fun CommentsBottomSheet(
     target: CommentsTarget?,
     onDismiss: () -> Unit,
+    /**
+     * Notifica il conteggio commenti aggiornato del target alla chiusura, così
+     * il chiamante può aggiornare il proprio item senza ricaricare tutto. Default
+     * no-op per i call site che preferiscono un refresh proprio (es. profilo).
+     */
+    onCountChanged: (id: String, kind: String, count: Int) -> Unit = { _, _, _ -> },
     viewModel: CommentsViewModel = viewModel(
         viewModelStoreOwner = LocalContext.current as ComponentActivity,
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
@@ -97,7 +100,12 @@ fun CommentsBottomSheet(
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            // Propaga il conteggio finale PRIMA di chiudere: il target è ancora
+            // valido qui (l'early-return su null avviene solo alla ricomposizione).
+            onCountChanged(target.id, target.kind, state.count)
+            onDismiss()
+        },
         sheetState = sheetState,
         containerColor = SheetSurface,
     ) {
@@ -210,7 +218,7 @@ private fun CommentRow(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = formatRelative(comment.createdAt),
+                    text = RelativeTime.short(comment.createdAt),
                     color = TextSecondary,
                     fontSize = 11.sp,
                 )
@@ -292,28 +300,3 @@ private fun CommentInputRow(
     }
 }
 
-/** Formato relativo ("ora", "5 min fa", "2 h fa", "3 g fa", altrimenti dd/MM). */
-private fun formatRelative(iso: String?): String {
-    if (iso.isNullOrBlank()) return "ora"
-    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    val sdfMs = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    val date = runCatching {
-        val trimmed = iso.removeSuffix("Z").take(23)
-        if (trimmed.length > 19) sdfMs.parse(trimmed) else sdf.parse(trimmed.take(19))
-    }.getOrNull() ?: return ""
-    val seconds = (System.currentTimeMillis() - date.time) / 1000
-    val minutes = seconds / 60
-    val hours = minutes / 60
-    val days = hours / 24
-    return when {
-        seconds < 60 -> "ora"
-        minutes < 60 -> "${minutes}m"
-        hours < 24 -> "${hours}h"
-        days < 7 -> "${days}g"
-        else -> SimpleDateFormat("dd/MM", Locale.ITALIAN).format(date)
-    }
-}

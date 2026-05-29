@@ -29,25 +29,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
-import java.text.SimpleDateFormat
-import java.util.Date
+import it.trentosmartmountain.app.ui.theme.TsmColors
+import it.trentosmartmountain.app.ui.theme.difficultyColor
+import it.trentosmartmountain.app.ui.util.RelativeTime
 import java.util.Locale
-import java.util.TimeZone
 import kotlin.math.roundToInt
 
-private val CardBackground = Color(0xFF242427)
-private val HeroTop = Color(0xFF1B1B1F)
-private val HeroBottom = Color(0xFF101012)
-private val TextPrimary = Color(0xFFF2F2F4)
-private val TextSecondary = Color(0xFF9A9AA0)
-private val AccentRed = Color(0xFFFF6B6B)
-private val AccentCyan = Color(0xFF4DD0E1)
-private val Divider = Color(0xFF34343A)
+// Colori della card derivati dalla palette centrale (vedi ui/theme/TsmPalette.kt).
+private val CardBackground = TsmColors.Card
+private val HeroTop = TsmColors.HeroTop
+private val HeroBottom = TsmColors.HeroBottom
+private val TextPrimary = TsmColors.TextPrimary
+private val TextSecondary = TsmColors.TextTertiary
+private val AccentRed = TsmColors.Danger
+private val AccentCyan = TsmColors.Cyan
+private val Divider = TsmColors.Divider
 
 /**
  * Card del feed sociale — redesign **Strava-style** (Sprint 3).
@@ -81,6 +84,7 @@ fun FeedCard(
     val hasRoute = route != null && route.size >= 2
     val profile = item.elevationProfile
     val hasProfile = profile != null && profile.size >= 2
+    val haptic = LocalHapticFeedback.current
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -242,7 +246,16 @@ fun FeedCard(
                     .padding(start = 6.dp, end = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onLikeToggle) {
+                IconButton(
+                    onClick = {
+                        // Feedback aptico solo quando si AGGIUNGE il like (gesto positivo),
+                        // come Strava/Instagram: rende il tap sul cuore soddisfacente.
+                        if (!item.likedByMe) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                        onLikeToggle()
+                    },
+                ) {
                     Icon(
                         imageVector = if (item.likedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                         contentDescription = if (item.likedByMe) "Rimuovi like" else "Metti like",
@@ -408,17 +421,9 @@ private fun StatCell(label: String, value: String, modifier: Modifier = Modifier
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-private fun difficultyColor(level: String): Color = when (level.uppercase(Locale.ROOT)) {
-    "T" -> Color(0xFF4CAF50)
-    "E" -> Color(0xFF4FC3F7)
-    "EE" -> Color(0xFFFF9800)
-    "EEA" -> Color(0xFFE53935)
-    else -> Color(0xFF9A9AA0)
-}
-
 /** Meta-riga "tempo relativo · tipo" sotto lo username. */
 private fun buildMetaLine(item: FeedItem): String {
-    val rel = formatSharedAt(item.sharedAt)
+    val rel = RelativeTime.long(item.sharedAt)
     val type = activityTypeLabel(item)
     return listOf(rel, type).filter { it.isNotBlank() }.joinToString(" · ")
 }
@@ -465,34 +470,4 @@ private fun formatPace(meters: Double?, seconds: Long?): String {
     val mm = secPerKm / 60
     val ss = secPerKm % 60
     return "%d:%02d".format(mm, ss)
-}
-
-/**
- * Formato "tempo trascorso" leggibile: "ora", "5 min fa", "2 h fa", "3 g fa",
- * altrimenti data assoluta dd/MM. Niente librerie esterne — bastano gli intervals.
- */
-private fun formatSharedAt(iso: String?): String {
-    if (iso.isNullOrBlank()) return ""
-    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    val sdfMs = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    val date = runCatching {
-        val trimmed = iso.removeSuffix("Z").take(23)
-        if (trimmed.length > 19) sdfMs.parse(trimmed) else sdf.parse(trimmed.take(19))
-    }.getOrNull() ?: return ""
-    val deltaMs = System.currentTimeMillis() - date.time
-    val seconds = deltaMs / 1000
-    val minutes = seconds / 60
-    val hours = minutes / 60
-    val days = hours / 24
-    return when {
-        seconds < 60 -> "ora"
-        minutes < 60 -> "$minutes min fa"
-        hours < 24 -> "$hours h fa"
-        days < 7 -> "$days g fa"
-        else -> SimpleDateFormat("dd/MM", Locale.ITALIAN).format(date)
-    }
 }

@@ -214,6 +214,12 @@ export async function cancelChallenge(challengeId, userId) {
   if (!challenge) throw new Error("CHALLENGE_NOT_FOUND");
   if (challenge.creatorId.toString() !== userId.toString())
     throw new Error("ONLY_CREATOR_CAN_CANCEL_CHALLENGE");
+  // Riconcilia lo stato PRIMA del controllo: una sfida con startDate già
+  // passata ma ancora salvata come PENDING (transizione lazy non ancora
+  // eseguita) è DI FATTO già in corso → non deve poter essere cancellata.
+  // Senza questo passaggio si poteva cancellare una sfida attiva sfruttando lo
+  // stato stale (bug). Vedi __tests__/routes/challenge.test.js.
+  reconcileStatus(challenge);
   if (challenge.status === "ACTIVE" || challenge.status === "COMPLETED") {
     throw new Error("CANNOT_CANCEL_RUNNING");
   }

@@ -508,6 +508,10 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         routePoints = snapState.trackGeoPoints.map { p ->
           RoutePoint(lat = p.latitude, lon = p.longitude)
         },
+        // Quote assolute della traccia per la banda altimetrica del feed: il
+        // GeoPoint conserva l'altitudine catturata in applyLocation (0.0 se il
+        // fix GPS non l'aveva). Il repository campiona a ~50 punti.
+        elevations = snapState.trackGeoPoints.map { it.altitude },
       )
       if (result is SessionCommandRepository.SyncResult.Synced) {
         // Marca sincronizzato con il remoteId emesso dal backend (per attività
@@ -573,8 +577,14 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         distanceMeters = metrics.distanceMeters,
         elevationGainMeters = metrics.elevationGainMeters,
         currentAltitudeMeters = snapshot.altitudeMeters?.toInt(),
+        // Conserviamo la quota nel GeoPoint (costruttore 3-arg, come
+        // TrackingPersistenceRepository.finalize): serve alla banda altimetrica
+        // del feed. La mappa OSMdroid ignora l'altitudine, quindi è innocua per
+        // il disegno della polyline. 0.0 quando il fix GPS non ha quota.
         trackGeoPoints =
-          metrics.trackPoints.map { GeoPoint(it.latitude, it.longitude) },
+          metrics.trackPoints.map {
+            GeoPoint(it.latitude, it.longitude, it.altitudeMeters ?: 0.0)
+          },
       )
     }
   }

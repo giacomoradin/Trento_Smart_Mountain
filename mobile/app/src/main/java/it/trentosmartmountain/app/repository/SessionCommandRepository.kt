@@ -10,6 +10,8 @@ import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
 import it.trentosmartmountain.app.data.remote.dto.RoutePoint
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.sync.SyncManager
+import it.trentosmartmountain.app.util.ELEVATION_PROFILE_MAX_POINTS
+import it.trentosmartmountain.app.util.downsampleByIndex
 
 /**
  * Sottile wrapper attorno agli endpoint backend chiamati durante il flusso
@@ -69,6 +71,13 @@ class SessionCommandRepository(context: Context) {
      * o < 2 punti → nessuna route signature (degrada a hero alternativo).
      */
     routePoints: List<RoutePoint> = emptyList(),
+    /**
+     * Quote assolute (m) della traccia, allineate ai [routePoints]. Inviate SOLO
+     * per le attività libere e campionate a [ELEVATION_PROFILE_MAX_POINTS] punti
+     * per la banda altimetrica del feed. Lista vuota o < 2 punti → nessun profilo
+     * (la card degrada a hero senza altimetria).
+     */
+    elevations: List<Double> = emptyList(),
   ): SyncResult {
     val distKm = distanceMeters / 1000.0
     val actualH = movingSeconds / 3600.0
@@ -101,7 +110,8 @@ class SessionCommandRepository(context: Context) {
           startTimeMs = if (startTimeMs > 0) startTimeMs else System.currentTimeMillis() - movingSeconds * 1000L,
           endTimeMs = System.currentTimeMillis(),
           actualStats = payload,
-          routePolyline = downsampleRoute(routePoints, ROUTE_MAX_POINTS),
+          elevationProfile = downsampleByIndex(elevations, ELEVATION_PROFILE_MAX_POINTS),
+          routePolyline = downsampleByIndex(routePoints, ROUTE_MAX_POINTS),
         )
         val resp = TsmApiClient.service().createActivity(req)
         if (resp.isSuccessful) SyncResult.Synced(remoteId = resp.body()?._id)
@@ -114,25 +124,6 @@ class SessionCommandRepository(context: Context) {
       SyncManager.enqueueImmediate(appContext)
       SyncResult.Pending
     }
-  }
-
-  /**
-   * Campiona la traccia a `maxPoints` per indice uniforme (primo + ultimo
-   * sempre preservati). Mirror lato client di `backend/src/utils/geoPolyline.js`
-   * — il server ricampiona comunque come hard cap, ma riduciamo qui per non
-   * sforare il limite di validazione (max 500) e contenere il payload.
-   * Ritorna `null` se la traccia ha < 2 punti (niente route signature).
-   */
-  private fun downsampleRoute(points: List<RoutePoint>, maxPoints: Int): List<RoutePoint>? {
-    if (points.size < 2) return null
-    if (points.size <= maxPoints) return points
-    val step = (points.size - 1).toDouble() / (maxPoints - 1)
-    val out = ArrayList<RoutePoint>(maxPoints)
-    for (i in 0 until maxPoints) {
-      out.add(points[Math.round(i * step).toInt()])
-    }
-    out[out.size - 1] = points[points.size - 1]
-    return out
   }
 
   private companion object {

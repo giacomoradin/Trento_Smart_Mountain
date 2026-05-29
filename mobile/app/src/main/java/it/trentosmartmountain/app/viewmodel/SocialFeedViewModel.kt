@@ -256,6 +256,21 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /**
+     * Aggiorna il `commentsCount` di un singolo item del feed **in-place**,
+     * senza ricaricare l'intero feed. Chiamato alla chiusura della BottomSheet
+     * commenti, che conosce il conteggio finale del target.
+     *
+     * Prima si faceva `refresh()` totale alla chiusura: una manciata di chiamate
+     * di rete + perdita della posizione di scroll, solo per aggiornare un numero.
+     * No-op se l'item non è (più) nel feed corrente.
+     */
+    fun setCommentCount(id: String, kind: String, count: Int) {
+        val item = _state.value.items.firstOrNull { it.id == id && it.kind == kind } ?: return
+        if (item.commentsCount == count) return
+        replaceItem(item.copy(commentsCount = count))
+    }
+
     /** Pulisce i messaggi transienti dopo che la UI li ha mostrati. */
     fun clearShareMessages() {
         _state.value = _state.value.copy(shareError = null, shareSuccess = null)

@@ -29,15 +29,25 @@ data class FeedItem(
     @SerializedName("sharedAt") val sharedAt: String?,    // ISO 8601
     @SerializedName("caption") val caption: String?,
     @SerializedName("title") val title: String?,
+    @SerializedName("activityType") val activityType: String? = null,    // hiking|trail|skitouring|trekking
+    @SerializedName("difficultyLevel") val difficultyLevel: String? = null, // T|E|EE|EEA
     @SerializedName("distanceMeters") val distanceMeters: Double?,
     @SerializedName("movingSeconds") val movingSeconds: Long?,
     @SerializedName("elevationGainM") val elevationGainM: Int?,
     @SerializedName("finalPoints") val finalPoints: Int?,
     @SerializedName("elevationProfile") val elevationProfile: List<Double>? = null,
+    /** Traccia GPS campionata (route signature). null se l'attività/sessione non ha geometria. */
+    @SerializedName("routePolyline") val routePolyline: List<RoutePoint>? = null,
     @SerializedName("participants") val participants: List<FeedUser>? = null,
     @SerializedName("likesCount") val likesCount: Int = 0,
     @SerializedName("commentsCount") val commentsCount: Int = 0,
     @SerializedName("likedByMe") val likedByMe: Boolean = false,
+)
+
+/** Punto della route signature. Formato `{lat, lon}` coerente col backend. */
+data class RoutePoint(
+    @SerializedName("lat") val lat: Double,
+    @SerializedName("lon") val lon: Double,
 )
 
 data class FeedUser(

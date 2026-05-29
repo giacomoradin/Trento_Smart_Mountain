@@ -639,6 +639,102 @@ describe("Social Routes", () => {
       expect(page2.body.items).toHaveLength(1);
       expect(page2.body.hasMore).toBe(false);
     });
+
+    // ── Route signature + metadata (redesign Strava-style) ──────────────
+    test("feed item exposes routePolyline + activityType + difficulty for activity", async () => {
+      const me = await createTestHiker({
+        username: "route29",
+        email: "route29@test.com",
+      });
+      // Attività con traccia GPS registrata + tipo + difficoltà.
+      const act = await Activity.create({
+        userId: me.user._id,
+        name: "Cima con traccia",
+        activityType: "trail",
+        difficultyLevel: "EE",
+        startTimeMs: Date.now() - 3600_000,
+        endTimeMs: Date.now(),
+        actualStats: {
+          movingSeconds: 3000,
+          totalSeconds: 3600,
+          distanceMeters: 5000,
+          elevationGainM: 300,
+        },
+        routePolyline: [
+          { lat: 46.0, lon: 11.0 },
+          { lat: 46.01, lon: 11.01 },
+          { lat: 46.02, lon: 11.015 },
+        ],
+      });
+      await request(app)
+        .post(`/api/v1/activities/${act._id}/share`)
+        .set("Authorization", `Bearer ${me.token}`)
+        .send({});
+      const res = await request(app)
+        .get("/api/v1/users/me/feed")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      const item = res.body.items[0];
+      expect(item.activityType).toBe("trail");
+      expect(item.difficultyLevel).toBe("EE");
+      expect(Array.isArray(item.routePolyline)).toBe(true);
+      expect(item.routePolyline).toHaveLength(3);
+      // Primo e ultimo punto preservati (start/end marker).
+      expect(item.routePolyline[0]).toMatchObject({ lat: 46.0, lon: 11.0 });
+      expect(item.routePolyline[2]).toMatchObject({ lat: 46.02, lon: 11.015 });
+    });
+
+    test("feed item has null routePolyline for activity without GPS track", async () => {
+      const me = await createTestHiker({
+        username: "noroute30",
+        email: "noroute30@test.com",
+      });
+      const act = await createTestActivity(me.user._id); // no routePolyline
+      await request(app)
+        .post(`/api/v1/activities/${act._id}/share`)
+        .set("Authorization", `Bearer ${me.token}`)
+        .send({});
+      const res = await request(app)
+        .get("/api/v1/users/me/feed")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.body.items[0].routePolyline).toBeNull();
+    });
+
+    test("feed item derives routePolyline from session plannedRoute", async () => {
+      const me = await createTestHiker({
+        username: "sessroute31",
+        email: "sessroute31@test.com",
+      });
+      const session = await HikeSession.create({
+        creatorId: me.user._id,
+        routeDetails: { name: "Percorso pianificato", difficultyLevel: "EEA" },
+        meetingDate: "2026-09-01",
+        inviteCode: "TSM-R031",
+        participants: [{ userId: me.user._id, role: "groupLeader" }],
+        plannedRoute: {
+          source: "GPX",
+          polylinePoints: [
+            { lat: 46.1, lon: 11.1 },
+            { lat: 46.11, lon: 11.12 },
+            { lat: 46.12, lon: 11.13 },
+            { lat: 46.13, lon: 11.14 },
+          ],
+        },
+      });
+      await request(app)
+        .post(`/api/v1/sessions/${session._id}/share`)
+        .set("Authorization", `Bearer ${me.token}`)
+        .send({});
+      const res = await request(app)
+        .get("/api/v1/users/me/feed")
+        .set("Authorization", `Bearer ${me.token}`);
+      const item = res.body.items.find((i) => i.kind === "session");
+      expect(item).toBeDefined();
+      expect(item.difficultyLevel).toBe("EEA");
+      expect(Array.isArray(item.routePolyline)).toBe(true);
+      expect(item.routePolyline.length).toBeGreaterThanOrEqual(2);
+      expect(item.routePolyline[0]).toMatchObject({ lat: 46.1, lon: 11.1 });
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────

@@ -259,6 +259,19 @@ export const createActivitySchema = Joi.object({
   actualStats: actualStatsRequiredSchema.required(),
   difficultyLevel: difficultyField,
   elevationProfile: Joi.array().items(Joi.number()).max(200),
+  // Traccia GPS campionata per la "route signature" del feed. Il client invia
+  // già downsampled (~80 punti); accettiamo fino a 500 per tolleranza e il
+  // service ricampiona se necessario. min(2) perché 1 punto non è una linea.
+  routePolyline: Joi.array()
+    .items(
+      Joi.object({
+        lat: Joi.number().min(-90).max(90).required(),
+        lon: Joi.number().min(-180).max(180).required(),
+      }),
+    )
+    .min(2)
+    .max(500)
+    .optional(),
 });
 
 // ── Params / query ──────────────────────────────────────────────────────

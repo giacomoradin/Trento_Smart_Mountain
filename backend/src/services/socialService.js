@@ -3,6 +3,11 @@ import Activity from "../models/activity.js";
 import HikeSession from "../models/hikeSession.js";
 import Hiker from "../models/hiker.js";
 import { getFollowingIds } from "./followService.js";
+import { downsamplePolyline } from "../utils/geoPolyline.js";
+
+// Risoluzione della route signature nel feed: ~48 punti bastano a riconoscere
+// la forma di un percorso in una thumbnail card senza appesantire il payload.
+const FEED_ROUTE_POINTS = 48;
 
 /**
  * Servizio "social" centralizzato per share + like su attività e sessioni.
@@ -187,6 +192,17 @@ function toFeedItem(doc, kind, viewerId) {
   const user = kind === "activity" ? doc.userId : doc.creatorId;
   const stats = doc.actualStats || {};
   const gpxStats = kind === "session" ? doc.gpxStats || {} : null;
+
+  // Route signature: per le attività la traccia registrata (routePolyline),
+  // per le sessioni la polyline del percorso pianificato (plannedRoute).
+  // Entrambe ricampionate a FEED_ROUTE_POINTS per la thumbnail. null se assente
+  // (attività vecchie / sessioni senza GPX) → la card userà un hero alternativo.
+  const rawRoute =
+    kind === "activity"
+      ? doc.routePolyline
+      : doc.plannedRoute?.polylinePoints;
+  const routePolyline = downsamplePolyline(rawRoute, FEED_ROUTE_POINTS) ?? null;
+
   return {
     kind,
     id: doc._id.toString(),
@@ -202,6 +218,11 @@ function toFeedItem(doc, kind, viewerId) {
     sharedAt: doc.sharedAt,
     caption: doc.caption ?? null,
     title: kind === "activity" ? doc.name : doc.routeDetails?.name,
+    activityType: kind === "activity" ? doc.activityType ?? null : null,
+    difficultyLevel:
+      kind === "activity"
+        ? doc.difficultyLevel ?? null
+        : doc.routeDetails?.difficultyLevel ?? null,
     distanceMeters:
       stats.distanceMeters ??
       (gpxStats?.distanceKm != null ? gpxStats.distanceKm * 1000 : null),
@@ -213,6 +234,7 @@ function toFeedItem(doc, kind, viewerId) {
       kind === "activity"
         ? doc.elevationProfile ?? null
         : gpxStats?.elevationProfile ?? null,
+    routePolyline,
     participants:
       kind === "session"
         ? (doc.participants || [])

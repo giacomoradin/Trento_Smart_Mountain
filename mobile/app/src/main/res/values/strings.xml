@@ -100,7 +100,12 @@
   <string name="session_join_scan_qr">SCANSIONA QR</string>
   <string name="session_join_sessions_header">SESSIONI IN CUI SEI REGISTRATO</string>
   <string name="session_card_avvia">▶ AVVIA</string>
+  <string name="session_card_arresta">■ ARRESTA</string>
+  <string name="session_card_arresta_per_me">↩ Arresta per me</string>
+  <string name="session_card_unisciti_live">▶ UNISCITI AL LIVE</string>
+  <string name="session_card_prova_tracciato">▶ PROVA TRACCIATO</string>
   <string name="session_card_abbandona">↩ Abbandona</string>
+  <string name="session_detail_arresta">■ ARRESTA ESCURSIONE</string>
   <string name="session_card_oggi">OGGI</string>
   <string name="session_leave_confirm_title">Abbandonare la sessione?</string>
   <string name="session_leave_confirm_body">Verrai rimosso dall\'elenco partecipanti. Potrai riunirti di nuovo con il codice invito.</string>

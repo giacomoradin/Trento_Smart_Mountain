@@ -23,7 +23,10 @@ import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
 import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
+import it.trentosmartmountain.app.data.session.SessionLiveStateStore
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
+import it.trentosmartmountain.app.data.session.SessionStopCoordinator
+import it.trentosmartmountain.app.data.session.UserSessionLiveState
 import it.trentosmartmountain.app.data.sync.SyncManager
 import it.trentosmartmountain.app.repository.EmergencyRepository
 import it.trentosmartmountain.app.repository.OfflineEmergencyException
@@ -220,10 +223,16 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         if (_uiState.value.trackingStatus == TrackingStatus.IDLE) {
           autoStartFromSession(sessionId)
         } else {
-          // Tracking già in corso → memorizziamo l'ID ma non interrompiamo
           _uiState.update { it.copy(activeSessionId = sessionId) }
         }
-        SessionStartCoordinator.consume()
+      }
+    }
+    viewModelScope.launch {
+      SessionStopCoordinator.pendingSessionStop.collect { sessionId ->
+        if (_uiState.value.activeSessionId == sessionId) {
+          detachFromLiveTracking()
+        }
+        SessionStopCoordinator.consume()
       }
     }
     viewModelScope.launch {
@@ -234,7 +243,11 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
           if (sessionId != null) {
             viewModelScope.launch { refreshSessionRole(sessionId) }
             startEmergencyPolling(sessionId)
-            startLivePolling(sessionId)
+            val local = SessionLiveStateStore.getState(app, sessionId)
+            val tracking = _uiState.value.trackingStatus != TrackingStatus.IDLE
+            if (tracking && (local == UserSessionLiveState.IN_GROUP_LIVE || local == UserSessionLiveState.SOLO_PRACTICE)) {
+              startLivePolling(sessionId)
+            }
           } else {
             stopEmergencyPolling()
             stopLivePolling()
@@ -257,21 +270,62 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
    */
   fun syncActiveSessionFromServer() {
     viewModelScope.launch {
-      if (_uiState.value.activeSessionId != null) {
-        startLivePolling(_uiState.value.activeSessionId!!)
-        refreshIncomingEmergencies()
+      val currentId = _uiState.value.activeSessionId
+      if (currentId != null) {
+        val local = SessionLiveStateStore.getState(app, currentId)
+        if (local == UserSessionLiveState.IN_GROUP_LIVE || local == UserSessionLiveState.SOLO_PRACTICE) {
+          if (_uiState.value.trackingStatus != TrackingStatus.IDLE) {
+            startLivePolling(currentId)
+          }
+          refreshIncomingEmergencies()
+        } else {
+          _uiState.update { it.copy(activeSessionId = null) }
+        }
         return@launch
       }
       runCatching {
         val res = TsmApiClient.service().getMySessions()
         if (!res.isSuccessful) return@launch
-        val active = res.body()?.firstOrNull { it.status == "ACTIVE" }
-        if (active != null) {
-          _uiState.update { it.copy(activeSessionId = active._id) }
-          refreshSessionRole(active._id)
-          refreshIncomingEmergencies()
+        val sessions = res.body().orEmpty()
+        val linked = sessions.firstOrNull { session ->
+          val local = SessionLiveStateStore.getState(app, session._id)
+          (local == UserSessionLiveState.IN_GROUP_LIVE || local == UserSessionLiveState.SOLO_PRACTICE) &&
+            (session.status == "ACTIVE" || local == UserSessionLiveState.SOLO_PRACTICE)
+        } ?: return@launch
+        _uiState.update { it.copy(activeSessionId = linked._id) }
+        refreshSessionRole(linked._id)
+        refreshIncomingEmergencies()
+        if (_uiState.value.trackingStatus != TrackingStatus.IDLE) {
+          startLivePolling(linked._id)
         }
       }.onFailure { /* sessione opzionale in background */ }
+    }
+  }
+
+  /** Interrompe GPS/live senza uscire dalla sessione di gruppo (Arresta per me / Arresta capogruppo). */
+  fun detachFromLiveTracking() {
+    if (_uiState.value.trackingStatus != TrackingStatus.IDLE) {
+      stopLivePolling()
+      stopHardware()
+      currentTrackId = null
+      _uiState.update {
+        it.copy(
+          trackingStatus = TrackingStatus.IDLE,
+          isAutoPaused = false,
+          showStopConfirm = false,
+          shortActivityConfirm = false,
+          trackGeoPoints = emptyList(),
+          elapsedSeconds = 0,
+          distanceMeters = 0.0,
+          elevationGainMeters = 0,
+          activeSessionId = null,
+          trackStartTimeMs = 0L,
+          activityNameDraft = "",
+        )
+      }
+    } else {
+      stopLivePolling()
+      _uiState.update { it.copy(activeSessionId = null) }
     }
   }
 
@@ -300,8 +354,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     _uiState.update { it.copy(activeSessionId = sessionId) }
     viewModelScope.launch {
       refreshSessionRole(sessionId)
-      // Solo il capogruppo può portare la sessione da PLANNED → ACTIVE (backend).
-      if (_uiState.value.isSessionGroupLeader) {
+      val local = SessionLiveStateStore.getState(app, sessionId)
+      if (_uiState.value.isSessionGroupLeader && local == UserSessionLiveState.IN_GROUP_LIVE) {
         sessionCommands.markSessionActive(sessionId)
       }
     }
@@ -358,6 +412,12 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       )
     }
     lastSnapshot?.let { applyLocation(it) }
+    _uiState.value.activeSessionId?.let { sessionId ->
+      val local = SessionLiveStateStore.getState(app, sessionId)
+      if (local == UserSessionLiveState.IN_GROUP_LIVE || local == UserSessionLiveState.SOLO_PRACTICE) {
+        startLivePolling(sessionId)
+      }
+    }
   }
 
   fun togglePause() {

@@ -8,6 +8,11 @@ import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
+import it.trentosmartmountain.app.data.session.SessionLiveController
+import it.trentosmartmountain.app.data.session.SessionParticipationResolver
+import it.trentosmartmountain.app.data.session.SessionParticipationUi
+import it.trentosmartmountain.app.data.session.UserSessionLiveState
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,17 +25,12 @@ import java.io.IOException
  */
 class SessionJoinViewModel(application: Application) : AndroidViewModel(application) {
 
-    /**
-     * Modalità di rimozione da una sessione:
-     * - LEAVE: partecipante non-creator → POST /:id/leave (rimane la sessione, esce solo lui)
-     * - DELETE: creator → DELETE /:id (rimuove l'intera sessione anche per i partecipanti)
-     */
     enum class RemovalMode { LEAVE, DELETE }
 
-    /** Stato del tab unisciti (codice, lista sessioni, dialog rimozione). */
     data class UiState(
         val joinCode: String = "TSM-",
         val sessions: List<SessionResponse> = emptyList(),
+        val liveStates: Map<String, UserSessionLiveState> = emptyMap(),
         val isLoadingSessions: Boolean = false,
         val isJoining: Boolean = false,
         val joinError: String? = null,
@@ -38,19 +38,26 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
         val removeConfirm: RemovalRequest? = null,
         val isRemoving: Boolean = false,
         val currentUserId: String = "",
+        val avviaConfirmSessionId: String? = null,
     )
 
     data class RemovalRequest(val sessionId: String, val mode: RemovalMode)
 
+    private val liveController = SessionLiveController(application)
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
-        // Estrai userId dal JWT per il check creator/partecipante
         val token = (getApplication() as TsmApplication).tokenStorage.getToken()
         val userId = token?.let { JwtDecoder.userIdFrom(it) } ?: ""
         _uiState.update { it.copy(currentUserId = userId) }
         loadSessions()
+    }
+
+    fun participationUi(session: SessionResponse): SessionParticipationUi {
+        val isCreator = session.creatorId?._id == _uiState.value.currentUserId
+        val local = _uiState.value.liveStates[session._id] ?: UserSessionLiveState.NOT_IN_LIVE
+        return SessionParticipationResolver.resolve(session, isCreator, local)
     }
 
     fun loadSessions() {
@@ -59,13 +66,17 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 val response = TsmApiClient.service().getMySessions()
                 if (response.isSuccessful) {
-                    // Mostriamo solo sessioni ancora "vive" nella tab Unisciti:
-                    // PLANNED (in programma) o ACTIVE (in corso). Le COMPLETED/CANCELLED
-                    // finiscono in "Le mie attività" e non devono comparire qui.
                     val sorted = (response.body() ?: emptyList())
                         .filter { it.status == "PLANNED" || it.status == "ACTIVE" }
                         .sortedBy { it.meetingDate ?: "" }
-                    _uiState.update { it.copy(isLoadingSessions = false, sessions = sorted) }
+                    liveController.reconcile(sorted)
+                    _uiState.update {
+                        it.copy(
+                            isLoadingSessions = false,
+                            sessions = sorted,
+                            liveStates = liveController.snapshot(),
+                        )
+                    }
                 } else {
                     _uiState.update {
                         it.copy(
@@ -125,10 +136,6 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    /**
-     * Richiede conferma per rimuovere la sessione. La modalità (LEAVE vs DELETE)
-     * è determinata dal ruolo dell'utente sulla sessione specifica.
-     */
     fun requestRemoveSession(session: SessionResponse) {
         val mode = if (session.creatorId?._id == _uiState.value.currentUserId) {
             RemovalMode.DELETE
@@ -159,7 +166,8 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
                         )
                     }
                 } else {
-                    _uiState.update { it.copy(isRemoving = false) }
+                    liveController.clearOnSessionRemoved(request.sessionId)
+                    _uiState.update { it.copy(isRemoving = false, liveStates = liveController.snapshot()) }
                 }
                 loadSessions()
             } catch (_: IOException) {
@@ -168,5 +176,55 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
                 _uiState.update { it.copy(isRemoving = false, generalError = "Errore: ${e.javaClass.simpleName}") }
             }
         }
+    }
+
+    fun requestLeaderStart(session: SessionResponse) {
+        if (SessionDateFormats.isTodayApi(session.meetingDate)) {
+            liveController.leaderStart(session._id)
+            refreshLiveStates()
+        } else {
+            _uiState.update { it.copy(avviaConfirmSessionId = session._id) }
+        }
+    }
+
+    fun confirmLeaderStartEarly() {
+        val id = _uiState.value.avviaConfirmSessionId ?: return
+        liveController.leaderStart(id)
+        _uiState.update { it.copy(avviaConfirmSessionId = null) }
+        refreshLiveStates()
+    }
+
+    fun dismissAvviaConfirm() {
+        _uiState.update { it.copy(avviaConfirmSessionId = null) }
+    }
+
+    fun leaderStop(sessionId: String) {
+        liveController.leaderStop(viewModelScope, sessionId)
+        refreshLiveStates()
+        loadSessions()
+    }
+
+    fun joinLive(sessionId: String) {
+        liveController.joinLive(sessionId)
+        refreshLiveStates()
+    }
+
+    fun leaveLive(sessionId: String) {
+        val local = _uiState.value.liveStates[sessionId]
+        if (local == UserSessionLiveState.SOLO_PRACTICE) {
+            liveController.endSoloPractice(sessionId)
+        } else {
+            liveController.leaveLive(sessionId)
+        }
+        refreshLiveStates()
+    }
+
+    fun startSoloPractice(sessionId: String) {
+        liveController.startSoloPractice(sessionId)
+        refreshLiveStates()
+    }
+
+    private fun refreshLiveStates() {
+        _uiState.update { it.copy(liveStates = liveController.snapshot()) }
     }
 }

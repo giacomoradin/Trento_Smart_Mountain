@@ -37,5 +37,11 @@ object SessionDateFormats {
         }
     }
 
-    fun isTodayApi(apiDate: String?): Boolean = apiDate?.trim() == todayApi()
+    fun isTodayApi(apiDate: String?): Boolean {
+        val raw = apiDate?.trim().orEmpty()
+        if (raw.isEmpty()) return false
+        val dateOnly = raw.take(10)
+        if (API_PATTERN.matches(dateOnly)) return dateOnly == todayApi()
+        return raw == todayApi()
+    }
 }

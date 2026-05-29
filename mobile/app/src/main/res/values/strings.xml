@@ -100,7 +100,12 @@
   <string name="session_join_scan_qr">SCANSIONA QR</string>
   <string name="session_join_sessions_header">SESSIONI IN CUI SEI REGISTRATO</string>
   <string name="session_card_avvia">▶ AVVIA</string>
+  <string name="session_card_arresta">■ ARRESTA</string>
+  <string name="session_card_arresta_per_me">↩ Arresta per me</string>
+  <string name="session_card_unisciti_live">▶ UNISCITI AL LIVE</string>
+  <string name="session_card_prova_tracciato">▶ PROVA TRACCIATO</string>
   <string name="session_card_abbandona">↩ Abbandona</string>
+  <string name="session_detail_arresta">■ ARRESTA ESCURSIONE</string>
   <string name="session_card_oggi">OGGI</string>
   <string name="session_leave_confirm_title">Abbandonare la sessione?</string>
   <string name="session_leave_confirm_body">Verrai rimosso dall\'elenco partecipanti. Potrai riunirti di nuovo con il codice invito.</string>
@@ -218,8 +223,19 @@
   <string name="live_participant_badge_leader">Capogruppo</string>
   <string name="live_participant_badge_participant">Partecipante</string>
   <string name="live_participant_leader_section">Dettagli capogruppo</string>
+  <string name="live_participant_self_section">Le tue informazioni</string>
   <string name="live_participant_altitude">Quota</string>
   <string name="live_participant_sex">Sesso</string>
   <string name="live_participant_last_update">Ultimo aggiornamento</string>
   <string name="live_participant_status">Stato</string>
+  <string name="group_roster_cd">Elenco partecipanti</string>
+  <string name="group_roster_title">Partecipanti in escursione</string>
+  <string name="group_roster_active_header">Sul percorso (in movimento o in pausa)</string>
+  <string name="group_roster_active_empty">Nessun partecipante con posizione aggiornata.</string>
+  <string name="group_roster_excluded_header">Esclusi dal tracking in tempo reale</string>
+  <string name="group_roster_reason_far">Lontano dal percorso</string>
+  <string name="group_roster_reason_stale">Segnale GPS non aggiornato</string>
+  <string name="group_roster_reason_no_signal">Posizione non disponibile</string>
+  <string name="group_roster_reason_manual">Escluso manualmente</string>
+  <string name="group_roster_reason_other">Tracking sospeso</string>
 </resources>

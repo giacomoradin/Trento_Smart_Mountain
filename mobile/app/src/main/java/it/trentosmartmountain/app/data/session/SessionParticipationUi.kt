@@ -1,8 +1,6 @@
 package it.trentosmartmountain.app.data.session
 
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
-import it.trentosmartmountain.app.ui.util.SessionDateFormats
-
 /**
  * Azioni primarie mostrate su card Unisciti e schermata dettaglio.
  */
@@ -26,13 +24,12 @@ object SessionParticipationResolver {
         isCreator: Boolean,
         localState: UserSessionLiveState,
     ): SessionParticipationUi {
-        val isToday = SessionDateFormats.isTodayApi(session.meetingDate)
         val isActive = session.status == "ACTIVE"
         val isPlanned = session.status == "PLANNED"
 
         if (isCreator) {
             return when {
-                isPlanned && isToday ->
+                isPlanned ->
                     SessionParticipationUi(primary = SessionParticipationUi.PrimaryAction.LEADER_START)
                 isActive ->
                     SessionParticipationUi(primary = SessionParticipationUi.PrimaryAction.LEADER_STOP)
@@ -57,14 +54,20 @@ object SessionParticipationResolver {
             }
         }
 
-        if (isPlanned && isToday) {
+        // Sessione non ancora avviata dal capogruppo: il partecipante può provare il tracciato in locale.
+        if (isPlanned) {
             return when (localState) {
                 UserSessionLiveState.SOLO_PRACTICE ->
                     SessionParticipationUi(showLeaveLive = true, statusHint = "Prova tracciato in corso")
                 UserSessionLiveState.IN_GROUP_LIVE ->
                     SessionParticipationUi(showLeaveLive = true)
-                else ->
-                    SessionParticipationUi(primary = SessionParticipationUi.PrimaryAction.SOLO_PRACTICE)
+                UserSessionLiveState.LEFT_LIVE,
+                UserSessionLiveState.NOT_IN_LIVE,
+                ->
+                    SessionParticipationUi(
+                        primary = SessionParticipationUi.PrimaryAction.SOLO_PRACTICE,
+                        statusHint = "Sessione non ancora avviata — puoi provare il tracciato",
+                    )
             }
         }
 

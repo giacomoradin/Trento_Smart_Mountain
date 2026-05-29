@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.FloatingActionButton
@@ -29,6 +30,8 @@ fun RegistraMapActionFabs(
   canCenterOnUser: Boolean,
   onCenterOnUser: () -> Unit,
   onSosClick: () -> Unit,
+  showGroupRoster: Boolean = false,
+  onGroupRosterClick: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   Column(
@@ -37,6 +40,20 @@ fun RegistraMapActionFabs(
     verticalArrangement = Arrangement.spacedBy(12.dp),
     horizontalAlignment = Alignment.End,
   ) {
+    if (showGroupRoster) {
+      FloatingActionButton(
+        onClick = onGroupRosterClick,
+        modifier = Modifier.size(RegistraLayout.primaryFabSize),
+        containerColor = TsmSurface,
+        contentColor = TsmAccent,
+      ) {
+        Icon(
+          imageVector = Icons.Filled.Groups,
+          contentDescription = stringResource(R.string.group_roster_cd),
+          modifier = Modifier.size(RegistraLayout.primaryFabIconSize),
+        )
+      }
+    }
     FloatingActionButton(
       onClick = { if (canCenterOnUser) onCenterOnUser() },
       modifier =

@@ -37,6 +37,7 @@ import it.trentosmartmountain.app.util.SosNotificationHelper
 import it.trentosmartmountain.app.data.ble.BluetoothHelper
 import it.trentosmartmountain.app.service.SosBeaconService
 import java.security.SecureRandom
+import it.trentosmartmountain.app.data.remote.dto.LiveExcludedParticipantDto
 import it.trentosmartmountain.app.data.remote.dto.LiveLocationDto
 import it.trentosmartmountain.app.data.remote.dto.LiveLocationItemDto
 import it.trentosmartmountain.app.data.remote.dto.LiveUserDto
@@ -104,8 +105,14 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
      */
     val shortActivityConfirm: Boolean = false,
     val liveLocations: List<LiveLocationItemDto> = emptyList(),
+    val liveExcludedParticipants: List<LiveExcludedParticipantDto> = emptyList(),
     val selectedLiveParticipant: LiveLocationItemDto? = null,
+    val selectedLiveParticipantIsSelf: Boolean = false,
     val showLiveParticipantSheet: Boolean = false,
+    val showGroupRosterMenu: Boolean = false,
+    val centerOnLivePointLat: Double? = null,
+    val centerOnLivePointLon: Double? = null,
+    val centerOnLivePointTick: Int = 0,
     val isRealtimeSuspended: Boolean = false,
     val realtimeSuspendReason: String? = null,
     /**
@@ -1238,11 +1245,17 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       val resp = TsmApiClient.service().getLiveLocations(sessionId)
       if (resp.isSuccessful) {
         val selfId = currentUserId
+        val body = resp.body()
         val items =
-          resp.body()?.data.orEmpty().filter { item ->
+          body?.data.orEmpty().filter { item ->
             selfId == null || item.user.id != selfId
           }
-        _uiState.update { it.copy(liveLocations = items) }
+        _uiState.update {
+          it.copy(
+            liveLocations = items,
+            liveExcludedParticipants = body?.excluded.orEmpty(),
+          )
+        }
       }
     }
   }
@@ -1295,15 +1308,49 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     liveUploadJob?.cancel()
     liveFetchJob = null
     liveUploadJob = null
-    _uiState.update { it.copy(liveLocations = emptyList(), isRealtimeSuspended = false) }
+    _uiState.update {
+      it.copy(liveLocations = emptyList(), liveExcludedParticipants = emptyList(), isRealtimeSuspended = false)
+    }
+  }
+
+  fun toggleGroupRosterMenu() {
+    _uiState.update { it.copy(showGroupRosterMenu = !it.showGroupRosterMenu) }
+  }
+
+  fun dismissGroupRosterMenu() {
+    _uiState.update { it.copy(showGroupRosterMenu = false) }
+  }
+
+  fun focusLiveParticipantFromRoster(item: LiveLocationItemDto) {
+    _uiState.update {
+      it.copy(
+        showGroupRosterMenu = false,
+        centerOnLivePointLat = item.location.lat,
+        centerOnLivePointLon = item.location.lon,
+        centerOnLivePointTick = it.centerOnLivePointTick + 1,
+      )
+    }
+    onLiveMarkerTap(item)
   }
 
   fun dismissLiveParticipantSheet() {
-    _uiState.update { it.copy(showLiveParticipantSheet = false, selectedLiveParticipant = null) }
+    _uiState.update {
+      it.copy(
+        showLiveParticipantSheet = false,
+        selectedLiveParticipant = null,
+        selectedLiveParticipantIsSelf = false,
+      )
+    }
   }
 
   fun onLiveMarkerTap(item: LiveLocationItemDto) {
-    _uiState.update { it.copy(selectedLiveParticipant = item, showLiveParticipantSheet = true) }
+    _uiState.update {
+      it.copy(
+        selectedLiveParticipant = item,
+        selectedLiveParticipantIsSelf = item.user.id == currentUserId,
+        showLiveParticipantSheet = true,
+      )
+    }
     if (_uiState.value.isSessionGroupLeader) {
       viewModelScope.launch { enrichParticipantForLeader(item.user.id) }
     }
@@ -1338,8 +1385,10 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
   fun onSelfMarkerTap() {
     val state = _uiState.value
     val userId = currentUserId ?: return
-    val location = state.userLocation ?: return
+    val location = state.userLocation
     val (first, last) = splitDisplayName(cachedSelfUsername)
+    val lat = location?.latitude ?: state.trackGeoPoints.lastOrNull()?.latitude ?: return
+    val lon = location?.longitude ?: state.trackGeoPoints.lastOrNull()?.longitude ?: return
     val item =
       LiveLocationItemDto(
         user =
@@ -1353,20 +1402,24 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
           ),
         location =
           LiveLocationDto(
-            lat = location.latitude,
-            lon = location.longitude,
-            altitudeM = location.altitudeMeters,
+            lat = lat,
+            lon = lon,
+            altitudeM = location?.altitudeMeters ?: state.currentAltitudeMeters?.toDouble(),
             trackingStatus = liveTrackingStatusPayload(state.trackingStatus),
             updatedAt = Instant.now().toString(),
           ),
       )
-    _uiState.update { it.copy(selectedLiveParticipant = item, showLiveParticipantSheet = true) }
-    if (state.isSessionGroupLeader) {
-      viewModelScope.launch { enrichSelfParticipantForLeader(userId) }
+    _uiState.update {
+      it.copy(
+        selectedLiveParticipant = item,
+        selectedLiveParticipantIsSelf = true,
+        showLiveParticipantSheet = true,
+      )
     }
+    viewModelScope.launch { enrichSelfProfile(userId) }
   }
 
-  private suspend fun enrichSelfParticipantForLeader(userId: String) {
+  private suspend fun enrichSelfProfile(userId: String) {
     runCatching {
       val resp = TsmApiClient.service().getUserById(userId)
       if (!resp.isSuccessful) return

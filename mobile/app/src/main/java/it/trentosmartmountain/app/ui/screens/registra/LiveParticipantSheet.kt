@@ -38,6 +38,7 @@ import java.util.Locale
 fun LiveParticipantSheet(
   participant: LiveLocationItemDto?,
   isGroupLeaderViewer: Boolean,
+  isSelfViewer: Boolean = false,
   onDismiss: () -> Unit,
 ) {
   if (participant == null) return
@@ -51,6 +52,7 @@ fun LiveParticipantSheet(
     LiveParticipantContent(
       participant = participant,
       isGroupLeaderViewer = isGroupLeaderViewer,
+      isSelfViewer = isSelfViewer,
       modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp).padding(bottom = 32.dp),
     )
   }
@@ -60,6 +62,7 @@ fun LiveParticipantSheet(
 fun LiveParticipantContent(
   participant: LiveLocationItemDto,
   isGroupLeaderViewer: Boolean,
+  isSelfViewer: Boolean = false,
   modifier: Modifier = Modifier,
 ) {
   val user = participant.user
@@ -89,10 +92,17 @@ fun LiveParticipantContent(
       }
     }
 
-    if (isGroupLeaderViewer) {
+    if (isGroupLeaderViewer || isSelfViewer) {
       Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-          text = stringResource(R.string.live_participant_leader_section),
+          text =
+            stringResource(
+              if (isSelfViewer && !isGroupLeaderViewer) {
+                R.string.live_participant_self_section
+              } else {
+                R.string.live_participant_leader_section
+              },
+            ),
           style = MaterialTheme.typography.labelMedium,
           color = TsmPrimary,
           fontWeight = FontWeight.SemiBold,

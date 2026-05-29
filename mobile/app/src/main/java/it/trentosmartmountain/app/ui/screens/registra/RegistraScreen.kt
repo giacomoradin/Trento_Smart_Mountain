@@ -239,6 +239,9 @@ fun RegistraScreen(
       userLocation = uiState.userLocation,
       trackGeoPoints = uiState.trackGeoPoints,
       centerOnUserTick = uiState.centerOnUserTick,
+      centerOnLivePointLat = uiState.centerOnLivePointLat,
+      centerOnLivePointLon = uiState.centerOnLivePointLon,
+      centerOnLivePointTick = uiState.centerOnLivePointTick,
       hasLocationPermission = uiState.hasLocationPermission,
       currentUserId = currentUserId,
       isCurrentUserLeader = uiState.isSessionGroupLeader,
@@ -311,6 +314,8 @@ fun RegistraScreen(
       canCenterOnUser = canCenterOnUser,
       onCenterOnUser = viewModel::centerOnUser,
       onSosClick = viewModel::onSosFabClicked,
+      showGroupRoster = uiState.activeSessionId != null && uiState.isSessionGroupLeader,
+      onGroupRosterClick = viewModel::toggleGroupRosterMenu,
       modifier = Modifier.align(Alignment.BottomEnd),
     )
 
@@ -489,10 +494,20 @@ fun RegistraScreen(
     )
   }
 
+  if (uiState.showGroupRosterMenu) {
+    GroupRosterMenu(
+      activeParticipants = uiState.liveLocations,
+      excludedParticipants = uiState.liveExcludedParticipants,
+      onDismiss = viewModel::dismissGroupRosterMenu,
+      onActiveParticipantClick = viewModel::focusLiveParticipantFromRoster,
+    )
+  }
+
   if (uiState.showLiveParticipantSheet) {
     LiveParticipantSheet(
       participant = uiState.selectedLiveParticipant,
       isGroupLeaderViewer = uiState.isSessionGroupLeader,
+      isSelfViewer = uiState.selectedLiveParticipantIsSelf,
       onDismiss = viewModel::dismissLiveParticipantSheet,
     )
   }

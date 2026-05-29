@@ -33,6 +33,8 @@ fun SessionParticipationActions(
     onLeaveLive: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    leaderStartLabel: String? = null,
+    leaderStopLabel: String? = null,
 ) {
     val hasPrimary = ui.primary != null
     val hasLeave = ui.showLeaveLive
@@ -54,7 +56,7 @@ fun SessionParticipationActions(
                 when (ui.primary) {
                     SessionParticipationUi.PrimaryAction.LEADER_START -> {
                         ParticipationButton(
-                            label = stringResource(R.string.session_card_avvia),
+                            label = leaderStartLabel ?: stringResource(R.string.session_card_avvia),
                             containerColor = TsmPrimary,
                             onClick = onLeaderStart,
                             modifier = Modifier.weight(1f),
@@ -63,7 +65,7 @@ fun SessionParticipationActions(
                     }
                     SessionParticipationUi.PrimaryAction.LEADER_STOP -> {
                         ParticipationButton(
-                            label = stringResource(R.string.session_card_arresta),
+                            label = leaderStopLabel ?: stringResource(R.string.session_card_arresta),
                             containerColor = TsmSos,
                             onClick = onLeaderStop,
                             modifier = Modifier.weight(1f),

@@ -135,3 +135,17 @@ export async function getFollowStats(targetUserId, viewerId) {
 export async function getFollowingIds(userId) {
   return Follow.find({ followerId: userId }).distinct("followingId");
 }
+
+/**
+ * Simmetrico di [getFollowingIds]: ObjectId degli utenti che seguono `userId`
+ * (i suoi follower). Usato dal gate di visibilità "friends" → un autore con
+ * profilo "solo amici" è visibile esclusivamente ai propri follower.
+ */
+export async function getFollowerIds(userId) {
+  return Follow.find({ followingId: userId }).distinct("followerId");
+}
+
+/** True se `followerId` segue `followingId`. Usato dal gate di visibilità. */
+export async function isFollowing(followerId, followingId) {
+  return Boolean(await Follow.exists({ followerId, followingId }));
+}

@@ -54,7 +54,7 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
         val selectedMonth: Int? = null,       // null = tutti i mesi
         val selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR),
         val yearlyStats: Map<Int, ActivityStatsResponse> = emptyMap(),
-        val statsLoading: Boolean = false,
+        val statsLoading: Boolean = true,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -73,7 +73,12 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
                 _uiState.update { state ->
                     state.copy(
                         isLoading = false,
+                        statsLoading = false,
                         activities = list,
+                        // Statistiche (totali + grafico mensile) ricalcolate da Room:
+                        // riflettono in tempo reale le eliminazioni locali (tombstone),
+                        // a differenza delle stats backend che ignorano le cancellazioni.
+                        yearlyStats = computeYearlyStats(list),
                         // Applica i filtri correnti. Se il filtro anno dà lista vuota
                         // (es. attività appena salvata in anno diverso o filtro stale),
                         // mostriamo comunque tutti i risultati senza filtro anno.
@@ -82,9 +87,8 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
                 }
             }
         }
-        // 2. Carica le stats dal backend
-        loadStats(Calendar.getInstance().get(Calendar.YEAR))
-        // 3. Sync cloud → Room: sessioni di gruppo + attività libere
+        // Sync cloud → Room: sessioni di gruppo + attività libere.
+        // Le stats si aggiornano automaticamente via il Flow observeAll qui sopra.
         syncCompletedSessionsToRoom()
         syncFreeActivitiesToRoom()
     }
@@ -98,7 +102,9 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
             val list = dao.getAll().map { it.toItem() }
             _uiState.update { state ->
                 state.copy(
+                    statsLoading = false,
                     activities = list,
+                    yearlyStats = computeYearlyStats(list),
                     filteredActivities = applyFiltersWithFallback(list, state.sort, state.selectedMonth, state.selectedYear),
                 )
             }
@@ -176,21 +182,41 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun refreshFromNetwork() {
+        // I sync aggiornano Room → il Flow observeAll ricalcola lista e stats.
         syncCompletedSessionsToRoom()
         syncFreeActivitiesToRoom()
-        loadStats(_uiState.value.selectedYear)
+    }
+
+    /**
+     * Pulizia una-tantum dei duplicati introdotti dal vecchio sync: per ogni
+     * `remoteId` presente più volte, tiene la riga "originale" registrata sul
+     * device (id != remoteId, con tracciato locale) ed elimina la copia sintetica
+     * re-importata dal backend (id == remoteId, trackLatLng vuoto).
+     */
+    private suspend fun dedupeFreeActivities() {
+        val byRemote = dao.getAll().filter { it.remoteId != null }.groupBy { it.remoteId }
+        byRemote.forEach { (remoteId, rows) ->
+            if (rows.size > 1 && rows.any { it.id != remoteId }) {
+                rows.filter { it.id == remoteId }.forEach { dao.deleteById(it.id) }
+            }
+        }
     }
 
     // Importa in Room le attività libere dal backend. Idempotente: skip se l'id esiste già.
     private fun syncFreeActivitiesToRoom() {
         viewModelScope.launch {
             try {
+                dedupeFreeActivities()
                 val resp = TsmApiClient.service().getMyActivities()
                 if (!resp.isSuccessful) return@launch
                 val activities = resp.body() ?: return@launch
                 activities.forEach { remote ->
-                    // L'id locale per le attività libere è il remoteId stesso (idempotenza)
-                    val existing = dao.getById(remote._id)
+                    // Controllo di esistenza idempotente: l'attività può essere già
+                    // in Room sia con id == remote._id (importata in precedenza) sia
+                    // con id == UUID locale e remote_id == remote._id (registrata sul
+                    // device e poi sincronizzata). Controllare entrambi evita il
+                    // duplicato che compariva dopo il sync (es. dopo "Condividi").
+                    val existing = dao.getById(remote._id) ?: dao.getByRemoteId(remote._id)
                     if (existing == null) {
                         val distM = remote.actualStats?.distanceMeters ?: 0.0
                         val movingSec = remote.actualStats?.movingSeconds ?: 0L
@@ -229,34 +255,59 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun loadStats(year: Int) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(statsLoading = true) }
-            try {
-                val resp = TsmApiClient.service().getActivityStats(year)
-                if (resp.isSuccessful && resp.body() != null) {
-                    _uiState.update { state ->
-                        state.copy(
-                            statsLoading = false,
-                            yearlyStats = state.yearlyStats + (year to resp.body()!!),
-                            selectedYear = year,
-                        )
-                    }
-                } else {
-                    _uiState.update { it.copy(statsLoading = false) }
+    fun onYearChanged(year: Int) {
+        _uiState.update { it.copy(selectedYear = year, selectedMonth = null) }
+        reapplyFilters()
+    }
+
+    /**
+     * Calcola le statistiche annuali (totali + grafico mensile) a partire dalla
+     * lista locale di Room (già priva delle attività eliminate/nascoste).
+     *
+     * Vantaggi rispetto all'endpoint backend `GET /sessions/stats`:
+     *  - riflette le eliminazioni locali (tombstone) → grafico e card coerenti
+     *    con la lista mostrata;
+     *  - nessuna chiamata di rete, aggiornamento istantaneo e reattivo.
+     */
+    private fun computeYearlyStats(list: List<ActivityItem>): Map<Int, ActivityStatsResponse> {
+        if (list.isEmpty()) return emptyMap()
+        val cal = Calendar.getInstance()
+        return list.groupBy { item ->
+            cal.timeInMillis = item.dateMs
+            cal.get(Calendar.YEAR)
+        }.mapValues { (_, items) ->
+            val monthlyCount = IntArray(12)
+            val monthlyDiffSum = DoubleArray(12)
+            val monthlyDiffN = IntArray(12)
+            items.forEach { item ->
+                cal.timeInMillis = item.dateMs
+                val m = cal.get(Calendar.MONTH)
+                monthlyCount[m]++
+                diffNormalized(item.difficultyLevel)?.let {
+                    monthlyDiffSum[m] += it
+                    monthlyDiffN[m]++
                 }
-            } catch (_: Exception) {
-                _uiState.update { it.copy(statsLoading = false) }
             }
+            ActivityStatsResponse(
+                totalActivities = items.size,
+                totalDistanceKm = items.sumOf { it.distanceKm },
+                totalElevationGainM = items.sumOf { it.elevationGainM },
+                totalPoints = items.sumOf { it.points ?: 0 },
+                monthlyActivityCount = monthlyCount.toList(),
+                monthlyAvgDifficulty = (0 until 12).map { m ->
+                    if (monthlyDiffN[m] > 0) monthlyDiffSum[m] / monthlyDiffN[m] else 0.0
+                },
+            )
         }
     }
 
-    fun onYearChanged(year: Int) {
-        _uiState.update { it.copy(selectedYear = year, selectedMonth = null) }
-        if (!_uiState.value.yearlyStats.containsKey(year)) {
-            loadStats(year)
-        }
-        reapplyFilters()
+    /** Difficoltà CAI normalizzata in 0..1 per il colore delle barre del grafico. */
+    private fun diffNormalized(diff: String?): Double? = when (diff) {
+        "T" -> 0.0
+        "E" -> 1.0 / 3.0
+        "EE" -> 2.0 / 3.0
+        "EEA" -> 1.0
+        else -> null
     }
 
     fun onSortChanged(sort: ActivitySort) {

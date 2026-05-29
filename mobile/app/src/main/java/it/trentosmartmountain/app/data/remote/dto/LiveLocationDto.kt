@@ -38,9 +38,17 @@ data class LiveLocationItemDto(
     val location: LiveLocationDto,
 )
 
+/** Partecipante escluso dal feed live (solo visibile al capogruppo). */
+data class LiveExcludedParticipantDto(
+    val user: LiveUserDto,
+    /** TOO_FAR_FROM_ROUTE | STALE | NO_SIGNAL | MANUAL | OTHER */
+    val reason: String,
+)
+
 /** Risposta completa di GET /api/v1/sessions/:id/live-locations */
 data class LiveLocationsResponse(
     val data: List<LiveLocationItemDto>,
+    val excluded: List<LiveExcludedParticipantDto> = emptyList(),
     val message: String? = null,
 )
 

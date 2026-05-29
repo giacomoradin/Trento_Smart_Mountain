@@ -51,6 +51,16 @@ class SessionCommandRepository(context: Context) {
     }
   }
 
+  /** Riporta la sessione da ACTIVE a PLANNED (solo capogruppo sul backend). */
+  suspend fun markSessionPlanned(sessionId: String) {
+    runCatching {
+      TsmApiClient.service().updateSessionStatus(
+        sessionId,
+        UpdateSessionStatusRequest(status = "PLANNED"),
+      )
+    }
+  }
+
   /**
    * Completa una sessione di gruppo o crea un'attività libera, a seconda
    * della presenza di [sessionId]. In entrambi i casi, se l'upload fallisce

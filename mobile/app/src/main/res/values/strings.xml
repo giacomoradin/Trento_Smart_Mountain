@@ -223,8 +223,19 @@
   <string name="live_participant_badge_leader">Capogruppo</string>
   <string name="live_participant_badge_participant">Partecipante</string>
   <string name="live_participant_leader_section">Dettagli capogruppo</string>
+  <string name="live_participant_self_section">Le tue informazioni</string>
   <string name="live_participant_altitude">Quota</string>
   <string name="live_participant_sex">Sesso</string>
   <string name="live_participant_last_update">Ultimo aggiornamento</string>
   <string name="live_participant_status">Stato</string>
+  <string name="group_roster_cd">Elenco partecipanti</string>
+  <string name="group_roster_title">Partecipanti in escursione</string>
+  <string name="group_roster_active_header">Sul percorso (in movimento o in pausa)</string>
+  <string name="group_roster_active_empty">Nessun partecipante con posizione aggiornata.</string>
+  <string name="group_roster_excluded_header">Esclusi dal tracking in tempo reale</string>
+  <string name="group_roster_reason_far">Lontano dal percorso</string>
+  <string name="group_roster_reason_stale">Segnale GPS non aggiornato</string>
+  <string name="group_roster_reason_no_signal">Posizione non disponibile</string>
+  <string name="group_roster_reason_manual">Escluso manualmente</string>
+  <string name="group_roster_reason_other">Tracking sospeso</string>
 </resources>

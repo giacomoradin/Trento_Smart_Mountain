@@ -316,32 +316,31 @@ export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {
     ]),
   );
 
+  const buildUserPayload = (uid, roleOverride) => {
+    const role = roleOverride || participantRoleById.get(uid) || "hiker";
+    const participant = (session.participants || []).find(
+      (p) => (p.userId?._id || p.userId).toString() === uid,
+    );
+    const u = participant?.userId;
+    const { firstName, lastName } = splitDisplayName(u?.username);
+    return {
+      id: uid,
+      username: u?.username,
+      firstName,
+      lastName,
+      avatarUrl: u?.personalInfo?.avatarUrl,
+      role,
+      ...(viewerIsLeader && u?.personalInfo?.sex ? { sex: u.personalInfo.sex } : {}),
+    };
+  };
+
   const locations = (session.liveLocations || [])
     .filter((l) => !suspendedIds.has(l.userId.toString()))
     .filter((l) => l.updatedAt && l.updatedAt >= cutoff)
     .map((l) => {
       const uid = l.userId.toString();
-      const role = participantRoleById.get(uid) || "hiker";
-
-      // Find populated user object from participants list (creator included there too)
-      const participant = (session.participants || []).find(
-        (p) => (p.userId?._id || p.userId).toString() === uid,
-      );
-      const u = participant?.userId;
-      const { firstName, lastName } = splitDisplayName(u?.username);
-
       return {
-        user: {
-          id: uid,
-          username: u?.username,
-          firstName,
-          lastName,
-          avatarUrl: u?.personalInfo?.avatarUrl,
-          role,
-          ...(viewerIsLeader && u?.personalInfo?.sex
-            ? { sex: u.personalInfo.sex }
-            : {}),
-        },
+        user: buildUserPayload(uid),
         location: {
           lat: l.lat,
           lon: l.lon,
@@ -353,7 +352,44 @@ export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {
       };
     });
 
-  return { message: "Live locations", data: locations };
+  const activeIds = new Set(locations.map((l) => l.user.id));
+  let excluded = [];
+
+  if (viewerIsLeader) {
+    const suspendedByUser = new Map(
+      (session.liveTracking || [])
+        .filter((t) => t.status === "SUSPENDED")
+        .map((t) => [t.userId.toString(), t.reason || "OTHER"]),
+    );
+
+    for (const p of session.participants || []) {
+      const uid = (p.userId?._id || p.userId).toString();
+      if (activeIds.has(uid)) continue;
+
+      let reason;
+      if (suspendedByUser.has(uid)) {
+        reason = suspendedByUser.get(uid);
+      } else {
+        const liveLoc = (session.liveLocations || []).find(
+          (l) => l.userId.toString() === uid,
+        );
+        if (!liveLoc) {
+          reason = "NO_SIGNAL";
+        } else if (!liveLoc.updatedAt || liveLoc.updatedAt < cutoff) {
+          reason = "STALE";
+        } else {
+          continue;
+        }
+      }
+
+      excluded.push({
+        user: buildUserPayload(uid, p.role),
+        reason,
+      });
+    }
+  }
+
+  return { message: "Live locations", data: locations, excluded };
 }
 
 export async function suspendLiveTracking(sessionId, callerUserId, { userId, reason }) {

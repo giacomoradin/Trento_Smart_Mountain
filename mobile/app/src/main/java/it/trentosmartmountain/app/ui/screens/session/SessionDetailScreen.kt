@@ -435,6 +435,8 @@ fun SessionDetailScreen(
                     },
                     onLeaveLive = { viewModel.leaveLive() },
                     compact = false,
+                    leaderStartLabel = stringResource(R.string.session_detail_avvia),
+                    leaderStopLabel = stringResource(R.string.session_detail_arresta),
                 )
             }
 

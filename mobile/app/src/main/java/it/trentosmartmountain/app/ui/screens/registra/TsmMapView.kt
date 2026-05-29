@@ -15,6 +15,7 @@ import it.trentosmartmountain.app.data.remote.dto.LiveLocationDto
 import it.trentosmartmountain.app.data.remote.dto.LiveLocationItemDto
 import it.trentosmartmountain.app.data.remote.dto.LiveUserDto
 import it.trentosmartmountain.app.data.remote.dto.SosMapMarkerDto
+import android.graphics.Paint
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
@@ -39,6 +40,9 @@ fun TsmMapView(
   userLocation: LocationSnapshot?,
   trackGeoPoints: List<GeoPoint>,
   centerOnUserTick: Int,
+  centerOnLivePointLat: Double? = null,
+  centerOnLivePointLon: Double? = null,
+  centerOnLivePointTick: Int = 0,
   hasLocationPermission: Boolean,
   currentUserId: String?,
   isCurrentUserLeader: Boolean,
@@ -97,64 +101,42 @@ fun TsmMapView(
       Polyline(mapView).apply {
         id = TRACK_POLYLINE_ID
         outlinePaint.color = android.graphics.Color.parseColor("#4FC3F7")
-        outlinePaint.strokeWidth = 10f
-        // Non intercettare tap: evita il popup OSMdroid sul tracciato.
-        isEnabled = false
+        outlinePaint.strokeWidth = 12f
+        outlinePaint.isAntiAlias = true
+        outlinePaint.strokeCap = Paint.Cap.ROUND
+        outlinePaint.strokeJoin = Paint.Join.ROUND
+        // isEnabled=false in OSMdroid disabilita anche il draw (non solo i tap).
+        isEnabled = true
         infoWindow = null
+        // Consuma il tap senza aprire il popup predefinito sul tracciato.
+        setOnClickListener { _, _, _ -> true }
       }
     }
 
-  LaunchedEffect(trackGeoPoints) {
-    mapView.overlays.remove(trackPolyline)
-    if (trackGeoPoints.size >= 2) {
-      trackPolyline.setPoints(ArrayList(trackGeoPoints))
-      mapView.overlays.add(0, trackPolyline)
-    }
-    mapView.invalidate()
-  }
-
   LaunchedEffect(
+    trackGeoPoints,
+    liveLocations,
+    sosOnlyMarkers,
+    sosUserIds,
     hasLocationPermission,
     userLocation,
     currentUserId,
     isCurrentUserLeader,
-    sosUserIds,
     hasOwnActiveSos,
   ) {
-    if (hasLocationPermission && userLocation != null) {
-      val point = GeoPoint(userLocation.latitude, userLocation.longitude)
-      userMarker.position = point
-      val selfHasSos =
-        currentUserId != null &&
-          (hasOwnActiveSos || sosUserIds.contains(currentUserId))
-      val kind =
-        MapMarkerIcons.kindForUser(
-          isSelf = true,
-          isLeader = isCurrentUserLeader,
-          hasSos = selfHasSos,
-        )
-      val sizeDp = MapMarkerIcons.markerSizeDp(kind, isSelf = true)
-      userMarker.icon = MapMarkerIcons.create(context, kind, sizeDp, withSosBadge = selfHasSos)
-      userMarker.setOnMarkerClickListener { _, _ ->
-        onSelfMarkerTap()
-        true
+    mapView.overlays.remove(trackPolyline)
+    when {
+      trackGeoPoints.size >= 2 -> {
+        trackPolyline.setPoints(ArrayList(trackGeoPoints))
+        mapView.overlays.add(0, trackPolyline)
       }
-      if (!mapView.overlays.contains(userMarker)) {
-        mapView.overlays.add(userMarker)
+      trackGeoPoints.size == 1 -> {
+        val p = trackGeoPoints.first()
+        trackPolyline.setPoints(arrayListOf(p, p))
+        mapView.overlays.add(0, trackPolyline)
       }
-    } else {
-      mapView.overlays.remove(userMarker)
     }
-    mapView.invalidate()
-  }
 
-  LaunchedEffect(centerOnUserTick) {
-    if (centerOnUserTick == 0) return@LaunchedEffect
-    val snap = userLocation ?: return@LaunchedEffect
-    mapView.controller.animateTo(GeoPoint(snap.latitude, snap.longitude))
-  }
-
-  LaunchedEffect(liveLocations, sosUserIds, sosOnlyMarkers) {
     mapView.overlays.removeAll(
       mapView.overlays.filterIsInstance<Marker>().filter { marker ->
         val id = marker.id
@@ -223,12 +205,65 @@ fun TsmMapView(
       mapView.overlays.add(marker)
     }
 
+    if (hasLocationPermission && userLocation != null) {
+      val point = GeoPoint(userLocation.latitude, userLocation.longitude)
+      userMarker.position = point
+      val selfHasSos =
+        currentUserId != null &&
+          (hasOwnActiveSos || sosUserIds.contains(currentUserId))
+      val kind =
+        MapMarkerIcons.kindForUser(
+          isSelf = true,
+          isLeader = isCurrentUserLeader,
+          hasSos = selfHasSos,
+        )
+      val sizeDp = MapMarkerIcons.markerSizeDp(kind, isSelf = true)
+      userMarker.icon = MapMarkerIcons.create(context, kind, sizeDp, withSosBadge = selfHasSos)
+      userMarker.setOnMarkerClickListener { _, _ ->
+        onSelfMarkerTap()
+        true
+      }
+      if (!mapView.overlays.contains(userMarker)) {
+        mapView.overlays.add(userMarker)
+      }
+    } else {
+      mapView.overlays.remove(userMarker)
+    }
+
     mapView.invalidate()
+  }
+
+  LaunchedEffect(centerOnUserTick) {
+    if (centerOnUserTick == 0) return@LaunchedEffect
+    val snap = userLocation ?: return@LaunchedEffect
+    mapView.controller.animateTo(GeoPoint(snap.latitude, snap.longitude))
+  }
+
+  LaunchedEffect(centerOnLivePointTick, centerOnLivePointLat, centerOnLivePointLon) {
+    if (centerOnLivePointTick == 0) return@LaunchedEffect
+    val lat = centerOnLivePointLat ?: return@LaunchedEffect
+    val lon = centerOnLivePointLon ?: return@LaunchedEffect
+    mapView.controller.animateTo(GeoPoint(lat, lon))
   }
 
   AndroidView(
     factory = { mapView },
     modifier = modifier,
-    update = { it.invalidate() },
+    update = { view ->
+      // Aggiorna anche qui: più affidabile di solo LaunchedEffect con AndroidView.
+      view.overlays.remove(trackPolyline)
+      when {
+        trackGeoPoints.size >= 2 -> {
+          trackPolyline.setPoints(ArrayList(trackGeoPoints))
+          view.overlays.add(0, trackPolyline)
+        }
+        trackGeoPoints.size == 1 -> {
+          val p = trackGeoPoints.first()
+          trackPolyline.setPoints(arrayListOf(p, p))
+          view.overlays.add(0, trackPolyline)
+        }
+      }
+      view.invalidate()
+    },
   )
 }

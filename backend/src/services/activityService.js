@@ -5,6 +5,7 @@ import User from "../models/user.js";
 import { addCredits } from "./creditService.js";
 import { applyBaselineMultiplier } from "./userScoringService.js";
 import { evaluateAllBadges } from "./badgeService.js";
+import { downsamplePolyline } from "../utils/geoPolyline.js";
 
 export async function createActivity(userId, payload) {
   const activity = new Activity({
@@ -17,6 +18,10 @@ export async function createActivity(userId, payload) {
     completedAt: new Date(payload.endTimeMs),
     actualStats: payload.actualStats,
     elevationProfile: payload.elevationProfile,
+    // Persiste la traccia GPS ricampionata (max 80 punti) per la route
+    // signature del feed. Il client invia già downsampled, ma ricampioniamo
+    // lato server come hard cap difensivo (storage + payload feed bounded).
+    routePolyline: downsamplePolyline(payload.routePolyline, 80),
   });
   await activity.save();
 

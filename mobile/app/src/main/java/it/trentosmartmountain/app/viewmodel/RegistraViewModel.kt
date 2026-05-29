@@ -38,6 +38,7 @@ import it.trentosmartmountain.app.data.remote.dto.LiveLocationDto
 import it.trentosmartmountain.app.data.remote.dto.LiveLocationItemDto
 import it.trentosmartmountain.app.data.remote.dto.LiveUserDto
 import it.trentosmartmountain.app.data.remote.dto.PostLiveLocationRequest
+import it.trentosmartmountain.app.data.remote.dto.RoutePoint
 import java.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -501,6 +502,12 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         distanceMeters = finalize.distanceMeters,
         elevationGainMeters = finalize.elevationGainMeters,
         currentAltitudeMeters = finalize.currentAltitudeMeters,
+        // Traccia GPS per la route signature del feed (solo attività libere;
+        // le sessioni hanno già plannedRoute lato server). Il repository
+        // campiona a 80 punti prima dell'invio.
+        routePoints = snapState.trackGeoPoints.map { p ->
+          RoutePoint(lat = p.latitude, lon = p.longitude)
+        },
       )
       if (result is SessionCommandRepository.SyncResult.Synced) {
         // Marca sincronizzato con il remoteId emesso dal backend (per attività

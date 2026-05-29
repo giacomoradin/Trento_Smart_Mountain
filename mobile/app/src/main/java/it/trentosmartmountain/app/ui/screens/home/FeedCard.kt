@@ -1,5 +1,6 @@
 package it.trentosmartmountain.app.ui.screens.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,29 +40,34 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.roundToInt
 
-private val CardBackground = Color(0xFF2C2C2E)
-private val TextSecondary = Color(0xFF8E8E93)
+private val CardBackground = Color(0xFF242427)
+private val HeroTop = Color(0xFF1B1B1F)
+private val HeroBottom = Color(0xFF101012)
+private val TextPrimary = Color(0xFFF2F2F4)
+private val TextSecondary = Color(0xFF9A9AA0)
 private val AccentRed = Color(0xFFFF6B6B)
 private val AccentCyan = Color(0xFF4DD0E1)
-private val Divider = Color(0xFF3A3A3C)
+private val Divider = Color(0xFF34343A)
 
 /**
- * Card del feed sociale. Layout fedele al mockup:
+ * Card del feed sociale — redesign **Strava-style** (Sprint 3).
  *
- *  [avatar 40dp] [username + sharedAt relativo]      [chip kind]
- *  [titolo escursione (es. nome GPX o nome attività libera)]
- *  [caption opzionale]
- *  [KPI strip: km, durata, dislivello, punti]
- *  [partecipanti (solo per session): "+3" overlay se >3]
- *  ───────────
- *  [like icon] [count] [comment icon] [count]
+ * Anatomia (dall'alto):
+ *  1. **Header atleta**: avatar + nome + meta ("3 h fa · Trail") + chip kind.
+ *  2. **Titolo** + caption opzionale.
+ *  3. **Hero visivo**:
+ *       - se l'item ha una `routePolyline` → *route signature* ([RouteTracePreview])
+ *         con chip difficoltà in overlay;
+ *       - altrimenti, se ha un `elevationProfile` → quello diventa l'hero;
+ *       - altrimenti nessun hero (card compatta).
+ *  4. **Stat strip**: Distanza · Dislivello · Tempo · Passo (4 celle).
+ *  5. **Banda altimetrica** sottile (solo se la route era già l'hero e c'è un
+ *     profilo: evita di duplicare l'altimetria quando è già l'hero).
+ *  6. **Partecipanti** (solo sessioni di gruppo).
+ *  7. **Action bar**: like (ottimistico) + commenti + badge punti.
  *
- * Il `kind` distingue Activity (libere) da HikeSession (gruppo). Per le sessioni
- * mostriamo anche la riga partecipanti; per le attività libere no.
- *
- * Tap sull'icona cuore → `onLikeToggle()` (ottimistico nel VM).
- * Tap su commenti → `onCommentClick()` (placeholder Sprint 3 fino a UI commenti).
- * Tap sull'avatar → `onUserClick(user._id)` (apre profilo utente, ora no-op).
+ * La firma resta invariata rispetto alla versione precedente → nessun call site
+ * da toccare (HomeSocialScreen, UserProfileScreen, dettagli).
  */
 @Composable
 fun FeedCard(
@@ -70,20 +77,25 @@ fun FeedCard(
     onUserClick: (userId: String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val route = item.routePolyline
+    val hasRoute = route != null && route.size >= 2
+    val profile = item.elevationProfile
+    val hasProfile = profile != null && profile.size >= 2
+
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // ── Header: avatar + username (clickabili) + chip kind a destra ──
+        Column {
+            // ── 1. Header atleta ──────────────────────────────────────────────
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 10.dp, top = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Area clickabile per il tap-su-autore: comprende avatar + nome
-                // così il target di tocco è abbondante (avatar 40dp da solo
-                // è ai limiti delle linee guida M3, l'username è una bella aggiunta).
                 Row(
                     modifier = Modifier
                         .weight(1f)
@@ -95,18 +107,18 @@ fun FeedCard(
                     AvatarImage(
                         avatarUrl = item.user?.avatarUrl,
                         fallbackName = item.user?.username,
-                        size = 40.dp,
+                        size = 44.dp,
                     )
                     Spacer(Modifier.width(10.dp))
                     Column {
                         Text(
                             text = item.user?.username ?: "Utente sconosciuto",
-                            color = Color.White,
+                            color = TextPrimary,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            text = formatSharedAt(item.sharedAt),
+                            text = buildMetaLine(item),
                             color = TextSecondary,
                             style = MaterialTheme.typography.labelSmall,
                         )
@@ -117,44 +129,78 @@ fun FeedCard(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── Titolo attività ──
+            // ── 2. Titolo + caption ───────────────────────────────────────────
             Text(
                 text = item.title ?: "Escursione",
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.titleSmall,
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 14.dp),
             )
-
-            // ── Caption (opzionale) ──
             if (!item.caption.isNullOrBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = item.caption,
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 14.dp),
                 )
             }
 
             Spacer(Modifier.height(12.dp))
 
-            // ── KPI strip ──
+            // ── 3. Hero visivo ────────────────────────────────────────────────
+            when {
+                hasRoute -> RouteHero(item = item, route = route!!)
+                hasProfile -> ProfileHero(profile = profile!!)
+                else -> Unit
+            }
+
+            // ── 4. Stat strip ─────────────────────────────────────────────────
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                KpiBlock(label = "DISTANZA", value = formatDistance(item.distanceMeters))
-                KpiBlock(label = "DURATA", value = formatDuration(item.movingSeconds))
-                KpiBlock(label = "D+", value = formatElevation(item.elevationGainM))
-                if (item.finalPoints != null && item.finalPoints > 0) {
-                    KpiBlock(label = "PT", value = "${item.finalPoints}")
+                StatCell("DISTANZA", formatDistance(item.distanceMeters), Modifier.weight(1f))
+                StatCell("DISLIVELLO", formatElevation(item.elevationGainM), Modifier.weight(1f))
+                StatCell("TEMPO", formatDuration(item.movingSeconds), Modifier.weight(1f))
+                StatCell(
+                    "PASSO",
+                    formatPace(item.distanceMeters, item.movingSeconds),
+                    Modifier.weight(1f),
+                )
+            }
+
+            // ── 5. Banda altimetrica (solo se la route era l'hero) ────────────
+            if (hasRoute && hasProfile) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+                    Text(
+                        "ALTIMETRIA",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.labelSmall,
+                        letterSpacing = 1.sp,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    ElevationSparkline(
+                        profile = profile!!,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp),
+                        lineColor = AccentCyan,
+                    )
+                    Spacer(Modifier.height(12.dp))
                 }
             }
 
-            // ── Partecipanti (solo sessioni) ──
+            // ── 6. Partecipanti (solo sessioni) ───────────────────────────────
             val participants = item.participants
             if (item.kind == "session" && !participants.isNullOrEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
                         "PARTECIPANTI",
                         color = TextSecondary,
@@ -172,9 +218,7 @@ fun FeedCard(
                         }
                         if (participants.size > 4) {
                             Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .padding(top = 2.dp),
+                                modifier = Modifier.size(24.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
@@ -187,18 +231,17 @@ fun FeedCard(
                         }
                     }
                 }
+                Spacer(Modifier.height(12.dp))
             }
 
-            Spacer(Modifier.height(12.dp))
-
-            // ── Divider + actions ──
-            Surface(
-                modifier = Modifier.fillMaxWidth().height(1.dp),
-                color = Divider,
-            ) {}
-            Spacer(Modifier.height(4.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // ── 7. Action bar ─────────────────────────────────────────────────
+            Surface(modifier = Modifier.fillMaxWidth().height(1.dp), color = Divider) {}
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 6.dp, end = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 IconButton(onClick = onLikeToggle) {
                     Icon(
                         imageVector = if (item.likedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -212,7 +255,7 @@ fun FeedCard(
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(8.dp))
                 IconButton(onClick = onCommentClick) {
                     Icon(
                         imageVector = Icons.Outlined.ChatBubbleOutline,
@@ -225,8 +268,64 @@ fun FeedCard(
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                Spacer(Modifier.weight(1f))
+                if (item.finalPoints != null && item.finalPoints > 0) {
+                    PointsBadge(points = item.finalPoints)
+                }
             }
         }
+    }
+}
+
+/** Hero con la route signature + chip difficoltà in overlay. */
+@Composable
+private fun RouteHero(item: FeedItem, route: List<it.trentosmartmountain.app.data.remote.dto.RoutePoint>) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(176.dp)
+            .background(Brush.verticalGradient(listOf(HeroTop, HeroBottom))),
+    ) {
+        RouteTracePreview(
+            points = route,
+            modifier = Modifier.fillMaxWidth().height(176.dp),
+            lineColor = AccentCyan,
+        )
+        item.difficultyLevel?.let { diff ->
+            DifficultyChip(
+                level = diff,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp),
+            )
+        }
+    }
+}
+
+/** Hero alternativo quando manca la route: il profilo altimetrico a tutta larghezza. */
+@Composable
+private fun ProfileHero(profile: List<Double>) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(132.dp)
+            .background(Brush.verticalGradient(listOf(HeroTop, HeroBottom))),
+    ) {
+        Text(
+            "ALTIMETRIA",
+            color = TextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            letterSpacing = 1.sp,
+            modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+        )
+        ElevationSparkline(
+            profile = profile,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(132.dp)
+                .padding(top = 24.dp),
+            lineColor = AccentCyan,
+        )
     }
 }
 
@@ -234,12 +333,9 @@ fun FeedCard(
 private fun KindChip(kind: String) {
     val (label, color) = when (kind) {
         "session" -> "GRUPPO" to AccentCyan
-        else -> "LIBERA" to Color(0xFF4CAF50)
+        else -> "LIBERA" to Color(0xFF66BB6A)
     }
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = color.copy(alpha = 0.15f),
-    ) {
+    Surface(shape = RoundedCornerShape(6.dp), color = color.copy(alpha = 0.15f)) {
         Text(
             text = label,
             color = color,
@@ -251,10 +347,90 @@ private fun KindChip(kind: String) {
 }
 
 @Composable
-private fun KpiBlock(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall, letterSpacing = 0.5.sp)
+private fun DifficultyChip(level: String, modifier: Modifier = Modifier) {
+    val color = difficultyColor(level)
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = color.copy(alpha = 0.9f),
+        modifier = modifier,
+    ) {
+        Text(
+            text = level,
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+@Composable
+private fun PointsBadge(points: Int) {
+    Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFFFC107).copy(alpha = 0.16f)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "$points",
+                color = Color(0xFFFFC107),
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.width(3.dp))
+            Text(
+                "pt",
+                color = Color(0xFFFFC107).copy(alpha = 0.8f),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatCell(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            value,
+            color = TextPrimary,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            label,
+            color = TextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            letterSpacing = 0.5.sp,
+        )
+    }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+private fun difficultyColor(level: String): Color = when (level.uppercase(Locale.ROOT)) {
+    "T" -> Color(0xFF4CAF50)
+    "E" -> Color(0xFF4FC3F7)
+    "EE" -> Color(0xFFFF9800)
+    "EEA" -> Color(0xFFE53935)
+    else -> Color(0xFF9A9AA0)
+}
+
+/** Meta-riga "tempo relativo · tipo" sotto lo username. */
+private fun buildMetaLine(item: FeedItem): String {
+    val rel = formatSharedAt(item.sharedAt)
+    val type = activityTypeLabel(item)
+    return listOf(rel, type).filter { it.isNotBlank() }.joinToString(" · ")
+}
+
+private fun activityTypeLabel(item: FeedItem): String {
+    if (item.kind == "session") return "Escursione di gruppo"
+    return when (item.activityType?.lowercase(Locale.ROOT)) {
+        "trail" -> "Trail running"
+        "skitouring" -> "Scialpinismo"
+        "trekking" -> "Trekking"
+        "hiking" -> "Escursione"
+        else -> "Escursione"
     }
 }
 
@@ -268,7 +444,7 @@ private fun formatDistance(meters: Double?): String {
 
 private fun formatElevation(elev: Int?): String {
     if (elev == null || elev <= 0) return "—"
-    return "${elev} m"
+    return "$elev m"
 }
 
 private fun formatDuration(seconds: Long?): String {
@@ -276,6 +452,19 @@ private fun formatDuration(seconds: Long?): String {
     val h = seconds / 3600
     val m = (seconds % 3600) / 60
     return if (h > 0) "${h}h ${m}m" else "${m}m"
+}
+
+/**
+ * Passo medio in min/km (stile Strava). Es. 720s su 1.2km → "10:00 /km".
+ * Ritorna "—" se distanza o tempo non sono validi.
+ */
+private fun formatPace(meters: Double?, seconds: Long?): String {
+    if (meters == null || meters <= 0 || seconds == null || seconds <= 0) return "—"
+    val km = meters / 1000.0
+    val secPerKm = (seconds / km).roundToInt()
+    val mm = secPerKm / 60
+    val ss = secPerKm % 60
+    return "%d:%02d".format(mm, ss)
 }
 
 /**
@@ -291,7 +480,6 @@ private fun formatSharedAt(iso: String?): String {
         timeZone = TimeZone.getTimeZone("UTC")
     }
     val date = runCatching {
-        // Tronca millis e Z per parser robusto (accetta entrambi i formati).
         val trimmed = iso.removeSuffix("Z").take(23)
         if (trimmed.length > 19) sdfMs.parse(trimmed) else sdf.parse(trimmed.take(19))
     }.getOrNull() ?: return ""
@@ -302,9 +490,9 @@ private fun formatSharedAt(iso: String?): String {
     val days = hours / 24
     return when {
         seconds < 60 -> "ora"
-        minutes < 60 -> "${minutes} min fa"
-        hours < 24 -> "${hours} h fa"
-        days < 7 -> "${days} g fa"
+        minutes < 60 -> "$minutes min fa"
+        hours < 24 -> "$hours h fa"
+        days < 7 -> "$days g fa"
         else -> SimpleDateFormat("dd/MM", Locale.ITALIAN).format(date)
     }
 }

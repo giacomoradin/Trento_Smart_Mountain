@@ -48,6 +48,22 @@ const activitySchema = new Schema({
   // profilo altimetrico campionato (max 200 punti, metri assoluti)
   elevationProfile: { type: [Number], default: undefined },
 
+  // Traccia GPS campionata (downsampled) del percorso effettivamente registrato.
+  // Serve a disegnare la "route signature" Strava-style nella card del feed e
+  // nel dettaglio attività, SENZA dover ricaricare l'intera traccia da Room.
+  // Salvata solo per attività registrate online; le attività vecchie o create
+  // offline non l'hanno → la UI degrada elegantemente (hero = profilo altimetrico).
+  // Formato [{lat, lon}] coerente con HikeSession.plannedRoute.polylinePoints.
+  routePolyline: {
+    type: [
+      {
+        lat: { type: Number, required: true, min: -90, max: 90 },
+        lon: { type: Number, required: true, min: -180, max: 180 },
+      },
+    ],
+    default: undefined,
+  },
+
   // ── Social (Sprint 2 — schermata Social) ──────────────────────────────────
   // L'attività è privata di default (visibile solo al proprietario nell'app).
   // Diventa "pubblica sul feed" quando il proprietario preme + Condividi: viene

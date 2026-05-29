@@ -141,10 +141,10 @@ fun UserProfileScreen(
 
     CommentsBottomSheet(
         target = commentsTarget,
-        onDismiss = {
-            commentsTarget = null
-            viewModel.refreshStatsAndPosts()
-        },
+        onDismiss = { commentsTarget = null },
+        // Aggiorna solo il contatore del post commentato: niente reload di
+        // profilo+stats+bacheca (che perdeva lo scroll della bacheca).
+        onCountChanged = viewModel::setCommentCount,
     )
 }
 

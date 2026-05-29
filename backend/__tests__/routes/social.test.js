@@ -700,6 +700,60 @@ describe("Social Routes", () => {
       expect(res.body.items[0].routePolyline).toBeNull();
     });
 
+    test("pagination across mixed sources: global order, no loss/dupes, exact hasMore", async () => {
+      const me = await createTestHiker({
+        username: "pager40",
+        email: "pager40@test.com",
+      });
+      // 3 attività + 3 sessioni, condivise alternate con sharedAt crescente.
+      // Ordine di condivisione: act0, sess0, act1, sess1, act2, sess2.
+      for (let i = 0; i < 3; i++) {
+        const act = await createTestActivity(me.user._id);
+        await request(app)
+          .post(`/api/v1/activities/${act._id}/share`)
+          .set("Authorization", `Bearer ${me.token}`)
+          .send({ caption: `act${i}` });
+        await new Promise((r) => setTimeout(r, 15));
+        const sess = await HikeSession.create({
+          creatorId: me.user._id,
+          routeDetails: { name: `sess${i}`, difficultyLevel: "E" },
+          meetingDate: "2026-08-01",
+          inviteCode: `TSM-P4${i}`,
+          participants: [{ userId: me.user._id, role: "groupLeader" }],
+        });
+        await request(app)
+          .post(`/api/v1/sessions/${sess._id}/share`)
+          .set("Authorization", `Bearer ${me.token}`)
+          .send({ caption: `sess${i}` });
+        await new Promise((r) => setTimeout(r, 15));
+      }
+
+      // Raccogli tutte le pagine (limit 2) seguendo hasMore.
+      const seen = [];
+      const hasMoreFlags = [];
+      let page = 1;
+      let guard = 0;
+      while (guard++ < 10) {
+        const res = await request(app)
+          .get(`/api/v1/users/me/feed?page=${page}&limit=2`)
+          .set("Authorization", `Bearer ${me.token}`);
+        expect(res.status).toBe(200);
+        seen.push(...res.body.items.map((it) => it.caption));
+        hasMoreFlags.push(res.body.hasMore);
+        if (!res.body.hasMore) break;
+        page += 1;
+      }
+
+      // 6 post totali, nessuna perdita, nessun duplicato.
+      expect(seen).toHaveLength(6);
+      expect(new Set(seen).size).toBe(6);
+      // Ordine globale sharedAt desc: l'ultimo condiviso è in cima.
+      expect(seen[0]).toBe("sess2");
+      expect(seen[5]).toBe("act0");
+      // hasMore: true sulle prime due pagine, false esattamente sulla terza.
+      expect(hasMoreFlags).toEqual([true, true, false]);
+    });
+
     test("feed item derives routePolyline from session plannedRoute", async () => {
       const me = await createTestHiker({
         username: "sessroute31",

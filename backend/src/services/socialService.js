@@ -266,12 +266,11 @@ function toFeedItem(doc, kind, viewerId) {
  *   3. Mappa entrambe a FeedItem (vedi `toFeedItem`).
  *   4. Merge + ordina per sharedAt desc + paginazione applicata in JS.
  *
- * Restituisce `{ items, hasMore }` con `hasMore` true se ci sono items
- * oltre la finestra page+limit attualmente nel set merged. NB: hasMore può
- * sbagliare per eccesso se le due sorgenti hanno entrambe raggiunto il cap
- * SERVER_MAX_PER_SOURCE e ci sono post più vecchi che non abbiamo caricato.
- * Pragmaticamente OK per la fase v1 — Sprint 3 può migrare a aggregation
- * `$unionWith + $sort + $skip + $limit` pipeline per cursor-based pagination.
+ * Restituisce `{ items, hasMore }`. La paginazione usa un lookahead di 1
+ * elemento per sorgente (vedi sotto): `hasMore` è esatto anche al raggiungimento
+ * del cap di sicurezza. Per scale molto grandi (>200 post visibili) la strada
+ * definitiva resta una pipeline `$unionWith + $sort + $skip + $limit` con
+ * cursor-based pagination (Fase 2 del piano).
  *
  * @param {string|ObjectId} userId  Utente che richiede il feed (auth via JWT).
  * @param {{page:number, limit:number}} opts  Paginazione (page 1-based, max 50 limit).
@@ -285,13 +284,23 @@ export async function getFeedForUser(userId, { page = 1, limit = 20 } = {}) {
     new mongoose.Types.ObjectId(String(userId)),
   ];
 
+  // Paginazione con "lookahead": invece di caricare un cap fisso (200) e
+  // calcolare hasMore sul merge — sbagliato quando si RAGGIUNGE il cap —
+  // recuperiamo da OGNI sorgente solo (skip + limit + 1) documenti. Poiché ogni
+  // sorgente è già ordinata sharedAt desc, questo basta a costruire la finestra
+  // globale corretta, e il +1 segnala se esiste almeno un altro elemento →
+  // hasMore esatto. Pagina 1/limit 20 = 21 doc/sorgente invece di 200.
+  // SERVER_MAX_PER_SOURCE resta come cap di sicurezza per paginazioni profonde.
+  const skip = (Math.max(1, page) - 1) * limit;
+  const fetchLimit = Math.min(skip + limit + 1, SERVER_MAX_PER_SOURCE);
+
   const [activities, sessions] = await Promise.all([
     Activity.find({
       userId: { $in: visibleAuthorIds },
       sharedAt: { $ne: null },
     })
       .sort({ sharedAt: -1 })
-      .limit(SERVER_MAX_PER_SOURCE)
+      .limit(fetchLimit)
       .populate("userId", "username personalInfo.avatarUrl")
       .lean(),
     HikeSession.find({
@@ -299,7 +308,11 @@ export async function getFeedForUser(userId, { page = 1, limit = 20 } = {}) {
       sharedAt: { $ne: null },
     })
       .sort({ sharedAt: -1 })
-      .limit(SERVER_MAX_PER_SOURCE)
+      .limit(fetchLimit)
+      // Escludi gli array di tracking live: pesanti (una posizione per
+      // partecipante × heartbeat) e mai usati da toFeedItem. Riduce il
+      // documento trasferito da Mongo nel caso comune di sessioni condivise.
+      .select("-liveLocations -liveTracking")
       .populate("creatorId", "username personalInfo.avatarUrl")
       .populate("participants.userId", "username personalInfo.avatarUrl")
       .lean(),
@@ -314,10 +327,11 @@ export async function getFeedForUser(userId, { page = 1, limit = 20 } = {}) {
     return tb - ta;
   });
 
-  const total = merged.length;
-  const skip = (Math.max(1, page) - 1) * limit;
   const items = merged.slice(skip, skip + limit);
-  return { items, hasMore: skip + limit < total };
+  // hasMore: il lookahead (+1 doc per sorgente) ha portato almeno un elemento
+  // oltre la finestra corrente? Allora esiste un'altra pagina. Esatto anche al
+  // cap, a differenza del vecchio `skip + limit < total` sul merge troncato.
+  return { items, hasMore: merged.length > skip + limit };
 }
 
 // ── SOCIAL ROW (avatar in cima al feed) ─────────────────────────────────────
@@ -573,15 +587,21 @@ export async function getPostsByUser(authorId, viewerId, { page = 1, limit = 20 
   // "vedere la propria timeline completa" e decidere cosa pubblicare.
   const sharedFilter = isSelf ? {} : { sharedAt: { $ne: null } };
 
+  // Stessa paginazione a lookahead di getFeedForUser: skip+limit+1 doc per
+  // sorgente → hasMore esatto e payload ridotto rispetto al cap fisso.
+  const skip = (Math.max(1, page) - 1) * limit;
+  const fetchLimit = Math.min(skip + limit + 1, SERVER_MAX_PER_SOURCE);
+
   const [activities, sessions] = await Promise.all([
     Activity.find({ userId: authorId, ...sharedFilter })
       .sort({ sharedAt: -1, completedAt: -1 })
-      .limit(SERVER_MAX_PER_SOURCE)
+      .limit(fetchLimit)
       .populate("userId", "username personalInfo.avatarUrl")
       .lean(),
     HikeSession.find({ creatorId: authorId, ...sharedFilter })
       .sort({ sharedAt: -1, createdAt: -1 })
-      .limit(SERVER_MAX_PER_SOURCE)
+      .limit(fetchLimit)
+      .select("-liveLocations -liveTracking")
       .populate("creatorId", "username personalInfo.avatarUrl")
       .populate("participants.userId", "username personalInfo.avatarUrl")
       .lean(),
@@ -599,8 +619,6 @@ export async function getPostsByUser(authorId, viewerId, { page = 1, limit = 20 
     return tb - ta;
   });
 
-  const total = merged.length;
-  const skip = (Math.max(1, page) - 1) * limit;
   const items = merged.slice(skip, skip + limit);
-  return { items, hasMore: skip + limit < total };
+  return { items, hasMore: merged.length > skip + limit };
 }

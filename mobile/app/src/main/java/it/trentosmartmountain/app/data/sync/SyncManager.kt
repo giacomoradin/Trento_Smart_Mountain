@@ -10,6 +10,8 @@ import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.ActualStats
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
+import it.trentosmartmountain.app.util.ELEVATION_PROFILE_MAX_POINTS
+import it.trentosmartmountain.app.util.downsampleByIndex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -147,12 +149,17 @@ object SyncManager {
         )
     }
 
+    // Estrae il profilo altimetrico dal blob `trackLatLng` ([[lat,lon,alt], ...]).
+    // Campiona a ~50 punti come il path immediato (SessionCommandRepository):
+    // così un'attività mostra la stessa banda altimetrica nel feed sia che venga
+    // inviata online sia che venga risincronizzata offline (parità store-and-forward).
     private fun parseElevationProfile(trackJson: String): List<Double>? {
         if (trackJson.isBlank() || trackJson == "[]") return null
         return try {
             val type = object : com.google.gson.reflect.TypeToken<List<List<Double>>>() {}.type
             val raw: List<List<Double>> = com.google.gson.Gson().fromJson(trackJson, type)
-            raw.mapNotNull { pts -> pts.getOrNull(2) }.takeIf { it.isNotEmpty() }
+            val elevations = raw.mapNotNull { pts -> pts.getOrNull(2) }
+            downsampleByIndex(elevations, ELEVATION_PROFILE_MAX_POINTS)
         } catch (_: Exception) { null }
     }
 

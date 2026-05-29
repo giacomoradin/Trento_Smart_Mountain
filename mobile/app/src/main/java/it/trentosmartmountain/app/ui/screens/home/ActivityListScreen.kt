@@ -1,6 +1,8 @@
 package it.trentosmartmountain.app.ui.screens.home
 
 import android.app.Application
+import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -40,7 +42,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +71,7 @@ import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.ActivityListViewModel
 import it.trentosmartmountain.app.viewmodel.ActivitySort
+import it.trentosmartmountain.app.viewmodel.SocialFeedViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -86,6 +91,31 @@ fun ActivityListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // ViewModel social condiviso a livello Activity (stesso del feed): permette di
+    // pubblicare un'attività direttamente dallo storico. Mostra il dialog caption.
+    val socialVm: SocialFeedViewModel = viewModel(
+        viewModelStoreOwner = LocalContext.current as ComponentActivity,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+            (LocalContext.current as ComponentActivity).application,
+        ),
+    )
+    val socialState by socialVm.state.collectAsStateWithLifecycle()
+    var shareTarget by remember { mutableStateOf<ActivityListViewModel.ActivityItem?>(null) }
+
+    LaunchedEffect(socialState.shareSuccess) {
+        socialState.shareSuccess?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            socialVm.clearShareMessages()
+        }
+    }
+    LaunchedEffect(socialState.shareError) {
+        socialState.shareError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            socialVm.clearShareMessages()
+        }
+    }
+
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     val years = remember(currentYear) { (currentYear downTo currentYear - 4).toList() }
     // initialPage 0 = anno corrente (years è ordinato dal più recente al più vecchio).
@@ -285,10 +315,23 @@ fun ActivityListScreen(
                 ActivityListItem(
                     activity = activity,
                     onClick = { onActivityClick(activity.id, activity.sessionId) },
+                    onShareClick = { shareTarget = activity },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp),
                 )
             }
         }
+    }
+
+    // Dialog "Pubblica sul feed" per un'attività libera sincronizzata.
+    shareTarget?.let { target ->
+        ShareActivityDialog(
+            activityName = target.name,
+            onDismiss = { shareTarget = null },
+            onShare = { caption ->
+                target.remoteId?.let { socialVm.shareActivity(it, caption) }
+                shareTarget = null
+            },
+        )
     }
 }
 
@@ -479,6 +522,7 @@ private fun MonthlyBarChart(
 private fun ActivityListItem(
     activity: ActivityListViewModel.ActivityItem,
     onClick: () -> Unit,
+    onShareClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val dateFmt = SimpleDateFormat("d MMM yyyy", Locale.ITALIAN)
@@ -557,10 +601,18 @@ private fun ActivityListItem(
                 } else {
                     Icon(Icons.Outlined.Sync, contentDescription = "Non sincronizzato", tint = Color.Gray, modifier = Modifier.size(16.dp))
                 }
-                // Share button — cablerà POST /activities/:id/share quando il backend
-                // sarà esteso (vedi docs/sprint2_social.md, fase B "Backend social actions").
-                IconButton(onClick = { /* sprint2_social.md fase E4 */ }, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Outlined.Share, contentDescription = "Condividi", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                // Condividi sul feed: solo per attività libere già sincronizzate
+                // (le sessioni di gruppo si pubblicano dal loro dettaglio, creator-only;
+                //  un'attività non ancora sincronizzata non ha id backend per lo share).
+                if (activity.sessionId == null && activity.remoteId != null) {
+                    IconButton(onClick = onShareClick, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            Icons.Outlined.Share,
+                            contentDescription = "Condividi sul feed",
+                            tint = TsmAccent,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
                 }
             }
         }

@@ -232,6 +232,17 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /**
+     * Aggiorna il contatore commenti di un singolo post della bacheca in-place,
+     * senza ricaricare profilo+stats+posts. Chiamato alla chiusura della sheet
+     * commenti (vedi [SocialFeedViewModel.setCommentCount] per la stessa logica).
+     */
+    fun setCommentCount(id: String, kind: String, count: Int) {
+        val item = _state.value.posts.firstOrNull { it.id == id && it.kind == kind } ?: return
+        if (item.commentsCount == count) return
+        replacePost(item.copy(commentsCount = count))
+    }
+
     fun clearError() {
         _state.value = _state.value.copy(error = null)
     }

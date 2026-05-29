@@ -5,18 +5,14 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -32,18 +28,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.ui.components.TsmEmptyState
+import it.trentosmartmountain.app.ui.components.TsmErrorState
+import it.trentosmartmountain.app.ui.components.TsmLoadingState
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.SocialFeedViewModel
 
-private val DarkSurface = Color(0xFF1C1C1E)
-private val AccentCyan = Color(0xFF4DD0E1)
-private val TextSecondary = Color(0xFF8E8E93)
+private val DarkSurface = TsmColors.FeedBackground
+private val AccentCyan = TsmColors.Cyan
+private val TextSecondary = TsmColors.TextSecondary
 
 /**
  * Schermata principale del feed sociale (HomeScreen sotto-tab Social).
@@ -97,13 +95,26 @@ fun HomeSocialScreen(
 
     Surface(modifier = modifier.fillMaxSize(), color = DarkSurface) {
         PullToRefreshBox(
-            isRefreshing = state.isLoading,
+            // Lo spinner pull-to-refresh va mostrato solo durante un refresh CON
+            // contenuti già a schermo; il primo caricamento usa TsmLoadingState.
+            isRefreshing = state.isLoading && state.items.isNotEmpty(),
             onRefresh = { viewModel.refresh() },
         ) {
             when {
-                state.isLoading && state.items.isEmpty() -> CenteredSpinner()
-                state.items.isEmpty() && !state.isLoading -> EmptyFeedView(
-                    onRefresh = { viewModel.refresh() },
+                state.isLoading && state.items.isEmpty() -> TsmLoadingState()
+                // Errore di rete con lista vuota: stato dedicato (prima appariva
+                // come "feed vuoto", facendo credere all'utente di non seguire
+                // nessuno invece che a un problema di connessione).
+                state.error != null && state.items.isEmpty() -> TsmErrorState(
+                    message = "Non riesco a caricare il feed. Controlla la connessione e riprova.",
+                    onRetry = { viewModel.refresh() },
+                )
+                state.items.isEmpty() -> TsmEmptyState(
+                    emoji = "👥",
+                    title = "Il tuo feed è vuoto",
+                    message = "Segui qualcuno o pubblica una tua attività dalla sezione \"Personale\" → tap su un'attività → Condividi.",
+                    actionLabel = "Aggiorna",
+                    onAction = { viewModel.refresh() },
                 )
                 else -> FeedList(
                     items = state.items,
@@ -135,12 +146,10 @@ fun HomeSocialScreen(
     // BottomSheet condivisa: si apre solo quando `commentsTarget != null`.
     CommentsBottomSheet(
         target = commentsTarget,
-        onDismiss = {
-            commentsTarget = null
-            // Dopo chiusura, refresh del feed per aggiornare il `commentsCount`
-            // visivo (le card mostrano il numero attuale).
-            viewModel.refresh()
-        },
+        onDismiss = { commentsTarget = null },
+        // Aggiorna SOLO il contatore dell'item interessato alla chiusura: niente
+        // più refresh totale del feed (che ricaricava tutto e perdeva lo scroll).
+        onCountChanged = viewModel::setCommentCount,
     )
 }
 
@@ -230,44 +239,5 @@ private fun FeedList(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CenteredSpinner() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = AccentCyan)
-    }
-}
-
-@Composable
-private fun EmptyFeedView(onRefresh: () -> Unit) {
-    // L'utente può ricevere feed vuoto in due casi:
-    //  1. Non segue nessuno e non ha ancora condiviso le proprie attività
-    //  2. Ha appena fatto refresh e nessuno dei seguiti ha post recenti
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("👥", style = MaterialTheme.typography.displayLarge)
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "Il tuo feed è vuoto",
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Segui qualcuno o pubblica una tua attività dalla sezione \"Personale\" → tap su un'attività → Condividi.",
-            color = TextSecondary,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = onRefresh) { Text("Aggiorna") }
     }
 }

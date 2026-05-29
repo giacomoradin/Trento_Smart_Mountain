@@ -1,5 +1,9 @@
 import request from "supertest";
+import bcrypt from "bcrypt";
 import app from "../../src/app.js";
+import User from "../../src/models/user.js";
+import Activity from "../../src/models/activity.js";
+import HikeSession from "../../src/models/hikeSession.js";
 import { createTestHiker } from "../helpers/authHelper.js";
 
 /**
@@ -216,6 +220,123 @@ describe("Account Routes", () => {
 
       expect(r2.status).toBe(200);
       expect(r2.body.profileCompletedAt).toBe(r1.body.profileCompletedAt);
+    });
+  });
+
+  describe("POST /me/change-password", () => {
+    test("password attuale corretta → 200 e l'hash viene aggiornato", async () => {
+      const { token, user, password } = await createTestHiker({ email: "cp1@test.com", username: "cp1" });
+      const res = await request(app)
+        .post("/api/v1/users/change-password")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ oldPassword: password, newPassword: "NuovaPassword456!" });
+      expect(res.status).toBe(200);
+      // Verifica diretta su DB: il nuovo hash matcha la nuova password, non la vecchia.
+      const updated = await User.findById(user._id).select("passwordHash").lean();
+      expect(await bcrypt.compare("NuovaPassword456!", updated.passwordHash)).toBe(true);
+      expect(await bcrypt.compare(password, updated.passwordHash)).toBe(false);
+    });
+
+    test("password attuale errata → 401 (e l'hash NON cambia)", async () => {
+      const { token, user, password } = await createTestHiker({ email: "cp2@test.com", username: "cp2" });
+      const res = await request(app)
+        .post("/api/v1/users/change-password")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ oldPassword: "Sbagliata123!", newPassword: "NuovaPassword456!" });
+      expect(res.status).toBe(401);
+      const updated = await User.findById(user._id).select("passwordHash").lean();
+      expect(await bcrypt.compare(password, updated.passwordHash)).toBe(true);
+    });
+
+    test("nuova password che non rispetta la policy → 422", async () => {
+      const { token, password } = await createTestHiker({ email: "cp3@test.com", username: "cp3" });
+      const res = await request(app)
+        .post("/api/v1/users/change-password")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ oldPassword: password, newPassword: "123" });
+      expect(res.status).toBe(422);
+    });
+  });
+
+  describe("DELETE /me — eliminazione account", () => {
+    test("password errata → 401, account NON eliminato", async () => {
+      const { token, user } = await createTestHiker({ email: "del1@test.com", username: "del1" });
+      const res = await request(app)
+        .delete("/api/v1/users/me")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ password: "Sbagliata123!" });
+      expect(res.status).toBe(401);
+      expect(await User.findById(user._id)).not.toBeNull();
+    });
+
+    test("password corretta → 200, utente e sue attività eliminati (cascade)", async () => {
+      const { token, user, password } = await createTestHiker({ email: "del2@test.com", username: "del2" });
+      await Activity.create({
+        userId: user._id,
+        name: "Da eliminare",
+        startTimeMs: Date.now() - 3600_000,
+        endTimeMs: Date.now(),
+        actualStats: { movingSeconds: 100, totalSeconds: 120, distanceMeters: 1000, elevationGainM: 10 },
+      });
+      const res = await request(app)
+        .delete("/api/v1/users/me")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ password });
+      expect(res.status).toBe(200);
+      expect(await User.findById(user._id)).toBeNull();
+      expect(await Activity.countDocuments({ userId: user._id })).toBe(0);
+    });
+
+    test("leadership transfer: la sessione del creator passa a un partecipante", async () => {
+      const creator = await createTestHiker({ email: "del3@test.com", username: "del3" });
+      const member = await createTestHiker({ email: "del3b@test.com", username: "del3b" });
+      const session = await HikeSession.create({
+        creatorId: creator.user._id,
+        routeDetails: { name: "Giro", difficultyLevel: "E" },
+        meetingDate: "2026-09-01",
+        inviteCode: "TSM-DEL3",
+        status: "PLANNED",
+        participants: [
+          { userId: creator.user._id, role: "groupLeader" },
+          { userId: member.user._id, role: "hiker" },
+        ],
+      });
+      const res = await request(app)
+        .delete("/api/v1/users/me")
+        .set("Authorization", `Bearer ${creator.token}`)
+        .send({ password: creator.password });
+      expect(res.status).toBe(200);
+      const after = await HikeSession.findById(session._id).lean();
+      expect(after).not.toBeNull(); // non cancellata: c'era un altro partecipante
+      expect(String(after.creatorId)).toBe(String(member.user._id));
+      const memberP = after.participants.find((p) => String(p.userId) === String(member.user._id));
+      expect(memberP.role).toBe("groupLeader");
+      expect(after.participants.some((p) => String(p.userId) === String(creator.user._id))).toBe(false);
+    });
+  });
+
+  describe("PATCH /me — cambio email", () => {
+    test("email già usata da un altro utente → 409", async () => {
+      await createTestHiker({ email: "taken@test.com", username: "owneremail" });
+      const { token } = await createTestHiker({ email: "mine@test.com", username: "mineemail" });
+      const res = await request(app)
+        .patch("/api/v1/users/me")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ email: "taken@test.com" });
+      expect(res.status).toBe(409);
+    });
+  });
+
+  describe("GET /me/weekly-stats", () => {
+    test("ritorna km/elevM/count (zero senza attività nella settimana)", async () => {
+      const { token } = await createTestHiker({ email: "ws1@test.com", username: "ws1" });
+      const res = await request(app)
+        .get("/api/v1/users/me/weekly-stats")
+        .set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ km: 0, elevM: 0, count: 0 });
+      expect(res.body.weekStart).toBeDefined();
+      expect(res.body.weekEnd).toBeDefined();
     });
   });
 });

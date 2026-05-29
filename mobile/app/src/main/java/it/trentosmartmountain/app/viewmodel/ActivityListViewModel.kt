@@ -25,6 +25,9 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
 
     data class ActivityItem(
         val id: String,
+        /** Id backend (Activity._id) dopo il sync; null finché non sincronizzata.
+         *  Necessario per le azioni social (share/like) che vivono lato server. */
+        val remoteId: String?,
         val sessionId: String?,
         val name: String,
         val activityType: String,
@@ -311,6 +314,7 @@ class ActivityListViewModel(application: Application) : AndroidViewModel(applica
 
     private fun CompletedActivityEntity.toItem() = ActivityItem(
         id = id,
+        remoteId = remoteId,
         sessionId = sessionId,
         name = name,
         activityType = activityType,

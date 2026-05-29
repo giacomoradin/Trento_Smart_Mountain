@@ -1,6 +1,6 @@
 
 ## Checklist escursione
-
+![Architettura Checklist](docs/checklist_architecture.svg)
 La checklist viene generata automaticamente per ogni sessione in stato `PLANNED` a partire dai dati del sentiero SAT e, opzionalmente, dalle previsioni meteo.
 
 ### Endpoint

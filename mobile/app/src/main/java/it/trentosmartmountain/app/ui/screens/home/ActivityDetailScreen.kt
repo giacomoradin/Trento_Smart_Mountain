@@ -125,7 +125,20 @@ fun ActivityDetailScreen(
                 // la condivisione passa per /sessions/:id/share. Authorization
                 // server-side: solo creator può condividere la sessione.
                 if (sessionId.isNullOrBlank()) {
-                    socialFeedViewModel.shareActivity(activityId, caption)
+                    // Lo share di un'attività libera richiede l'ID backend (ObjectId
+                    // MongoDB), NON l'id Room locale (che per le attività registrate
+                    // sul device è un UUID → 422 "ID non valido"). Usiamo il remoteId,
+                    // disponibile solo dopo la sincronizzazione.
+                    val remoteId = uiState.local?.remoteId
+                    if (remoteId != null) {
+                        socialFeedViewModel.shareActivity(remoteId, caption)
+                    } else {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Sincronizza l'attività prima di condividerla.",
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    }
                 } else {
                     socialFeedViewModel.shareSession(sessionId, caption)
                 }
@@ -375,25 +388,11 @@ fun ActivityDetailScreen(
             if (!participants.isNullOrEmpty()) {
                 Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = TsmSurface) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "PARTECIPANTI · ${participants.size}",
-                                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
-                                color = Color.Gray,
-                            )
-                            Surface(color = TsmPrimary.copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
-                                Text(
-                                    "Tutti arrivati",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TsmPrimary,
-                                )
-                            }
-                        }
+                        Text(
+                            "PARTECIPANTI · ${participants.size}",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                            color = Color.Gray,
+                        )
                         Spacer(modifier = Modifier.height(10.dp))
                         participants.forEach { p ->
                             val name = p.userId?.username ?: "Utente"

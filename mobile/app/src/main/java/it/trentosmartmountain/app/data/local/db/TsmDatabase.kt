@@ -23,7 +23,10 @@ import androidx.room.RoomDatabase
   // v6: coda SOS offline (`pending_emergencies`) — merge branch SOS.
   // v7: tabella `viewed_stories` per la priority-row Social (locale-only,
   //     vedi ViewedStoryEntity). Migration esplicita MIGRATION_6_7.
-  version = 7,
+  // v8: colonna `hidden` su `completed_activities` (tombstone eliminazione —
+  //     evita la re-importazione delle sessioni COMPLETED al riavvio).
+  //     Migration esplicita MIGRATION_7_8.
+  version = 8,
   exportSchema = false,
 )
 abstract class TsmDatabase : RoomDatabase() {

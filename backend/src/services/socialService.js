@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import Activity from "../models/activity.js";
 import HikeSession from "../models/hikeSession.js";
 import Hiker from "../models/hiker.js";
-import { getFollowingIds } from "./followService.js";
+import { getFollowingIds, isFollowing } from "./followService.js";
 import { downsamplePolyline } from "../utils/geoPolyline.js";
 
 // Risoluzione della route signature nel feed: ~48 punti bastano a riconoscere
@@ -166,6 +166,33 @@ export async function unlikeSession(sessionId, userId) {
   return { likesCount: session.likes.length, likedByMe: false };
 }
 
+// ── VISIBILITÀ PROFILO ──────────────────────────────────────────────────────
+
+/**
+ * Modello di visibilità a livello di account (`preferences.privacy.profileVisibility`):
+ *
+ *   - "public"  → i post condivisi sono visibili a chiunque
+ *   - "friends" → visibili solo ai propri follower (modello "amici = follower")
+ *   - "private" → visibili solo a se stessi
+ *
+ * Restituisce una Map<string, "public"|"friends"|"private"> per gli autori dati.
+ * Default "friends" (coerente con lo schema Hiker) per autori senza preferenza.
+ */
+async function getVisibilityForAuthors(authorIds) {
+  const map = new Map();
+  if (!authorIds || authorIds.length === 0) return map;
+  const docs = await Hiker.find({ _id: { $in: authorIds } })
+    .select("preferences.privacy.profileVisibility")
+    .lean();
+  for (const d of docs) {
+    map.set(
+      String(d._id),
+      d.preferences?.privacy?.profileVisibility ?? "friends",
+    );
+  }
+  return map;
+}
+
 // ── FEED AGGREGATOR ─────────────────────────────────────────────────────────
 
 /**
@@ -277,10 +304,17 @@ function toFeedItem(doc, kind, viewerId) {
  */
 export async function getFeedForUser(userId, { page = 1, limit = 20 } = {}) {
   const followingIds = await getFollowingIds(userId);
+  // Gate di visibilità: il viewer segue ciascun autore (quindi ne è follower),
+  // perciò gli autori "public" e "friends" sono sempre ammessi nel feed. Vanno
+  // esclusi solo gli autori che hanno impostato il profilo su "private".
+  const visMap = await getVisibilityForAuthors(followingIds);
+  const allowedFollowingIds = followingIds.filter(
+    (id) => visMap.get(String(id)) !== "private",
+  );
   // Include "me" così l'utente vede i propri post nel feed. ObjectId esplicito
   // per evitare Cast string->ObjectId implicito che a volte non match nei $in.
   const visibleAuthorIds = [
-    ...followingIds,
+    ...allowedFollowingIds,
     new mongoose.Types.ObjectId(String(userId)),
   ];
 
@@ -387,7 +421,14 @@ function computeProgressPct(goals, totals) {
  * Implementazione: 5 query parallele Promise.all → merge per userId → priority assignment.
  */
 export async function getSocialRowForUser(viewerId) {
-  const followingIds = await getFollowingIds(viewerId);
+  const rawFollowingIds = await getFollowingIds(viewerId);
+  if (rawFollowingIds.length === 0) return { items: [] };
+  // Gate di visibilità: gli autori "private" non compaiono nella row (né story
+  // né live). "public"/"friends" restano visibili (il viewer ne è follower).
+  const visMap = await getVisibilityForAuthors(rawFollowingIds);
+  const followingIds = rawFollowingIds.filter(
+    (id) => visMap.get(String(id)) !== "private",
+  );
   if (followingIds.length === 0) return { items: [] };
 
   const since24h = new Date(Date.now() - STORY_WINDOW_MS);
@@ -582,6 +623,20 @@ export async function getSocialRowForUser(viewerId) {
  */
 export async function getPostsByUser(authorId, viewerId, { page = 1, limit = 20 } = {}) {
   const isSelf = String(authorId) === String(viewerId);
+
+  // Gate di visibilità a livello account (solo per viewer != autore):
+  //   - "private" → nessun post visibile
+  //   - "friends" → visibile solo se il viewer è follower dell'autore
+  //   - "public"  → post condivisi visibili a chiunque
+  if (!isSelf) {
+    const visMap = await getVisibilityForAuthors([authorId]);
+    const visibility = visMap.get(String(authorId)) ?? "friends";
+    if (visibility === "private") return { items: [], hasMore: false };
+    if (visibility === "friends" && !(await isFollowing(viewerId, authorId))) {
+      return { items: [], hasMore: false };
+    }
+  }
+
   // Se viewer != autore, mostriamo solo i post condivisi (sharedAt != null).
   // Se viewer == autore, mostriamo anche i privati così l'utente può
   // "vedere la propria timeline completa" e decidere cosa pubblicare.

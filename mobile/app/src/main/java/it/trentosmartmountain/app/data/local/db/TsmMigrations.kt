@@ -113,8 +113,22 @@ object TsmMigrations {
   }
 
   /**
+   * v7 → v8: colonna `hidden` su `completed_activities` (tombstone locale per
+   * l'eliminazione delle attività). Le sessioni di gruppo COMPLETED non sono
+   * cancellabili sul backend, quindi marchiamo la riga come nascosta invece di
+   * rimuoverla: il sync la vede come "già esistente" e non la re-importa.
+   */
+  val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+      db.execSQL(
+        "ALTER TABLE `completed_activities` ADD COLUMN `hidden` INTEGER NOT NULL DEFAULT 0",
+      )
+    }
+  }
+
+  /**
    * Tutte le migration esplicite registrate, in ordine cronologico.
    * Passate a Room via `Room.databaseBuilder(...).addMigrations(*ALL)`.
    */
-  val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+  val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
 }

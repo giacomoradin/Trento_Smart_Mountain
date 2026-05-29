@@ -4,7 +4,20 @@ import Activity from "../../src/models/activity.js";
 import HikeSession from "../../src/models/hikeSession.js";
 import Follow from "../../src/models/follow.js";
 import Comment from "../../src/models/comment.js";
+import Hiker from "../../src/models/hiker.js";
 import { createTestHiker } from "../helpers/authHelper.js";
+
+/**
+ * Imposta la visibilità del profilo di un utente (gate Social a livello account).
+ * Default schema = "friends"; molti test della bacheca presuppongono visibilità
+ * pubblica verso un viewer non-follower, quindi la forziamo esplicitamente.
+ */
+async function setVisibility(userId, visibility) {
+  await Hiker.updateOne(
+    { _id: userId },
+    { "preferences.privacy.profileVisibility": visibility },
+  );
+}
 
 /**
  * Test suite Social (Sprint 2 — schermata Social).
@@ -949,6 +962,8 @@ describe("Social Routes", () => {
         username: "viewer41",
         email: "viewer41@test.com",
       });
+      // Profilo pubblico → la bacheca è visibile anche a un viewer non-follower.
+      await setVisibility(author.user._id, "public");
       const sharedAct = await createTestActivity(author.user._id);
       await createTestActivity(author.user._id); // privata
       await request(app)
@@ -972,6 +987,7 @@ describe("Social Routes", () => {
         username: "viewer42",
         email: "viewer42@test.com",
       });
+      await setVisibility(author.user._id, "public");
       const act = await createTestActivity(author.user._id);
       await request(app)
         .post(`/api/v1/activities/${act._id}/share`)
@@ -996,6 +1012,119 @@ describe("Social Routes", () => {
         .get("/api/v1/users/not-an-id/posts")
         .set("Authorization", `Bearer ${me.token}`);
       expect(res.status).toBe(422);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Visibilità profilo (account-level) — modello "amici = follower"
+  //   public  → visibile a chiunque
+  //   friends → visibile solo ai propri follower
+  //   private → visibile solo a se stessi
+  // ──────────────────────────────────────────────────────────────────
+
+  describe("Visibilità profilo nel Social", () => {
+    async function shareActivityAs(owner) {
+      const act = await createTestActivity(owner.user._id);
+      await request(app)
+        .post(`/api/v1/activities/${act._id}/share`)
+        .set("Authorization", `Bearer ${owner.token}`)
+        .send({ caption: "post" });
+      return act;
+    }
+
+    test("bacheca: autore private → viewer non vede nulla", async () => {
+      const author = await createTestHiker({ username: "priv1", email: "priv1@test.com" });
+      const viewer = await createTestHiker({ username: "pv1", email: "pv1@test.com" });
+      await setVisibility(author.user._id, "private");
+      await shareActivityAs(author);
+      const res = await request(app)
+        .get(`/api/v1/users/${author.user._id}/posts`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items).toHaveLength(0);
+    });
+
+    test("bacheca: autore private → l'autore vede comunque i propri post", async () => {
+      const author = await createTestHiker({ username: "priv2", email: "priv2@test.com" });
+      await setVisibility(author.user._id, "private");
+      await shareActivityAs(author);
+      const res = await request(app)
+        .get(`/api/v1/users/${author.user._id}/posts`)
+        .set("Authorization", `Bearer ${author.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items).toHaveLength(1);
+    });
+
+    test("bacheca: autore friends → non-follower non vede, follower sì", async () => {
+      const author = await createTestHiker({ username: "fr1", email: "fr1@test.com" });
+      const viewer = await createTestHiker({ username: "fv1", email: "fv1@test.com" });
+      await setVisibility(author.user._id, "friends");
+      await shareActivityAs(author);
+
+      // Non-follower → bacheca vuota
+      let res = await request(app)
+        .get(`/api/v1/users/${author.user._id}/posts`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      expect(res.body.items).toHaveLength(0);
+
+      // Diventa follower → ora vede i post condivisi
+      await request(app)
+        .post(`/api/v1/users/${author.user._id}/follow`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      res = await request(app)
+        .get(`/api/v1/users/${author.user._id}/posts`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      expect(res.body.items).toHaveLength(1);
+    });
+
+    test("bacheca: autore public → anche un non-follower vede i post condivisi", async () => {
+      const author = await createTestHiker({ username: "pub1", email: "pub1@test.com" });
+      const viewer = await createTestHiker({ username: "puv1", email: "puv1@test.com" });
+      await setVisibility(author.user._id, "public");
+      await shareActivityAs(author);
+      const res = await request(app)
+        .get(`/api/v1/users/${author.user._id}/posts`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      expect(res.body.items).toHaveLength(1);
+    });
+
+    test("feed: un autore private seguito NON compare nel feed", async () => {
+      const me = await createTestHiker({ username: "feedme1", email: "feedme1@test.com" });
+      const privateAuthor = await createTestHiker({ username: "fpriv1", email: "fpriv1@test.com" });
+      const publicAuthor = await createTestHiker({ username: "fpub1", email: "fpub1@test.com" });
+      await setVisibility(privateAuthor.user._id, "private");
+      await setVisibility(publicAuthor.user._id, "public");
+      // Seguo entrambi
+      await request(app)
+        .post(`/api/v1/users/${privateAuthor.user._id}/follow`)
+        .set("Authorization", `Bearer ${me.token}`);
+      await request(app)
+        .post(`/api/v1/users/${publicAuthor.user._id}/follow`)
+        .set("Authorization", `Bearer ${me.token}`);
+      // Entrambi condividono
+      await shareActivityAs(privateAuthor);
+      await shareActivityAs(publicAuthor);
+      const res = await request(app)
+        .get("/api/v1/users/me/feed")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      // Solo il post dell'autore pubblico è presente.
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.items[0].user.username).toBe("fpub1");
+    });
+
+    test("feed: un autore friends seguito compare (il viewer ne è follower)", async () => {
+      const me = await createTestHiker({ username: "feedme2", email: "feedme2@test.com" });
+      const friendAuthor = await createTestHiker({ username: "ffr1", email: "ffr1@test.com" });
+      await setVisibility(friendAuthor.user._id, "friends");
+      await request(app)
+        .post(`/api/v1/users/${friendAuthor.user._id}/follow`)
+        .set("Authorization", `Bearer ${me.token}`);
+      await shareActivityAs(friendAuthor);
+      const res = await request(app)
+        .get("/api/v1/users/me/feed")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.body.items).toHaveLength(1);
     });
   });
 

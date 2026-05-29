@@ -156,8 +156,17 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
     }
 
     /**
-     * Elimina l'attività da Room e, se è un'attività libera sincronizzata, anche dal backend.
-     * Per le sessioni di gruppo non tocca il server (la sessione appartiene anche agli altri).
+     * Elimina l'attività dalla lista "Le mie attività".
+     *
+     * - Attività libera sincronizzata (`sessionId == null`, `remoteId != null`):
+     *   viene cancellata anche dal backend (`DELETE /activities/:id`).
+     * - Sessione di gruppo COMPLETED: NON è cancellabile sul backend (appartiene
+     *   anche agli altri partecipanti), quindi la nascondiamo localmente.
+     *
+     * In entrambi i casi marchiamo la riga come `hidden` (tombstone) invece di
+     * rimuoverla fisicamente: così `syncCompletedSessionsToRoom` /
+     * `syncFreeActivitiesToRoom` la vedono ancora come esistente e NON la
+     * re-importano al riavvio dell'app.
      */
     fun deleteActivity(onDeleted: () -> Unit) {
         val id = _uiState.value.activityId
@@ -166,7 +175,9 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
             if (entity?.sessionId == null && entity?.remoteId != null) {
                 runCatching { TsmApiClient.service().deleteActivity(entity.remoteId) }
             }
-            dao.deleteById(id)
+            // Tombstone: nasconde la riga senza eliminarla (evita re-import dal sync).
+            dao.markHidden(id)
+            entity?.sessionId?.let { dao.markHiddenBySessionId(it) }
             onDeleted()
         }
     }

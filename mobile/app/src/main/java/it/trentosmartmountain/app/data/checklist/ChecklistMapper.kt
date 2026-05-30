@@ -10,33 +10,36 @@ object ChecklistMapper {
     /** Numero di item visibili in copertina per sezione (espandibili). */
     const val INITIAL_SECTION_VISIBLE = 5
 
-    enum class Priorita { ESSENZIALE, FACOLTATIVO, PERSONALE }
+    enum class Priorita { ESSENZIALE, CONSIGLIATO, OPZIONALE, PERSONALE }
 
     fun priorita(item: SessionDetailViewModel.ChecklistItem): Priorita = when {
         item.isPersonal -> Priorita.PERSONALE
         item.livello.equals("base", ignoreCase = true) -> Priorita.ESSENZIALE
-        item.livello.equals("consigliato", ignoreCase = true) ||
-            item.livello.equals("opzionale", ignoreCase = true) -> Priorita.FACOLTATIVO
+        item.livello.equals("consigliato", ignoreCase = true) -> Priorita.CONSIGLIATO
+        item.livello.equals("opzionale", ignoreCase = true) -> Priorita.OPZIONALE
         else -> Priorita.ESSENZIALE
     }
 
     fun partition(items: List<SessionDetailViewModel.ChecklistItem>): ChecklistSections {
         val essenziali = mutableListOf<SessionDetailViewModel.ChecklistItem>()
-        val facoltativi = mutableListOf<SessionDetailViewModel.ChecklistItem>()
+        val consigliati = mutableListOf<SessionDetailViewModel.ChecklistItem>()
+        val opzionali = mutableListOf<SessionDetailViewModel.ChecklistItem>()
         val personali = mutableListOf<SessionDetailViewModel.ChecklistItem>()
         items.forEach { item ->
             when (priorita(item)) {
                 Priorita.ESSENZIALE -> essenziali.add(item)
-                Priorita.FACOLTATIVO -> facoltativi.add(item)
+                Priorita.CONSIGLIATO -> consigliati.add(item)
+                Priorita.OPZIONALE -> opzionali.add(item)
                 Priorita.PERSONALE -> personali.add(item)
             }
         }
-        return ChecklistSections(essenziali, facoltativi, personali)
+        return ChecklistSections(essenziali, consigliati, opzionali, personali)
     }
 
     data class ChecklistSections(
         val essenziali: List<SessionDetailViewModel.ChecklistItem>,
-        val facoltativi: List<SessionDetailViewModel.ChecklistItem>,
+        val consigliati: List<SessionDetailViewModel.ChecklistItem>,
+        val opzionali: List<SessionDetailViewModel.ChecklistItem>,
         val personali: List<SessionDetailViewModel.ChecklistItem>,
     )
 

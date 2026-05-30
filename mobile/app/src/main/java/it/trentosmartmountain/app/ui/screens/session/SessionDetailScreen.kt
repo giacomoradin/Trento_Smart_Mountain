@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
@@ -181,6 +182,14 @@ fun SessionDetailScreen(
 
     LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
     LaunchedEffect(currentUserId) { viewModel.bindCurrentUserId(currentUserId) }
+
+    LaunchedEffect(sessionId, uiState.session?.status) {
+        if (uiState.session?.status != "PLANNED") return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(SessionDetailViewModel.AUTO_REFRESH_MS)
+            viewModel.refreshChecklistAuto()
+        }
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, sessionId) {
         val observer = LifecycleEventObserver { _, event ->
@@ -454,7 +463,11 @@ fun SessionDetailScreen(
                 onRefresh = viewModel::refreshMeteo,
             )
 
-            ChecklistCard(uiState = uiState, viewModel = viewModel)
+            ChecklistCard(
+                uiState = uiState,
+                viewModel = viewModel,
+                onRefresh = viewModel::refreshChecklistManual,
+            )
 
             ParticipantsCard(session = session)
 
@@ -852,74 +865,211 @@ private fun MeteoCard(
 private fun ChecklistCard(
     uiState: SessionDetailViewModel.UiState,
     viewModel: SessionDetailViewModel,
+    onRefresh: () -> Unit,
 ) {
     val checkedCount = uiState.checklist.count { it.checked }
     val total = uiState.checklist.size
+
+    val updatedAgo = uiState.checklistLastUpdate?.let { ts ->
+        val diffMs = System.currentTimeMillis() - ts
+        when {
+            diffMs < 60_000L -> "ora"
+            diffMs < 3_600_000L -> "${diffMs / 60_000L} min fa"
+            else -> "${diffMs / 3_600_000L} h fa"
+        }
+    }
+
+    val freezeLabel = when {
+        uiState.checklistIsFrozen -> "Congelata"
+        uiState.checklistFreezeAtMillis != null -> {
+            val diffMs = uiState.checklistFreezeAtMillis - System.currentTimeMillis()
+            if (diffMs <= 0) "Congelata"
+            else {
+                val hours = diffMs / 3_600_000L
+                val mins = (diffMs % 3_600_000L) / 60_000L
+                when {
+                    hours > 24 -> "Freeze tra ${hours / 24} g"
+                    hours > 0 -> "Freeze tra ${hours}h ${mins}m"
+                    else -> "Freeze tra ${mins} min"
+                }
+            }
+        }
+        else -> null
+    }
 
     DetailCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = "CHECKLIST",
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
                 color = Color.Gray,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (freezeLabel != null) {
+                    Surface(
+                        color = if (uiState.checklistIsFrozen) TsmSurfaceVariant else TsmPrimary.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(20.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                Icons.Outlined.Lock,
+                                contentDescription = null,
+                                tint = if (uiState.checklistIsFrozen) Color.Gray else TsmAccent,
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Text(
+                                freezeLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (uiState.checklistIsFrozen) Color.Gray else TsmAccent,
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = "$checkedCount / $total",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = TsmAccent,
+                    maxLines = 1,
+                )
+            }
+        }
+
+        if (uiState.checklistAcquaLitri != null || uiState.checklistCalorie != null) {
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "$checkedCount / $total",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = TsmAccent,
-                maxLines = 1
+                text = buildString {
+                    uiState.checklistAcquaLitri?.let { append("Acqua consigliata: ${"%.1f".format(it)} L") }
+                    if (uiState.checklistAcquaLitri != null && uiState.checklistCalorie != null) append(" · ")
+                    uiState.checklistCalorie?.let { append("~$it kcal") }
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray,
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        sh.calvin.reorderable.ReorderableColumn(
-            list = uiState.checklist,
-            onSettle = { from, to -> viewModel.onChecklistMove(from, to) },
-        ) { _, item, _ ->
-            key(item.id) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            Surface(
+                color = TsmSurfaceVariant,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.clickable(enabled = !uiState.checklistLoading) { onRefresh() },
+            ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    IconButton(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .draggableHandle(),
-                        onClick = {},
-                    ) {
-                        Icon(
-                            Icons.Outlined.DragHandle,
-                            contentDescription = "Trascina per riordinare",
-                            tint = Color(0xFF888888),
-                            modifier = Modifier.size(20.dp),
-                        )
+                    if (uiState.checklistLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = TsmAccent)
+                    } else {
+                        Icon(Icons.Outlined.Schedule, null, tint = TsmAccent, modifier = Modifier.size(12.dp))
                     }
-                    Checkbox(
-                        checked = item.checked,
-                        onCheckedChange = { viewModel.onToggleCheck(item.id) },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = TsmPrimary,
-                            uncheckedColor = Color(0xFF555555),
-                            checkmarkColor = Color.White,
-                        ),
-                    )
                     Text(
-                        item.text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (item.checked) Color.Gray else Color.White,
-                        modifier = Modifier.weight(1f),
+                        when {
+                            uiState.checklistLoading -> "Aggiornamento..."
+                            updatedAgo != null -> "Aggiornato $updatedAgo"
+                            else -> "Aggiorna"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TsmAccent,
                     )
-                    IconButton(onClick = { viewModel.onRemoveItem(item.id) }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color(0xFF888888), modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+
+        when {
+            uiState.checklistUnavailableReason != null -> {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    uiState.checklistUnavailableReason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                )
+            }
+            uiState.checklistError != null -> {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    uiState.checklistError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                TextButton(onClick = onRefresh) {
+                    Text("Riprova", color = TsmAccent, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
+        if (uiState.checklist.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            sh.calvin.reorderable.ReorderableColumn(
+                list = uiState.checklist,
+                onSettle = { from, to -> viewModel.onChecklistMove(from, to) },
+            ) { _, item, _ ->
+                key(item.id) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .draggableHandle(),
+                            onClick = {},
+                        ) {
+                            Icon(
+                                Icons.Outlined.DragHandle,
+                                contentDescription = "Trascina per riordinare",
+                                tint = Color(0xFF888888),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        Checkbox(
+                            checked = item.checked,
+                            onCheckedChange = { viewModel.onToggleCheck(item.id) },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = TsmPrimary,
+                                uncheckedColor = Color(0xFF555555),
+                                checkmarkColor = Color.White,
+                            ),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                item.text,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (item.checked) Color.Gray else Color.White,
+                            )
+                            if (!item.motivo.isNullOrBlank()) {
+                                Text(
+                                    item.motivo,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.Gray.copy(alpha = 0.8f),
+                                )
+                            }
+                        }
+                        if (item.isPersonal) {
+                            IconButton(onClick = { viewModel.onRemoveItem(item.id) }, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color(0xFF888888), modifier = Modifier.size(18.dp))
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.size(28.dp))
+                        }
                     }
                 }
             }

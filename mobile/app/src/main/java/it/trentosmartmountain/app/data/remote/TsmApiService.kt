@@ -13,6 +13,9 @@ import it.trentosmartmountain.app.data.remote.dto.Challenge
 import it.trentosmartmountain.app.data.remote.dto.ChallengeDetailResponse
 import it.trentosmartmountain.app.data.remote.dto.ChallengeRespondRequest
 import it.trentosmartmountain.app.data.remote.dto.ChangePasswordRequest
+import it.trentosmartmountain.app.data.remote.dto.ChecklistGenerateRequest
+import it.trentosmartmountain.app.data.remote.dto.ChecklistGetResponse
+import it.trentosmartmountain.app.data.remote.dto.ChecklistMutationResponse
 import it.trentosmartmountain.app.data.remote.dto.CommentListResponse
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
@@ -81,6 +84,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -164,6 +168,23 @@ interface TsmApiService {
     @Path("id") id: String,
     @Body body: CompleteSessionRequest,
   ): Response<ApiMessageBody>
+
+  // ── Checklist dinamica (US-7) ──
+
+  @GET("api/v1/sessions/{id}/checklist")
+  suspend fun getSessionChecklist(@Path("id") id: String): Response<ChecklistGetResponse>
+
+  @POST("api/v1/sessions/{id}/checklist")
+  suspend fun generateSessionChecklist(
+    @Path("id") id: String,
+    @Body body: ChecklistGenerateRequest = ChecklistGenerateRequest(),
+  ): Response<ChecklistMutationResponse>
+
+  @PUT("api/v1/sessions/{id}/checklist")
+  suspend fun updateSessionChecklist(
+    @Path("id") id: String,
+    @Body body: ChecklistGenerateRequest = ChecklistGenerateRequest(),
+  ): Response<ChecklistMutationResponse>
 
   // ├ö├Â├ç├ö├Â├ç Realtime Monitoring ├ö├Â├ç├ö├Â├ç
 

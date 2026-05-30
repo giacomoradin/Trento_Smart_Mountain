@@ -3,6 +3,8 @@ package it.trentosmartmountain.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import it.trentosmartmountain.app.data.checklist.ChecklistMapper
+import it.trentosmartmountain.app.data.checklist.ChecklistPersonalStore
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.session.SessionLiveController
 import it.trentosmartmountain.app.data.session.SessionParticipationResolver
@@ -10,6 +12,10 @@ import it.trentosmartmountain.app.data.session.SessionParticipationUi
 import it.trentosmartmountain.app.data.session.UserSessionLiveState
 import it.trentosmartmountain.app.ui.util.ApiErrorMessages
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
+import it.trentosmartmountain.app.data.remote.dto.ChecklistDto
+import it.trentosmartmountain.app.data.remote.dto.ChecklistGenerateRequest
+import it.trentosmartmountain.app.data.remote.dto.ChecklistGetResponse
+import it.trentosmartmountain.app.data.remote.dto.ChecklistMutationResponse
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateRouteDetails
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
@@ -20,22 +26,34 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.time.Instant
 import java.util.UUID
 
 /**
- * Dettaglio sessione: caricamento da API, modifica capogruppo, checklist locale, meteo.
+ * Dettaglio sessione: caricamento da API, modifica capogruppo, checklist dinamica, meteo.
  */
 class SessionDetailViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val personalStore = ChecklistPersonalStore
+    private val api = TsmApiClient.service()
+
+    companion object {
+        const val AUTO_REFRESH_MS = 60 * 60 * 1000L
+    }
 
     private val liveController = SessionLiveController(application)
     var currentUserId: String = ""
         private set
 
-    /** Elemento della checklist escursionistica (stato solo locale, non ancora persistito). */
+    /** Elemento checklist: item server (dinamico) o personale (solo locale). */
     data class ChecklistItem(
         val id: String = UUID.randomUUID().toString(),
         val text: String,
+        val motivo: String? = null,
         val checked: Boolean = false,
+        val isPersonal: Boolean = false,
+        val livello: String? = null,
+        val categoria: String? = null,
     )
 
     /** Stato per [it.trentosmartmountain.app.ui.screens.session.SessionDetailScreen]. */
@@ -45,6 +63,15 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
         val isSaving: Boolean = false,
         val editMode: Boolean = false,
         val checklist: List<ChecklistItem> = emptyList(),
+        val checklistLoading: Boolean = false,
+        val checklistError: String? = null,
+        val checklistUnavailableReason: String? = null,
+        val checklistLastUpdate: Long? = null,
+        val checklistIsFrozen: Boolean = false,
+        val checklistFreezeAtMillis: Long? = null,
+        val checklistAcquaLitri: Double? = null,
+        val checklistCalorie: Int? = null,
+        val checklistCanRegenerate: Boolean = false,
         val newItemText: String = "",
         val showAvviaConfirm: Boolean = false,
         val error: String? = null,
@@ -80,42 +107,17 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val response = TsmApiClient.service().getSessionById(sessionId)
+                val response = api.getSessionById(sessionId)
                 if (response.isSuccessful) {
                     val session = response.body()!!
-                    /*
-                     * CHECKLIST AUTO-GENERATION — DA IMPLEMENTARE
-                     *
-                     * Obiettivo (RF3): generare checklist dinamica in base al percorso.
-                     *
-                     * Input disponibili:
-                     *   - session.routeDetails.difficultyLevel (T/E/EE/EEA)
-                     *   - session.gpxStats.distanceKm
-                     *   - session.gpxStats.elevationGainM
-                     *   - session.meetingDate → meteo previsto (da API MeteoTrentino)
-                     *
-                     * Algoritmo suggerito (backend: GET /api/v1/sessions/{id}/checklist):
-                     *   1. Base comune: acqua (1L/3h), kit primo soccorso, giacca emergency
-                     *   2. Meteo: pioggia → impermeabile; T < 5° → guanti+cappello; vento > 30km/h → occhiali
-                     *   3. Difficoltà:
-                     *      T/E → scarpe da trekking leggere
-                     *      EE  → scarponi alti + bastoncini + caschetto
-                     *      EEA → set corde + ramponi + piccozza
-                     *   4. Distanza > 15km o dislivello > 1000m → snack extra, pila frontale
-                     *   5. Validazione partecipante: confronta item con profilo utente (saldoSc, badge)
-                     *
-                     * Per ora: checklist statica di default con possibilità di modifica manuale.
-                     */
-                    val defaultChecklist = buildDefaultChecklist(session)
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             session = session,
-                            checklist = defaultChecklist,
                         )
                     }
-                    // Trigger fetch meteo per la stazione più vicina al punto di partenza
                     loadMeteo(session)
+                    syncChecklist(session, regenerate = false)
                 } else {
                     _uiState.update { it.copy(isLoading = false, error = "Sessione non trovata.") }
                 }
@@ -127,35 +129,218 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    private fun buildDefaultChecklist(session: SessionResponse): List<ChecklistItem> {
-        val items = mutableListOf(
-            ChecklistItem(text = "Acqua (almeno 1.5L)"),
-            ChecklistItem(text = "Kit primo soccorso"),
-            ChecklistItem(text = "Giacca antipioggia"),
-        )
-        val diff = session.routeDetails?.difficultyLevel ?: "E"
-        when (diff) {
-            "T", "E" -> items.add(ChecklistItem(text = "Scarpe da trekking"))
-            "EE" -> {
-                items.addAll(listOf(
-                    ChecklistItem(text = "Scarponi alti"),
-                    ChecklistItem(text = "Bastoncini da trekking"),
-                    ChecklistItem(text = "Caschetto"),
-                ))
+    /** Aggiornamento manuale: il capogruppo rigenera (PUT), i partecipanti sincronizzano (GET). */
+    fun refreshChecklistManual() {
+        val session = _uiState.value.session ?: return
+        val isCreator = session.creatorId?._id == currentUserId
+        syncChecklist(session, regenerate = isCreator && _uiState.value.checklistCanRegenerate)
+    }
+
+    /** Auto-refresh ogni 60 min: capogruppo rigenera se possibile, altrimenti GET. */
+    fun refreshChecklistAuto() {
+        val session = _uiState.value.session ?: return
+        if (session.status != "PLANNED") return
+        val isCreator = session.creatorId?._id == currentUserId
+        syncChecklist(session, regenerate = isCreator && _uiState.value.checklistCanRegenerate, silent = true)
+    }
+
+    private fun syncChecklist(session: SessionResponse, regenerate: Boolean, silent: Boolean = false) {
+        viewModelScope.launch {
+            if (session.sentieroCode.isNullOrBlank()) {
+                val personal = personalStore.load(getApplication(), session._id, currentUserId)
+                _uiState.update {
+                    it.copy(
+                        checklist = mergeWithPersonal(emptyList(), personal, session._id),
+                        checklistLoading = false,
+                        checklistError = null,
+                        checklistUnavailableReason =
+                            "Checklist dinamica disponibile solo per sessioni create da un sentiero SAT.",
+                        checklistCanRegenerate = false,
+                        checklistIsFrozen = false,
+                        checklistFreezeAtMillis = null,
+                        checklistAcquaLitri = null,
+                        checklistCalorie = null,
+                        checklistLastUpdate = null,
+                    )
+                }
+                return@launch
             }
-            "EEA" -> {
-                items.addAll(listOf(
-                    ChecklistItem(text = "Scarponi alti"),
-                    ChecklistItem(text = "Imbragatura + corde"),
-                    ChecklistItem(text = "Piccozza"),
-                ))
+
+            if (!silent) {
+                _uiState.update { it.copy(checklistLoading = true, checklistError = null, checklistUnavailableReason = null) }
+            }
+
+            try {
+                val body = buildChecklistRequest(session)
+                val isCreator = session.creatorId?._id == currentUserId
+
+                if (regenerate) {
+                    val putResp = api.updateSessionChecklist(session._id, body)
+                    when {
+                        putResp.isSuccessful && putResp.body()?.checklist != null ->
+                            applyChecklistMutation(session, putResp.body()!!)
+                        putResp.code() == 403 -> {
+                            val getResp = api.getSessionChecklist(session._id)
+                            if (getResp.isSuccessful && getResp.body() != null) {
+                                applyChecklistGet(session, getResp.body()!!)
+                            } else {
+                                _uiState.update {
+                                    it.copy(
+                                        checklistLoading = false,
+                                        checklistError = "Checklist congelata: non è più possibile aggiornarla.",
+                                        checklistIsFrozen = true,
+                                        checklistCanRegenerate = false,
+                                    )
+                                }
+                            }
+                        }
+                        else -> _uiState.update {
+                            it.copy(
+                                checklistLoading = false,
+                                checklistError = ApiErrorMessages.fromResponse(putResp),
+                            )
+                        }
+                    }
+                    return@launch
+                }
+
+                val getResp = api.getSessionChecklist(session._id)
+                when {
+                    getResp.isSuccessful && getResp.body()?.checklist != null ->
+                        applyChecklistGet(session, getResp.body()!!)
+                    getResp.code() == 404 && isCreator -> {
+                        val postResp = api.generateSessionChecklist(session._id, body)
+                        if (postResp.isSuccessful && postResp.body()?.checklist != null) {
+                            applyChecklistMutation(session, postResp.body()!!)
+                        } else {
+                            _uiState.update {
+                                it.copy(
+                                    checklistLoading = false,
+                                    checklistError = ApiErrorMessages.fromResponse(postResp),
+                                )
+                            }
+                        }
+                    }
+                    getResp.code() == 404 -> _uiState.update {
+                        it.copy(
+                            checklistLoading = false,
+                            checklist = mergeWithPersonal(
+                                emptyList(),
+                                personalStore.load(getApplication(), session._id, currentUserId),
+                                session._id,
+                            ),
+                            checklistError = "In attesa che il capogruppo generi la checklist.",
+                        )
+                    }
+                    else -> _uiState.update {
+                        it.copy(
+                            checklistLoading = false,
+                            checklistError = ApiErrorMessages.fromResponse(getResp),
+                        )
+                    }
+                }
+            } catch (e: IOException) {
+                _uiState.update {
+                    it.copy(
+                        checklistLoading = false,
+                        checklistError = if (silent) it.checklistError else "Nessuna connessione al server.",
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        checklistLoading = false,
+                        checklistError = if (silent) it.checklistError else (e.message ?: "Errore checklist."),
+                    )
+                }
             }
         }
-        val dist = session.gpxStats?.distanceKm ?: 0.0
-        if (dist > 15.0) items.add(ChecklistItem(text = "Snack extra"))
-        items.add(ChecklistItem(text = "Pila frontale"))
-        items.add(ChecklistItem(text = "Crema solare"))
-        return items
+    }
+
+    private fun applyChecklistMutation(session: SessionResponse, body: ChecklistMutationResponse) {
+        applyChecklistDto(
+            session = session,
+            dto = body.checklist,
+            isFrozen = body.checklist.isFrozen,
+            freezeAtIso = body.checklist.frozenAt,
+        )
+    }
+
+    private fun applyChecklistGet(session: SessionResponse, body: ChecklistGetResponse) {
+        applyChecklistDto(
+            session = session,
+            dto = body.checklist,
+            isFrozen = body.freeze.isFrozen || body.checklist.isFrozen,
+            freezeAtIso = body.freeze.frozenAt ?: body.checklist.frozenAt,
+        )
+    }
+
+    private fun applyChecklistDto(
+        session: SessionResponse,
+        dto: ChecklistDto,
+        isFrozen: Boolean,
+        freezeAtIso: String?,
+    ) {
+        val personal = personalStore.load(getApplication(), session._id, currentUserId)
+        val serverItems = ChecklistMapper.flattenServerItems(dto)
+        _uiState.update {
+            it.copy(
+                checklistLoading = false,
+                checklistError = null,
+                checklistUnavailableReason = null,
+                checklist = mergeWithPersonal(serverItems, personal, session._id),
+                checklistLastUpdate = parseIsoMillis(dto.updatedAt ?: dto.generatedAt),
+                checklistIsFrozen = isFrozen,
+                checklistFreezeAtMillis = parseIsoMillis(freezeAtIso),
+                checklistAcquaLitri = dto.acquaLitri,
+                checklistCalorie = dto.calorieFabbisogno,
+                checklistCanRegenerate = session.creatorId?._id == currentUserId &&
+                    session.status == "PLANNED" &&
+                    !isFrozen &&
+                    !session.sentieroCode.isNullOrBlank(),
+            )
+        }
+    }
+
+    private fun buildChecklistRequest(session: SessionResponse): ChecklistGenerateRequest {
+        val locationId = _uiState.value.weatherForecast?.location?.externalId
+        return ChecklistGenerateRequest(
+            sentieroCode = session.sentieroCode,
+            locationId = locationId,
+            partenza = buildPartenzaIso(session),
+        )
+    }
+
+    private fun buildPartenzaIso(session: SessionResponse): String? {
+        val date = session.meetingDate ?: return null
+        val time = session.meetingTime?.trim().orEmpty()
+        return if (time.matches(Regex("""\d{1,2}:\d{2}"""))) {
+            val parts = time.split(":")
+            "${date}T${parts[0].padStart(2, '0')}:${parts[1]}:00Z"
+        } else {
+            "${date}T08:00:00Z"
+        }
+    }
+
+    private fun mergeWithPersonal(
+        serverItems: List<ChecklistItem>,
+        personal: ChecklistPersonalStore.Snapshot,
+        sessionId: String,
+    ): List<ChecklistItem> = ChecklistMapper.merge(serverItems, personal)
+
+    private fun persistPersonalState(sessionId: String, items: List<ChecklistItem>) {
+        if (currentUserId.isBlank()) return
+        personalStore.save(
+            getApplication(),
+            sessionId,
+            currentUserId,
+            ChecklistMapper.toPersonalSnapshot(items),
+        )
+    }
+
+    private fun parseIsoMillis(value: String?): Long? {
+        if (value.isNullOrBlank()) return null
+        return runCatching { Instant.parse(value).toEpochMilli() }.getOrNull()
     }
 
     // --- Edit mode ---
@@ -206,7 +391,7 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
                 )
                 
                 // 2. Chiamata I/O Server
-                val response = TsmApiClient.service().updateSession(sessionId, body)
+                val response = api.updateSession(sessionId, body)
 
                 if (response.isSuccessful) {
                     _uiState.update {
@@ -243,7 +428,7 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
     private fun silentReloadSession(sessionId: String) {
         viewModelScope.launch {
             try {
-                val response = TsmApiClient.service().getSessionById(sessionId)
+                val response = api.getSessionById(sessionId)
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(session = response.body()) }
                 }
@@ -255,9 +440,18 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
 
     // --- Checklist ---
 
-    fun onToggleCheck(id: String) {
+    private fun updateChecklistItems(transform: (List<ChecklistItem>) -> List<ChecklistItem>) {
+        val sessionId = _uiState.value.session?._id ?: return
         _uiState.update { state ->
-            state.copy(checklist = state.checklist.map { if (it.id == id) it.copy(checked = !it.checked) else it })
+            val updated = transform(state.checklist)
+            persistPersonalState(sessionId, updated)
+            state.copy(checklist = updated)
+        }
+    }
+
+    fun onToggleCheck(id: String) {
+        updateChecklistItems { items ->
+            items.map { if (it.id == id) it.copy(checked = !it.checked) else it }
         }
     }
 
@@ -266,11 +460,16 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
     fun onAddItem() {
         val text = _uiState.value.newItemText.trim()
         if (text.isBlank()) return
-        _uiState.update { it.copy(checklist = it.checklist + ChecklistItem(text = text), newItemText = "") }
+        updateChecklistItems { items ->
+            items + ChecklistItem(text = text, isPersonal = true)
+        }
+        _uiState.update { it.copy(newItemText = "") }
     }
 
     fun onRemoveItem(id: String) {
-        _uiState.update { it.copy(checklist = it.checklist.filter { item -> item.id != id }) }
+        updateChecklistItems { items ->
+            items.filter { it.id != id || !it.isPersonal }
+        }
     }
 
     /**
@@ -278,12 +477,12 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
      * Usato da [sh.calvin.reorderable.ReorderableColumn] tramite callback onMove.
      */
     fun onChecklistMove(fromIndex: Int, toIndex: Int) {
-        _uiState.update { state ->
-            val list = state.checklist.toMutableList()
+        updateChecklistItems { items ->
+            val list = items.toMutableList()
             if (fromIndex in list.indices && toIndex in list.indices) {
                 list.add(toIndex, list.removeAt(fromIndex))
             }
-            state.copy(checklist = list)
+            list
         }
     }
 
@@ -347,7 +546,7 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
     private fun reloadSessionQuiet(sessionId: String) {
         viewModelScope.launch {
             runCatching {
-                val response = TsmApiClient.service().getSessionById(sessionId)
+                val response = api.getSessionById(sessionId)
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(session = response.body()) }
                 }
@@ -391,7 +590,7 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
             _uiState.update { it.copy(meteoLoading = true, meteoError = null) }
             try {
                 // 1. Trova la town più vicina
-                val nearbyResp = TsmApiClient.service().getWeatherLocationsNearby(
+                val nearbyResp = api.getWeatherLocationsNearby(
                     lon = lon,
                     lat = lat,
                     type = "town",
@@ -410,7 +609,7 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
                 val town = nearbyResp.body()!!.results.first()
 
                 // 2. Recupera il forecast completo (cache 1h server-side)
-                val forecastResp = TsmApiClient.service().getWeatherForecast(
+                val forecastResp = api.getWeatherForecast(
                     externalId = town.externalId,
                     forceRefresh = if (forceRefresh) true else null,
                 )

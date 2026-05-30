@@ -107,6 +107,9 @@ const gpxStatsSchema = Joi.object({
     .max(7 * 24 * 3600),
 });
 
+// Tracciato pianificato: polyline campionata + bounding box opzionale.
+// Limite a 2000 punti (allineato al downsampling lato client) per evitare
+// payload e documenti sproporzionati.
 const plannedRouteSchema = Joi.object({
   source: Joi.string().valid("GPX", "SAT").required(),
   polylinePoints: Joi.array()
@@ -156,6 +159,8 @@ export const createSessionSchema = Joi.object({
   minExperienceLevel: difficultyField,
   gpxFileName: Joi.string().max(200),
   gpxStats: gpxStatsSchema,
+  // Codice sentiero SAT (modalità DB); null/assente in modalità GPX.
+  sentieroCode: Joi.string().max(40).trim().allow(null, ""),
   plannedRoute: plannedRouteSchema.optional(),
 });
 

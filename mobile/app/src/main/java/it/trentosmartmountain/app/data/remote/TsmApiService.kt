@@ -3,6 +3,8 @@ package it.trentosmartmountain.app.data.remote
 import it.trentosmartmountain.app.data.remote.dto.AccountUpdateRequest
 import it.trentosmartmountain.app.data.remote.dto.AccountUpdateResponse
 import it.trentosmartmountain.app.data.remote.dto.ActivityResponse
+import it.trentosmartmountain.app.data.remote.dto.ApiItemResponse
+import it.trentosmartmountain.app.data.remote.dto.ApiListResponse
 import it.trentosmartmountain.app.data.remote.dto.ActivityStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.ApiMessageBody
 import it.trentosmartmountain.app.data.remote.dto.BadgeItem
@@ -58,6 +60,8 @@ import it.trentosmartmountain.app.data.remote.dto.RefreshRequest
 import it.trentosmartmountain.app.data.remote.dto.RegisterRequest
 import it.trentosmartmountain.app.data.remote.dto.RegisterResponse
 import it.trentosmartmountain.app.data.remote.dto.RegisterRifugioRequest
+import it.trentosmartmountain.app.data.remote.dto.SentieroDettaglioDto
+import it.trentosmartmountain.app.data.remote.dto.SentieroListItemDto
 import it.trentosmartmountain.app.data.remote.dto.SessionCreatedResponse
 import it.trentosmartmountain.app.data.remote.dto.SessionEmergenciesResponse
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
@@ -214,7 +218,26 @@ interface TsmApiService {
   @DELETE("api/v1/activities/{id}")
   suspend fun deleteActivity(@Path("id") id: String): Response<ApiMessageBody>
 
-  // ├ö├Â├ç├ö├Â├ç Weather ├ö├Â├ç├ö├Â├ç
+  // ── Sentieri SAT (modalità "Scegli percorso sulla mappa") ──
+
+  /**
+   * GET /api/v1/sentieri → tutti i sentieri (senza percorsoCoordinate, escluse per performance).
+   * Sorgente unica per la modalità "Scegli tra i percorsi suggeriti": destinazioni, conteggi,
+   * filtri (difficoltà/dislivello/distanza/tempo) e ricerca sono calcolati client-side da questa lista.
+   * @param limit numero massimo di sentieri da restituire (default backend 100): usare un valore alto.
+   */
+  @GET("api/v1/sentieri")
+  suspend fun getAllSentieri(
+    @Query("limit") limit: Int = 100000,
+  ): Response<ApiListResponse<SentieroListItemDto>>
+
+  /** GET /api/v1/sentieri/{codice} → dettaglio sentiero con percorsoCoordinate. */
+  @GET("api/v1/sentieri/{codice}")
+  suspend fun getSentieroByCodice(
+    @Path("codice") codice: String,
+  ): Response<ApiItemResponse<SentieroDettaglioDto>>
+
+  // ── Weather (implementazione di Marco via meteo.report / TINIA) ──
 
   @GET("weather/locations/nearby")
   suspend fun getWeatherLocationsNearby(

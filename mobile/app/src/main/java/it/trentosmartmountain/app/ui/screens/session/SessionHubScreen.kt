@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FileUpload
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
@@ -198,6 +199,8 @@ private fun SessionPlanTab(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var showDifficultyMenu by remember { mutableStateOf(false) }
+    var showGpxPreviewDialog by remember { mutableStateOf(false) }
+    var showRoutePickerDialog by remember { mutableStateOf(false) }
 
     val gpxLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
@@ -224,6 +227,22 @@ private fun SessionPlanTab(
         QrPreviewDialog(
             code = uiState.createdInviteCode ?: uiState.previewCode,
             onDismiss = { viewModel.onToggleQrPreview() },
+        )
+    }
+
+    if (showGpxPreviewDialog) {
+        uiState.gpxData?.let { gpx ->
+            GpxPreviewDialog(gpx = gpx, onDismiss = { showGpxPreviewDialog = false })
+        } ?: run { showGpxPreviewDialog = false }
+    }
+
+    if (showRoutePickerDialog) {
+        SessionRoutePickerDialog(
+            onConfirm = { sentiero ->
+                viewModel.onSentieroSelected(sentiero)
+                showRoutePickerDialog = false
+            },
+            onDismiss = { showRoutePickerDialog = false },
         )
     }
 
@@ -349,6 +368,77 @@ private fun SessionPlanTab(
                         )
                     }
                     IconButton(onClick = viewModel::onRemoveGpx) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color.Gray)
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { showGpxPreviewDialog = true },
+                    enabled = gpx.trackLatLon.isNotEmpty(),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, TsmAccent),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                ) {
+                    Icon(Icons.Outlined.Map, contentDescription = null, tint = TsmAccent, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Visualizza nella mappa",
+                        color = TsmAccent,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    )
+                }
+            }
+
+            // Separatore "oppure" + scelta da database (alternativa al GPX).
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HorizontalDivider(modifier = Modifier.weight(1f), color = TsmBorder)
+                Text(
+                    "  oppure  ",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                )
+                HorizontalDivider(modifier = Modifier.weight(1f), color = TsmBorder)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = { showRoutePickerDialog = true },
+                border = androidx.compose.foundation.BorderStroke(1.dp, TsmBorder),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            ) {
+                Icon(Icons.Outlined.Map, contentDescription = null, tint = TsmAccent, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Scegli tra i percorsi suggeriti",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+
+            uiState.selectedSentiero?.let { sentiero ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(TsmBackground, RoundedCornerShape(6.dp))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = TsmPrimary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            sentiero.denominazione?.takeIf { it.isNotBlank() } ?: sentiero.codice,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
+                        )
+                        val dist = sentiero.lunghezzaPlanimetrica?.let { "%.1f km".format(it / 1000.0) }
+                        val info = listOfNotNull(sentiero.codice, sentiero.difficolta, dist).joinToString(" · ")
+                        Text(info, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                    IconButton(onClick = viewModel::onRemoveSentiero) {
                         Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color.Gray)
                     }
                 }

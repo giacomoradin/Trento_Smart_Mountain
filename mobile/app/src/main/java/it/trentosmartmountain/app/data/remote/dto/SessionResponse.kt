@@ -29,6 +29,11 @@ data class SessionResponse(
     val startTime: String?,
     val endTime: String?,
     val createdAt: String?,
+    /**
+     * Codice del sentiero SAT scelto in pianificazione (modalità DB). Null in modalità GPX.
+     * Usato dalla SessionDetail per invocare la checklist dinamica con il codice corretto (US-7).
+     */
+    val sentieroCode: String? = null,
 )
 
 /** Dettagli percorso inclusi nella sessione (nome, difficoltà, punti GeoJSON). */

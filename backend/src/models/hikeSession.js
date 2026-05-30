@@ -172,6 +172,11 @@ const hikSessionSchema = new Schema({
   maxParticipants: { type: Number },
   minExperienceLevel: { type: String, enum: ["T", "E", "EE", "EEA"] },
 
+  // Codice del sentiero SAT selezionato dal DB (modalità "Scegli percorso sulla mappa").
+  // Null in modalità GPX. Serve alla checklist dinamica (US-7) per risalire al Sentiero
+  // (Sentiero.findOne({ codice })) e generare l'equipaggiamento in base a difficoltà/quota/meteo.
+  sentieroCode: { type: String, default: null },
+
   // Dati tracciato GPX (opzionale, da import mobile)
   gpxFileName: { type: String },
   gpxStats: {

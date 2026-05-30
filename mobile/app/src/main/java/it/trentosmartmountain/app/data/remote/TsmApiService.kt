@@ -60,7 +60,6 @@ import it.trentosmartmountain.app.data.remote.dto.RefreshRequest
 import it.trentosmartmountain.app.data.remote.dto.RegisterRequest
 import it.trentosmartmountain.app.data.remote.dto.RegisterResponse
 import it.trentosmartmountain.app.data.remote.dto.RegisterRifugioRequest
-import it.trentosmartmountain.app.data.remote.dto.SentieroDestinazioneDto
 import it.trentosmartmountain.app.data.remote.dto.SentieroDettaglioDto
 import it.trentosmartmountain.app.data.remote.dto.SentieroListItemDto
 import it.trentosmartmountain.app.data.remote.dto.SessionCreatedResponse
@@ -221,17 +220,15 @@ interface TsmApiService {
 
   // ── Sentieri SAT (modalità "Scegli percorso sulla mappa") ──
 
-  /** GET /api/v1/sentieri/destinazioni → tutte le destinazioni (punti finali) con marker. */
-  @GET("api/v1/sentieri/destinazioni")
-  suspend fun getSentieriDestinazioni(): Response<ApiListResponse<SentieroDestinazioneDto>>
-
   /**
-   * GET /api/v1/sentieri/destinazioni/{nome}/sentieri → sentieri che raggiungono la destinazione.
-   * `nome` viene URL-encoded automaticamente da Retrofit (es. spazi e virgolette).
+   * GET /api/v1/sentieri → tutti i sentieri (senza percorsoCoordinate, escluse per performance).
+   * Sorgente unica per la modalità "Scegli tra i percorsi suggeriti": destinazioni, conteggi,
+   * filtri (difficoltà/dislivello/distanza/tempo) e ricerca sono calcolati client-side da questa lista.
+   * @param limit numero massimo di sentieri da restituire (default backend 100): usare un valore alto.
    */
-  @GET("api/v1/sentieri/destinazioni/{nome}/sentieri")
-  suspend fun getSentieriByDestinazione(
-    @Path("nome") nome: String,
+  @GET("api/v1/sentieri")
+  suspend fun getAllSentieri(
+    @Query("limit") limit: Int = 100000,
   ): Response<ApiListResponse<SentieroListItemDto>>
 
   /** GET /api/v1/sentieri/{codice} → dettaglio sentiero con percorsoCoordinate. */

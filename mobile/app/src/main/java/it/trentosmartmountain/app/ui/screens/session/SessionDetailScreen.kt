@@ -979,11 +979,20 @@ private fun ChecklistCard(
                 )
             }
 
-            if (sections.facoltativi.isNotEmpty()) {
+            if (sections.consigliati.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 ChecklistExpandableSection(
-                    title = "Facoltativi",
-                    allItems = sections.facoltativi,
+                    title = "Consigliati",
+                    allItems = sections.consigliati,
+                    viewModel = viewModel,
+                )
+            }
+
+            if (sections.opzionali.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                ChecklistExpandableSection(
+                    title = "Opzionali",
+                    allItems = sections.opzionali,
                     viewModel = viewModel,
                 )
             }

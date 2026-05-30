@@ -1,5 +1,5 @@
 import express from "express";
-import { generateChecklist, isChecklistFrozen, getFreezeAt } from '../services/checklistService.js';
+import { generateChecklist, isChecklistFrozen, getFreezeAt, buildSentieroLikeFromSession } from '../services/checklistService.js';
 import { getLocationForecast } from '../services/weatherService.js';   
 import HikeSession from '../models/hikeSession.js';   
 import Sentiero from '../models/sentiero.js';    
@@ -341,6 +341,29 @@ function buildChecklistPartenza(session, partenza) {
   return new Date();
 }
 
+/** Sentiero SAT dal DB, oppure adattatore da sessione GPX. */
+async function resolveSentieroForChecklist(session, bodySentieroCode) {
+  const sentieroCode = resolveSentieroCode(session, bodySentieroCode);
+  if (sentieroCode) {
+    const sentiero = await Sentiero.findOne({ codice: sentieroCode }).lean();
+    if (!sentiero) {
+      return { error: { status: 404, message: `Sentiero ${sentieroCode} non trovato.` } };
+    }
+    return { sentiero };
+  }
+
+  const sentiero = buildSentieroLikeFromSession(session);
+  if (!sentiero) {
+    return {
+      error: {
+        status: 400,
+        message: 'Dati percorso insufficienti per generare la checklist (servono distanza/difficoltà o durata GPX).',
+      },
+    };
+  }
+  return { sentiero };
+}
+
 // ─── POST /api/v1/sessions/:id/checklist ─────────────────────────────────────
 /**
  * Genera la checklist per la prima volta.
@@ -400,17 +423,11 @@ router.post('/:id/checklist', validate(idParamSchema, 'params'), async (req, res
     }
 
     const { sentieroCode: bodySentieroCode, locationId, partenza } = req.body;
-    const sentieroCode = resolveSentieroCode(session, bodySentieroCode);
-    if (!sentieroCode) {
-      return res.status(400).json({
-        error: 'Codice sentiero mancante: seleziona un sentiero SAT in pianificazione o invia "sentieroCode" nel body.',
-      });
+    const resolved = await resolveSentieroForChecklist(session, bodySentieroCode);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json({ error: resolved.error.message });
     }
-
-    const sentiero = await Sentiero.findOne({ codice: sentieroCode }).lean();
-    if (!sentiero) {
-      return res.status(404).json({ error: `Sentiero ${sentieroCode} non trovato.` });
-    }
+    const { sentiero } = resolved;
 
     let forecastResult = null;
     if (locationId) {
@@ -496,17 +513,11 @@ router.put('/:id/checklist', validate(idParamSchema, 'params'), async (req, res,
     }
 
     const { sentieroCode: bodySentieroCode, locationId, partenza } = req.body;
-    const sentieroCode = resolveSentieroCode(session, bodySentieroCode);
-    if (!sentieroCode) {
-      return res.status(400).json({
-        error: 'Codice sentiero mancante: seleziona un sentiero SAT in pianificazione o invia "sentieroCode" nel body.',
-      });
+    const resolved = await resolveSentieroForChecklist(session, bodySentieroCode);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json({ error: resolved.error.message });
     }
-
-    const sentiero = await Sentiero.findOne({ codice: sentieroCode }).lean();
-    if (!sentiero) {
-      return res.status(404).json({ error: `Sentiero ${sentieroCode} non trovato.` });
-    }
+    const { sentiero } = resolved;
 
     let forecastResult = null;
     if (locationId) {

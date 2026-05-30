@@ -72,6 +72,8 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
         val checklistAcquaLitri: Double? = null,
         val checklistCalorie: Int? = null,
         val checklistCanRegenerate: Boolean = false,
+        val checklistMeteoApplied: Boolean = false,
+        val checklistMeteoLocationName: String? = null,
         val newItemText: String = "",
         val showAvviaConfirm: Boolean = false,
         val error: String? = null,
@@ -146,26 +148,6 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
 
     private fun syncChecklist(session: SessionResponse, regenerate: Boolean, silent: Boolean = false) {
         viewModelScope.launch {
-            if (session.sentieroCode.isNullOrBlank()) {
-                val personal = personalStore.load(getApplication(), session._id, currentUserId)
-                _uiState.update {
-                    it.copy(
-                        checklist = mergeWithPersonal(emptyList(), personal, session._id),
-                        checklistLoading = false,
-                        checklistError = null,
-                        checklistUnavailableReason =
-                            "Checklist dinamica disponibile solo per sessioni create da un sentiero SAT.",
-                        checklistCanRegenerate = false,
-                        checklistIsFrozen = false,
-                        checklistFreezeAtMillis = null,
-                        checklistAcquaLitri = null,
-                        checklistCalorie = null,
-                        checklistLastUpdate = null,
-                    )
-                }
-                return@launch
-            }
-
             if (!silent) {
                 _uiState.update { it.copy(checklistLoading = true, checklistError = null, checklistUnavailableReason = null) }
             }
@@ -296,9 +278,20 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
                 checklistCalorie = dto.calorieFabbisogno,
                 checklistCanRegenerate = session.creatorId?._id == currentUserId &&
                     session.status == "PLANNED" &&
-                    !isFrozen &&
-                    !session.sentieroCode.isNullOrBlank(),
+                    !isFrozen,
+                checklistMeteoApplied = !dto.meteoSnapshot?.locationId.isNullOrBlank(),
+                checklistMeteoLocationName = dto.meteoSnapshot?.locationName?.takeIf { it.isNotBlank() },
             )
+        }
+    }
+
+    /** Dopo il caricamento meteo, rigenera la checklist (solo capogruppo) se mancava il forecast. */
+    private fun refreshChecklistWithMeteoIfNeeded(session: SessionResponse, forceRegenerate: Boolean = false) {
+        val isCreator = session.creatorId?._id == currentUserId
+        val meteoReady = !_uiState.value.weatherForecast?.location?.externalId.isNullOrBlank()
+        if (!meteoReady || !isCreator || !_uiState.value.checklistCanRegenerate) return
+        if (forceRegenerate || !_uiState.value.checklistMeteoApplied) {
+            syncChecklist(session, regenerate = true, silent = true)
         }
     }
 
@@ -486,6 +479,23 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /** Riordina gli item all'interno di un sottoinsieme preservando l'ordine globale delle altre sezioni. */
+    fun onChecklistMoveInSubset(subsetIds: List<String>, fromIndex: Int, toIndex: Int) {
+        if (fromIndex !in subsetIds.indices || toIndex !in subsetIds.indices) return
+        updateChecklistItems { all ->
+            val idOrder = all.map { it.id }.toMutableList()
+            val subsetPositions = subsetIds.mapNotNull { id ->
+                idOrder.indexOf(id).takeIf { it >= 0 }
+            }
+            if (fromIndex !in subsetPositions.indices || toIndex !in subsetPositions.indices) return@updateChecklistItems all
+            val globalFrom = subsetPositions[fromIndex]
+            val globalTo = subsetPositions[toIndex]
+            idOrder.add(globalTo, idOrder.removeAt(globalFrom))
+            val byId = all.associateBy { it.id }
+            idOrder.mapNotNull { byId[it] }
+        }
+    }
+
     // --- Live sessione (stato locale) ---
 
     fun requestLeaderStart(onNavigate: () -> Unit) {
@@ -621,6 +631,7 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
                             meteoLastUpdate = System.currentTimeMillis(),
                         )
                     }
+                    refreshChecklistWithMeteoIfNeeded(session, forceRegenerate = forceRefresh)
                 } else {
                     _uiState.update {
                         it.copy(

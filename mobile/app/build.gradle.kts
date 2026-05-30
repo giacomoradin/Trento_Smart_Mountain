@@ -85,6 +85,15 @@ dependencies {
   implementation(libs.osmdroid.android)
   implementation(libs.play.services.location)
   implementation(libs.reorderable)
+  implementation(libs.androidx.exifinterface)
+  implementation(libs.androidx.work.runtime.ktx)
+
+  // ── Unit testing (JVM, src/test) ─────────────────────────────────────────
+  // Primo step della test strategy mobile (vedi piano Fase 0): partiamo dalla
+  // logica pura (util di sampling, formattazione tempo). I test su ViewModel
+  // con coroutine/mock arriveranno nell'iterazione successiva.
+  testImplementation("junit:junit:4.13.2")
+
   debugImplementation("androidx.compose.ui:ui-tooling")
   debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

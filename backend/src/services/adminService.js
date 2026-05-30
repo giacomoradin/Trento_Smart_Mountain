@@ -1,5 +1,7 @@
 import User from "../models/user.js";
 import Admin from "../models/admin.js";
+import Hiker from "../models/hiker.js";
+import Refuge from "../models/refuge.js";
 import bcrypt from "bcrypt";
 
 /**
@@ -71,7 +73,9 @@ export const getAnyUserById = async (req, res) => {
      #swagger.description = 'Recupera dati di qualunque utente. Solo admin.'
   */
   try {
-    const user = await User.findById(req.params.id).select("-passwordHash -__v");
+    const user = await User.findById(req.params.id).select(
+      "-passwordHash -__v",
+    );
     if (!user) {
       return res.status(404).json({ message: "Utente non trovato." });
     }
@@ -109,10 +113,29 @@ export const updateAnyUser = async (req, res) => {
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     }
 
-    const updated = await User.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-      runValidators: true,
-    }).select("-passwordHash -__v");
+    // IMPORTANTE: i campi rifugioName/caiCode/quota/posti/coordinates sono
+    // del discriminator Refuge. Aggiornarli via User base verrebbe scartato
+    // dallo strict mode (vedi nota in creditService). Usiamo il modello del
+    // discriminator corretto in base al ruolo target.
+    const targetUser = await User.findById(req.params.id).select("role").lean();
+    if (!targetUser) {
+      return res.status(404).json({ message: "Utente non trovato." });
+    }
+    const ModelByRole = {
+      rifugio: Refuge,
+      groupLeader: Hiker,
+      admin: Admin,
+    };
+    const TargetModel = ModelByRole[targetUser.role] || User;
+
+    const updated = await TargetModel.findByIdAndUpdate(
+      req.params.id,
+      updates,
+      {
+        new: true,
+        runValidators: true,
+      },
+    ).select("-passwordHash -__v");
 
     if (!updated) {
       return res.status(404).json({ message: "Utente non trovato." });

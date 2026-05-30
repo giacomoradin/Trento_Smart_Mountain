@@ -35,7 +35,9 @@ export default {
   
   // Forza l'uscita dopo i test (evita hang con MongoDB)
   forceExit: true,
-  
+
   // Pulisci i mock dopo ogni test
   clearMocks: true,
+
+  testPathIgnorePatterns: ['/node_modules/', '/.claude/'],
 };

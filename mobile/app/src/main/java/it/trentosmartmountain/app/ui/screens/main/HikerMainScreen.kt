@@ -19,10 +19,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.viewmodel.RegistraViewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
-import it.trentosmartmountain.app.ui.screens.home.ActivityListScreen
 import it.trentosmartmountain.app.ui.screens.home.HomeScreen
 import it.trentosmartmountain.app.ui.screens.profile.ProfileScreen
 import it.trentosmartmountain.app.ui.screens.registra.RegistraScreen
@@ -41,21 +41,46 @@ private enum class HikerTab { Home, Session, Registra, Profile }
  * - Profilo — dati utente e logout
  *
  * @param onLoggedOut callback dopo logout (navigazione verso auth)
- * @param onNavigateToSessionDetail apre il dettaglio sessione sul grafo root ([Routes.SESSION_DETAIL])
+ * @param onNavigateToSessionDetail apre il dettaglio sessione sul grafo root ([it.trentosmartmountain.app.ui.navigation.Routes.SESSION_DETAIL])
+ * @param onNavigateToActivityDetail apre il dettaglio attività completata sul grafo root ([it.trentosmartmountain.app.ui.navigation.Routes.ACTIVITY_DETAIL])
  */
 @Composable
 fun HikerMainScreen(
   onLoggedOut: () -> Unit,
   onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
   onNavigateToActivityDetail: (activityId: String, sessionId: String?) -> Unit = { _, _ -> },
+  onNavigateToFormazione: () -> Unit = {},
+  onNavigateToNfcScan: () -> Unit = {},
+  onNavigateToAccount: () -> Unit = {},
+  onNavigateToOnboarding: () -> Unit = {},
+  onNavigateToGoals: () -> Unit = {},
+  onNavigateToChallenges: () -> Unit = {},
+  onNavigateToBadges: () -> Unit = {},
+  onNavigateToProfileView: () -> Unit = {},
+  // Apertura del profilo pubblico di un altro utente: chiamato dal tap su
+  // avatar nel feed Social. Default no-op per backward-compat con i preview.
+  onNavigateToUserProfile: (userId: String) -> Unit = {},
+  // Tap su anello story della AvatarRow → apre StoryViewerScreen full-screen.
+  onNavigateToStoryViewer: (refId: String, kind: String) -> Unit = { _, _ -> },
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
+  // Scope Activity: il polling live/SOS continua anche se l'utente è su un'altra tab.
+  val registraViewModel: RegistraViewModel = viewModel()
 
-  // Quando SessionDetail.AVVIA conferma, il Coordinator emette un sessionId:
-  // switchiamo automaticamente alla tab Registra (RegistraViewModel auto-avvia il tracking).
-  val pendingStart by SessionStartCoordinator.pendingSessionStart.collectAsStateWithLifecycle()
-  LaunchedEffect(pendingStart) {
-    if (pendingStart != null) selectedTab = HikerTab.Registra
+  LaunchedEffect(Unit) {
+    registraViewModel.syncActiveSessionFromServer()
+  }
+
+  // Quando SessionDetail / SessionHub.AVVIA conferma, il Coordinator emette un sessionId:
+  // switchiamo automaticamente alla tab Registra. Il consume() avviene nel VM dopo
+  // l'autoStart (vedi RegistraViewModel.init). Usiamo collect su SharedFlow invece
+  // di collectAsStateWithLifecycle: i due osservatori (HikerMainScreen + VM) devono
+  // ricevere ogni emit in modo indipendente, e StateFlow conflated saltava la transizione.
+  LaunchedEffect(Unit) {
+    SessionStartCoordinator.pendingSessionStart.collect {
+      selectedTab = HikerTab.Registra
+      SessionStartCoordinator.consume()
+    }
   }
 
   Scaffold(
@@ -92,13 +117,30 @@ fun HikerMainScreen(
       HikerTab.Home -> HomeScreen(
         modifier = Modifier.padding(innerPadding),
         onActivityClick = onNavigateToActivityDetail,
+        onNavigateToUserProfile = onNavigateToUserProfile,
+        onNavigateToSessionDetail = onNavigateToSessionDetail,
+        onNavigateToStoryViewer = onNavigateToStoryViewer,
       )
       HikerTab.Session -> SessionHubScreen(
         modifier = Modifier.padding(innerPadding),
         onNavigateToDetail = onNavigateToSessionDetail,
       )
-      HikerTab.Registra -> RegistraScreen(Modifier.padding(innerPadding))
-      HikerTab.Profile -> ProfileScreen(onLoggedOut = onLoggedOut, modifier = Modifier.padding(innerPadding))
+      HikerTab.Registra -> RegistraScreen(
+        modifier = Modifier.padding(innerPadding),
+        viewModel = registraViewModel,
+      )
+      HikerTab.Profile -> ProfileScreen(
+        onLoggedOut = onLoggedOut,
+        onNavigateToFormazione = onNavigateToFormazione,
+        onNavigateToNfcScan = onNavigateToNfcScan,
+        onNavigateToAccount = onNavigateToAccount,
+        onNavigateToOnboarding = onNavigateToOnboarding,
+        onNavigateToGoals = onNavigateToGoals,
+        onNavigateToChallenges = onNavigateToChallenges,
+        onNavigateToBadges = onNavigateToBadges,
+        onNavigateToProfileView = onNavigateToProfileView,
+        modifier = Modifier.padding(innerPadding),
+      )
     }
   }
 }

@@ -1,0 +1,75 @@
+name: CI
+
+# Pipeline di qualità di Trento Smart Mountain.
+# Due job indipendenti — backend (Node) e mobile (Android) — entrambi devono
+# passare perché una PR sia mergiabile. È la "rete di sicurezza" introdotta in
+# Fase 0 del piano di miglioramento: prima non esisteva alcuna CI e le
+# regressioni (incl. duplicati da merge) passavano inosservate.
+
+on:
+  push:
+    branches: [main, develop, UI]
+  pull_request:
+
+# Annulla run obsolete sullo stesso ref quando arrivano nuovi commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend · test + audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install (clean, da lockfile)
+        run: npm ci
+
+      - name: Test (Jest + coverage)
+        run: npm test
+
+      - name: Security audit
+        # Il progetto è a 0 vulnerabilità dopo la pulizia dipendenze di Fase 0:
+        # questo gate BLOCCA l'introduzione di nuove vulnerabilità high/critical.
+        run: npm audit --audit-level=high
+
+  mobile:
+    name: Mobile · unit test + lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle (con cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Rendi eseguibile gradlew
+        working-directory: mobile
+        run: chmod +x gradlew
+
+      - name: Unit test (JVM)
+        working-directory: mobile
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Android Lint
+        # Non bloccante in Fase 0: pubblichiamo il report senza far fallire la
+        # pipeline su lint pre-esistenti. Da promuovere a bloccante in Fase 1
+        # dopo aver azzerato i lint error e adottato detekt/ktlint.
+        working-directory: mobile
+        continue-on-error: true
+        run: ./gradlew :app:lintDebug --no-daemon

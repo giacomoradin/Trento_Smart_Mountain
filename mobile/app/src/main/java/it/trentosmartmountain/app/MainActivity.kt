@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import it.trentosmartmountain.app.data.local.TokenStorage
+import it.trentosmartmountain.app.data.nfc.NfcTagBus
+import it.trentosmartmountain.app.data.nfc.NfcUtils
 import it.trentosmartmountain.app.ui.navigation.TsmNavHost
 import it.trentosmartmountain.app.ui.theme.TsmTheme
 
@@ -33,6 +35,10 @@ class MainActivity : ComponentActivity() {
     // Salviamo il JWT in TokenStorage PRIMA di comporre il NavHost così
     // AuthSession.startDestinationFor() trova già il token e parte dalla shell.
     handleAuthDeepLink(intent)
+    // Se l'app è stata aperta direttamente da un intent NFC (cold start col telefono
+    // appoggiato al totem), il tagId viene messo nel bus con replay=1 — appena il
+    // NfcScanViewModel si iscrive lo riceve.
+    handleNfcIntent(intent)
 
     setContent {
       TsmTheme {
@@ -49,9 +55,18 @@ class MainActivity : ComponentActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     if (handleAuthDeepLink(intent)) {
-      // Auto-login andato a buon fine: ricrea l'activity per partire dalla shell utente.
       recreate()
+      return
     }
+    handleNfcIntent(intent)
+  }
+
+  private fun handleNfcIntent(intent: Intent) {
+    // Conversione tag → hex string centralizzata in NfcUtils per evitare
+    // divergenze di formato (lowercase/uppercase, separatori) tra MainActivity e altri call site.
+    val tagId = NfcUtils.extractTagIdFromIntent(intent) ?: return
+    Log.d(TAG, "NFC tag scansionato: $tagId")
+    NfcTagBus.emit(tagId)
   }
 
   /**

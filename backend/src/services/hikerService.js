@@ -2,6 +2,7 @@ import Hiker from "../models/hiker.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { sendVerificationEmail } from "./emailService.js";
+import { stripPrivateFields, isSelfOrAdmin } from "../utils/userPrivacy.js";
 
 /**
  * Servizio dedicato agli utenti **escursionisti** (capogruppo).
@@ -47,16 +48,33 @@ export const createHiker = async (req, res) => {
 
     const saved = await hiker.save();
 
-    // Invio email asincrono (non blocca la response)
-    sendVerificationEmail(email, verificationToken).catch((err) => {
-      console.error("[hikerService] Invio email verifica fallito:", err.message);
-    });
+    // Invio email sincrono: se fallisce, cancelliamo l'utente e restituiamo errore.
+    // Questo permette all'utente di riprovare subito correggendo eventuali typo,
+    // ed evita di "bruciare" l'email con un account non verificabile.
+    try {
+      await sendVerificationEmail(email, verificationToken);
+    } catch (err) {
+      console.error(
+        "[hikerService] Invio email verifica fallito:",
+        err.message,
+      );
+      await hiker.deleteOne(); // Rollback creazione utente
+      return res.status(500).json({
+        message:
+          "Errore durante l'invio dell'email di verifica. L'account non è stato creato, riprova tra qualche istante.",
+      });
+    }
 
-    const { passwordHash: _p, verificationToken: _v, __v, ...userPublic } =
-      saved.toObject();
+    const {
+      passwordHash: _p,
+      verificationToken: _v,
+      __v,
+      ...userPublic
+    } = saved.toObject();
 
     res.status(201).json({
-      message: "Account escursionista creato. Verifica la tua email per attivare l'account.",
+      message:
+        "Account escursionista creato. Verifica la tua email per attivare l'account.",
       user: userPublic,
     });
   } catch (error) {
@@ -75,14 +93,22 @@ export const createHiker = async (req, res) => {
 export const getHikerById = async (req, res) => {
   /*
      #swagger.tags = ['Hikers']
-     #swagger.description = 'Recupera il profilo di un escursionista.'
+     #swagger.description = 'Recupera il profilo di un escursionista. I dati personali e le preferenze sono visibili solo a self/admin.'
   */
   try {
-    const hiker = await Hiker.findById(req.params.id).select("-passwordHash -__v");
+    const hiker = await Hiker.findById(req.params.id).select(
+      "-passwordHash -__v",
+    );
     if (!hiker) {
       return res.status(404).json({ message: "Escursionista non trovato." });
     }
-    res.status(200).json(hiker);
+    // Privacy gate (vedi utils/userPrivacy.js): per other-view nasconde
+    // personalInfo, experience, preferences, weeklyGoals, profileCompletedAt.
+    const safe = stripPrivateFields(
+      hiker,
+      isSelfOrAdmin(req.user, req.params.id),
+    );
+    res.status(200).json(safe);
   } catch (error) {
     if (error.name === "CastError") {
       return res.status(400).json({ message: "ID utente non valido." });
@@ -104,7 +130,9 @@ export const updateHiker = async (req, res) => {
     const isSelf = req.user?.userId?.toString() === req.params.id;
     const isAdmin = req.user?.role === "admin";
     if (!isSelf && !isAdmin) {
-      return res.status(403).json({ message: "Non sei autorizzato a modificare questo profilo." });
+      return res
+        .status(403)
+        .json({ message: "Non sei autorizzato a modificare questo profilo." });
     }
 
     // Campi ammessi: nessun campo specifico Hiker per ora, solo base

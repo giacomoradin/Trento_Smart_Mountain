@@ -11,14 +11,36 @@ import hikeSessionRoutes from "./routes/hikeSessionRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import weatherRoutes from "./routes/weatherRoutes.js";
 import sentieroRoutes from "./routes/sentieroRoutes.js";
+import creditsRoutes from "./routes/creditsRoutes.js";
+import quizRoutes from "./routes/quizRoutes.js";
+import nfcRoutes from "./routes/nfcRoutes.js";
+import accountRoutes from "./routes/accountRoutes.js";
+import challengeRoutes from "./routes/challengeRoutes.js";
+import badgeRoutes from "./routes/badgeRoutes.js";
+import emergencyRoutes from "./routes/emergencyRoutes.js";
+import followRoutes from "./routes/followRoutes.js";
+import "./models/emergency.js";
+import "./models/follow.js";
+import "./models/comment.js";
 
 // IMPORTANTE: importa i discriminator models per registrarli con Mongoose
 // (devono essere caricati almeno una volta perché User.discriminator() venga eseguito)
 import "./models/hiker.js";
 import "./models/refuge.js";
 import "./models/admin.js";
+import "./models/creditTransaction.js";
+import "./models/quizCategory.js";
+import "./models/quiz.js";
+import "./models/quizAttempt.js";
+import "./models/nfcTotem.js";
+import "./models/nfcScan.js";
+import "./models/challenge.js";
+import "./models/earnedBadge.js";
 
-import { globalErrorHandler, notFoundHandler } from "./middleware/errorMiddleware.js";
+import {
+  globalErrorHandler,
+  notFoundHandler,
+} from "./middleware/errorMiddleware.js";
 import {
   helmetMiddleware,
   mongoSanitizeMiddleware,
@@ -26,11 +48,23 @@ import {
   corsOptions,
   requestSizeLimit,
 } from "./middleware/securityMiddleware.js";
-import { globalLimiter, authenticatedLimiter, writeLimiter } from "./middleware/rateLimitMiddleware.js";
+import {
+  globalLimiter,
+  authenticatedLimiter,
+  writeLimiter,
+} from "./middleware/rateLimitMiddleware.js";
 
-const swaggerDocument = JSON.parse(
-  readFileSync(new URL("../../swagger-output.json", import.meta.url)),
-);
+// Caricamento sicuro di Swagger (evita crash se il file manca in prod)
+let swaggerDocument;
+try {
+  swaggerDocument = JSON.parse(
+    readFileSync(new URL("../../swagger-output.json", import.meta.url)),
+  );
+} catch (err) {
+  console.warn(
+    "[app] WARN: swagger-output.json non trovato. La documentazione API non sarà disponibile.",
+  );
+}
 
 const app = express();
 
@@ -71,7 +105,9 @@ app.use(globalLimiter);
 app.use(writeLimiter);
 
 // Swagger UI pubblico per l'esplorazione delle API
-app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
+if (swaggerDocument) {
+  app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
+}
 
 // Route principali
 app.use("/auth", authRoutes);
@@ -79,9 +115,17 @@ app.use("/hikers", hikerRoutes);
 app.use("/refuges", refugeRoutes);
 app.use("/admin", adminRoutes);
 app.use("/api/v1/sessions", hikeSessionRoutes);
+app.use("/api/v1/emergencies", emergencyRoutes);
 app.use("/api/v1/activities", activityRoutes);
 app.use("/weather", weatherRoutes);
 app.use("/api/v1/sentieri", sentieroRoutes);
+app.use("/api/v1/users", creditsRoutes);
+app.use("/api/v1/quiz", quizRoutes);
+app.use("/api/v1/nfc", nfcRoutes);
+app.use("/api/v1/users", accountRoutes);
+app.use("/api/v1/users", followRoutes);
+app.use("/api/v1/challenges", challengeRoutes);
+app.use("/api/v1/users/me", badgeRoutes);
 
 // ─── Compatibility shim: /users (deprecato, mantenuto per backward-compat) ───
 // Il refactor 2026-05 ha separato la collection in hikers/refuges/admins ma
@@ -89,10 +133,13 @@ app.use("/api/v1/sentieri", sentieroRoutes);
 // conoscere a priori il ruolo. Smistiamo internamente verso lo schema corretto.
 import { authenticate as _authShim } from "./middleware/authMiddleware.js";
 import User from "./models/user.js";
+import { stripPrivateFields, isSelfOrAdmin } from "./utils/userPrivacy.js";
 
 app.post("/users", async (req, res, next) => {
   const role = req.body?.role;
-  console.warn(`[app] DEPRECATION: POST /users (role=${role}) → usare /auth/register/hiker o /refuge`);
+  console.warn(
+    `[app] DEPRECATION: POST /users (role=${role}) → usare /auth/register/hiker o /refuge`,
+  );
   try {
     if (role === "rifugio") {
       const { createRefuge } = await import("./services/refugeService.js");
@@ -111,9 +158,18 @@ app.post("/users", async (req, res, next) => {
 
 app.get("/users/:id", _authShim, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select("-passwordHash -__v");
+    const user = await User.findById(req.params.id).select(
+      "-passwordHash -__v",
+    );
     if (!user) return res.status(404).json({ message: "Utente non trovato." });
-    res.status(200).json(user);
+    // Privacy gate: dati personali (peso, sesso, preferenze, etc.) visibili
+    // solo al proprietario o ad admin. Senza questo strip un utente
+    // qualunque potrebbe leggere weightKg/birthDate altrui via /users/:id.
+    const safe = stripPrivateFields(
+      user,
+      isSelfOrAdmin(req.user, req.params.id),
+    );
+    res.status(200).json(safe);
   } catch (error) {
     if (error.name === "CastError") {
       return res.status(400).json({ message: "ID utente non valido." });

@@ -45,6 +45,7 @@ Il client mobile NON parla mai direttamente con Brevo, MongoDB o le API meteo. T
 - **Autorizzazione**: ogni service verifica `userId === req.user.userId` prima di operare su risorse (vedi `activityService.deleteActivity`, `hikeSessionService.completeSession`).
 - **Discriminator User**: hierarchy `User { Hiker | Refuge | Admin }` — non si possono escalare ruoli via API.
 - **Insecure Direct Object Reference**: gli endpoint `/sessions/:id` non rivelano sessioni di cui l'utente non è creator o partecipante (filtrate via `$or: [{creatorId: userId}, {"participants.userId": userId}]`).
+- **Privacy gate per dati personali (`utils/userPrivacy.js`, aggiornato 26/05 serale)**: per i viewer "other" (utente A che legge profilo di utente B con A≠B≠admin), `stripPrivateFields` rimuove i campi `SELF_ONLY_FIELDS` (experience, preferences, profileCompletedAt, weeklyGoals, token reset). Per `personalInfo` è applicata una whitelist `PERSONAL_INFO_PUBLIC_FIELDS = ["avatarUrl"]`: la foto profilo è pubblica (serve a renderla nei partecipanti delle sessioni / autori dei post sociali), i campi sex/birthDate/heightCm/weightKg restano privati e vengono cancellati. Self e admin vedono il documento intero.
 
 ### A02:2021 — Cryptographic Failures
 
@@ -58,13 +59,32 @@ Il client mobile NON parla mai direttamente con Brevo, MongoDB o le API meteo. T
 - **NoSQL injection**: `express-mongo-sanitize` rimuove operatori `$` e chiavi con `.` da `req.body`, `req.params`, `req.query` (vedi `securityMiddleware.js`).
 - **Schema validation**: Joi rifiuta campi non dichiarati (`.unknown(false)` di default) → niente mass-assignment.
 - **Mongoose strict mode**: di default true; assegnamenti a campi sconosciuti vengono droppati silenziosamente.
+
+> **⚠ Gotcha discriminator (lesson learned 2026-05):** lo strict mode di Mongoose
+> applica lo schema del **modello con cui esegui la query**. Per i campi del
+> discriminator (es. `socialCredits` su Hiker, `rifugioName` su Refuge), usare
+> `User.findByIdAndUpdate(id, { $set/$inc: { campo: x } })` **scarta
+> silenziosamente l'update** — la risposta è 200 OK ma il DB non cambia. Bug
+> nascosto perché le `findById` con `.select()` proiettano comunque il campo
+> a livello MongoDB. **Regola:** per write su campi discriminator usa SEMPRE
+> il modello del discriminator (`Hiker`/`Refuge`/`Admin`). Coverage in
+> `__tests__/services/discriminator.test.js` (4 test) fissa il contratto.
+
 - **HTML/XSS**: l'API è JSON-only eccetto `/auth/reset-password/:token` (form HTML). I valori dinamici sono escape-d.
 
 ### A04:2021 — Insecure Design
 
-- **Rate limiting differenziato**: globale (300/15min), login (10/15min skipSuccess), register (5/h), forgot-password (5/h), authenticated (1000/15min), write-ops (200/15min).
+- **Rate limiting differenziato**: globale (300/15min), login (10/15min skipSuccess), register (5/h), forgot-password (5/h), authenticated (1000/15min), write-ops (200/15min). In `NODE_ENV=test` i limiter sono bypassati per consentire test deterministici.
 - **Soglie sensate**: il limit di register a 5/h previene account farming; login 10/15min lascia margine all'utente onesto ma blocca brute force.
-- **Body size limit**: 100 KB → DoS bomba JSON impedita.
+- **Body size limit**: 5 MB (era 100 KB pre-26/05) → margine per upload avatar Base64 fino a ~3.5 MB binari, mantiene la protezione contro JSON bomb estremi. Il Joi schema `personalInfoSchema.avatarUrl` valida ulteriormente con pattern stretto `^data:image/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$` + cap di 7 MB sulla stringa → blocca payload manifestamente malformati prima di toccare il DB.
+- **Anti-cheat sui campi scoring (2026-05)**: `personalInfo.birthDate` e
+  `experience.caiLevel` influenzano direttamente il moltiplicatore
+  `μ_user_baseline` (vedi `userScoringService.js`). Una volta impostati, un
+  utente potrebbe abbassarli prima di una sessione facile per farmare
+  crediti gonfi. Enforcement server-side: `accountService.updatePersonalInfo`
+  e `updateExperience` rilanciano `LockedFieldError → HTTP 409` se il campo
+  è già presente. L'UI mobile mostra anche un lucchetto 🔒 ma il blocco
+  reale è qui — un curl/Postman non può aggirarlo.
 
 ### A05:2021 — Security Misconfiguration
 
@@ -135,42 +155,47 @@ Legenda:
 - 🛡 = consentito solo se _partecipante_ della sessione
 - 🅿 = pubblico (anche anonimo)
 
-| Risorsa / Azione                      | Anon |      Hiker      |     Refuge      | Admin |
-| ------------------------------------- | :--: | :-------------: | :-------------: | :---: |
-| `POST /auth/login`                    |  🅿  |       🅿        |       🅿        |  🅿   |
-| `POST /auth/register/hiker`           |  🅿  |       🅿        |       🅿        |  🅿   |
-| `POST /auth/register/refuge`          |  🅿  |       🅿        |       🅿        |  🅿   |
-| `GET /auth/verify/:token`             |  🅿  |       🅿        |       🅿        |  🅿   |
-| `POST /auth/forgot-password`          |  🅿  |       🅿        |       🅿        |  🅿   |
-| `POST /auth/reset-password/:token`    |  🅿  |       🅿        |       🅿        |  🅿   |
-| `GET /hikers/:id`                     |  ❌  |       👤        |       ❌        |  ✅   |
-| `GET /refuges/:id`                    |  ❌  |       ✅        |       👤        |  ✅   |
-| `GET /users/:id` (legacy)             |  ❌  |       ✅        |       ✅        |  ✅   |
-| `POST /api/v1/sessions`               |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /api/v1/sessions/my`             |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /api/v1/sessions/:id`            |  ❌  |       🛡        |       🛡        |  ✅   |
-| `PATCH /api/v1/sessions/:id`          |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
-| `PATCH /api/v1/sessions/:id/status`   |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
-| `PATCH /api/v1/sessions/:id/complete` |  ❌  |       🛡        |       🛡        |  ✅   |
-| `POST /api/v1/sessions/:id/leave`     |  ❌  | 🛡 (no creator) | 🛡 (no creator) |  ✅   |
-| `POST /api/v1/sessions/join`          |  ❌  |       ✅        |       ✅        |  ✅   |
-| `DELETE /api/v1/sessions/:id`         |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
-| `GET /api/v1/sessions/stats`          |  ❌  |  ✅ (only own)  |  ✅ (only own)  |  ✅   |
-| `POST /api/v1/activities`             |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /api/v1/activities`              |  ❌  |  ✅ (only own)  |  ✅ (only own)  |  ✅   |
-| `GET /api/v1/activities/:id`          |  ❌  |       👤        |       👤        |  ✅   |
-| `DELETE /api/v1/activities/:id`       |  ❌  |       👤        |       👤        |  ✅   |
-| `GET /weather/locations/nearby`       |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /weather/locations/search`       |  ❌  |       ✅        |       ✅        |  ✅   |
-| `GET /weather/forecast/:externalId`   |  ❌  |       ✅        |       ✅        |  ✅   |
-| `/admin/*`                            |  ❌  |       ❌        |       ❌        |  ✅   |
-| `GET /api-docs`                       |  🅿  |       🅿        |       🅿        |  🅿   |
+| Risorsa / Azione                       | Anon |      Hiker      |     Refuge      | Admin |
+| -------------------------------------- | :--: | :-------------: | :-------------: | :---: |
+| `POST /auth/login`                     |  🅿  |       🅿        |       🅿        |  🅿   |
+| `POST /auth/register/hiker`            |  🅿  |       🅿        |       🅿        |  🅿   |
+| `POST /auth/register/refuge`           |  🅿  |       🅿        |       🅿        |  🅿   |
+| `GET /auth/verify/:token`              |  🅿  |       🅿        |       🅿        |  🅿   |
+| `POST /auth/forgot-password`           |  🅿  |       🅿        |       🅿        |  🅿   |
+| `POST /auth/reset-password/:token`     |  🅿  |       🅿        |       🅿        |  🅿   |
+| `GET /hikers/:id`                      |  ❌  |  ✅ (privacy)†  |       ❌        |  ✅   |
+| `GET /refuges/:id`                     |  ❌  |       ✅        |       👤        |  ✅   |
+| `GET /users/:id` (legacy)              |  ❌  |  ✅ (privacy)†  |  ✅ (privacy)†  |  ✅   |
+| `PATCH /api/v1/users/me/personal-info` |  ❌  | 👤 (anti-cheat) | 👤 (anti-cheat) |  ✅   |
+| `POST /api/v1/sessions`                |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /api/v1/sessions/my`              |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /api/v1/sessions/:id`             |  ❌  |       🛡        |       🛡        |  ✅   |
+| `PATCH /api/v1/sessions/:id`           |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
+| `PATCH /api/v1/sessions/:id/status`    |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
+| `PATCH /api/v1/sessions/:id/complete`  |  ❌  |       🛡        |       🛡        |  ✅   |
+| `POST /api/v1/sessions/:id/leave`      |  ❌  | 🛡 (no creator) | 🛡 (no creator) |  ✅   |
+| `POST /api/v1/sessions/join`           |  ❌  |       ✅        |       ✅        |  ✅   |
+| `DELETE /api/v1/sessions/:id`          |  ❌  |  👤 (creator)   |  👤 (creator)   |  ✅   |
+| `GET /api/v1/sessions/stats`           |  ❌  |  ✅ (only own)  |  ✅ (only own)  |  ✅   |
+| `POST /api/v1/activities`              |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /api/v1/activities`               |  ❌  |  ✅ (only own)  |  ✅ (only own)  |  ✅   |
+| `GET /api/v1/activities/:id`           |  ❌  |       👤        |       👤        |  ✅   |
+| `DELETE /api/v1/activities/:id`        |  ❌  |       👤        |       👤        |  ✅   |
+| `GET /weather/locations/nearby`        |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /weather/locations/search`        |  ❌  |       ✅        |       ✅        |  ✅   |
+| `GET /weather/forecast/:externalId`    |  ❌  |       ✅        |       ✅        |  ✅   |
+| `POST /weather/seed`                   |  ❌  |       ❌        |       ❌        |  ✅   |
+| `POST /weather/forecast/:id/refresh`   |  ❌  |       ❌        |       ❌        |  ✅   |
+| `/admin/*`                             |  ❌  |       ❌        |       ❌        |  ✅   |
+| `GET /api-docs`                        |  🅿  |       🅿        |       🅿        |  🅿   |
 
 ### Note di implementazione
 
-- Le route `/hikers/:id` e `/refuges/:id` attualmente non differenziano role-cross (un Hiker può leggere un altro Hiker). Da rivedere se la deliverable richiede privacy stretta tra utenti.
-- `/api/v1/sessions/:id` non distingue creator vs partecipante in lettura — entrambi possono vedere i dettagli della sessione condivisa.
+- Le route `/hikers/:id` e `/refuges/:id` permettono lettura cross-utente, ma il payload è filtrato dal **privacy gate** (`utils/userPrivacy.js`): viewer "other" vede solo `username`, `email`, `isVerified`, `socialCredits`, `nfcStats` e l'unico campo pubblico di `personalInfo` (= `avatarUrl`). Tutti gli altri campi di `personalInfo`/`experience`/`preferences`/`weeklyGoals`/`profileCompletedAt` sono rimossi dalla response. Da qui il **†** in tabella: l'accesso è consentito ma il contenuto è ridotto.
+- `† Privacy gate`: il marker indica che la response viene filtrata da `stripPrivateFields(user, viewerIsSelfOrAdmin)`. Self e admin ricevono il documento intero; tutti gli altri ricevono la versione public.
+- `/api/v1/sessions/:id` non distingue creator vs partecipante in lettura — entrambi possono vedere i dettagli della sessione condivisa. I `participants.userId` e `creatorId` vengono populated con `personalInfo.avatarUrl` (e null per gli altri campi personali, già esclusi dal `.select()`).
 - `/api/v1/activities/:id` ha controllo `userId === ownerId` esplicito nel service (no leak).
+- `PATCH /personal-info` ha **anti-cheat lock** su `birthDate` e `caiLevel` (vedi A04 → §"Anti-cheat sui campi scoring"): primo set OK, modifiche successive → HTTP 409 `LockedFieldError`. L'avatar `avatarUrl` invece è **mutabile** senza limiti (inviare `""` per rimuovere la foto è ammesso esplicitamente in Joi).
 
 ---
 
@@ -191,17 +216,17 @@ Header esposti in risposta: `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-Aft
 
 ## 6. Secret management
 
-| Variabile            | Required       | Note                                                              |
-| -------------------- | -------------- | ----------------------------------------------------------------- |
-| `JWT_SECRET`         | ✅ (sempre)    | >= 32 char, generato con `crypto.randomBytes(48).toString('hex')` |
-| `JWT_EXPIRES_IN`     | ⚠ default `1d` | Mai > 7d in produzione                                            |
-| `MONGO_URI`          | ✅ (prod)      | Connection string Atlas con credenziali read/write                |
-| `BASE_URL`           | ✅ (prod)      | URL pubblico backend per email link                               |
-| `BREVO_API_KEY`      | ✅ (prod)      | API key Brevo solo "transactional emails"                         |
-| `EMAIL_FROM_ADDRESS` | ✅ (prod)      | Mittente verificato su Brevo                                      |
-| `EMAIL_FROM_NAME`    | ❌             | Default "Trento Smart Mountain"                                   |
-| `ALLOWED_ORIGINS`    | ⚠ prod         | CSV di origin CORS allow-list                                     |
-| `NODE_ENV`           | ⚠              | `production` abilita HSTS + fail-fast aggiuntivi                  |
+| Variabile            | Required       | Note                                                                                                                                        |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JWT_SECRET`         | ✅ (sempre)    | >= 32 char, generato con `crypto.randomBytes(48).toString('hex')`                                                                           |
+| `JWT_EXPIRES_IN`     | ⚠ default `7d` | Calibrato per supportare requisito offline 3 giorni con margine. Sprint 3 → refresh token rotation (access 15min + refresh 30d). Mai > 30d. |
+| `MONGO_URI`          | ✅ (prod)      | Connection string Atlas con credenziali read/write                                                                                          |
+| `BASE_URL`           | ✅ (prod)      | URL pubblico backend per email link                                                                                                         |
+| `BREVO_API_KEY`      | ✅ (prod)      | API key Brevo solo "transactional emails"                                                                                                   |
+| `EMAIL_FROM_ADDRESS` | ✅ (prod)      | Mittente verificato su Brevo                                                                                                                |
+| `EMAIL_FROM_NAME`    | ❌             | Default "Trento Smart Mountain"                                                                                                             |
+| `ALLOWED_ORIGINS`    | ⚠ prod         | CSV di origin CORS allow-list                                                                                                               |
+| `NODE_ENV`           | ⚠              | `production` abilita HSTS + fail-fast aggiuntivi                                                                                            |
 
 ### Procedura rotazione JWT_SECRET
 

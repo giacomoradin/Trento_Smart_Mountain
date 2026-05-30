@@ -15,6 +15,8 @@ data class CreateActivityRequest(
     val actualStats: ActualStats,
     val difficultyLevel: String? = null,
     val elevationProfile: List<Double>? = null,
+    /** Traccia GPS campionata (max ~80 punti) per la route signature del feed. */
+    val routePolyline: List<RoutePoint>? = null,
 )
 
 /** Risposta dopo creazione/lettura di un'attività libera. */

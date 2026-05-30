@@ -43,6 +43,8 @@ router.post("/", validate(createSessionSchema), async (req, res) => {
     minExperienceLevel,
     gpxFileName,
     gpxStats,
+    sentieroCode,
+    plannedRoute,
   } = req.body;
 
   if (!routeDetails || !routeDetails.name) {
@@ -58,6 +60,8 @@ router.post("/", validate(createSessionSchema), async (req, res) => {
       ...(minExperienceLevel && { minExperienceLevel }),
       ...(gpxFileName && { gpxFileName }),
       ...(gpxStats && { gpxStats }),
+      ...(sentieroCode && { sentieroCode }),
+      ...(plannedRoute && { plannedRoute }),
     };
     const session = await createSession(req.user.userId, routeDetails, sessionMeta);
     res.status(201).json(session);

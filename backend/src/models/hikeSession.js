@@ -1,6 +1,16 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+// Punto della polyline pianificata. _id disabilitato: sono migliaia di punti
+// e non serve un identificatore per ciascuno (riduce dimensione documento).
+const plannedRoutePointSchema = new Schema(
+  {
+    lat: { type: Number, required: true },
+    lon: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
 const hikSessionSchema = new Schema({
   // Chi ha creato la sessione diventa automaticamente groupLeader
   creatorId: {
@@ -37,6 +47,20 @@ const hikSessionSchema = new Schema({
   meetingLocation: { type: String },
   maxParticipants: { type: Number },
   minExperienceLevel: { type: String, enum: ["T", "E", "EE", "EEA"] },
+
+  // Codice del sentiero SAT selezionato dal DB (modalità "Scegli percorso sulla mappa").
+  // Null in modalità GPX. Serve alla checklist dinamica (US-7) per risalire al Sentiero
+  // (Sentiero.findOne({ codice })) e generare l'equipaggiamento in base a difficoltà/quota/meteo.
+  sentieroCode: { type: String, default: null },
+
+  // Tracciato pianificato (origine + polyline) usato per il controllo distanza dal
+  // percorso durante il tracking. source = "GPX" (da file importato) | "SAT" (da DB sentieri).
+  // polylinePoints in formato GeoJSON-like { lat, lon } campionato (downsampling lato client).
+  plannedRoute: {
+    source: { type: String, enum: ["GPX", "SAT"] },
+    polylinePoints: { type: [plannedRoutePointSchema], default: undefined },
+    bbox: { type: [Number], default: undefined }, // [minLon, minLat, maxLon, maxLat]
+  },
 
   // Dati tracciato GPX (opzionale, da import mobile)
   gpxFileName: { type: String },

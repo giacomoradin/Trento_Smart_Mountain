@@ -326,6 +326,21 @@ router.get(
   },
 );
  
+/**
+ * Risolve il codice sentiero SAT per la checklist: body (override) → sessione persistita.
+ */
+function resolveSentieroCode(session, bodySentieroCode) {
+  const fromBody = typeof bodySentieroCode === 'string' ? bodySentieroCode.trim() : '';
+  const fromSession = typeof session.sentieroCode === 'string' ? session.sentieroCode.trim() : '';
+  return (fromBody || fromSession || '').toUpperCase();
+}
+
+function buildChecklistPartenza(session, partenza) {
+  if (partenza) return new Date(partenza);
+  if (session.meetingDate) return new Date(new Date(session.meetingDate).setUTCHours(8, 0, 0, 0));
+  return new Date();
+}
+
 // ─── POST /api/v1/sessions/:id/checklist ─────────────────────────────────────
 /**
  * Genera la checklist per la prima volta.
@@ -334,7 +349,7 @@ router.get(
  *
  * Body (opzionale):
  *   {
- *     "sentieroCode": "E131",           // codice SAT obbligatorio
+ *     "sentieroCode": "E131",           // override opzionale se assente usa session.sentieroCode
  *     "locationId":   "uuid-del-luogo", // externalId meteo opzionale
  *     "partenza":     "2026-06-15T07:00:00Z" // ISO opzionale, default meetingDate 08:00
  *   }
@@ -384,12 +399,15 @@ router.post('/:id/checklist', validate(idParamSchema, 'params'), async (req, res
       });
     }
 
-    const { sentieroCode, locationId, partenza } = req.body;
+    const { sentieroCode: bodySentieroCode, locationId, partenza } = req.body;
+    const sentieroCode = resolveSentieroCode(session, bodySentieroCode);
     if (!sentieroCode) {
-      return res.status(400).json({ error: 'Il campo "sentieroCode" è obbligatorio.' });
+      return res.status(400).json({
+        error: 'Codice sentiero mancante: seleziona un sentiero SAT in pianificazione o invia "sentieroCode" nel body.',
+      });
     }
 
-    const sentiero = await Sentiero.findOne({ codice: sentieroCode.toUpperCase() }).lean();
+    const sentiero = await Sentiero.findOne({ codice: sentieroCode }).lean();
     if (!sentiero) {
       return res.status(404).json({ error: `Sentiero ${sentieroCode} non trovato.` });
     }
@@ -403,13 +421,7 @@ router.post('/:id/checklist', validate(idParamSchema, 'params'), async (req, res
       }
     }
 
-    const oraPartenza = partenza
-      ? new Date(partenza)
-      : session.meetingDate
-        ? new Date(new Date(session.meetingDate).setUTCHours(8, 0, 0, 0))
-        : new Date();
-
-    const checklistData = generateChecklist(sentiero, forecastResult, oraPartenza);
+    const checklistData = generateChecklist(sentiero, forecastResult, buildChecklistPartenza(session, partenza));
     session.checklist = checklistData;
     await session.save();
 
@@ -483,12 +495,15 @@ router.put('/:id/checklist', validate(idParamSchema, 'params'), async (req, res,
       });
     }
 
-    const { sentieroCode, locationId, partenza } = req.body;
+    const { sentieroCode: bodySentieroCode, locationId, partenza } = req.body;
+    const sentieroCode = resolveSentieroCode(session, bodySentieroCode);
     if (!sentieroCode) {
-      return res.status(400).json({ error: 'Il campo "sentieroCode" è obbligatorio.' });
+      return res.status(400).json({
+        error: 'Codice sentiero mancante: seleziona un sentiero SAT in pianificazione o invia "sentieroCode" nel body.',
+      });
     }
 
-    const sentiero = await Sentiero.findOne({ codice: sentieroCode.toUpperCase() }).lean();
+    const sentiero = await Sentiero.findOne({ codice: sentieroCode }).lean();
     if (!sentiero) {
       return res.status(404).json({ error: `Sentiero ${sentieroCode} non trovato.` });
     }
@@ -502,13 +517,7 @@ router.put('/:id/checklist', validate(idParamSchema, 'params'), async (req, res,
       }
     }
 
-    const oraPartenza = partenza
-      ? new Date(partenza)
-      : session.meetingDate
-        ? new Date(new Date(session.meetingDate).setUTCHours(8, 0, 0, 0))
-        : new Date();
-
-    const checklistData = generateChecklist(sentiero, forecastResult, oraPartenza);
+    const checklistData = generateChecklist(sentiero, forecastResult, buildChecklistPartenza(session, partenza));
     checklistData.generatedAt = session.checklist.generatedAt;
     session.checklist = checklistData;
     await session.save();

@@ -7,6 +7,39 @@ object ChecklistMapper {
 
     private val livelloOrder = listOf("base", "consigliato", "opzionale")
 
+    /** Numero di item visibili in copertina per sezione (espandibili). */
+    const val INITIAL_SECTION_VISIBLE = 5
+
+    enum class Priorita { ESSENZIALE, FACOLTATIVO, PERSONALE }
+
+    fun priorita(item: SessionDetailViewModel.ChecklistItem): Priorita = when {
+        item.isPersonal -> Priorita.PERSONALE
+        item.livello.equals("base", ignoreCase = true) -> Priorita.ESSENZIALE
+        item.livello.equals("consigliato", ignoreCase = true) ||
+            item.livello.equals("opzionale", ignoreCase = true) -> Priorita.FACOLTATIVO
+        else -> Priorita.ESSENZIALE
+    }
+
+    fun partition(items: List<SessionDetailViewModel.ChecklistItem>): ChecklistSections {
+        val essenziali = mutableListOf<SessionDetailViewModel.ChecklistItem>()
+        val facoltativi = mutableListOf<SessionDetailViewModel.ChecklistItem>()
+        val personali = mutableListOf<SessionDetailViewModel.ChecklistItem>()
+        items.forEach { item ->
+            when (priorita(item)) {
+                Priorita.ESSENZIALE -> essenziali.add(item)
+                Priorita.FACOLTATIVO -> facoltativi.add(item)
+                Priorita.PERSONALE -> personali.add(item)
+            }
+        }
+        return ChecklistSections(essenziali, facoltativi, personali)
+    }
+
+    data class ChecklistSections(
+        val essenziali: List<SessionDetailViewModel.ChecklistItem>,
+        val facoltativi: List<SessionDetailViewModel.ChecklistItem>,
+        val personali: List<SessionDetailViewModel.ChecklistItem>,
+    )
+
     fun stableServerId(categoria: String, livello: String, nome: String): String {
         val raw = "$categoria|$livello|$nome"
         return "srv_${raw.hashCode().and(0x7FFFFFFF)}"

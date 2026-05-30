@@ -25,8 +25,8 @@ const SOGLIA_VENTO_FORTE    = 50;  // km/h
 const SOGLIA_TEMP_FREDDA    = 5;   // °C — sotto questa si aggiunge strato isolante
 const SOGLIA_TEMP_MOLTO_FREDDA = -5; // °C
 
-// Acqua: litri/ora base per difficoltà
-const ACQUA_LPH = { T: 0.4, E: 0.5, EE: 0.6, EEA: 0.7 };
+// Acqua: litri/ora base per difficoltà (stima prudente, non sovradimensionata)
+const ACQUA_LPH = { T: 0.30, E: 0.35, EE: 0.42, EEA: 0.50 };
 
 // Calorie: kcal/ora base per difficoltà (approssimazione media adulto 70kg)
 const KCAL_PH = { T: 250, E: 350, EE: 450, EEA: 550 };
@@ -43,6 +43,69 @@ function parseOre(tempoStr) {
   return (hh || 0) + (mm || 0) / 60;
 }
 
+function formatTempoAndata(oreDecimali) {
+  const h = Math.floor(oreDecimali);
+  const m = Math.round((oreDecimali - h) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** Stima durata escursione da sessione GPX (durata GPX o formula CAI). */
+export function estimateOreFromSession(session) {
+  const gs = session.gpxStats || {};
+  if (gs.gpxDurationSec && gs.gpxDurationSec > 0) {
+    return gs.gpxDurationSec / 3600;
+  }
+  const dist = gs.distanceKm ?? 0;
+  const elev = gs.elevationGainM ?? session.routeDetails?.elevationGain ?? 0;
+  if (dist > 0) return dist / 4 + elev / 600;
+  return 0;
+}
+
+/**
+ * Adatta i dati di una sessione GPX/import al formato atteso da generateChecklist.
+ * Permette checklist dinamica anche senza sentieroCode SAT.
+ */
+export function buildSentieroLikeFromSession(session) {
+  const rd = session.routeDetails || {};
+  const gs = session.gpxStats || {};
+  const ore = estimateOreFromSession(session);
+  if (ore <= 0 && !rd.difficultyLevel && !gs.distanceKm) return null;
+
+  let quotaMassima = null;
+  let quotaMinima = null;
+  const profile = gs.elevationProfile;
+  if (Array.isArray(profile) && profile.length > 0) {
+    quotaMinima = Math.min(...profile);
+    quotaMassima = Math.max(...profile);
+  } else {
+    const gain = gs.elevationGainM ?? rd.elevationGain ?? 0;
+    if (gain > 0) {
+      quotaMinima = 600;
+      quotaMassima = quotaMinima + gain;
+    }
+  }
+
+  return {
+    difficolta: rd.difficultyLevel || 'E',
+    tempoAndata: ore > 0 ? formatTempoAndata(ore) : '03:00',
+    quotaMassima,
+    quotaMinima,
+    denominazione: rd.name || 'Percorso importato',
+  };
+}
+
+function isViaFerrata(sentiero) {
+  const label = `${sentiero.denominazione || ''} ${sentiero.codice || ''}`.toLowerCase();
+  return /ferrata|\bvf\b|via ferrata|sentiero attrezzato|attrezzat/.test(label);
+}
+
+function isEscursioneImpegnativa(sentiero) {
+  const ore = parseOre(sentiero.tempoAndata);
+  const diffLevel = DIFFICOLTA_ORDER[sentiero.difficolta || 'E'] ?? 1;
+  const dislivello = (sentiero.quotaMassima ?? 0) - (sentiero.quotaMinima ?? 0);
+  return diffLevel >= DIFFICOLTA_ORDER.EE || ore >= 6 || dislivello >= 1200;
+}
+
 /**
  * Calcola acqua in litri per l'intera escursione.
  * Aumenta del 20% se caldo (temp media > 20°C), del 10% se dislivello elevato.
@@ -50,14 +113,18 @@ function parseOre(tempoStr) {
 function calcolaAcqua(sentiero, meteoAgg) {
   const ore        = parseOre(sentiero.tempoAndata);
   const difficolta = sentiero.difficolta || 'E';
-  const lph        = ACQUA_LPH[difficolta] ?? 0.5;
+  const lph        = ACQUA_LPH[difficolta] ?? 0.35;
   let litri        = ore * lph;
 
-  if (meteoAgg?.temperaturaMed > 20) litri *= 1.2;
+  if (meteoAgg?.temperaturaMed > 22) litri *= 1.12;
   const dislivello = (sentiero.quotaMassima ?? 0) - (sentiero.quotaMinima ?? 0);
-  if (dislivello > 1000) litri *= 1.1;
+  if (dislivello > 1500) litri *= 1.05;
 
-  return Math.round(litri * 10) / 10; // 1 decimale
+  // Tetto prudente: evita stime eccessive su escursioni lunghe
+  const cap = Math.max(1.5, ore * 0.55);
+  litri = Math.min(litri, cap);
+
+  return Math.round(litri * 10) / 10;
 }
 
 /**
@@ -160,12 +227,19 @@ function buildAbbigliamento(sentiero, meteo) {
     motivo: 'Protezione solare/termica in base alla stagione.',
   });
 
-  base.push({
-    nome: 'Guanti da trekking leggeri',
-    motivo: quotaMax > QUOTA_ALPINA
-      ? `Quota massima ${quotaMax} m: le temperature in vetta possono essere sensibilmente più basse.`
-      : 'Utili nelle prime ore di cammino o in caso di vento.',
-  });
+  const guantiConsigliati = quotaMax > QUOTA_ALPINA
+    || tempMin < SOGLIA_TEMP_FREDDA
+    || diffLevel >= DIFFICOLTA_ORDER.EE;
+  if (guantiConsigliati) {
+    consigliati.push({
+      nome: 'Guanti da trekking leggeri',
+      motivo: quotaMax > QUOTA_ALPINA
+        ? `Quota massima ${quotaMax} m: temperature più basse in vetta.`
+        : tempMin < SOGLIA_TEMP_FREDDA
+          ? `Temperatura minima prevista ${tempMin}°C.`
+          : `Sentiero ${diff}: terreno impegnativo, mani esposte al freddo/vento.`,
+    });
+  }
 
   // ── Condizioni fredde ──
   if (tempMin < SOGLIA_TEMP_FREDDA || quotaMax > QUOTA_ALPINA) {
@@ -252,16 +326,16 @@ function buildAttrezzatura(sentiero, meteo) {
     motivo: 'Contenitore per acqua, cibo, indumenti e kit di emergenza.',
   });
 
-  base.push({
+  consigliati.push({
     nome: 'Bastoncini da trekking regolabili',
-    motivo: diffLevel >= 1
-      ? 'Riducono il carico sulle ginocchia in salita e discesa, fondamentali su sentieri EE/EEA.'
-      : 'Migliorano la stabilità e riducono l\'affaticamento.',
+    motivo: diffLevel >= DIFFICOLTA_ORDER.EE
+      ? 'Riducono il carico sulle ginocchia su sentieri impegnativi.'
+      : 'Migliorano stabilità e comfort; utili ma non indispensabili.',
   });
 
   base.push({
-    nome: 'Borraccia o sistema idratazione (2L minimo)',
-    motivo: 'Capacità minima per l\'escursione calcolata in base a durata e difficoltà.',
+    nome: 'Borraccia o sistema idratazione',
+    motivo: 'Contenitore per l\'acqua calcolata in base a durata e difficoltà.',
   });
 
   base.push({
@@ -269,20 +343,30 @@ function buildAttrezzatura(sentiero, meteo) {
     motivo: 'Il segnale GPS/dati in quota può essere assente. La mappa offline è salvavita.',
   });
 
-  base.push({
+  opzionali.push({
     nome: 'Powerbank per smartphone',
-    motivo: 'Il GPS consuma batteria rapidamente. Un powerbank garantisce comunicazioni di emergenza.',
+    motivo: 'Utile se usi GPS/navigatione a lungo; non indispensabile con batteria piena.',
   });
 
-  // ── Difficoltà avanzata ──
-  if (diffLevel >= DIFFICOLTA_ORDER['EE']) {
+  const ferrata = isViaFerrata(sentiero);
+  if (diff === 'EEA' || ferrata) {
     base.push({
       nome: 'Casco da via ferrata o alpinismo',
-      motivo: `Sentiero ${diff}: rischio caduta massi o cadute accidentali su terreno esposto.`,
+      motivo: ferrata
+        ? 'Percorso attrezzato/ferrata: protezione obbligatoria da caduta massi.'
+        : `Sentiero ${diff}: terreno esposto con rischio caduta.`,
     });
-    consigliati.push({
+  } else if (diffLevel >= DIFFICOLTA_ORDER.EE) {
+    opzionali.push({
+      nome: 'Casco da via ferrata o alpinismo',
+      motivo: 'Consigliato su tratti esposti; obbligatorio solo su vie ferrate attrezzate.',
+    });
+  }
+
+  if (diff === 'EEA') {
+    base.push({
       nome: 'Imbragatura da ferrata con kit assorbitori di energia',
-      motivo: 'Per tratti attrezzati (scale, catene, cavi) presenti sui sentieri EE/EEA.',
+      motivo: 'Sentiero EEA: attrezzatura di progressione su terreno attrezzato/alpinistico.',
     });
   }
 
@@ -346,9 +430,9 @@ function buildSicurezza(sentiero, meteo) {
     motivo: 'Essenziale per qualsiasi escursione, da T ad EEA.',
   });
 
-  base.push({
+  opzionali.push({
     nome: 'Fischietto di emergenza',
-    motivo: 'Il segnale universale di soccorso in montagna è 6 fischi + pausa. Pesa niente.',
+    motivo: 'Segnale acustico leggero per richiamare attenzione in caso di necessità.',
   });
 
   base.push({
@@ -356,19 +440,15 @@ function buildSicurezza(sentiero, meteo) {
     motivo: 'In caso di ipotermia o infortunio, riduce drasticamente la dispersione di calore.',
   });
 
-  base.push({
+  consigliati.push({
     nome: 'Torcia frontale con batterie di riserva',
-    motivo: 'Un ritardo imprevisto può costringere al rientro al buio. Obbligatoria.',
+    motivo: 'Utile in caso di ritardo imprevisto; consigliata se il rientro può avvenire al crepuscolo.',
   });
 
   if (diffLevel >= DIFFICOLTA_ORDER['EE'] || quotaMax > QUOTA_ALPINA) {
     consigliati.push({
       nome: 'Comunicatore satellitare (es. Garmin inReach Mini)',
       motivo: `${diff} a ${quotaMax} m: le reti mobili sono spesso assenti. Il segnale satellitare garantisce i soccorsi.`,
-    });
-    consigliati.push({
-      nome: 'Numero del Soccorso Alpino salvato: 118',
-      motivo: 'Conoscere il numero in anticipo e averlo offline può fare la differenza.',
     });
   }
 
@@ -379,10 +459,12 @@ function buildSicurezza(sentiero, meteo) {
     });
   }
 
-  opzionali.push({
-    nome: 'Barrette energetiche di emergenza',
-    motivo: 'Scorta calorica di emergenza in caso di ipoglicemia o ritardo imprevisto.',
-  });
+  if (isEscursioneImpegnativa(sentiero)) {
+    opzionali.push({
+      nome: 'Barrette energetiche di emergenza',
+      motivo: 'Scorta calorica extra consigliata su escursioni lunghe o molto impegnative.',
+    });
+  }
 
   return [
     ...(base.length        ? [{ nome: 'Sicurezza', livello: 'base',        items: base }]        : []),
@@ -408,7 +490,7 @@ function buildAlimentazione(sentiero, meteoAgg) {
 
   base.push({
     nome: `Acqua: almeno ${acqua} litri`,
-    motivo: `Calcolati su ${ore.toFixed(1)}h di percorrenza a difficoltà ${diff}${meteoAgg?.temperaturaMed > 20 ? ', aumentato del 20% per temperature elevate' : ''}.`,
+    motivo: `Calcolati su ${ore.toFixed(1)}h di percorrenza a difficoltà ${diff}${meteoAgg?.temperaturaMed > 22 ? ', leggermente aumentati per caldo' : ''}.`,
   });
 
   base.push({
@@ -426,10 +508,10 @@ function buildAlimentazione(sentiero, meteoAgg) {
     motivo: 'Snack ad alto apporto calorico e facilmente trasportabile.',
   });
 
-  if (ore > 4) {
-    base.push({
+  if (isEscursioneImpegnativa(sentiero)) {
+    consigliati.push({
       nome: 'Barrette energetiche o gel (2–3 pezzi)',
-      motivo: `Escursione lunga (${ore.toFixed(1)}h): utili per mantenere la glicemia costante.`,
+      motivo: `Escursione impegnativa (${ore.toFixed(1)}h, difficoltà ${diff}): utili per mantenere la glicemia costante.`,
     });
   }
 

@@ -31,9 +31,10 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -88,6 +89,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.data.checklist.ChecklistMapper
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.SessionParticipationActions
@@ -99,14 +101,10 @@ import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.SessionDetailViewModel
-import it.trentosmartmountain.app.viewmodel.SocialFeedViewModel
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.ui.components.AvatarImage
-import it.trentosmartmountain.app.ui.screens.home.ShareActivityDialog
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelProvider
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -130,48 +128,9 @@ fun SessionDetailScreen(
     onAvviaConfirmed: (sessionId: String) -> Unit = {},
     currentUserId: String = "",
     viewModel: SessionDetailViewModel = viewModel(),
-    // VM social Activity-scoped: stesso usato da HomeSocialScreen + Activity
-    // Detail. Il dialog "Pubblica" chiama `shareSession()` e poi `refresh()`
-    // del feed così la sessione appare immediatamente nel feed dell'utente.
-    socialFeedViewModel: SocialFeedViewModel = viewModel(
-        viewModelStoreOwner = LocalContext.current as ComponentActivity,
-        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            (LocalContext.current as ComponentActivity).application,
-        ),
-    ),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val socialState by socialFeedViewModel.state.collectAsStateWithLifecycle()
-    var showShareDialog by remember { mutableStateOf(false) }
-    // Per debug: mostra un Toast con l'errore se il ViewModel segnala un errore di caricamento o salvataggio della sessione
     val context = LocalContext.current
-
-    // Toast per esiti share (VM Activity-scoped → notifica visibile qui).
-    LaunchedEffect(socialState.shareSuccess) {
-        socialState.shareSuccess?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-            socialFeedViewModel.clearShareMessages()
-        }
-    }
-    LaunchedEffect(socialState.shareError) {
-        socialState.shareError?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-            socialFeedViewModel.clearShareMessages()
-        }
-    }
-
-    if (showShareDialog) {
-        ShareActivityDialog(
-            activityName = uiState.session?.routeDetails?.name.orEmpty(),
-            onDismiss = { showShareDialog = false },
-            onShare = { caption ->
-                showShareDialog = false
-                socialFeedViewModel.shareSession(sessionId, caption)
-            },
-        )
-    }
-
-    // TELEMETRIA: Se il ViewModel genera un errore (es. dal salvataggio), stampalo a schermo
     LaunchedEffect(uiState.error) {
         uiState.error?.let { errorMessage ->
             if (errorMessage.isNotBlank() && uiState.session != null) {
@@ -492,30 +451,6 @@ fun SessionDetailScreen(
                     leaderStartLabel = stringResource(R.string.session_detail_avvia),
                     leaderStopLabel = stringResource(R.string.session_detail_arresta),
                 )
-            }
-
-            // Bottone Condividi sul feed — solo creator (lato server stesso
-            // vincolo via FORBIDDEN_NOT_CREATOR). Visibile in qualsiasi stato
-            // della sessione (PLANNED → "annuncia uscita", COMPLETED → "racconta").
-            if (isCreator) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = { showShareDialog = true },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = TsmAccent),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    androidx.compose.material3.Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Outlined.Share,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        "CONDIVIDI SUL FEED",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -957,6 +892,25 @@ private fun ChecklistCard(
             )
         }
 
+        if (uiState.checklistMeteoApplied && !uiState.checklistMeteoLocationName.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Include previsioni meteo · ${uiState.checklistMeteoLocationName}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray.copy(alpha = 0.85f),
+            )
+        } else if (uiState.checklistUnavailableReason.isNullOrBlank() &&
+            uiState.checklist.isNotEmpty() &&
+            !uiState.checklistMeteoApplied
+        ) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Meteo non ancora applicato: in attesa del forecast o aggiorna manualmente.",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray.copy(alpha = 0.7f),
+            )
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
@@ -1015,63 +969,40 @@ private fun ChecklistCard(
 
         if (uiState.checklist.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
+            val sections = ChecklistMapper.partition(uiState.checklist)
 
-            sh.calvin.reorderable.ReorderableColumn(
-                list = uiState.checklist,
-                onSettle = { from, to -> viewModel.onChecklistMove(from, to) },
-            ) { _, item, _ ->
-                key(item.id) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .draggableHandle(),
-                            onClick = {},
-                        ) {
-                            Icon(
-                                Icons.Outlined.DragHandle,
-                                contentDescription = "Trascina per riordinare",
-                                tint = Color(0xFF888888),
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                        Checkbox(
-                            checked = item.checked,
-                            onCheckedChange = { viewModel.onToggleCheck(item.id) },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = TsmPrimary,
-                                uncheckedColor = Color(0xFF555555),
-                                checkmarkColor = Color.White,
-                            ),
+            if (sections.essenziali.isNotEmpty()) {
+                ChecklistExpandableSection(
+                    title = "Essenziali",
+                    allItems = sections.essenziali,
+                    viewModel = viewModel,
+                )
+            }
+
+            if (sections.facoltativi.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                ChecklistExpandableSection(
+                    title = "Facoltativi",
+                    allItems = sections.facoltativi,
+                    viewModel = viewModel,
+                )
+            }
+
+            if (sections.personali.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                ChecklistSectionHeader("Aggiunti da te")
+                ChecklistItemList(
+                    items = sections.personali,
+                    viewModel = viewModel,
+                    reorderable = true,
+                    onMove = { from, to ->
+                        viewModel.onChecklistMoveInSubset(
+                            sections.personali.map { it.id },
+                            from,
+                            to,
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                item.text,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (item.checked) Color.Gray else Color.White,
-                            )
-                            if (!item.motivo.isNullOrBlank()) {
-                                Text(
-                                    item.motivo,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.Gray.copy(alpha = 0.8f),
-                                )
-                            }
-                        }
-                        if (item.isPersonal) {
-                            IconButton(onClick = { viewModel.onRemoveItem(item.id) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color(0xFF888888), modifier = Modifier.size(18.dp))
-                            }
-                        } else {
-                            Spacer(modifier = Modifier.size(28.dp))
-                        }
-                    }
-                }
+                    },
+                )
             }
         }
 
@@ -1101,6 +1032,149 @@ private fun ChecklistCard(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun ChecklistExpandableSection(
+    title: String,
+    allItems: List<SessionDetailViewModel.ChecklistItem>,
+    viewModel: SessionDetailViewModel,
+) {
+    var expanded by remember(allItems.size) { mutableStateOf(false) }
+    val hiddenCount = (allItems.size - ChecklistMapper.INITIAL_SECTION_VISIBLE).coerceAtLeast(0)
+    val visibleItems = if (expanded || hiddenCount == 0) {
+        allItems
+    } else {
+        allItems.take(ChecklistMapper.INITIAL_SECTION_VISIBLE)
+    }
+
+    ChecklistSectionHeader(title)
+    ChecklistItemList(
+        items = visibleItems,
+        viewModel = viewModel,
+        reorderable = expanded,
+        onMove = { from, to ->
+            viewModel.onChecklistMoveInSubset(allItems.map { it.id }, from, to)
+        },
+    )
+    if (hiddenCount > 0) {
+        TextButton(
+            onClick = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = TsmAccent,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                if (expanded) "Mostra meno" else "Visualizza altri $hiddenCount elementi",
+                color = TsmAccent,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChecklistSectionHeader(title: String) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+        color = TsmAccent.copy(alpha = 0.85f),
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun ChecklistItemRow(
+    item: SessionDetailViewModel.ChecklistItem,
+    viewModel: SessionDetailViewModel,
+    leading: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        leading()
+        Checkbox(
+            checked = item.checked,
+            onCheckedChange = { viewModel.onToggleCheck(item.id) },
+            colors = CheckboxDefaults.colors(
+                checkedColor = TsmPrimary,
+                uncheckedColor = Color(0xFF555555),
+                checkmarkColor = Color.White,
+            ),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                item.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (item.checked) Color.Gray else Color.White,
+            )
+            if (!item.motivo.isNullOrBlank()) {
+                Text(
+                    item.motivo,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray.copy(alpha = 0.8f),
+                )
+            }
+        }
+        if (item.isPersonal) {
+            IconButton(onClick = { viewModel.onRemoveItem(item.id) }, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color(0xFF888888), modifier = Modifier.size(18.dp))
+            }
+        } else {
+            Spacer(modifier = Modifier.size(28.dp))
+        }
+    }
+}
+
+@Composable
+private fun ChecklistItemList(
+    items: List<SessionDetailViewModel.ChecklistItem>,
+    viewModel: SessionDetailViewModel,
+    reorderable: Boolean,
+    onMove: (Int, Int) -> Unit,
+) {
+    if (items.isEmpty()) return
+
+    if (reorderable) {
+        sh.calvin.reorderable.ReorderableColumn(
+            list = items,
+            onSettle = onMove,
+        ) { _, item, _ ->
+            key(item.id) {
+                ChecklistItemRow(item, viewModel) {
+                    IconButton(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .draggableHandle(),
+                        onClick = {},
+                    ) {
+                        Icon(
+                            Icons.Outlined.DragHandle,
+                            contentDescription = "Trascina per riordinare",
+                            tint = Color(0xFF888888),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
+        }
+    } else {
+        items.forEach { item ->
+            key(item.id) {
+                ChecklistItemRow(item, viewModel) {
+                    Spacer(modifier = Modifier.width(28.dp))
+                }
+            }
+        }
     }
 }
 

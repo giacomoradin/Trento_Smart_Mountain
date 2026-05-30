@@ -26,14 +26,22 @@ data class CreateSessionRequest(
 data class PlannedRoute(
     val source: String,
     val polylinePoints: List<PlannedRoutePoint> = emptyList(),
-    /** Bounding box [minLon, minLat, maxLon, maxLat] (opzionale). */
-    val bbox: List<Double>? = null,
+    /** Bounding box del tracciato (opzionale). */
+    val bbox: PlannedRouteBbox? = null,
 )
 
 /** Punto della polyline pianificata (lat/lon). */
 data class PlannedRoutePoint(
     val lat: Double,
     val lon: Double,
+)
+
+/** Bounding box del tracciato pianificato (formato oggetto atteso dal backend). */
+data class PlannedRouteBbox(
+    val minLat: Double,
+    val minLon: Double,
+    val maxLat: Double,
+    val maxLon: Double,
 )
 
 /** Percorso e metadati inviati in fase di pianificazione. */

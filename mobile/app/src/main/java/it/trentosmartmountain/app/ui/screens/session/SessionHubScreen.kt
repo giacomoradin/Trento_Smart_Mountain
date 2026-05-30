@@ -411,7 +411,7 @@ private fun SessionPlanTab(
                 Icon(Icons.Outlined.Map, contentDescription = null, tint = TsmAccent, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Scegli percorso sulla mappa",
+                    "Scegli tra i percorsi suggeriti",
                     color = Color.White,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                 )

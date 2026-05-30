@@ -59,6 +59,18 @@ object SentieroMappers {
         }
     }
 
+    /**
+     * Converte un tempo nel formato `"HH:MM"` (come salvato dal backend) in minuti totali.
+     * Ritorna null se la stringa è assente o malformata.
+     */
+    fun parseTempoToMinutes(raw: String?): Int? {
+        val parts = raw?.trim()?.split(":") ?: return null
+        if (parts.size != 2) return null
+        val h = parts[0].toIntOrNull() ?: return null
+        val m = parts[1].toIntOrNull() ?: return null
+        return h * 60 + m
+    }
+
     /** Bounding box [minLon, minLat, maxLon, maxLat] dei punti, o null se vuoto. */
     fun boundingBox(points: List<GeoPoint>): List<Double>? {
         if (points.isEmpty()) return null

@@ -20,12 +20,20 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,7 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,6 +60,7 @@ import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
+import it.trentosmartmountain.app.ui.theme.difficultyColor
 import it.trentosmartmountain.app.viewmodel.SessionRoutePickerViewModel
 import it.trentosmartmountain.app.viewmodel.SessionRoutePickerViewModel.Step
 import org.osmdroid.util.GeoPoint
@@ -74,9 +85,9 @@ fun SessionRoutePickerDialog(
     DisposableEffect(Unit) { onDispose { viewModel.reset() } }
 
     // Marker e polyline derivati dallo step corrente.
-    val markers = remember(state.step, state.destinations, state.trailsForDestination, state.selectedDestination, state.selectedTrailDetail) {
+    val markers = remember(state.step, state.destinations, state.searchQuery, state.trailsForDestination, state.selectedDestination, state.selectedTrailDetail) {
         when (state.step) {
-            Step.Destinations -> state.destinations.mapNotNull { d ->
+            Step.Destinations -> state.visibleDestinations.mapNotNull { d ->
                 d.coordinate?.let {
                     SentieroMapMarker(d.nome, GeoPoint(it.lat, it.lon), d.nome, SentieroMarkerType.DESTINATION)
                 }
@@ -86,18 +97,24 @@ fun SessionRoutePickerDialog(
                     add(SentieroMapMarker(state.selectedDestination!!.nome, GeoPoint(it.lat, it.lon), state.selectedDestination!!.nome, SentieroMarkerType.SELECTED_DESTINATION))
                 }
                 state.trailsForDestination.forEach { t ->
-                    t.puntoInizio?.coordinate?.let {
-                        add(SentieroMapMarker(t.codice, GeoPoint(it.lat, it.lon), "${t.codice} · ${t.puntoInizio?.nome ?: ""}", SentieroMarkerType.START))
+                    t.puntoInizio?.let { p ->
+                        p.coordinate?.let { c ->
+                            add(SentieroMapMarker(t.codice, GeoPoint(c.lat, c.lon), pointLabel(t.codice, p.nome, p.quota), SentieroMarkerType.START))
+                        }
                     }
                 }
             }
             Step.TrailDetail -> buildList {
                 val d = state.selectedTrailDetail
-                d?.puntoInizio?.coordinate?.let {
-                    add(SentieroMapMarker("start", GeoPoint(it.lat, it.lon), "Partenza", SentieroMarkerType.START))
+                d?.puntoInizio?.let { p ->
+                    p.coordinate?.let { c ->
+                        add(SentieroMapMarker("start", GeoPoint(c.lat, c.lon), pointLabel("Partenza", p.nome, p.quota), SentieroMarkerType.START))
+                    }
                 }
-                d?.puntoFine?.coordinate?.let {
-                    add(SentieroMapMarker("end", GeoPoint(it.lat, it.lon), "Arrivo", SentieroMarkerType.SELECTED_DESTINATION))
+                d?.puntoFine?.let { p ->
+                    p.coordinate?.let { c ->
+                        add(SentieroMapMarker("end", GeoPoint(c.lat, c.lon), pointLabel("Arrivo", p.nome, p.quota), SentieroMarkerType.SELECTED_DESTINATION))
+                    }
                 }
             }
         }
@@ -186,27 +203,213 @@ private fun DestinationsPanel(
     state: SessionRoutePickerViewModel.UiState,
     viewModel: SessionRoutePickerViewModel,
 ) {
-    if (state.destinations.isEmpty() && !state.isLoading) {
-        Text("Nessuna destinazione disponibile.", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
-        return
-    }
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items(state.destinations, key = { it.nome }) { dest ->
-            Surface(
-                modifier = Modifier.fillMaxWidth().clickable { viewModel.onDestinationClick(dest) },
-                shape = RoundedCornerShape(8.dp),
-                color = TsmSurfaceVariant,
-            ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(dest.nome, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
-                        val quota = dest.quota?.let { "$it m" }
-                        val info = listOfNotNull(quota, "${dest.numeroSentieri} sentieri").joinToString(" · ")
-                        Text(info, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+    var filtersExpanded by remember { mutableStateOf(false) }
+    val visible = state.visibleDestinations
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Barra di ricerca destinazioni (filtro client-side sul nome).
+        OutlinedTextField(
+            value = state.searchQuery,
+            onValueChange = viewModel::onSearchQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("Cerca destinazione", color = Color.Gray) },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = Color.Gray) },
+            trailingIcon = {
+                if (state.searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Cancella", tint = Color.Gray)
+                    }
+                }
+            },
+            shape = RoundedCornerShape(10.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = TsmAccent,
+                unfocusedBorderColor = TsmSurfaceVariant,
+                cursorColor = TsmAccent,
+            ),
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Riga "Filtri" con badge conteggio + reset.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = { filtersExpanded = !filtersExpanded }) {
+                Icon(Icons.Outlined.FilterList, contentDescription = null, tint = TsmAccent, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.size(6.dp))
+                val label = if (state.filter.isActive) "Filtri (${state.filter.activeCount})" else "Filtri"
+                Text(label, color = if (state.filter.isActive) TsmAccent else Color.White, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            if (state.filter.isActive) {
+                TextButton(onClick = viewModel::clearFilter) {
+                    Text("Azzera", color = Color.Gray, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
+        if (filtersExpanded) {
+            FilterSection(filter = state.filter, onChange = viewModel::applyFilter)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        if (visible.isEmpty() && !state.isLoading) {
+            val msg = when {
+                state.searchQuery.isNotBlank() -> "Nessuna destinazione per \"${state.searchQuery}\"."
+                state.filter.isActive -> "Nessuna destinazione soddisfa i filtri."
+                else -> "Nessuna destinazione disponibile."
+            }
+            Text(msg, color = Color.Gray, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(visible, key = { it.nome }) { dest ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().clickable { viewModel.onDestinationClick(dest) },
+                        shape = RoundedCornerShape(8.dp),
+                        color = TsmSurfaceVariant,
+                    ) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(dest.nome, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                                val quota = dest.quota?.let { "$it m" }
+                                val sentieriLabel = if (state.filter.isActive) "${dest.numeroSentieri} sentieri compatibili" else "${dest.numeroSentieri} sentieri"
+                                val info = listOfNotNull(quota, sentieriLabel).joinToString(" · ")
+                                Text(info, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/** Difficoltà (chip multi-select) + soglie massime (slider) per dislivello, distanza, tempo. */
+@Composable
+private fun FilterSection(
+    filter: SessionRoutePickerViewModel.RouteFilter,
+    onChange: (SessionRoutePickerViewModel.RouteFilter) -> Unit,
+) {
+    Surface(shape = RoundedCornerShape(10.dp), color = TsmSurfaceVariant.copy(alpha = 0.4f), modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("Difficoltà", color = Color.White, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("T", "E", "EE", "EEA").forEach { level ->
+                    val selected = level in filter.difficolta
+                    FilterChip(
+                        selected = selected,
+                        onClick = {
+                            val next = if (selected) filter.difficolta - level else filter.difficolta + level
+                            onChange(filter.copy(difficolta = next))
+                        },
+                        label = { Text(level, fontWeight = FontWeight.Bold) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = difficultyColor(level).copy(alpha = 0.25f),
+                            selectedLabelColor = difficultyColor(level),
+                            labelColor = Color.Gray,
+                            containerColor = TsmSurface,
+                        ),
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            FilterSlider(
+                label = "Dislivello max",
+                value = filter.dislivelloMax,
+                range = 0f..2500f,
+                step = 50,
+                noLimitAt = 2500,
+                formatValue = { "$it m" },
+                onCommit = { onChange(filter.copy(dislivelloMax = it)) },
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            FilterSlider(
+                label = "Distanza max",
+                value = filter.distanzaMaxKm,
+                range = 0f..30f,
+                step = 1,
+                noLimitAt = 30,
+                formatValue = { "$it km" },
+                onCommit = { onChange(filter.copy(distanzaMaxKm = it)) },
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            FilterSlider(
+                label = "Tempo max (andata)",
+                value = filter.tempoMaxMin,
+                range = 0f..600f,
+                step = 15,
+                noLimitAt = 600,
+                formatValue = { formatMinutes(it) },
+                onCommit = { onChange(filter.copy(tempoMaxMin = it)) },
+            )
+        }
+    }
+}
+
+/**
+ * Slider per una soglia massima. Il valore [noLimitAt] (estremo destro) equivale a
+ * "nessun limite" → emette `null` su [onCommit]. Mostra il valore live durante il drag.
+ */
+@Composable
+private fun FilterSlider(
+    label: String,
+    value: Int?,
+    range: ClosedFloatingPointRange<Float>,
+    step: Int,
+    noLimitAt: Int,
+    formatValue: (Int) -> String,
+    onCommit: (Int?) -> Unit,
+) {
+    var sliderValue by remember(value) { mutableStateOf((value ?: noLimitAt).toFloat()) }
+    val rounded = (Math.round(sliderValue / step) * step).coerceIn(range.start.toInt(), range.endInclusive.toInt())
+
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(label, color = Color.White, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+        Text(
+            if (rounded >= noLimitAt) "Nessun limite" else formatValue(rounded),
+            color = if (rounded >= noLimitAt) Color.Gray else TsmAccent,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+        )
+    }
+    Slider(
+        value = sliderValue,
+        onValueChange = { sliderValue = it },
+        valueRange = range,
+        onValueChangeFinished = {
+            val v = (Math.round(sliderValue / step) * step).coerceIn(range.start.toInt(), range.endInclusive.toInt())
+            onCommit(if (v >= noLimitAt) null else v)
+        },
+        colors = SliderDefaults.colors(
+            thumbColor = TsmAccent,
+            activeTrackColor = TsmAccent,
+            inactiveTrackColor = TsmSurfaceVariant,
+        ),
+    )
+}
+
+/** Etichetta marker: "Ruolo: Nome · quota m" (parti mancanti omesse). */
+private fun pointLabel(role: String, nome: String?, quota: Int?): String {
+    val tail = listOfNotNull(
+        nome?.takeIf { it.isNotBlank() },
+        quota?.let { "$it m" },
+    ).joinToString(" · ")
+    return if (tail.isEmpty()) role else "$role · $tail"
+}
+
+/** Minuti → "Xh YY" / "YY min". */
+private fun formatMinutes(min: Int): String {
+    val h = min / 60
+    val m = min % 60
+    return when {
+        h > 0 && m > 0 -> "${h}h ${m}min"
+        h > 0 -> "${h}h"
+        else -> "${m}min"
     }
 }
 

@@ -1,9 +1,15 @@
 package it.trentosmartmountain.app.ui.screens.session
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.view.View
+import android.widget.TextView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +29,7 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.infowindow.InfoWindow
 
 /** Categoria del marker, determina colore/dimensione del pin. */
 enum class SentieroMarkerType { DESTINATION, SELECTED_DESTINATION, START }
@@ -85,7 +92,7 @@ fun TsmSentieriMapView(
         Polyline(mapView).apply {
             id = SENTIERO_POLYLINE_ID
             outlinePaint.color = android.graphics.Color.parseColor("#FF7043")
-            outlinePaint.strokeWidth = 10f
+            outlinePaint.strokeWidth = 14f
         }
     }
 
@@ -94,7 +101,11 @@ fun TsmSentieriMapView(
     fun iconFor(type: SentieroMarkerType): Drawable =
         iconCache.getOrPut(type) { buildMarkerIcon(context.resources.displayMetrics.density, type) }
 
+    // Info window custom (tema scuro) condivisa da tutti i marker, al posto del bubble di default.
+    val sharedInfoWindow = remember(mapView) { TsmMarkerInfoWindow(mapView) }
+
     LaunchedEffect(markers, polyline) {
+        InfoWindow.closeAllInfoWindowsOn(mapView)
         mapView.overlays.clear()
 
         // Polyline (sotto i marker)
@@ -110,6 +121,7 @@ fun TsmSentieriMapView(
                 title = m.title
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                 icon = iconFor(m.type)
+                infoWindow = sharedInfoWindow
                 setOnMarkerClickListener { mk, _ ->
                     mk.showInfoWindow()
                     onMarkerClick(m.id)
@@ -163,4 +175,43 @@ private fun buildMarkerIcon(density: Float, type: SentieroMarkerType): Drawable 
     canvas.drawCircle(r, r, r - 2f * density, fill)
     canvas.drawCircle(r, r, r - 2f * density, stroke)
     return BitmapDrawable(android.content.res.Resources.getSystem(), bmp)
+}
+
+/**
+ * Info window in tema scuro che sostituisce il bubble di default di OSMdroid (layout bonuspack,
+ * sfondo bianco squadrato). Mostra il [Marker.getTitle] in una card arrotondata con bordo accent.
+ * Un tap sulla card la chiude.
+ */
+private class TsmMarkerInfoWindow(mapView: MapView) :
+    InfoWindow(buildInfoWindowView(mapView), mapView) {
+
+    override fun onOpen(item: Any?) {
+        val marker = item as? Marker ?: return
+        (view as? TextView)?.apply {
+            text = marker.title
+            setOnClickListener { close() }
+        }
+    }
+
+    override fun onClose() {}
+}
+
+/** Card arrotondata (TextView) usata come contenuto della [TsmMarkerInfoWindow]. */
+private fun buildInfoWindowView(mapView: MapView): View {
+    val ctx = mapView.context
+    val density = ctx.resources.displayMetrics.density
+    fun dp(value: Int) = (value * density).toInt()
+    return TextView(ctx).apply {
+        setTextColor(Color.WHITE)
+        textSize = 13f
+        typeface = Typeface.DEFAULT_BOLD
+        gravity = Gravity.CENTER
+        maxWidth = dp(240)
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        background = GradientDrawable().apply {
+            cornerRadius = dp(10).toFloat()
+            setColor(Color.parseColor("#2C2C2E"))
+            setStroke(dp(1).coerceAtLeast(1), Color.parseColor("#4FC3F7"))
+        }
+    }
 }

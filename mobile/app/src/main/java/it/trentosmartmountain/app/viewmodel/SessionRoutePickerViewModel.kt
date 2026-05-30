@@ -16,22 +16,49 @@ import org.osmdroid.util.GeoPoint
 import java.io.IOException
 
 /**
- * ViewModel del popup **"Scegli percorso sulla mappa"** (modalità DB sentieri).
+ * ViewModel del popup **"Scegli tra i percorsi suggeriti"** (modalità DB sentieri).
  *
  * State machine a tre step:
- *  1. [Step.Destinations] — marker di tutte le destinazioni;
+ *  1. [Step.Destinations] — marker delle destinazioni;
  *  2. [Step.TrailsForDestination] — sentieri che raggiungono la destinazione + start point;
  *  3. [Step.TrailDetail] — polyline completa + scheda info + conferma.
  *
- * Nessuna navigazione di screen: il dialog vive sopra la tab "Pianifica".
+ * **Sorgente dati**: all'apertura scarica una sola volta tutti i sentieri (senza coordinate)
+ * via `getAllSentieri`. Destinazioni, conteggi, filtri e ricerca sono calcolati **client-side**
+ * da questa lista; solo il dettaglio del sentiero scelto ([onTrailClick]) richiama il backend
+ * per ottenere `percorsoCoordinate`. Nessuna navigazione di screen: il dialog vive sopra "Pianifica".
  */
 class SessionRoutePickerViewModel : ViewModel() {
 
     enum class Step { Destinations, TrailsForDestination, TrailDetail }
 
+    /**
+     * Filtri applicati client-side ai sentieri: una destinazione è mostrata solo se ha almeno
+     * un sentiero che li soddisfa. I valori `null`/insieme vuoto significano "nessun limite".
+     * Vedi [RouteFilter.isActive] per il badge UI.
+     */
+    data class RouteFilter(
+        val difficolta: Set<String> = emptySet(),
+        val dislivelloMax: Int? = null,   // metri
+        val distanzaMaxKm: Int? = null,   // km
+        val tempoMaxMin: Int? = null,     // minuti (andata)
+    ) {
+        val activeCount: Int
+            get() = listOf(
+                difficolta.isNotEmpty(),
+                dislivelloMax != null,
+                distanzaMaxKm != null,
+                tempoMaxMin != null,
+            ).count { it }
+
+        val isActive: Boolean get() = activeCount > 0
+    }
+
     data class UiState(
         val step: Step = Step.Destinations,
         val destinations: List<SentieroDestinazioneDto> = emptyList(),
+        val filter: RouteFilter = RouteFilter(),
+        val searchQuery: String = "",
         val selectedDestination: SentieroDestinazioneDto? = null,
         val trailsForDestination: List<SentieroListItemDto> = emptyList(),
         val selectedTrailCode: String? = null,
@@ -39,29 +66,58 @@ class SessionRoutePickerViewModel : ViewModel() {
         val selectedTrailPolyline: List<GeoPoint> = emptyList(),
         val isLoading: Boolean = false,
         val error: String? = null,
-    )
+    ) {
+        /** Destinazioni filtrate client-side per la barra di ricerca (sul nome). */
+        val visibleDestinations: List<SentieroDestinazioneDto>
+            get() = if (searchQuery.isBlank()) {
+                destinations
+            } else {
+                destinations.filter { it.nome.contains(searchQuery.trim(), ignoreCase = true) }
+            }
+    }
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    private var destinationsLoaded = false
+    /** Cache locale di TUTTI i sentieri (senza coordinate): sorgente per destinazioni/filtri/ricerca. */
+    private var allTrails: List<SentieroListItemDto> = emptyList()
+    private var trailsLoaded = false
 
-    /** Carica le destinazioni una sola volta all'apertura del dialog. */
+    /** Carica i sentieri una sola volta all'apertura del dialog. */
     fun onOpen() {
-        if (destinationsLoaded || _uiState.value.isLoading) return
+        if (trailsLoaded || _uiState.value.isLoading) return
         loadDestinations()
     }
 
+    /** Aggiorna i filtri e ricalcola le destinazioni client-side (nessuna chiamata di rete). */
+    fun applyFilter(filter: RouteFilter) {
+        if (filter == _uiState.value.filter) return
+        _uiState.update { it.copy(filter = filter, destinations = computeDestinations(filter)) }
+    }
+
+    /** Azzera tutti i filtri (la ricerca testuale resta separata). */
+    fun clearFilter() = applyFilter(RouteFilter())
+
+    /** Aggiorna la query di ricerca (filtro client-side, nessuna chiamata di rete). */
+    fun onSearchQueryChange(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+    }
+
+    /** Scarica tutti i sentieri (una volta) e ricava le destinazioni con i filtri correnti. */
     fun loadDestinations() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val response = TsmApiClient.service().getSentieriDestinazioni()
+                val response = TsmApiClient.service().getAllSentieri()
                 if (response.isSuccessful) {
-                    val data = response.body()?.data.orEmpty()
-                    destinationsLoaded = true
+                    allTrails = response.body()?.data.orEmpty()
+                    trailsLoaded = true
                     _uiState.update {
-                        it.copy(isLoading = false, destinations = data, step = Step.Destinations)
+                        it.copy(
+                            isLoading = false,
+                            destinations = computeDestinations(it.filter),
+                            step = Step.Destinations,
+                        )
                     }
                 } else {
                     _uiState.update { it.copy(isLoading = false, error = "Errore server (${response.code()}).") }
@@ -74,34 +130,59 @@ class SessionRoutePickerViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Ricava le destinazioni dai sentieri in cache applicando [filter]: una destinazione è
+     * presente solo se ha ≥1 sentiero compatibile, e [SentieroDestinazioneDto.numeroSentieri]
+     * conta i sentieri compatibili. Ordinate per nome.
+     */
+    private fun computeDestinations(filter: RouteFilter): List<SentieroDestinazioneDto> =
+        allTrails
+            .filter { matchesFilter(it, filter) }
+            .groupBy { it.puntoFine?.nome }
+            .mapNotNull { (nome, trails) ->
+                if (nome.isNullOrBlank()) return@mapNotNull null
+                val pf = trails.first().puntoFine
+                SentieroDestinazioneDto(
+                    nome = nome,
+                    quota = pf?.quota,
+                    numeroSentieri = trails.size,
+                    coordinate = pf?.coordinate,
+                )
+            }
+            .sortedBy { it.nome }
+
+    /** Verifica che un sentiero soddisfi tutti i criteri del filtro (dato mancante = escluso). */
+    private fun matchesFilter(t: SentieroListItemDto, f: RouteFilter): Boolean {
+        if (f.difficolta.isNotEmpty() && t.difficolta?.uppercase() !in f.difficolta) return false
+        f.distanzaMaxKm?.let { maxKm ->
+            val km = (t.lunghezzaPlanimetrica ?: return false) / 1000.0
+            if (km > maxKm) return false
+        }
+        f.dislivelloMax?.let { maxD ->
+            val min = t.quotaMinima ?: return false
+            val max = t.quotaMassima ?: return false
+            if ((max - min).coerceAtLeast(0) > maxD) return false
+        }
+        f.tempoMaxMin?.let { maxT ->
+            val minutes = SentieroMappers.parseTempoToMinutes(t.tempoAndata) ?: return false
+            if (minutes > maxT) return false
+        }
+        return true
+    }
+
     fun onDestinationClick(dest: SentieroDestinazioneDto) {
+        // Sentieri della destinazione presi dalla cache (nessuna chiamata di rete).
+        val trails = allTrails.filter { it.puntoFine?.nome == dest.nome }
         _uiState.update {
             it.copy(
                 step = Step.TrailsForDestination,
                 selectedDestination = dest,
-                trailsForDestination = emptyList(),
+                trailsForDestination = trails,
                 selectedTrailCode = null,
                 selectedTrailDetail = null,
                 selectedTrailPolyline = emptyList(),
-                error = null,
+                error = if (trails.isEmpty()) "Nessun sentiero per questa destinazione." else null,
             )
-        }
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            try {
-                val response = TsmApiClient.service().getSentieriByDestinazione(dest.nome)
-                if (response.isSuccessful) {
-                    _uiState.update { it.copy(isLoading = false, trailsForDestination = response.body()?.data.orEmpty()) }
-                } else if (response.code() == 404) {
-                    _uiState.update { it.copy(isLoading = false, error = "Nessun sentiero per questa destinazione.") }
-                } else {
-                    _uiState.update { it.copy(isLoading = false, error = "Errore server (${response.code()}).") }
-                }
-            } catch (e: IOException) {
-                _uiState.update { it.copy(isLoading = false, error = "Nessuna connessione al server.") }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message ?: "Errore imprevisto.") }
-            }
         }
     }
 
@@ -173,8 +254,10 @@ class SessionRoutePickerViewModel : ViewModel() {
         }
     }
 
-    /** Reset completo: chiamato alla chiusura del dialog per ripartire pulito. */
+    /** Reset alla chiusura del dialog: torna allo step destinazioni mantenendo cache, filtri e ricerca. */
     fun reset() {
-        _uiState.update { UiState(destinations = it.destinations) }
+        _uiState.update {
+            UiState(destinations = it.destinations, filter = it.filter, searchQuery = it.searchQuery)
+        }
     }
 }

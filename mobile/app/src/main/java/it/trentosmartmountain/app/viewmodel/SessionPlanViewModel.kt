@@ -6,9 +6,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.CreateSessionRequest
+import it.trentosmartmountain.app.ui.util.ApiErrorMessages
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.data.remote.dto.GeoPoint
 import it.trentosmartmountain.app.data.remote.dto.GpxStats
 import it.trentosmartmountain.app.data.remote.dto.PlannedRoute
+import it.trentosmartmountain.app.data.remote.dto.PlannedRouteBbox
 import it.trentosmartmountain.app.data.remote.dto.PlannedRoutePoint
 import it.trentosmartmountain.app.data.remote.dto.SentieroDettaglioDto
 import it.trentosmartmountain.app.data.remote.dto.SessionRouteDetails
@@ -141,10 +144,17 @@ class SessionPlanViewModel : ViewModel() {
             _uiState.update { it.copy(generalError = "Inserisci un nome per l'escursione.") }
             return
         }
+        val meetingDateApi = SessionDateFormats.toApiOrNull(state.meetingDate)
+        if (state.meetingDate.isNotBlank() && meetingDateApi == null) {
+            _uiState.update {
+                it.copy(generalError = "Data non valida. Selezionala di nuovo dal calendario.")
+            }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, generalError = null) }
             try {
-                val request = buildCreateSessionRequest(state)
+                val request = buildCreateSessionRequest(state, meetingDateApi)
                 val response = TsmApiClient.service().createSession(request)
                 if (response.isSuccessful) {
                     val code = response.body()?.inviteCode ?: state.previewCode
@@ -152,7 +162,7 @@ class SessionPlanViewModel : ViewModel() {
                 } else {
                     val error = when (response.code()) {
                         409 -> "Sei già in una sessione attiva."
-                        else -> "Errore server (${response.code()})."
+                        else -> ApiErrorMessages.fromResponse(response)
                     }
                     _uiState.update { it.copy(isLoading = false, generalError = error) }
                 }
@@ -172,7 +182,7 @@ class SessionPlanViewModel : ViewModel() {
      *
      * Coerenza coordinate: il request GeoJSON usa `[lon, lat]`.
      */
-    private fun buildCreateSessionRequest(state: UiState): CreateSessionRequest {
+    private fun buildCreateSessionRequest(state: UiState, meetingDateApi: String?): CreateSessionRequest {
         val sentiero = state.selectedSentiero
         if (sentiero != null) {
             val polyline = SentieroMappers.parsePercorsoToGeoPoints(sentiero.percorsoCoordinate, maxPoints = 1000)
@@ -188,7 +198,7 @@ class SessionPlanViewModel : ViewModel() {
                     startPoint = sentiero.puntoInizio?.coordinate?.let { GeoPoint(coordinates = listOf(it.lon, it.lat)) },
                     endPoint = sentiero.puntoFine?.coordinate?.let { GeoPoint(coordinates = listOf(it.lon, it.lat)) },
                 ),
-                meetingDate = state.meetingDate.ifBlank { null },
+                meetingDate = meetingDateApi,
                 meetingTime = state.meetingTime.ifBlank { null },
                 maxParticipants = state.maxParticipants,
                 minExperienceLevel = SentieroMappers.normalizeDifficolta(sentiero.difficolta),
@@ -200,7 +210,9 @@ class SessionPlanViewModel : ViewModel() {
                     PlannedRoute(
                         source = "SAT",
                         polylinePoints = pts.map { PlannedRoutePoint(it.latitude, it.longitude) },
-                        bbox = SentieroMappers.boundingBox(pts),
+                        bbox = SentieroMappers.boundingBox(pts)?.let { (minLon, minLat, maxLon, maxLat) ->
+                            PlannedRouteBbox(minLat = minLat, minLon = minLon, maxLat = maxLat, maxLon = maxLon)
+                        },
                     )
                 },
             )
@@ -215,7 +227,7 @@ class SessionPlanViewModel : ViewModel() {
                 startPoint = gpx?.firstPoint?.let { GeoPoint(coordinates = listOf(it.second, it.first)) },
                 endPoint = gpx?.lastPoint?.let { GeoPoint(coordinates = listOf(it.second, it.first)) },
             ),
-            meetingDate = state.meetingDate.ifBlank { null },
+            meetingDate = meetingDateApi,
             meetingTime = state.meetingTime.ifBlank { null },
             maxParticipants = state.maxParticipants,
             minExperienceLevel = state.difficultyLevel,
@@ -234,7 +246,10 @@ class SessionPlanViewModel : ViewModel() {
                 PlannedRoute(
                     source = "GPX",
                     polylinePoints = pts.map { PlannedRoutePoint(it.first, it.second) },
-                    bbox = SentieroMappers.boundingBox(pts.map { org.osmdroid.util.GeoPoint(it.first, it.second) }),
+                    bbox = SentieroMappers.boundingBox(pts.map { org.osmdroid.util.GeoPoint(it.first, it.second) })
+                        ?.let { (minLon, minLat, maxLon, maxLat) ->
+                            PlannedRouteBbox(minLat = minLat, minLon = minLon, maxLat = maxLat, maxLon = maxLon)
+                        },
                 )
             },
         )

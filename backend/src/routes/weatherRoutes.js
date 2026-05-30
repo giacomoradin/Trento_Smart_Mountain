@@ -12,7 +12,6 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/authMiddleware.js";
 import { requireRoles } from "../middleware/authorizationMiddleware.js";
-// import corretto
 import {
   getLocationForecast,
   refreshLocationForecast,
@@ -29,7 +28,8 @@ const router = Router();
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
-// ─── Routes ───────────────────────────────────────────────────────────────────;
+// ─── Routes ───────────────────────────────────────────────────────────────────
+router.get('/test', (req, res) => res.json({ ok: true }));
 /**
  * GET /weather/locations/search
  * Query: q (required), type? ('town'|'poi'), limit? (default 10)
@@ -139,7 +139,9 @@ router.get(
  * Forza il refresh del forecast ignorando la cache.
  * Solo per towns (i POI non hanno forecast propri).
  *
- * Richiede autenticazione admin (JWT Bearer + role="admin").
+ * Protetta admin-only: la chiamata genera traffico verso meteo.report/TINIA
+ * (API esterne con rate limit). Senza auth, un utente potrebbe abusare per
+ * far esaurire la nostra quota.
  */
 router.post(
   "/forecast/:externalId/refresh",
@@ -166,7 +168,9 @@ router.post(
  * Popola il DB con tutte le towns e i POI dall'API.
  * Da chiamare una volta allo startup o tramite script di init.
  *
- * Richiede autenticazione admin (JWT Bearer + role="admin").
+ * Protetta admin-only: operazione costosa che riscrive l'intera collection
+ * delle location. Un utente non autenticato che la triggera potrebbe
+ * sovraccaricare il DB o spegnere il servizio.
  */
 router.post(
   "/seed",

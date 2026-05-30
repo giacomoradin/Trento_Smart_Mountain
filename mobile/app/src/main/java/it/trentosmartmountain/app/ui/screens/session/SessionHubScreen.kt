@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -100,12 +101,11 @@ import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
-import it.trentosmartmountain.app.data.session.SessionStartCoordinator
+import it.trentosmartmountain.app.data.session.SessionParticipationUi
+import it.trentosmartmountain.app.ui.components.SessionParticipationActions
 import it.trentosmartmountain.app.viewmodel.SessionJoinViewModel
 import it.trentosmartmountain.app.viewmodel.SessionPlanViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
 
 /**
  * Tab **Sessione** nella shell escursionista: due sotto-tab interni.
@@ -192,6 +192,9 @@ private fun SessionPlanTab(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val meetingDateDisplay = remember(uiState.meetingDate) {
+        SessionDateFormats.formatDisplayFromApi(uiState.meetingDate)
+    }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -250,8 +253,7 @@ private fun SessionPlanTab(
             confirmButton = {
                 TextButton(onClick = {
                     dateState.selectedDateMillis?.let { millis ->
-                        val fmt = SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN)
-                        viewModel.onMeetingDateChange(fmt.format(Date(millis)))
+                        viewModel.onMeetingDateChange(SessionDateFormats.formatApiFromMillis(millis))
                     }
                     showDatePicker = false
                 }) { Text("OK", color = TsmAccent) }
@@ -464,10 +466,10 @@ private fun SessionPlanTab(
                 Column(modifier = Modifier.weight(1f)) {
                     SessionFieldLabel(stringResource(R.string.session_date_label))
                     OutlinedTextField(
-                        value = uiState.meetingDate,
+                        value = meetingDateDisplay,
                         onValueChange = {},
                         modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true },
-                        placeholder = { Text("20 Mag 2026", color = Color.Gray) },
+                        placeholder = { Text(SessionDateFormats.formatDisplayFromApi("2026-05-26"), color = Color.Gray) },
                         singleLine = true,
                         readOnly = true,
                         enabled = false,
@@ -631,35 +633,30 @@ private fun SessionJoinTab(
     viewModel: SessionJoinViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val todayFormatted = remember {
-        SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
+    val avviaConfirmSession = uiState.avviaConfirmSessionId?.let { id ->
+        uiState.sessions.find { it._id == id }
     }
-
-    // Dialog conferma AVVIA quando la data della sessione non è oggi
-    // (identico al flusso di SessionDetailScreen.showAvviaConfirm)
-    var avviaConfirmSession by remember { mutableStateOf<SessionResponse?>(null) }
     avviaConfirmSession?.let { session ->
         AlertDialog(
-            onDismissRequest = { avviaConfirmSession = null },
+            onDismissRequest = viewModel::dismissAvviaConfirm,
             containerColor = TsmSurface,
-            title = { Text("Avviare in anticipo?", color = Color.White) },
+            title = { Text(stringResource(R.string.session_avvia_confirm_title), color = Color.White) },
             text = {
                 Text(
-                    "La sessione è pianificata per ${session.meetingDate ?: "un altro giorno"}. Vuoi avviarla ugualmente?",
+                    stringResource(
+                        R.string.session_avvia_confirm_body,
+                    ) + " " + SessionDateFormats.formatDisplayFromApi(session.meetingDate).ifBlank { "un altro giorno" },
                     color = Color.Gray,
                 )
             },
             confirmButton = {
                 Button(
-                    onClick = {
-                        SessionStartCoordinator.requestStart(session._id)
-                        avviaConfirmSession = null
-                    },
+                    onClick = viewModel::confirmLeaderStartEarly,
                     colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
                 ) { Text("Avvia") }
             },
             dismissButton = {
-                TextButton(onClick = { avviaConfirmSession = null }) {
+                TextButton(onClick = viewModel::dismissAvviaConfirm) {
                     Text("Annulla", color = Color.Gray)
                 }
             },
@@ -806,26 +803,31 @@ private fun SessionJoinTab(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(stringResource(R.string.session_join_sessions_header), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp), color = Color.Gray)
-                    Text(uiState.sessions.size.toString(), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = TsmAccent)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(uiState.sessions.size.toString(), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = TsmAccent)
+                        IconButton(
+                            onClick = viewModel::loadSessions,
+                            enabled = !uiState.isLoadingSessions,
+                        ) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "Aggiorna lista", tint = TsmAccent)
+                        }
+                    }
                 }
                 uiState.sessions.forEach { session ->
-                    val isToday = session.meetingDate == todayFormatted
+                    val isToday = SessionDateFormats.isTodayApi(session.meetingDate)
                     val isCreator = session.creatorId?._id == uiState.currentUserId
+                    val participation = viewModel.participationUi(session)
                     SessionCard(
                         session = session,
                         isToday = isToday,
                         isCreator = isCreator,
+                        participationUi = participation,
                         onDetailClick = { onNavigateToDetail(session._id) },
-                        onAvviaClick = {
-                            // Stessa logica di SessionDetailScreen.AVVIA ESCURSIONE:
-                            // se è il giorno pianificato → avvio diretto via Coordinator;
-                            // altrimenti → dialog conferma (stessa UX del detail screen).
-                            if (isToday) {
-                                SessionStartCoordinator.requestStart(session._id)
-                            } else {
-                                avviaConfirmSession = session
-                            }
-                        },
+                        onLeaderStart = { viewModel.requestLeaderStart(session) },
+                        onLeaderStop = { viewModel.leaderStop(session._id) },
+                        onJoinLive = { viewModel.joinLive(session._id) },
+                        onSoloPractice = { viewModel.startSoloPractice(session._id) },
+                        onLeaveLive = { viewModel.leaveLive(session._id) },
                         onRemoveClick = { viewModel.requestRemoveSession(session) },
                     )
                 }
@@ -940,12 +942,18 @@ private fun SessionCard(
     session: it.trentosmartmountain.app.data.remote.dto.SessionResponse,
     isToday: Boolean,
     isCreator: Boolean,
+    participationUi: SessionParticipationUi,
     onDetailClick: () -> Unit,
-    onAvviaClick: () -> Unit,
+    onLeaderStart: () -> Unit,
+    onLeaderStop: () -> Unit,
+    onJoinLive: () -> Unit,
+    onSoloPractice: () -> Unit,
+    onLeaveLive: () -> Unit,
     onRemoveClick: () -> Unit,
 ) {
     val name = session.routeDetails?.name ?: "Sessione"
-    val dateTime = listOfNotNull(session.meetingDate, session.meetingTime).joinToString(" · ")
+    val dateLabel = session.meetingDate?.let { SessionDateFormats.formatDisplayFromApi(it) }.orEmpty()
+    val dateTime = listOfNotNull(dateLabel.takeIf { it.isNotBlank() }, session.meetingTime).joinToString(" · ")
     val host = session.creatorId?.username?.let { "host $it" } ?: ""
     val subtitle = listOf(dateTime, host).filter { it.isNotBlank() }.joinToString(" · ")
     val distKm = session.gpxStats?.distanceKm?.let { "%.1f km".format(it) }
@@ -1007,30 +1015,28 @@ private fun SessionCard(
                         color = TsmAccent,
                     )
                 }
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = null,
-                    tint = Color.Gray,
-                    modifier = Modifier.size(20.dp).alpha(0.5f),
-                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            SessionParticipationActions(
+                ui = participationUi,
+                onLeaderStart = onLeaderStart,
+                onLeaderStop = onLeaderStop,
+                onJoinLive = onJoinLive,
+                onSoloPractice = onSoloPractice,
+                onLeaveLive = onLeaveLive,
+                compact = true,
+            )
+
+            if (participationUi.primary != null || participationUi.showLeaveLive) {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isToday && session.status == "PLANNED") {
-                    Button(
-                        onClick = onAvviaClick,
-                        modifier = Modifier.weight(1f).height(40.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        Text(stringResource(R.string.session_card_avvia), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
-                    }
-                }
                 OutlinedButton(
                     onClick = onRemoveClick,
-                    modifier = Modifier.weight(if (isToday && session.status == "PLANNED") 1f else 2f).height(40.dp),
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, TsmSos),
                     shape = RoundedCornerShape(8.dp),
                 ) {

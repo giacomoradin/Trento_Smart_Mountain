@@ -21,10 +21,17 @@ class AuthRepositoryImpl(
     return try {
       val response = api.login(LoginRequest(email = email, password = password))
       if (response.isSuccessful) {
-        val token = response.body()?.token
-        if (token != null) {
-          // Persistenza JWT per sessioni successive e AuthInterceptor
-          tokenStorage.saveToken(token)
+        val body = response.body()
+        val accessToken = body?.accessToken ?: body?.token
+        if (accessToken != null) {
+          // Persistenza access + refresh per AuthInterceptor + TsmAuthenticator.
+          // Su server pre-refresh, refreshToken sarà null — l'app continua a
+          // funzionare ma senza rotation automatica.
+          tokenStorage.saveTokens(
+            accessToken = accessToken,
+            refreshToken = body?.refreshToken,
+            refreshExpiresAtIso = body?.refreshExpiresAt,
+          )
           LoginResult.Success
         } else {
           LoginResult.Failure("Risposta senza token.")

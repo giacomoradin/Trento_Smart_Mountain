@@ -1,4 +1,4 @@
-import Sentiero from "../models/Sentiero.js";
+import Sentiero from "../models/sentiero.js";
 
 /**
  * Servizio dedicato ai **sentieri SAT** (mountain pathways).

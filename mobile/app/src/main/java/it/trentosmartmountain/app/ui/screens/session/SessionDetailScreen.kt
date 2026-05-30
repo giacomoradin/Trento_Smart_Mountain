@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -58,6 +59,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -80,12 +82,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
-import it.trentosmartmountain.app.data.session.SessionStartCoordinator
+import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.ui.components.SessionParticipationActions
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmBorder
@@ -94,12 +98,17 @@ import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.SessionDetailViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.abs
+import it.trentosmartmountain.app.viewmodel.SocialFeedViewModel
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
+import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.screens.home.ShareActivityDialog
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 /**
  * Dettaglio escursione (navigazione full-screen sopra [HikerMainScreen]).
@@ -120,14 +129,46 @@ fun SessionDetailScreen(
     onAvviaConfirmed: (sessionId: String) -> Unit = {},
     currentUserId: String = "",
     viewModel: SessionDetailViewModel = viewModel(),
+    // VM social Activity-scoped: stesso usato da HomeSocialScreen + Activity
+    // Detail. Il dialog "Pubblica" chiama `shareSession()` e poi `refresh()`
+    // del feed così la sessione appare immediatamente nel feed dell'utente.
+    socialFeedViewModel: SocialFeedViewModel = viewModel(
+        viewModelStoreOwner = LocalContext.current as ComponentActivity,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+            (LocalContext.current as ComponentActivity).application,
+        ),
+    ),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val todayFormatted = remember {
-        SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date())
-    }
-    
+    val socialState by socialFeedViewModel.state.collectAsStateWithLifecycle()
+    var showShareDialog by remember { mutableStateOf(false) }
     // Per debug: mostra un Toast con l'errore se il ViewModel segnala un errore di caricamento o salvataggio della sessione
     val context = LocalContext.current
+
+    // Toast per esiti share (VM Activity-scoped → notifica visibile qui).
+    LaunchedEffect(socialState.shareSuccess) {
+        socialState.shareSuccess?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            socialFeedViewModel.clearShareMessages()
+        }
+    }
+    LaunchedEffect(socialState.shareError) {
+        socialState.shareError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            socialFeedViewModel.clearShareMessages()
+        }
+    }
+
+    if (showShareDialog) {
+        ShareActivityDialog(
+            activityName = uiState.session?.routeDetails?.name.orEmpty(),
+            onDismiss = { showShareDialog = false },
+            onShare = { caption ->
+                showShareDialog = false
+                socialFeedViewModel.shareSession(sessionId, caption)
+            },
+        )
+    }
 
     // TELEMETRIA: Se il ViewModel genera un errore (es. dal salvataggio), stampalo a schermo
     LaunchedEffect(uiState.error) {
@@ -139,24 +180,31 @@ fun SessionDetailScreen(
     }
 
     LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
+    LaunchedEffect(currentUserId) { viewModel.bindCurrentUserId(currentUserId) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, sessionId) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.loadSession(sessionId)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     if (uiState.showAvviaConfirm) {
         AlertDialog(
             onDismissRequest = viewModel::dismissAvviaConfirm,
             containerColor = TsmSurface,
-            title = { Text("Avviare in anticipo?", color = Color.White) },
+            title = { Text(stringResource(R.string.session_avvia_confirm_title), color = Color.White) },
             text = {
                 Text(
-                    "La sessione è pianificata per ${uiState.session?.meetingDate ?: "un altro giorno"}. Vuoi avviarla ugualmente?",
+                    stringResource(R.string.session_avvia_confirm_body),
                     color = Color.Gray,
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.dismissAvviaConfirm()
-                        SessionStartCoordinator.requestStart(sessionId)
-                        onAvviaConfirmed(sessionId)
+                        viewModel.confirmLeaderStartEarly { onAvviaConfirmed(sessionId) }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
                 ) { Text("Avvia") }
@@ -186,7 +234,7 @@ fun SessionDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     dateState.selectedDateMillis?.let { millis ->
-                        viewModel.onEditDateChange(SimpleDateFormat("dd MMM yyyy", Locale.ITALIAN).format(Date(millis)))
+                        viewModel.onEditDateChange(SessionDateFormats.formatApiFromMillis(millis))
                     }
                     showEditDatePicker = false
                 }) { Text("OK", color = TsmAccent) }
@@ -218,7 +266,7 @@ fun SessionDetailScreen(
 
     val session = uiState.session
     val isCreator = session?.creatorId?._id == currentUserId || currentUserId.isBlank()
-    val isToday = session?.meetingDate == todayFormatted
+    val isToday = SessionDateFormats.isTodayApi(session?.meetingDate)
 
     Scaffold(
         containerColor = TsmBackground,
@@ -239,7 +287,9 @@ fun SessionDetailScreen(
                             }
                         }
                         val subtitle = buildString {
-                            session?.meetingDate?.let { append(it) }
+                            session?.meetingDate?.let {
+                                append(SessionDateFormats.formatDisplayFromApi(it))
+                            }
                             session?.meetingTime?.let { append(" · $it") }
                             session?.creatorId?.username?.let { append(" · host $it") }
                         }
@@ -399,7 +449,7 @@ fun SessionDetailScreen(
             }
 
             MeteoCard(
-                meetingDate = session.meetingDate ?: "—",
+                meetingDate = SessionDateFormats.formatDisplayFromApi(session.meetingDate).ifBlank { "—" },
                 uiState = uiState,
                 onRefresh = viewModel::refreshMeteo,
             )
@@ -408,49 +458,50 @@ fun SessionDetailScreen(
 
             ParticipantsCard(session = session)
 
-            // Il pulsante AVVIA è riservato al Capogruppo (creator).
-            // Solo lui può cambiare lo stato della sessione a ACTIVE sul server
-            // (PATCH /sessions/:id/status è protetto da controllo creatorId).
-            if (isCreator && session.status == "PLANNED") {
-                Button(
-                    onClick = {
-                        viewModel.onAvviaClick(todayFormatted) {
-                            SessionStartCoordinator.requestStart(sessionId)
-                            onAvviaConfirmed(sessionId)
-                        }
+            val participation = remember(uiState.session, uiState.liveUiEpoch, currentUserId) {
+                viewModel.participationUi()
+            }
+            if (participation != null) {
+                SessionParticipationActions(
+                    ui = participation,
+                    onLeaderStart = {
+                        viewModel.requestLeaderStart { onAvviaConfirmed(sessionId) }
                     },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
+                    onLeaderStop = { viewModel.leaderStop() },
+                    onJoinLive = {
+                        viewModel.joinLive { onAvviaConfirmed(sessionId) }
+                    },
+                    onSoloPractice = {
+                        viewModel.startSoloPractice { onAvviaConfirmed(sessionId) }
+                    },
+                    onLeaveLive = { viewModel.leaveLive() },
+                    compact = false,
+                    leaderStartLabel = stringResource(R.string.session_detail_avvia),
+                    leaderStopLabel = stringResource(R.string.session_detail_arresta),
+                )
+            }
+
+            // Bottone Condividi sul feed — solo creator (lato server stesso
+            // vincolo via FORBIDDEN_NOT_CREATOR). Visibile in qualsiasi stato
+            // della sessione (PLANNED → "annuncia uscita", COMPLETED → "racconta").
+            if (isCreator) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { showShareDialog = true },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmAccent),
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Text("▶ AVVIA ESCURSIONE", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-                }
-            } else if (!isCreator && session.status == "PLANNED") {
-                // Partecipante: avvisare che l'avvio spetta al Capogruppo
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = TsmSurfaceVariant,
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Text(
-                        text = "⏳  In attesa che il Capogruppo avvii la sessione",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
+                    androidx.compose.material3.Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
                     )
-                }
-            } else if (session.status == "ACTIVE") {
-                Button(
-                    onClick = {
-                        SessionStartCoordinator.requestStart(sessionId)
-                        onAvviaConfirmed(sessionId)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Text("▶ UNISCITI AL TRACKING", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "CONDIVIDI SUL FEED",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    )
                 }
             }
 
@@ -479,7 +530,8 @@ private fun EditModeCard(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
-                    value = uiState.editDate, onValueChange = {},
+                    value = SessionDateFormats.formatDisplayFromApi(uiState.editDate),
+                    onValueChange = {},
                     label = { Text("DATA", color = Color.Gray) },
                     modifier = Modifier.weight(1f).clickable { onDateClick() }, readOnly = true, enabled = false,
                     leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null, tint = TsmAccent) },
@@ -917,19 +969,19 @@ private fun ParticipantsCard(session: SessionResponse) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             participants.forEach { p ->
                 val username = p.userId?.username ?: "?"
-                val initials = username.split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercaseChar()?.toString() }.joinToString("")
-                val avatarColor = avatarColorFor(username)
                 val isCreator = p.role == "groupLeader"
-
+                // Borda accent solo per il creator; usiamo un Box wrapper così la
+                // border non interferisce con il clip circolare dell'AvatarImage.
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(CircleShape)
-                        .background(avatarColor)
                         .then(if (isCreator) Modifier.border(2.dp, TsmAccent, CircleShape) else Modifier),
-                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(initials.take(2), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                    AvatarImage(
+                        avatarUrl = p.userId?.avatarUrl,
+                        fallbackName = username,
+                        size = 40.dp,
+                    )
                 }
             }
             val emptySlots = (max - participants.size).coerceIn(0, 4)
@@ -943,14 +995,6 @@ private fun ParticipantsCard(session: SessionResponse) {
             }
         }
     }
-}
-
-private fun avatarColorFor(username: String): Color {
-    val palette = listOf(
-        Color(0xFF1B5E20), Color(0xFF01579B), Color(0xFF37474F),
-        Color(0xFF4A148C), Color(0xFF006064), Color(0xFF3E2723),
-    )
-    return palette[abs(username.hashCode()) % palette.size]
 }
 
 @Composable

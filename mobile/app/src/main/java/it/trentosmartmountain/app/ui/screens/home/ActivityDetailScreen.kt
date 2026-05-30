@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RadioButtonChecked
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -95,13 +96,55 @@ fun ActivityDetailScreen(
             LocalContext.current.applicationContext as Application,
         ),
     ),
+    // VM Activity-scoped per il social feed: il dialog "Condividi" usa questo
+    // per chiamare share + ricaricare il feed; lo stesso VM è osservato dalla
+    // HomeSocialScreen così l'utente vede il post in cima subito dopo Pubblica.
+    socialFeedViewModel: it.trentosmartmountain.app.viewmodel.SocialFeedViewModel = viewModel(
+        viewModelStoreOwner = LocalContext.current as androidx.activity.ComponentActivity,
+        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
+            (LocalContext.current as androidx.activity.ComponentActivity).application,
+        ),
+    ),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var showShareDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(activityId) { viewModel.load(activityId, sessionId) }
+
+    if (showShareDialog) {
+        ShareActivityDialog(
+            activityName = uiState.name,
+            onDismiss = { showShareDialog = false },
+            onShare = { caption ->
+                showShareDialog = false
+                // Distingue share di session (gruppo) da activity (libera):
+                // se l'attività ha sessionId, è una sessione completata e
+                // la condivisione passa per /sessions/:id/share. Authorization
+                // server-side: solo creator può condividere la sessione.
+                if (sessionId.isNullOrBlank()) {
+                    // Lo share di un'attività libera richiede l'ID backend (ObjectId
+                    // MongoDB), NON l'id Room locale (che per le attività registrate
+                    // sul device è un UUID → 422 "ID non valido"). Usiamo il remoteId,
+                    // disponibile solo dopo la sincronizzazione.
+                    val remoteId = uiState.local?.remoteId
+                    if (remoteId != null) {
+                        socialFeedViewModel.shareActivity(remoteId, caption)
+                    } else {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Sincronizza l'attività prima di condividerla.",
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                } else {
+                    socialFeedViewModel.shareSession(sessionId, caption)
+                }
+            },
+        )
+    }
 
     // GPX export via "Create Document" — Android mostra il document picker
     val gpxExportLauncher = rememberLauncherForActivityResult(
@@ -306,6 +349,18 @@ fun ActivityDetailScreen(
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
+                    // Condividi sul feed sociale (apre dialog "Pubblica" con caption opzionale)
+                    Button(
+                        onClick = { showShareDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = TsmAccent),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Icon(Icons.Outlined.Share, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("CONDIVIDI SUL FEED", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
                     // Download GPX
                     Button(
                         onClick = {
@@ -333,25 +388,11 @@ fun ActivityDetailScreen(
             if (!participants.isNullOrEmpty()) {
                 Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = TsmSurface) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "PARTECIPANTI · ${participants.size}",
-                                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
-                                color = Color.Gray,
-                            )
-                            Surface(color = TsmPrimary.copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
-                                Text(
-                                    "Tutti arrivati",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TsmPrimary,
-                                )
-                            }
-                        }
+                        Text(
+                            "PARTECIPANTI · ${participants.size}",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                            color = Color.Gray,
+                        )
                         Spacer(modifier = Modifier.height(10.dp))
                         participants.forEach { p ->
                             val name = p.userId?.username ?: "Utente"

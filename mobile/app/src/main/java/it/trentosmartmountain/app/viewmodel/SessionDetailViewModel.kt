@@ -1,8 +1,15 @@
 package it.trentosmartmountain.app.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import it.trentosmartmountain.app.data.remote.TsmApiClient
+import it.trentosmartmountain.app.data.session.SessionLiveController
+import it.trentosmartmountain.app.data.session.SessionParticipationResolver
+import it.trentosmartmountain.app.data.session.SessionParticipationUi
+import it.trentosmartmountain.app.data.session.UserSessionLiveState
+import it.trentosmartmountain.app.ui.util.ApiErrorMessages
+import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateRouteDetails
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
@@ -18,7 +25,11 @@ import java.util.UUID
 /**
  * Dettaglio sessione: caricamento da API, modifica capogruppo, checklist locale, meteo.
  */
-class SessionDetailViewModel : ViewModel() {
+class SessionDetailViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val liveController = SessionLiveController(application)
+    var currentUserId: String = ""
+        private set
 
     /** Elemento della checklist escursionistica (stato solo locale, non ancora persistito). */
     data class ChecklistItem(
@@ -48,10 +59,22 @@ class SessionDetailViewModel : ViewModel() {
         val meteoLoading: Boolean = false,
         val meteoError: String? = null,
         val meteoLastUpdate: Long? = null, // System.currentTimeMillis()
+        val liveUiEpoch: Int = 0,
     )
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    fun bindCurrentUserId(userId: String) {
+        currentUserId = userId
+    }
+
+    fun participationUi(): SessionParticipationUi? {
+        val session = _uiState.value.session ?: return null
+        val isCreator = session.creatorId?._id == currentUserId
+        val local = liveController.localState(session._id)
+        return SessionParticipationResolver.resolve(session, isCreator, local)
+    }
 
     fun loadSession(sessionId: String) {
         viewModelScope.launch {
@@ -168,9 +191,16 @@ class SessionDetailViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
+                val meetingDateApi = SessionDateFormats.toApiOrNull(state.editDate)
+                if (state.editDate.isNotBlank() && meetingDateApi == null) {
+                    _uiState.update {
+                        it.copy(isSaving = false, error = "Data non valida. Selezionala di nuovo dal calendario.")
+                    }
+                    return@launch
+                }
                 val body = UpdateSessionRequest(
                     routeDetails = UpdateRouteDetails(name = state.editName, difficultyLevel = state.editDifficulty),
-                    meetingDate = state.editDate.ifBlank { null },
+                    meetingDate = meetingDateApi,
                     meetingTime = state.editTime.ifBlank { null },
                     maxParticipants = state.editMaxParticipants,
                 )
@@ -187,13 +217,10 @@ class SessionDetailViewModel : ViewModel() {
                     }
                     silentReloadSession(sessionId) // Ricarica in background
                 } else {
-                    // 3. SEGNALAZIONE FALLIMENTO (Senza riaprire la tendina)
-                    val errorBody = response.errorBody()?.string() ?: "Errore Sconosciuto"
                     _uiState.update {
                         it.copy(
                             isSaving = false,
-                            // Lasciamo editMode = false per confermare che l'input UI funziona.
-                            error = "HTTP ${response.code()}: $errorBody" 
+                            error = ApiErrorMessages.fromResponse(response),
                         )
                     }
                 }
@@ -260,18 +287,73 @@ class SessionDetailViewModel : ViewModel() {
         }
     }
 
-    // --- AVVIA ---
+    // --- Live sessione (stato locale) ---
 
-    fun onAvviaClick(todayFormatted: String, onNavigate: () -> Unit) {
-        val meetingDate = _uiState.value.session?.meetingDate ?: ""
-        if (meetingDate.isBlank() || meetingDate == todayFormatted) {
+    fun requestLeaderStart(onNavigate: () -> Unit) {
+        val session = _uiState.value.session ?: return
+        if (SessionDateFormats.isTodayApi(session.meetingDate)) {
+            liveController.leaderStart(session._id)
             onNavigate()
         } else {
             _uiState.update { it.copy(showAvviaConfirm = true) }
         }
     }
 
+    fun confirmLeaderStartEarly(onNavigate: () -> Unit) {
+        val session = _uiState.value.session ?: return
+        liveController.leaderStart(session._id)
+        _uiState.update { it.copy(showAvviaConfirm = false) }
+        onNavigate()
+    }
+
     fun dismissAvviaConfirm() = _uiState.update { it.copy(showAvviaConfirm = false) }
+
+    fun leaderStop() {
+        val sessionId = _uiState.value.session?._id ?: return
+        liveController.leaderStop(viewModelScope, sessionId)
+        bumpLiveUi()
+        reloadSessionQuiet(sessionId)
+    }
+
+    fun joinLive(onNavigate: () -> Unit) {
+        val sessionId = _uiState.value.session?._id ?: return
+        liveController.joinLive(sessionId)
+        bumpLiveUi()
+        onNavigate()
+    }
+
+    fun leaveLive() {
+        val session = _uiState.value.session ?: return
+        val local = liveController.localState(session._id)
+        if (local == UserSessionLiveState.SOLO_PRACTICE) {
+            liveController.endSoloPractice(session._id)
+        } else {
+            liveController.leaveLive(session._id)
+        }
+        bumpLiveUi()
+    }
+
+    fun startSoloPractice(onNavigate: () -> Unit) {
+        val sessionId = _uiState.value.session?._id ?: return
+        liveController.startSoloPractice(sessionId)
+        bumpLiveUi()
+        onNavigate()
+    }
+
+    private fun bumpLiveUi() {
+        _uiState.update { it.copy(liveUiEpoch = it.liveUiEpoch + 1) }
+    }
+
+    private fun reloadSessionQuiet(sessionId: String) {
+        viewModelScope.launch {
+            runCatching {
+                val response = TsmApiClient.service().getSessionById(sessionId)
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(session = response.body()) }
+                }
+            }
+        }
+    }
 
     // ── METEO (API meteo.report/TINIA via backend di Marco) ──
 
@@ -283,13 +365,14 @@ class SessionDetailViewModel : ViewModel() {
      *   2. GET /weather/locations/nearby?lon=&lat=&type=town&limit=1 → town più vicina
      *   3. GET /weather/forecast/:externalId → slots3h (prossime 48h) + slots24h (7 giorni)
      *
-     * Se il DB non è seedato (POST /weather/seed) o non ci sono stazioni nel raggio,
-     * la MeteoCard mostra un messaggio di errore con bottone Riprova.
+     * Se il DB non ha stazioni nel raggio richiesto, la MeteoCard mostra un messaggio
+     * di errore con bottone Riprova (DB è auto-seedato all'avvio backend con 601 towns
+     * + 108 POI, vedi weatherService.seedLocations).
      *
      * Cache server-side: 1h. Il refresh manuale dalla UI chiama con forceRefresh=true.
      *
-     * TODO — quando il DB è seedato in produzione:
-     *   - Aggiungere polling ogni 5 min con LaunchedEffect + delay(5 * 60_000L)
+     * Enhancements futuri (Sprint 3):
+     *   - Polling ogni 5 min con LaunchedEffect + delay(5 * 60_000L) per sessione attiva
      *   - Storico giorni precedenti via slot24h con filtro su validFrom
      *   - Room cache offline per le sessioni già visualizzate
      */

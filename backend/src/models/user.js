@@ -32,6 +32,10 @@ const userSchema = new Schema(
      * Ruoli per-sessione dell'utente (popolati da hikeSessionService).
      * Mantenuti nello schema base perché un utente di qualunque tipo
      * (escursionista, rifugio admin) può creare/partecipare a sessioni.
+     *
+     * NOTA: i campi rifugioDetails (rifugioName, caiCode, quota, posti, coordinates)
+     * sono stati spostati nel discriminator Refuge (vedi models/refuge.js) dopo il
+     * refactor 2026-05 split User → Hiker/Refuge/Admin. Non vanno reintrodotti qui.
      */
     sessionRoles: [
       {

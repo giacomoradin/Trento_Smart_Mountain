@@ -87,4 +87,13 @@ data class CompletedActivityEntity(
     // Null finché non è stato sincronizzato almeno una volta.
     @ColumnInfo(name = "remote_id")
     val remoteId: String? = null,
+
+    // Tombstone locale: 1 quando l'utente ha eliminato l'attività dalla lista.
+    // Le sessioni di gruppo COMPLETED non possono essere cancellate sul backend
+    // (appartengono anche agli altri partecipanti), quindi senza questo flag il
+    // sync `syncCompletedSessionsToRoom` le re-importerebbe ad ogni riavvio.
+    // La riga resta in tabella come tombstone: i controlli di esistenza del sync
+    // la vedono e saltano la re-importazione, mentre le query di lista la escludono.
+    @ColumnInfo(name = "hidden", defaultValue = "0")
+    val hidden: Boolean = false,
 )

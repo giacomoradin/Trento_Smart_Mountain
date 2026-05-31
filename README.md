@@ -1,6 +1,7 @@
-
 ## Checklist escursione
+
 ![Architettura Checklist](docs/checklist_architecture.svg)
+
 La checklist viene generata automaticamente per ogni sessione in stato `PLANNED` a partire dai dati del sentiero SAT e, opzionalmente, dalle previsioni meteo.
 
 ### Endpoint
@@ -11,7 +12,7 @@ La checklist viene generata automaticamente per ogni sessione in stato `PLANNED`
 | `PUT` | `/api/v1/sessions/:id/checklist` | Rigenera con meteo aggiornato |
 | `GET` | `/api/v1/sessions/:id/checklist` | Legge la checklist (tutti i partecipanti) |
 
-### Body richiesto (POST e PUT)
+### Body (POST e PUT)
 
 ```json
 {
@@ -21,7 +22,10 @@ La checklist viene generata automaticamente per ogni sessione in stato `PLANNED`
 }
 ```
 
-`sentieroCode` è obbligatorio. `locationId` e `partenza` sono opzionali — senza meteo la checklist viene generata comunque dai dati del sentiero; senza `partenza` si assume la `meetingDate` della sessione alle 08:00 UTC.
+Tutti i campi sono opzionali:
+- `sentieroCode` — se assente, viene usato `session.sentieroCode` salvato sulla sessione. Per sessioni GPX senza codice SAT, la checklist viene generata dai dati GPX (distanza, dislivello, durata)
+- `locationId` — se assente, la checklist viene generata senza dati meteo
+- `partenza` — se assente, si assume la `meetingDate` della sessione alle 08:00 UTC
 
 ### Struttura della checklist
 
@@ -45,3 +49,26 @@ I fattori considerati sono:
 ### Freeze
 
 La checklist si congela alla **mezzanotte UTC del giorno prima** della `meetingDate`. Dopo il freeze qualsiasi chiamata `PUT` restituisce `403` con il timestamp di freeze. La data di freeze è esposta anche nel `GET` per permettere al client di mostrare il countdown.
+
+---
+
+## Filtri sentieri
+
+L'endpoint `GET /api/v1/sentieri` supporta filtri server-side opzionali.
+
+### Parametri
+
+| Parametro | Tipo | Descrizione | Esempio |
+|-----------|------|-------------|---------|
+| `difficolta` | string | Difficoltà CAI esatta | `E` |
+| `destinazione` | string | Nome destinazione (parziale, case-insensitive) | `Rifugio` |
+| `dislivelloMax` | integer | Differenza quotaMassima - quotaMinima in metri | `800` |
+| `distanzaMax` | integer | Distanza planimetrica massima in metri | `10000` |
+| `tempoMax` | string | Tempo massimo di andata (formato `HH:MM`) | `03:30` |
+| `limit` | integer | Numero massimo di risultati (default 100) | `50` |
+
+### Esempio
+
+```
+GET /api/v1/sentieri?difficolta=E&dislivelloMax=800&distanzaMax=10000&tempoMax=03:30
+```

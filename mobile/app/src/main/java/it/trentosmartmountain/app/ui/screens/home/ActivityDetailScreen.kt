@@ -72,6 +72,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.estimation.HikeEstimation
+import it.trentosmartmountain.app.data.remote.dto.RoutePoint
+import it.trentosmartmountain.app.ui.components.TsmRouteMapPreview
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
@@ -329,18 +331,17 @@ fun ActivityDetailScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp)
-                            .clip(RoundedCornerShape(8.dp)).background(TsmSurfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (uiState.trackPoints.isNotEmpty()) {
-                            Text(
-                                "Mappa · ${uiState.trackPoints.size} punti GPS",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TsmAccent,
-                            )
-                        } else {
+                    if (uiState.trackPoints.isNotEmpty()) {
+                        TsmRouteMapPreview(
+                            points = uiState.trackPoints.map { RoutePoint(it.first, it.second) },
+                            modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(8.dp)),
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(200.dp)
+                                .clip(RoundedCornerShape(8.dp)).background(TsmSurfaceVariant),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Outlined.RadioButtonChecked, null, tint = Color.Gray, modifier = Modifier.size(32.dp))
                                 Text("Nessun tracciato GPS disponibile", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -726,15 +727,15 @@ private fun buildGpxString(
 
 // ── Badges significativi ──
 
-private data class BadgeInfo(val emoji: String, val title: String, val subtitle: String, val bgColor: Color, val textColor: Color)
+private data class ActivityBadgeInfo(val emoji: String, val title: String, val subtitle: String, val bgColor: Color, val textColor: Color)
 
 /**
  * Badge basati su soglie reali dell'escursionismo CAI.
  * Ogni badge ha una soglia significativa + un subtitolo con il valore effettivo.
  * L'efficienza (μ) dal modello TSM guida i badge di performance.
  */
-private fun buildBadges(uiState: ActivityDetailViewModel.UiState): List<BadgeInfo> {
-    val badges = mutableListOf<BadgeInfo>()
+private fun buildBadges(uiState: ActivityDetailViewModel.UiState): List<ActivityBadgeInfo> {
+    val badges = mutableListOf<ActivityBadgeInfo>()
     val distKm = uiState.distanceKm
     val elevM = uiState.elevationGainM
     val movingH = uiState.movingSeconds / 3600.0
@@ -742,47 +743,47 @@ private fun buildBadges(uiState: ActivityDetailViewModel.UiState): List<BadgeInf
     val mu = if (movingH > 0 && tNom > 0) (tNom / movingH).coerceIn(0.0, 2.0) else 0.0
 
     // 🏔 Alpinista: dislivello ≥ 1000m (soglia escursionismo EE/EEA)
-    if (elevM >= 1000) badges.add(BadgeInfo(
+    if (elevM >= 1000) badges.add(ActivityBadgeInfo(
         "🏔", "Alpinista",
         "+${elevM}m · soglia EE superata",
         Color(0xFF4A148C).copy(alpha = 0.25f), Color(0xFFCE93D8),
     ))
     // ⛰ Quotista: dislivello 500-999m
-    else if (elevM >= 500) badges.add(BadgeInfo(
+    else if (elevM >= 500) badges.add(ActivityBadgeInfo(
         "⛰", "Quotista",
         "+${elevM}m D+",
         Color(0xFF1A237E).copy(alpha = 0.25f), Color(0xFF90CAF9),
     ))
 
     // 🏃 In Forma: μ > 1.1 = più veloce del 10% rispetto al ritmo CAI
-    if (mu > 1.1) badges.add(BadgeInfo(
+    if (mu > 1.1) badges.add(ActivityBadgeInfo(
         "🏃", "In Forma",
         "Ritmo +${((mu - 1) * 100).roundToInt()}% CAI",
         Color(0xFF1B5E20).copy(alpha = 0.25f), TsmPrimary,
     ))
     // 🐢 Passo Costante: 0.9 ≤ μ ≤ 1.1 = nella media CAI (ottimo per safety)
-    else if (mu in 0.9..1.1) badges.add(BadgeInfo(
+    else if (mu in 0.9..1.1) badges.add(ActivityBadgeInfo(
         "🎯", "Passo Costante",
         "Ritmo in linea CAI",
         Color(0xFF004D40).copy(alpha = 0.25f), TsmAccent,
     ))
 
     // 🗺 Lungo cammino: ≥ 20km
-    if (distKm >= 20) badges.add(BadgeInfo(
+    if (distKm >= 20) badges.add(ActivityBadgeInfo(
         "🗺", "Lungo Cammino",
         "%.1f km percorsi".format(distKm),
         Color(0xFFE65100).copy(alpha = 0.25f), Color(0xFFFF9800),
     ))
 
     // ⭐ Punti bonus: se μ_clip = 1.2 (massima efficienza)
-    if (mu >= 1.15) badges.add(BadgeInfo(
+    if (mu >= 1.15) badges.add(ActivityBadgeInfo(
         "⭐", "Efficienza Max",
         "${uiState.points ?: 0} pt bonus",
         Color(0xFFF57F17).copy(alpha = 0.25f), Color(0xFFFFD700),
     ))
 
     // ✅ Completato: sempre presente (almeno un badge)
-    if (badges.isEmpty()) badges.add(BadgeInfo(
+    if (badges.isEmpty()) badges.add(ActivityBadgeInfo(
         "✅", "Completato",
         "%.1f km · +${elevM}m".format(distKm),
         Color(0xFF212121).copy(alpha = 0.5f), Color(0xFF888888),

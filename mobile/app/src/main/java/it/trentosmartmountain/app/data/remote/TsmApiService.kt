@@ -165,6 +165,13 @@ interface TsmApiService {
   @POST("api/v1/board")
   suspend fun createBoardPost(@Body body: CreateBoardPostRequest): Response<BoardPost>
 
+  /** Modifica un proprio post della bacheca (autore o admin). */
+  @PATCH("api/v1/board/{id}")
+  suspend fun updateBoardPost(
+    @Path("id") id: String,
+    @Body body: CreateBoardPostRequest,
+  ): Response<BoardPost>
+
   /** Elimina un post della bacheca (autore o admin). */
   @DELETE("api/v1/board/{id}")
   suspend fun deleteBoardPost(@Path("id") id: String): Response<ApiMessageBody>

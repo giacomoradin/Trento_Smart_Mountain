@@ -224,6 +224,10 @@ data class PublicUserProfile(
     @SerializedName("username") val username: String?,
     @SerializedName("email") val email: String? = null,
     @SerializedName("isVerified") val isVerified: Boolean? = null,
+    /** True se il profilo è limitato per visibilità (private / friends-non-seguito). */
+    @SerializedName("restricted") val restricted: Boolean? = null,
+    /** "public" | "friends" | "private" — presente quando restricted. */
+    @SerializedName("visibility") val visibility: String? = null,
     @SerializedName("socialCredits") val socialCredits: Int? = null,
     @SerializedName("personalInfo") val personalInfo: FeedUserPersonalInfo? = null,
 ) {

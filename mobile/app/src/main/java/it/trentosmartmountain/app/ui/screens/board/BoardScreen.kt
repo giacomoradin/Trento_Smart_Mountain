@@ -21,13 +21,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -43,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,23 +59,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.remote.dto.BoardPost
+import it.trentosmartmountain.app.ui.components.ListSkeleton
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.util.RelativeTime
 import it.trentosmartmountain.app.viewmodel.BoardViewModel
 
-private val DarkSurface = Color(0xFF1C1C1E)
-private val CardBg = Color(0xFF2C2C2E)
-private val Cyan = Color(0xFF4DD0E1)
-private val TextSecondary = Color(0xFF8E8E93)
+private val DarkSurface = TsmColors.FeedBackground
+private val CardBg = TsmColors.CardElevated
+private val Cyan = TsmColors.Cyan
+private val TextSecondary = TsmColors.TextSecondary
 
-private val DangerRed = Color(0xFFE53935)
-private val WarnOrange = Color(0xFFFB8C00)
-private val InfoBlue = Color(0xFF29B6F6)
+private val DangerRed = TsmColors.Offline
+private val WarnOrange = TsmColors.Warning
+private val InfoBlue = TsmColors.Info
 
 /**
  * Bacheca rifugi.
@@ -87,6 +96,7 @@ fun BoardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showCompose by remember { mutableStateOf(false) }
+    var editPost by remember { mutableStateOf<BoardPost?>(null) }
 
     LaunchedEffect(manage) { viewModel.load(manage) }
     LaunchedEffect(state.message) {
@@ -108,7 +118,7 @@ fun BoardScreen(
             TopAppBar(
                 title = {
                     Text(
-                        if (manage) "La mia bacheca" else "Bacheca rifugi",
+                        stringResource(if (manage) R.string.board_title_manage else R.string.board_title_user),
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                     )
@@ -124,20 +134,19 @@ fun BoardScreen(
         floatingActionButton = {
             if (manage) {
                 FloatingActionButton(onClick = { showCompose = true }, containerColor = Cyan) {
-                    Icon(Icons.Filled.Add, contentDescription = "Nuovo post", tint = DarkSurface)
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_new_post), tint = DarkSurface)
                 }
             }
         },
     ) { padding ->
         when {
-            state.isLoading && state.items.isEmpty() -> Centered(padding) { CircularProgressIndicator(color = Cyan) }
+            state.isLoading && state.items.isEmpty() -> ListSkeleton(modifier = Modifier.padding(padding))
             state.items.isEmpty() -> Centered(padding) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("📋", style = MaterialTheme.typography.displaySmall)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        if (manage) "Non hai ancora pubblicato nulla.\nTocca + per creare un avviso."
-                        else "Nessuna comunicazione dai rifugi al momento.",
+                        stringResource(if (manage) R.string.board_empty_manage else R.string.board_empty_user),
                         color = TextSecondary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -154,7 +163,8 @@ fun BoardScreen(
                 items(state.items, key = { it._id }) { post ->
                     BoardPostCard(
                         post = post,
-                        canDelete = manage,
+                        canManage = manage,
+                        onEdit = { editPost = post },
                         onDelete = { viewModel.delete(post._id) },
                     )
                 }
@@ -162,20 +172,28 @@ fun BoardScreen(
         }
     }
 
-    if (showCompose) {
+    if (showCompose || editPost != null) {
         ComposeDialog(
+            initial = editPost,
             isSubmitting = state.isSubmitting,
-            onDismiss = { showCompose = false },
-            onPublish = { type, title, body ->
-                viewModel.create(type, title, body) { showCompose = false }
+            onDismiss = { showCompose = false; editPost = null },
+            onPublish = { type, title, body, validUntil ->
+                val target = editPost
+                if (target != null) {
+                    viewModel.update(target._id, type, title, body, validUntil) {
+                        showCompose = false; editPost = null
+                    }
+                } else {
+                    viewModel.create(type, title, body, validUntil) { showCompose = false }
+                }
             },
         )
     }
 }
 
 @Composable
-private fun BoardPostCard(post: BoardPost, canDelete: Boolean, onDelete: () -> Unit) {
-    val (color, icon, label) = typeStyle(post.type)
+private fun BoardPostCard(post: BoardPost, canManage: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
+    val (color, icon) = typeStyle(post.type)
     Surface(shape = RoundedCornerShape(12.dp), color = CardBg, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -186,13 +204,16 @@ private fun BoardPostCard(post: BoardPost, canDelete: Boolean, onDelete: () -> U
                     ) {
                         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text(label, color = color, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(boardBadgeRes(post.type)), color = color, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                if (canDelete) {
+                if (canManage) {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.cd_edit), tint = TextSecondary, modifier = Modifier.size(18.dp))
+                    }
                     IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Filled.DeleteOutline, contentDescription = "Elimina", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.DeleteOutline, contentDescription = stringResource(R.string.cd_delete), tint = TextSecondary, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -202,7 +223,7 @@ private fun BoardPostCard(post: BoardPost, canDelete: Boolean, onDelete: () -> U
             Text(post.body, color = Color(0xFFD0D0D5), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
             Text(
-                "${post.refugeName} · ${RelativeTime.short(post.createdAt)}",
+                stringResource(R.string.board_footer, post.refugeName, RelativeTime.short(post.createdAt)),
                 color = TextSecondary,
                 style = MaterialTheme.typography.labelSmall,
             )
@@ -213,32 +234,41 @@ private fun BoardPostCard(post: BoardPost, canDelete: Boolean, onDelete: () -> U
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ComposeDialog(
+    initial: BoardPost?,
     isSubmitting: Boolean,
     onDismiss: () -> Unit,
-    onPublish: (type: String, title: String, body: String) -> Unit,
+    onPublish: (type: String, title: String, body: String, validUntil: String?) -> Unit,
 ) {
-    var type by remember { mutableStateOf("info") }
-    var title by remember { mutableStateOf("") }
-    var body by remember { mutableStateOf("") }
+    var type by remember { mutableStateOf(initial?.type ?: "info") }
+    var title by remember { mutableStateOf(initial?.title ?: "") }
+    var body by remember { mutableStateOf(initial?.body ?: "") }
+    var validUntilMs by remember { mutableStateOf(isoToMillis(initial?.validUntil)) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     AlertDialog(
         containerColor = CardBg,
         onDismissRequest = onDismiss,
-        title = { Text("Nuovo post", color = Color.White, fontWeight = FontWeight.Bold) },
+        title = {
+            Text(
+                stringResource(if (initial != null) R.string.board_edit_post else R.string.board_new_post),
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+            )
+        },
         text = {
             Column {
-                Text("CATEGORIA", color = TextSecondary, style = MaterialTheme.typography.labelSmall, letterSpacing = 1.sp)
+                Text(stringResource(R.string.board_category), color = TextSecondary, style = MaterialTheme.typography.labelSmall, letterSpacing = 1.sp)
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TypeChip("Info", "info", type) { type = it }
-                    TypeChip("Avviso", "avviso", type) { type = it }
-                    TypeChip("Pericolo", "pericolo", type) { type = it }
+                    TypeChip(stringResource(R.string.board_type_info), "info", type) { type = it }
+                    TypeChip(stringResource(R.string.board_type_avviso), "avviso", type) { type = it }
+                    TypeChip(stringResource(R.string.board_type_pericolo), "pericolo", type) { type = it }
                 }
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = title,
                     onValueChange = { if (it.length <= 120) title = it },
-                    placeholder = { Text("Titolo", color = TextSecondary) },
+                    placeholder = { Text(stringResource(R.string.board_title_hint), color = TextSecondary) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = fieldColors(),
@@ -247,32 +277,77 @@ private fun ComposeDialog(
                 OutlinedTextField(
                     value = body,
                     onValueChange = { if (it.length <= 2000) body = it },
-                    placeholder = { Text("Testo della comunicazione", color = TextSecondary) },
+                    placeholder = { Text(stringResource(R.string.board_body_hint), color = TextSecondary) },
                     modifier = Modifier.fillMaxWidth().height(120.dp),
                     colors = fieldColors(),
                 )
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.board_deadline), color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { showDatePicker = true }) {
+                        Text(validUntilMs?.let { formatDate(it) } ?: stringResource(R.string.board_deadline_none), color = Cyan)
+                    }
+                    if (validUntilMs != null) {
+                        IconButton(onClick = { validUntilMs = null }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_remove_deadline), tint = TextSecondary, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onPublish(type, title, body) },
+                onClick = { onPublish(type, title, body, validUntilMs?.let { millisToIso(it) }) },
                 enabled = !isSubmitting && title.isNotBlank() && body.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = Cyan),
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(color = DarkSurface, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                 } else {
-                    Text("Pubblica", color = DarkSurface, fontWeight = FontWeight.Bold)
+                    Text(stringResource(if (initial != null) R.string.board_save else R.string.board_publish), color = DarkSurface, fontWeight = FontWeight.Bold)
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla", color = TextSecondary) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel), color = TextSecondary) } },
     )
+
+    if (showDatePicker) {
+        val dpState = rememberDatePickerState(initialSelectedDateMillis = validUntilMs)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = { validUntilMs = dpState.selectedDateMillis; showDatePicker = false }) {
+                    Text(stringResource(R.string.action_ok), color = Cyan)
+                }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text(stringResource(R.string.action_cancel), color = TextSecondary) } },
+        ) { DatePicker(state = dpState) }
+    }
 }
+
+// ── Helpers data ─────────────────────────────────────────────────────────────
+
+private fun isoToMillis(iso: String?): Long? {
+    if (iso.isNullOrBlank()) return null
+    return runCatching {
+        val cleaned = iso.substringBefore(".").removeSuffix("Z").take(19)
+        java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+            .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+            .parse(cleaned)!!.time
+    }.getOrNull()
+}
+
+private fun millisToIso(ms: Long): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+        .format(java.util.Date(ms))
+
+private fun formatDate(ms: Long): String =
+    java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.ITALIAN).format(java.util.Date(ms))
 
 @Composable
 private fun TypeChip(label: String, value: String, selected: String, onSelect: (String) -> Unit) {
-    val (color, _, _) = typeStyle(value)
+    val (color, _) = typeStyle(value)
     FilterChip(
         selected = selected == value,
         onClick = { onSelect(value) },
@@ -296,10 +371,17 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
     cursorColor = Cyan,
 )
 
-private fun typeStyle(type: String): Triple<Color, ImageVector, String> = when (type) {
-    "pericolo" -> Triple(DangerRed, Icons.Filled.Warning, "PERICOLO")
-    "avviso" -> Triple(WarnOrange, Icons.Filled.Campaign, "AVVISO")
-    else -> Triple(InfoBlue, Icons.Filled.Info, "INFO")
+private fun typeStyle(type: String): Pair<Color, ImageVector> = when (type) {
+    "pericolo" -> DangerRed to Icons.Filled.Warning
+    "avviso" -> WarnOrange to Icons.Filled.Campaign
+    else -> InfoBlue to Icons.Filled.Info
+}
+
+/** Etichetta (string resource) del badge categoria. */
+private fun boardBadgeRes(type: String): Int = when (type) {
+    "pericolo" -> R.string.board_badge_pericolo
+    "avviso" -> R.string.board_badge_avviso
+    else -> R.string.board_badge_info
 }
 
 @Composable

@@ -24,8 +24,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -36,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmRouteMapPreview
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.theme.difficultyColor
 import it.trentosmartmountain.app.ui.util.RelativeTime
@@ -78,6 +88,7 @@ fun FeedCard(
     onLikeToggle: () -> Unit,
     onCommentClick: () -> Unit = {},
     onUserClick: (userId: String) -> Unit = {},
+    onOpenDetail: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val route = item.routePolyline
@@ -86,7 +97,20 @@ fun FeedCard(
     val hasProfile = profile != null && profile.size >= 2
     val haptic = LocalHapticFeedback.current
 
+    // "Pop" del cuore quando si AGGIUNGE il like (transizione false→true),
+    // non al primo render di un post già likato (evita pop durante lo scroll).
+    val likeScale = remember { Animatable(1f) }
+    var likedPrev by remember { mutableStateOf(item.likedByMe) }
+    LaunchedEffect(item.likedByMe) {
+        if (item.likedByMe && !likedPrev) {
+            likeScale.animateTo(1.35f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            likeScale.animateTo(1f)
+        }
+        likedPrev = item.likedByMe
+    }
+
     Card(
+        onClick = onOpenDetail,
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
         shape = RoundedCornerShape(16.dp),
@@ -260,6 +284,7 @@ fun FeedCard(
                         imageVector = if (item.likedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                         contentDescription = if (item.likedByMe) "Rimuovi like" else "Metti like",
                         tint = if (item.likedByMe) AccentRed else TextSecondary,
+                        modifier = Modifier.scale(likeScale.value),
                     )
                 }
                 Text(
@@ -299,10 +324,9 @@ private fun RouteHero(item: FeedItem, route: List<it.trentosmartmountain.app.dat
             .height(176.dp)
             .background(Brush.verticalGradient(listOf(HeroTop, HeroBottom))),
     ) {
-        RouteTracePreview(
+        TsmRouteMapPreview(
             points = route,
             modifier = Modifier.fillMaxWidth().height(176.dp),
-            lineColor = AccentCyan,
         )
         item.difficultyLevel?.let { diff ->
             DifficultyChip(

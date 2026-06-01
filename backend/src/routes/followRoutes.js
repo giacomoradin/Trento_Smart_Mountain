@@ -33,6 +33,7 @@ import {
   getFeedForUser,
   getPostsByUser,
   getSocialRowForUser,
+  searchUsers,
 } from "../services/socialService.js";
 
 const router = express.Router();
@@ -41,6 +42,23 @@ router.use(authenticate);
 router.use(authenticatedLimiter);
 
 // ── Me-relative: precedono i :id-relative per priorità di matching ──────
+
+/**
+ * GET /api/v1/users/search?q=&limit= — ricerca escursionisti per username.
+ *
+ * Cuore del flusso "aggiungi amici": match parziale case-insensitive, esclude
+ * il viewer, ritorna `{ items: [{ user, isFollowedByMe }] }`. Path statico
+ * definito prima dei `:id`-relative per evitare qualsiasi ambiguità di match.
+ */
+router.get("/search", async (req, res, next) => {
+  try {
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const result = await searchUsers(req.user.userId, req.query.q, { limit });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
 /** GET /api/v1/users/me/following — lista paginata di chi seguo. */
 router.get("/me/following", async (req, res, next) => {
@@ -119,6 +137,42 @@ router.get(
     try {
       const stats = await getFollowStats(req.params.id, req.user.userId);
       res.status(200).json(stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * GET /api/v1/users/:id/followers — follower di un utente qualsiasi.
+ * Stessa shape di /me/followers; abilita la navigazione del grafo sociale
+ * (tap sul contatore FOLLOWER del profilo di un altro utente).
+ */
+router.get(
+  "/:id/followers",
+  validate(followIdParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const result = await getFollowers(req.params.id, { page, limit });
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/** GET /api/v1/users/:id/following — utenti seguiti da un utente qualsiasi. */
+router.get(
+  "/:id/following",
+  validate(followIdParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const result = await getFollowing(req.params.id, { page, limit });
+      res.status(200).json(result);
     } catch (err) {
       next(err);
     }

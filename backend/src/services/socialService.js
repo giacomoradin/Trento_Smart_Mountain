@@ -193,6 +193,72 @@ async function getVisibilityForAuthors(authorIds) {
   return map;
 }
 
+// ── DISCOVERY / RICERCA UTENTI ──────────────────────────────────────────────
+
+/**
+ * Ricerca escursionisti per username (case-insensitive, match parziale).
+ *
+ * Usata dalla schermata "Cerca persone da seguire" del mobile: alimenta il
+ * flusso "aggiungi amici" del social (follow asimmetrico).
+ *
+ *  - Esclude il viewer stesso dai risultati.
+ *  - Restituisce solo campi pubblici (`username`, `personalInfo.avatarUrl`),
+ *    coerente con userPrivacy.js.
+ *  - `isFollowedByMe` per ogni risultato → la UI mostra subito "Segui"/"Seguito"
+ *    senza una seconda query per riga.
+ *  - Ordina i non-ancora-seguiti per primi (più utili da scoprire), poi A→Z.
+ *
+ * Sicurezza: i metacaratteri regex nel termine vengono escapati per prevenire
+ * regex injection / ReDoS. Termine < 2 caratteri → nessun risultato (evita
+ * di restituire l'intero DB su query vuote).
+ *
+ * @param {string|ObjectId} viewerId  utente che cerca (per escludere sé + isFollowedByMe)
+ * @param {string} q                  termine di ricerca (username, parziale)
+ * @param {{limit?:number}} opts      cap risultati (default 20, max 50)
+ */
+export async function searchUsers(viewerId, q, { limit = 20 } = {}) {
+  const term = (q ?? "").trim();
+  if (term.length < 2) return { items: [] };
+
+  // Escape dei metacaratteri regex: il termine arriva dall'utente, non deve
+  // poter alterare il pattern (ReDoS / match imprevisti).
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(escaped, "i");
+  const safeLimit = Math.min(Math.max(1, limit), 50);
+
+  const docs = await Hiker.find({
+    username: regex,
+    _id: { $ne: viewerId },
+  })
+    .select("username personalInfo.avatarUrl")
+    .limit(safeLimit)
+    .lean();
+
+  // Una sola query per sapere quali risultati il viewer segue già.
+  const followingIds = new Set(
+    (await getFollowingIds(viewerId)).map((id) => String(id)),
+  );
+
+  const items = docs.map((d) => ({
+    user: {
+      _id: String(d._id),
+      username: d.username,
+      personalInfo: d.personalInfo?.avatarUrl
+        ? { avatarUrl: d.personalInfo.avatarUrl }
+        : null,
+    },
+    isFollowedByMe: followingIds.has(String(d._id)),
+  }));
+
+  // Non-seguiti prima (scoperta), poi ordine alfabetico per stabilità.
+  items.sort((a, b) => {
+    if (a.isFollowedByMe !== b.isFollowedByMe) return a.isFollowedByMe ? 1 : -1;
+    return (a.user.username || "").localeCompare(b.user.username || "");
+  });
+
+  return { items };
+}
+
 // ── FEED AGGREGATOR ─────────────────────────────────────────────────────────
 
 /**

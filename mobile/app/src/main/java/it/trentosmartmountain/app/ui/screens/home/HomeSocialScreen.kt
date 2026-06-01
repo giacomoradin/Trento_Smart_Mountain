@@ -5,16 +5,25 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
@@ -72,6 +82,8 @@ fun HomeSocialScreen(
     onLiveClick: (sessionId: String) -> Unit = {},
     /** Tap su anello STORY: apre lo StoryViewerScreen full-screen. */
     onStoryClick: (refId: String, kind: String) -> Unit = { _, _ -> },
+    /** Tap sulla barra "Trova persone": apre la ricerca utenti ("aggiungi amici"). */
+    onSearchClick: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -94,11 +106,14 @@ fun HomeSocialScreen(
     }
 
     Surface(modifier = modifier.fillMaxSize(), color = DarkSurface) {
+      Column(modifier = Modifier.fillMaxSize()) {
+        SearchEntryBar(onClick = onSearchClick)
         PullToRefreshBox(
             // Lo spinner pull-to-refresh va mostrato solo durante un refresh CON
             // contenuti già a schermo; il primo caricamento usa TsmLoadingState.
             isRefreshing = state.isLoading && state.items.isNotEmpty(),
             onRefresh = { viewModel.refresh() },
+            modifier = Modifier.weight(1f),
         ) {
             when {
                 state.isLoading && state.items.isEmpty() -> TsmLoadingState()
@@ -141,6 +156,7 @@ fun HomeSocialScreen(
                 )
             }
         }
+      }
     }
 
     // BottomSheet condivisa: si apre solo quando `commentsTarget != null`.
@@ -151,6 +167,39 @@ fun HomeSocialScreen(
         // più refresh totale del feed (che ricaricava tutto e perdeva lo scroll).
         onCountChanged = viewModel::setCommentCount,
     )
+}
+
+/**
+ * Barra "Trova persone da seguire" in cima al feed: non è un campo editabile,
+ * è un bottone che apre la schermata di ricerca utenti dedicata (flusso
+ * "aggiungi amici"). Stile coerente con una search bar per affordance chiara.
+ */
+@Composable
+private fun SearchEntryBar(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF2C2C2E),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Filled.Search,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "Trova persone da seguire",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
 }
 
 @Composable

@@ -62,6 +62,8 @@ fun HikerMainScreen(
   onNavigateToUserProfile: (userId: String) -> Unit = {},
   // Tap su anello story della AvatarRow → apre StoryViewerScreen full-screen.
   onNavigateToStoryViewer: (refId: String, kind: String) -> Unit = { _, _ -> },
+  // Tap sulla barra "Trova persone" del feed → apre la ricerca utenti.
+  onNavigateToUserSearch: () -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
   // Scope Activity: il polling live/SOS continua anche se l'utente è su un'altra tab.
@@ -120,6 +122,7 @@ fun HikerMainScreen(
         onNavigateToUserProfile = onNavigateToUserProfile,
         onNavigateToSessionDetail = onNavigateToSessionDetail,
         onNavigateToStoryViewer = onNavigateToStoryViewer,
+        onNavigateToUserSearch = onNavigateToUserSearch,
       )
       HikerTab.Session -> SessionHubScreen(
         modifier = Modifier.padding(innerPadding),

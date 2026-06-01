@@ -31,6 +31,12 @@ object TsmColors {
     val HeroBottom = Color(0xFF101012)
     /** Linea divisore sottile su superfici scure. */
     val Divider = Color(0xFF34343A)
+    /** Sfondo near-black della Dashboard IoT rifugio (mockup). */
+    val DashboardBackground = Color(0xFF0D0D0F)
+    /** Card della Dashboard IoT. */
+    val DashboardCard = Color(0xFF161618)
+    /** Bordo sottile delle card Dashboard IoT. */
+    val DashboardBorder = Color(0xFF242428)
 
     // ── Accenti ───────────────────────────────────────────────────────────
     /** Ciano del cluster Social (azioni, anelli story, link). */
@@ -41,6 +47,18 @@ object TsmColors {
     val Danger = Color(0xFFFF6B6B)
     /** Oro punteggio/crediti. */
     val Gold = Color(0xFFFFC107)
+    /** Verde "online / verificato" (più saturo del Success). */
+    val Online = Color(0xFF4CAF50)
+    /** Rosso "offline / pericolo" forte (≠ Danger affettivo del like). */
+    val Offline = Color(0xFFE53935)
+    /** Arancione "avviso". */
+    val Warning = Color(0xFFFB8C00)
+    /** Blu "info / sensori" (cluster IoT). */
+    val Info = Color(0xFF29B6F6)
+    /** Pesca — umidità (sensori). */
+    val Peach = Color(0xFFE0A87E)
+    /** Verde — vento (sensori). */
+    val Wind = Color(0xFF9CCC65)
 
     // ── Testo ─────────────────────────────────────────────────────────────
     /** Testo primario quasi-bianco (più morbido del bianco puro su nero). */
@@ -49,6 +67,8 @@ object TsmColors {
     val TextSecondary = Color(0xFF8E8E93)
     /** Grigio metadati leggermente più chiaro (meta-riga card, stati neutri). */
     val TextTertiary = Color(0xFF9A9AA0)
+    /** Testo molto attenuato (sotto-metadati, es. "ult: 2h fa"). */
+    val TextDim = Color(0xFF6B6B70)
 }
 
 /**

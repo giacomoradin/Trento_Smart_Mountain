@@ -238,4 +238,124 @@
   <string name="group_roster_reason_no_signal">Posizione non disponibile</string>
   <string name="group_roster_reason_manual">Escluso manualmente</string>
   <string name="group_roster_reason_other">Tracking sospeso</string>
+
+  <!-- ══ Sprint 3: Social, Notifiche, Rifugio, Bacheca ══ -->
+
+  <!-- Ricerca utenti -->
+  <string name="search_title">Trova persone</string>
+  <string name="search_hint">Cerca per username</string>
+  <string name="search_initial">Digita almeno 2 caratteri per cercare altri escursionisti da seguire.</string>
+  <string name="search_no_results">Nessun utente trovato per \"%1$s\".</string>
+  <string name="action_follow">Segui</string>
+  <string name="action_followed">Seguito</string>
+  <string name="cd_clear">Cancella</string>
+
+  <!-- Liste follower/seguiti -->
+  <string name="followers_title">Follower</string>
+  <string name="following_title">Seguiti</string>
+  <string name="followers_empty">Nessun follower.</string>
+  <string name="following_empty">Non segue ancora nessuno.</string>
+
+  <!-- Classifica settimanale -->
+  <string name="leaderboard_title">Classifica settimanale</string>
+  <string name="leaderboard_subtitle">Ultimi 7 giorni · tu e chi segui</string>
+  <string name="leaderboard_metric_km">Km</string>
+  <string name="leaderboard_metric_elev">Dislivello</string>
+  <string name="leaderboard_metric_points">Punti</string>
+  <string name="leaderboard_empty">Nessuna attività questa settimana.\nEsci a camminare o segui altri escursionisti!</string>
+  <string name="leaderboard_you_suffix">%1$s (tu)</string>
+  <plurals name="leaderboard_outings">
+    <item quantity="one">%1$d uscita</item>
+    <item quantity="other">%1$d uscite</item>
+  </plurals>
+
+  <!-- Notifiche -->
+  <string name="notifications_title">Notifiche</string>
+  <string name="notifications_empty">Nessuna notifica per ora.\nQuando qualcuno ti segue o interagisce coi tuoi post, lo vedrai qui.</string>
+  <string name="notif_follow">%1$s ha iniziato a seguirti</string>
+  <string name="notif_like_activity">%1$s ha messo \"Mi piace\" alla tua attività</string>
+  <string name="notif_like_session">%1$s ha messo \"Mi piace\" alla tua uscita di gruppo</string>
+  <string name="notif_comment_activity">%1$s ha commentato la tua attività</string>
+  <string name="notif_comment_session">%1$s ha commentato la tua uscita di gruppo</string>
+  <string name="notif_generic">%1$s ha interagito con te</string>
+
+  <!-- Gate privacy profilo -->
+  <string name="profile_private_title">Questo profilo è privato</string>
+  <string name="profile_friends_title">Profilo visibile solo agli amici</string>
+  <string name="profile_private_msg">L\'utente ha scelto di non mostrare le proprie attività.</string>
+  <string name="profile_friends_msg">Segui questo utente per vedere le sue attività.</string>
+  <string name="profile_follows_you">Ti segue</string>
+
+  <!-- Home social: barre / azioni -->
+  <string name="social_search_bar">Trova persone da seguire</string>
+  <string name="cd_leaderboard">Classifica settimanale</string>
+  <string name="cd_notifications">Notifiche</string>
+  <string name="cd_board">Bacheca rifugi</string>
+
+  <!-- Voce Profilo: bacheca -->
+  <string name="profile_board_title">Bacheca rifugi</string>
+  <string name="profile_board_subtitle">Avvisi e segnalazioni dai rifugi</string>
+
+  <!-- Dashboard IoT rifugio -->
+  <string name="refuge_dashboard_title">Dashboard IoT</string>
+  <string name="refuge_dashboard_header">RIFUGIO</string>
+  <string name="refuge_live">LIVE</string>
+  <string name="refuge_sensors_header">SENSORI EDGE NODES · 4 ATTIVI</string>
+  <string name="sensor_temp">TEMPERATURA EST.</string>
+  <string name="sensor_humidity">UMIDITÀ</string>
+  <string name="sensor_wind">VENTO</string>
+  <string name="sensor_pressure">PRESSIONE</string>
+  <string name="sensor_wind_unit">km/h %1$s</string>
+  <string name="sensor_gust">raff. %1$d</string>
+  <string name="edge_nodes_header">EDGE NODES BLE-MESH</string>
+  <string name="edge_online_badge">%1$d/%2$d ONLINE</string>
+  <string name="node_signal">segnale</string>
+  <string name="node_offline">OFFLINE</string>
+  <string name="node_last_seen_min">ult: %1$dm fa</string>
+  <string name="node_last_seen_hour">ult: %1$dh fa</string>
+  <string name="node_last_seen_day">ult: %1$dg fa</string>
+  <string name="passages_header">PASSAGGI OGGI · SOCIAL CREDITS</string>
+  <string name="passage_line">passato alle %1$s · via %2$s</string>
+  <string name="refuge_dashboard_unavailable">Dashboard non disponibile.</string>
+  <string name="action_retry">Riprova</string>
+  <string name="cd_refuge_profile">Profilo rifugio</string>
+
+  <!-- Profilo rifugio -->
+  <string name="refuge_profile_title">Profilo rifugio</string>
+  <string name="refuge_label">Rifugio</string>
+  <string name="refuge_verified">✓ Verificato</string>
+  <string name="refuge_stat_quota">QUOTA</string>
+  <string name="refuge_stat_posti">POSTI</string>
+  <string name="refuge_board_menu_title">La mia bacheca</string>
+  <string name="refuge_board_menu_subtitle">Pubblica avvisi, info e segnalazioni di pericolo</string>
+  <string name="action_logout">Esci</string>
+
+  <!-- Bacheca -->
+  <string name="board_title_user">Bacheca rifugi</string>
+  <string name="board_title_manage">La mia bacheca</string>
+  <string name="board_new_post">Nuovo post</string>
+  <string name="board_edit_post">Modifica post</string>
+  <string name="board_category">CATEGORIA</string>
+  <string name="board_type_info">Info</string>
+  <string name="board_type_avviso">Avviso</string>
+  <string name="board_type_pericolo">Pericolo</string>
+  <string name="board_badge_info">INFO</string>
+  <string name="board_badge_avviso">AVVISO</string>
+  <string name="board_badge_pericolo">PERICOLO</string>
+  <string name="board_title_hint">Titolo</string>
+  <string name="board_body_hint">Testo della comunicazione</string>
+  <string name="board_deadline">Scadenza:</string>
+  <string name="board_deadline_none">Nessuna</string>
+  <string name="board_publish">Pubblica</string>
+  <string name="board_save">Salva</string>
+  <string name="board_empty_manage">Non hai ancora pubblicato nulla.\nTocca + per creare un avviso.</string>
+  <string name="board_empty_user">Nessuna comunicazione dai rifugi al momento.</string>
+  <string name="board_footer">%1$s · %2$s</string>
+  <string name="cd_new_post">Nuovo post</string>
+  <string name="cd_edit">Modifica</string>
+  <string name="cd_delete">Elimina</string>
+  <string name="cd_remove_deadline">Rimuovi scadenza</string>
+  <string name="action_cancel">Annulla</string>
+  <string name="action_ok">OK</string>
+  <string name="action_back">Indietro</string>
 </resources>

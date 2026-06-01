@@ -48,13 +48,47 @@ describe("Board Routes (Bacheca rifugi)", () => {
     expect(res.status).toBe(403);
   });
 
-  test("empty title/body is rejected (400)", async () => {
+  test("empty title/body is rejected by Joi (422)", async () => {
     const r = await createTestRefuge();
     const res = await request(app)
       .post("/api/v1/board")
       .set("Authorization", `Bearer ${r.token}`)
       .send({ type: "info", title: "   ", body: "" });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
+  });
+
+  test("invalid type is rejected by Joi (422)", async () => {
+    const r = await createTestRefuge();
+    const res = await request(app)
+      .post("/api/v1/board")
+      .set("Authorization", `Bearer ${r.token}`)
+      .send({ type: "spam", title: "Titolo", body: "Testo" });
+    expect(res.status).toBe(422);
+  });
+
+  test("author refuge can edit its own post; non-author cannot (PATCH)", async () => {
+    const a = await createTestRefuge("Rifugio Edit");
+    const b = await createTestRefuge("Rifugio Other");
+    const created = await request(app)
+      .post("/api/v1/board")
+      .set("Authorization", `Bearer ${a.token}`)
+      .send({ type: "info", title: "Orari", body: "8-18" });
+    const id = created.body._id;
+
+    const forbidden = await request(app)
+      .patch(`/api/v1/board/${id}`)
+      .set("Authorization", `Bearer ${b.token}`)
+      .send({ title: "Hacked" });
+    expect(forbidden.status).toBe(403);
+
+    const ok = await request(app)
+      .patch(`/api/v1/board/${id}`)
+      .set("Authorization", `Bearer ${a.token}`)
+      .send({ type: "avviso", title: "Orari aggiornati" });
+    expect(ok.status).toBe(200);
+    expect(ok.body.type).toBe("avviso");
+    expect(ok.body.title).toBe("Orari aggiornati");
+    expect(ok.body.body).toBe("8-18");
   });
 
   test("only the author refuge (or admin) can delete a post", async () => {

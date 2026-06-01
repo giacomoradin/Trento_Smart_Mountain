@@ -1,5 +1,32 @@
 # Trento Smart Mountain — Stato del progetto
 
+## ⏱️ Aggiornamento Sprint 3 — giugno 2026
+
+> Build mobile **`compileDebugKotlin` green**; backend **220/220 test verdi** (15 suite).
+
+Funzionalità aggiunte dopo lo Sprint 2:
+
+**Social (completo)**
+- Ricerca/scoperta utenti, liste follower/seguiti navigabili.
+- Metriche escursionistiche sul profilo (km/dislivello/uscite/punti) + classifica settimanale tra i seguiti.
+- **Notifiche** in-app (follow/like/commento) con centro notifiche + badge non-letti + deep-link.
+- Badge "Ti segue"; **gate privacy** profilo (`profileVisibility` applicato in `getHikerById` + feed + bacheca).
+
+**Rifugio — Dashboard IoT (mock)**
+- Modelli `EdgeNode`, `RefugeSensorReading`, `RefugePassage` + seed mock + `GET /api/v1/refuge/dashboard`.
+- UI dashboard fedele al mockup (sensori, edge nodes BLE-mesh, passaggi/social-credit) + scheda profilo rifugista.
+- ⚠️ Nessun ingest MQTT reale: dati generati lato server, schema definitivo.
+
+**Bacheca rifugi**
+- Modello `RefugeBoardPost` (info/avviso/pericolo, `validUntil`) + CRUD `/api/v1/board` Joi-validato.
+- Composizione lato rifugista (crea/modifica/elimina) + consultazione utenti (icona in Home/Pianificazione/Registra).
+
+**Altro**: fix bug attività (paginazione feed, cancel sfida, eliminazioni persistenti); pipeline CI; 0 vulnerabilità npm; copertura test backend 88 → 220.
+
+> _Polish residuo (non bloccante): estrazione stringhe i18n delle schermate nuove, unificazione design-token su `TsmColors`, skeleton loaders._
+
+---
+
 > Snapshot dell'architettura, codebase e implementazione corrente. Aggiornato al **26 maggio 2026 (sessione serale)** — Sprint 2 con feature **Foto profilo utente** completata (privacy gate fix, componente Compose `AvatarImage` riusabile, EXIF rotation, foto visibile in ProfileScreen / ProfileViewScreen / partecipanti sessioni), oltre alle tre sessioni precedenti dello stesso giorno (notturna: discriminator persistence + anti-cheat; pomeridiana: refresh token rotation + WAL Room v5). Build mobile **`compileDebugKotlin` green**, backend **88/89 test verdi** (1 test fragile pre-esistente su `BREVO_API_KEY`).
 
 ---
@@ -180,12 +207,16 @@ trento-smart-mountain/
 - ✅ Bottone "Risincronizza ($n)" bypassa il backoff (`SyncManager.enqueueImmediate(ignoreBackoff=true)`)
 - ✅ Empty state contestuale (no attività vs no attività per periodo)
 - ✅ ElevationProfileChart con assi disegnati nel canvas (no più sovrapposizione)
-- ✅ ActivityDetailScreen: metric grid, mappa preview, partecipanti, profilo altimetrico, timeline split km, badge dinamici, export GPX
+- ✅ ActivityDetailScreen: metric grid, mappa preview (TsmRouteMapPreview con OSMdroid), partecipanti, profilo altimetrico, timeline split km, performance badges (Alpinista, Maratoneta), export GPX
+- ✅ PostDetailScreen: dettaglio social avanzato con timeline split ogni 5km e performance badges per un'esperienza "Strava-like".
+- ✅ Nuova rotta `POST_DETAIL` in `TsmNavHost.kt` e `Routes.kt` per la navigazione nel feed social.
+- ✅ TsmRouteMapPreview: nuovo componente basato su OSMdroid che renderizza il tracciato GPX sopra una mappa topografica reale, sostituendo la vecchia RouteTracePreview statica. Integrato in FeedCard, ActivityDetailScreen e PostDetailScreen.
 - ✅ Delete con cleanup remoto per attività libere (DELETE /activities/:id)
 
 #### Sync engine
 
 - ✅ SyncManager: coroutine loop 60s + backoff incrementale per record (1m → 5m → 30m → 1h cap)
+- ✅ Fix bug GPX: aggiunto `parseRoutePolyline` in `SyncManager.kt` per garantire l'invio della `routePolyline` durante il sync delle attività libere (risolve tracce mancanti nel feed social).
 - ✅ `enqueueImmediate()` per pull-to-refresh manuale
 - ✅ Room v4 con campi `retry_count`, `last_retry_at_ms`, `remote_id`
 - ✅ Marcatura `isSynced=1` post upload + tracking `remoteId` per delete cross-device

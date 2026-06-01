@@ -18,6 +18,8 @@ object Routes {
   const val MAIN_HIKER = "main_hiker"
   /** Area principale account rifugio (metriche IoT, crediti ospiti). */
   const val MAIN_RIFUGIO = "main_rifugio"
+  /** Scheda profilo del rifugista (identità struttura + bacheca + logout). */
+  const val REFUGE_PROFILE = "refuge_profile"
   /** Recupero password via email. */
   const val FORGOT_PASSWORD = "forgot_password"
   /** Dettaglio sessione escursione (modale sul nav principale). */
@@ -94,6 +96,9 @@ object Routes {
   const val STORY_VIEWER = "story_viewer/{refId}?kind={kind}"
   fun storyViewerRoute(refId: String, kind: String): String =
     "story_viewer/${Uri.encode(refId)}?kind=${Uri.encode(kind)}"
+
+  /** Dettaglio social di un post condiviso nel feed. */
+  const val POST_DETAIL = "post_detail"
 
   fun quizRoute(quizId: String) = "quiz/$quizId"
   fun quizFromCategoryRoute(slug: String) = "quiz_cat/${Uri.encode(slug)}"

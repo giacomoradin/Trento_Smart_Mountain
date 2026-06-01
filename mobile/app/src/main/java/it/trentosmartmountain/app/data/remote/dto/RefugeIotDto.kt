@@ -19,6 +19,10 @@ data class RefugeDashboardResponse(
 data class RefugeInfoDto(
     @SerializedName("name") val name: String = "Rifugio",
     @SerializedName("altitudeM") val altitudeM: Int? = null,
+    @SerializedName("caiCode") val caiCode: String? = null,
+    @SerializedName("posti") val posti: Int? = null,
+    @SerializedName("email") val email: String? = null,
+    @SerializedName("verified") val verified: Boolean = false,
 )
 
 data class RefugeSensorsDto(

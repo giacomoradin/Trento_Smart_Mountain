@@ -1689,4 +1689,69 @@ describe("Social Routes", () => {
       expect(cnt.body.unreadCount).toBe(0);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Privacy gate profilo — GET /hikers/:id
+  // ──────────────────────────────────────────────────────────────────
+
+  describe("GET /hikers/:id visibility gate", () => {
+    test("friends-default profile is restricted for a non-follower", async () => {
+      const viewer = await createTestHiker({ username: "zzpgv", email: "zzpgv@test.com" });
+      const target = await createTestHiker({ username: "zzpgt", email: "zzpgt@test.com" });
+      const res = await request(app)
+        .get(`/hikers/${target.user._id}`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.restricted).toBe(true);
+      expect(res.body.username).toBe("zzpgt"); // identità sempre visibile
+    });
+
+    test("following a friends-profile unlocks the full profile", async () => {
+      const viewer = await createTestHiker({ username: "zzpgv2", email: "zzpgv2@test.com" });
+      const target = await createTestHiker({ username: "zzpgt2", email: "zzpgt2@test.com" });
+      await request(app)
+        .post(`/api/v1/users/${target.user._id}/follow`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      const res = await request(app)
+        .get(`/hikers/${target.user._id}`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.restricted).toBeUndefined();
+      expect(res.body.username).toBe("zzpgt2");
+    });
+
+    test("public profile is visible to non-followers", async () => {
+      const viewer = await createTestHiker({ username: "zzpgv3", email: "zzpgv3@test.com" });
+      const target = await createTestHiker({ username: "zzpgt3", email: "zzpgt3@test.com" });
+      await setVisibility(target.user._id, "public");
+      const res = await request(app)
+        .get(`/hikers/${target.user._id}`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.restricted).toBeUndefined();
+    });
+
+    test("private profile is restricted even for a follower", async () => {
+      const viewer = await createTestHiker({ username: "zzpgv4", email: "zzpgv4@test.com" });
+      const target = await createTestHiker({ username: "zzpgt4", email: "zzpgt4@test.com" });
+      await setVisibility(target.user._id, "private");
+      await request(app)
+        .post(`/api/v1/users/${target.user._id}/follow`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      const res = await request(app)
+        .get(`/hikers/${target.user._id}`)
+        .set("Authorization", `Bearer ${viewer.token}`);
+      expect(res.body.restricted).toBe(true);
+    });
+
+    test("self always sees the full profile regardless of visibility", async () => {
+      const me = await createTestHiker({ username: "zzpgself", email: "zzpgself@test.com" });
+      await setVisibility(me.user._id, "private");
+      const res = await request(app)
+        .get(`/hikers/${me.user._id}`)
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.body.restricted).toBeUndefined();
+      expect(res.body.username).toBe("zzpgself");
+    });
+  });
 });

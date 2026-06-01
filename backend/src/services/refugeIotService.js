@@ -110,7 +110,9 @@ export async function getRefugeDashboard(refugeId) {
   await ensureSeed(refugeId);
 
   const [refuge, reading, nodes, passages] = await Promise.all([
-    Refuge.findById(refugeId).select("rifugioName quota").lean(),
+    Refuge.findById(refugeId)
+      .select("rifugioName quota caiCode posti email isVerified")
+      .lean(),
     RefugeSensorReading.findOne({ refugeId }).sort({ capturedAt: -1 }).lean(),
     EdgeNode.find({ refugeId }).sort({ code: 1 }).lean(),
     RefugePassage.find({ refugeId, passedAt: { $gte: startOfToday() } })
@@ -125,6 +127,10 @@ export async function getRefugeDashboard(refugeId) {
     refuge: {
       name: refuge?.rifugioName || "Rifugio",
       altitudeM: refuge?.quota ?? null,
+      caiCode: refuge?.caiCode ?? null,
+      posti: refuge?.posti ?? null,
+      email: refuge?.email ?? null,
+      verified: refuge?.isVerified ?? false,
     },
     live: true,
     sensors: reading

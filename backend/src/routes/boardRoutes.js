@@ -15,10 +15,17 @@ import express from "express";
 import { authenticate } from "../middleware/authMiddleware.js";
 import { authenticatedLimiter } from "../middleware/rateLimitMiddleware.js";
 import {
+  validate,
+  createBoardPostSchema,
+  updateBoardPostSchema,
+  idParamSchema,
+} from "../middleware/validationMiddleware.js";
+import {
   createBoardPost,
   listBoardPosts,
   getMyBoardPosts,
   deleteBoardPost,
+  updateBoardPost,
 } from "../services/boardService.js";
 
 const router = express.Router();
@@ -53,7 +60,7 @@ router.get("/mine", async (req, res, next) => {
 });
 
 /** POST / — crea un post in bacheca (solo account rifugio/admin). */
-router.post("/", async (req, res, next) => {
+router.post("/", validate(createBoardPostSchema), async (req, res, next) => {
   try {
     const { type, title, body, validUntil } = req.body || {};
     const post = await createBoardPost(req.user.userId, req.user.role, {
@@ -68,16 +75,42 @@ router.post("/", async (req, res, next) => {
   }
 });
 
+/** PATCH /:id — modifica un proprio post (autore o admin). */
+router.patch(
+  "/:id",
+  validate(idParamSchema, "params"),
+  validate(updateBoardPostSchema),
+  async (req, res, next) => {
+    try {
+      const { type, title, body, validUntil } = req.body || {};
+      const post = await updateBoardPost(req.params.id, req.user.userId, {
+        isAdmin: req.user.role === "admin",
+        type,
+        title,
+        body,
+        validUntil,
+      });
+      res.status(200).json(post);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 /** DELETE /:id — elimina un post (autore o admin). */
-router.delete("/:id", async (req, res, next) => {
-  try {
-    const result = await deleteBoardPost(req.params.id, req.user.userId, {
-      isAdmin: req.user.role === "admin",
-    });
-    res.status(200).json(result);
-  } catch (err) {
-    next(err);
-  }
-});
+router.delete(
+  "/:id",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const result = await deleteBoardPost(req.params.id, req.user.userId, {
+        isAdmin: req.user.role === "admin",
+      });
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export default router;

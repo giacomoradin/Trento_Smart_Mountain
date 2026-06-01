@@ -44,6 +44,8 @@ data class SocialFeedState(
     val socialRow: List<SocialRowItem> = emptyList(),
     /** Set degli `activityRefId` già marcati come "vista" dal viewer. */
     val viewedStoryIds: Set<String> = emptySet(),
+    /** Notifiche non lette → badge sulla campanella in cima al feed. */
+    val unreadNotifications: Int = 0,
 )
 
 /**
@@ -90,9 +92,11 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                 val viewedJob = async {
                     runCatching { viewedStoryDao.getViewedSince(since24h) }
                 }
+                val notifJob = async { runCatching { api.getUnreadNotificationsCount() } }
                 val feedResp = feedJob.await().getOrNull()
                 val rowResp = rowJob.await().getOrNull()
                 val viewedIds = viewedJob.await().getOrNull().orEmpty().toSet()
+                val notifResp = notifJob.await().getOrNull()
 
                 _state.value = _state.value.copy(
                     isLoading = false,
@@ -103,6 +107,8 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                     socialRow = rowResp?.body()?.items.orEmpty().takeIf { rowResp?.isSuccessful == true }
                         ?: _state.value.socialRow,
                     viewedStoryIds = viewedIds,
+                    unreadNotifications = notifResp?.body()?.unreadCount?.takeIf { notifResp.isSuccessful }
+                        ?: _state.value.unreadNotifications,
                     error = when {
                         feedResp == null || !feedResp.isSuccessful ->
                             "Errore caricamento feed (${feedResp?.code() ?: "rete"})."
@@ -110,6 +116,17 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                     },
                 )
             }
+        }
+    }
+
+    /**
+     * Azzera il badge notifiche in locale: chiamato quando l'utente apre il
+     * centro notifiche (che le marca come lette lato server). Evita di mostrare
+     * un badge stale al ritorno sul feed senza dover ri-fare il fetch.
+     */
+    fun clearNotificationBadge() {
+        if (_state.value.unreadNotifications != 0) {
+            _state.value = _state.value.copy(unreadNotifications = 0)
         }
     }
 

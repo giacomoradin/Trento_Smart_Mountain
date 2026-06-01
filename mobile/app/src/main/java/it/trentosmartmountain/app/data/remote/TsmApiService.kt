@@ -8,7 +8,10 @@ import it.trentosmartmountain.app.data.remote.dto.ApiListResponse
 import it.trentosmartmountain.app.data.remote.dto.ActivityStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.ApiMessageBody
 import it.trentosmartmountain.app.data.remote.dto.BadgeItem
+import it.trentosmartmountain.app.data.remote.dto.BoardListResponse
+import it.trentosmartmountain.app.data.remote.dto.BoardPost
 import it.trentosmartmountain.app.data.remote.dto.CertificateItem
+import it.trentosmartmountain.app.data.remote.dto.CreateBoardPostRequest
 import it.trentosmartmountain.app.data.remote.dto.Challenge
 import it.trentosmartmountain.app.data.remote.dto.ChallengeDetailResponse
 import it.trentosmartmountain.app.data.remote.dto.ChallengeRespondRequest
@@ -36,12 +39,15 @@ import it.trentosmartmountain.app.data.remote.dto.FollowStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.ForgotPasswordRequest
 import it.trentosmartmountain.app.data.remote.dto.GoalsResponse
 import it.trentosmartmountain.app.data.remote.dto.GoalsUpdateRequest
+import it.trentosmartmountain.app.data.remote.dto.HikingStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.LikeResponse
 import it.trentosmartmountain.app.data.remote.dto.LiveLocationsResponse
 import it.trentosmartmountain.app.data.remote.dto.LoginRequest
 import it.trentosmartmountain.app.data.remote.dto.LoginResponse
 import it.trentosmartmountain.app.data.remote.dto.LogoutRequest
+import it.trentosmartmountain.app.data.remote.dto.MarkReadResponse
+import it.trentosmartmountain.app.data.remote.dto.NotificationsResponse
 import it.trentosmartmountain.app.data.remote.dto.NextQuizResponse
 import it.trentosmartmountain.app.data.remote.dto.NfcScanRequest
 import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
@@ -60,6 +66,7 @@ import it.trentosmartmountain.app.data.remote.dto.QuizListItemResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizSubmissionRequest
 import it.trentosmartmountain.app.data.remote.dto.QuizSubmissionResponse
 import it.trentosmartmountain.app.data.remote.dto.RefreshRequest
+import it.trentosmartmountain.app.data.remote.dto.RefugeDashboardResponse
 import it.trentosmartmountain.app.data.remote.dto.RegisterRequest
 import it.trentosmartmountain.app.data.remote.dto.RegisterResponse
 import it.trentosmartmountain.app.data.remote.dto.RegisterRifugioRequest
@@ -71,11 +78,13 @@ import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.remote.dto.ShareRequest
 import it.trentosmartmountain.app.data.remote.dto.ShareResponse
 import it.trentosmartmountain.app.data.remote.dto.SocialRowResponse
+import it.trentosmartmountain.app.data.remote.dto.UnreadCountResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.remote.dto.UserResponse
 import it.trentosmartmountain.app.data.remote.dto.UserSearchResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherForecastResponse
+import it.trentosmartmountain.app.data.remote.dto.WeeklyLeaderboardResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherLocationsResponse
 import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
 
@@ -131,6 +140,34 @@ interface TsmApiService {
 
   @GET("refuges/{id}")
   suspend fun getRefugeById(@Path("id") id: String): Response<UserResponse>
+
+  /** Dashboard IoT del rifugio loggato (sensori + edge nodes + passaggi, mock). */
+  @GET("api/v1/refuge/dashboard")
+  suspend fun getRefugeDashboard(): Response<RefugeDashboardResponse>
+
+  // ── Bacheca rifugi ──
+  /** Feed bacheca consultabile da tutti gli escursionisti. */
+  @GET("api/v1/board")
+  suspend fun getBoardPosts(
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+    @Query("type") type: String? = null,
+  ): Response<BoardListResponse>
+
+  /** Post pubblicati dal rifugio loggato. */
+  @GET("api/v1/board/mine")
+  suspend fun getMyBoardPosts(
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<BoardListResponse>
+
+  /** Crea un post in bacheca (solo account rifugio). */
+  @POST("api/v1/board")
+  suspend fun createBoardPost(@Body body: CreateBoardPostRequest): Response<BoardPost>
+
+  /** Elimina un post della bacheca (autore o admin). */
+  @DELETE("api/v1/board/{id}")
+  suspend fun deleteBoardPost(@Path("id") id: String): Response<ApiMessageBody>
 
   @GET("users/{id}")
   suspend fun getUserById(@Path("id") id: String): Response<UserResponse>
@@ -448,6 +485,29 @@ interface TsmApiService {
 
   @GET("api/v1/users/{id}/follow-stats")
   suspend fun getFollowStats(@Path("id") id: String): Response<FollowStatsResponse>
+
+  /** Totali escursionistici ALL-TIME (km/dislivello/uscite/punti) per il profilo. */
+  @GET("api/v1/users/{id}/hiking-stats")
+  suspend fun getUserHikingStats(@Path("id") id: String): Response<HikingStatsResponse>
+
+  /** Classifica settimanale (rolling 7gg) tra l'utente e i suoi seguiti. */
+  @GET("api/v1/users/me/weekly-leaderboard")
+  suspend fun getWeeklyLeaderboard(): Response<WeeklyLeaderboardResponse>
+
+  // ── Notifiche social ──
+  @GET("api/v1/users/me/notifications")
+  suspend fun getNotifications(
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<NotificationsResponse>
+
+  /** Conteggio non-letti per il badge sulla campanella (polling leggero). */
+  @GET("api/v1/users/me/notifications/unread-count")
+  suspend fun getUnreadNotificationsCount(): Response<UnreadCountResponse>
+
+  /** Segna tutte le notifiche come lette (all'apertura del centro notifiche). */
+  @POST("api/v1/users/me/notifications/read")
+  suspend fun markNotificationsRead(): Response<MarkReadResponse>
 
   /**
    * Ricerca escursionisti per username (match parziale, case-insensitive).

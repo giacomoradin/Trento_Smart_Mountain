@@ -27,6 +27,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -274,6 +275,21 @@ private fun ProfileHeader(
                     )
                 }
             }
+            // Reciprocità: "Ti segue" se il target segue il viewer.
+            if (!state.isSelf && state.stats?.followsViewer == true) {
+                Spacer(Modifier.height(4.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = TextSecondary.copy(alpha = 0.18f),
+                ) {
+                    Text(
+                        "Ti segue",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
             Spacer(Modifier.height(16.dp))
 
             // Stat row: post + followers + following
@@ -297,6 +313,21 @@ private fun ProfileHeader(
                 }
             }
 
+            // ── Riepilogo escursionistico (km/dislivello/uscite/punti) ──
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(color = TextSecondary.copy(alpha = 0.15f))
+            Spacer(Modifier.height(14.dp))
+            val hs = state.hikingStats
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                HikingMetric(value = "${hs?.totalActivities ?: 0}", label = "USCITE", color = Color.White)
+                HikingMetric(value = formatKmTotal(hs?.totalDistanceKm ?: 0.0), label = "KM", color = AccentCyan)
+                HikingMetric(value = "${hs?.totalElevationGainM ?: 0}", label = "DISLIVELLO m", color = Color(0xFFFF9800))
+                HikingMetric(value = "${hs?.totalPoints ?: 0}", label = "PUNTI", color = AccentGreen)
+            }
+
             // Bottone Segui/Smetti — solo se non sono io
             if (!state.isSelf) {
                 Spacer(Modifier.height(16.dp))
@@ -309,6 +340,29 @@ private fun ProfileHeader(
         }
     }
 }
+
+/** Cella di una metrica escursionistica (valore colorato + etichetta). */
+@Composable
+private fun HikingMetric(value: String, label: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            value,
+            color = color,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            label,
+            color = TextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            letterSpacing = 0.5.sp,
+        )
+    }
+}
+
+/** Km totali: interi sopra 100 (es. "123"), un decimale sotto (es. "42.5"). */
+private fun formatKmTotal(km: Double): String =
+    if (km >= 100) "%.0f".format(km) else "%.1f".format(km)
 
 @Composable
 private fun StatBlock(label: String, value: String, onClick: (() -> Unit)? = null) {

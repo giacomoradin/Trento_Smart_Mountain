@@ -66,6 +66,10 @@ const BUSINESS_ERROR_MAP = {
     status: 403,
     message: "Puoi cancellare solo i tuoi commenti.",
   },
+  BOARD_FORBIDDEN_ROLE: {
+    status: 403,
+    message: "Solo gli account rifugio possono pubblicare in bacheca.",
+  },
   // 400 — input semanticamente invalido
   SELF_FOLLOW: { status: 400, message: "Non puoi seguire te stesso." },
   // 404 — risorsa non trovata
@@ -78,8 +82,10 @@ const BUSINESS_ERROR_MAP = {
   TOTEM_NOT_FOUND: { status: 404, message: "Totem non trovato." },
   CHALLENGE_NOT_FOUND: { status: 404, message: "Sfida non trovata." },
   COMMENT_NOT_FOUND: { status: 404, message: "Commento non trovato." },
+  POST_NOT_FOUND: { status: 404, message: "Post non trovato." },
   // 400
   COMMENT_EMPTY: { status: 400, message: "Il commento non può essere vuoto." },
+  POST_EMPTY: { status: 400, message: "Titolo e testo sono obbligatori." },
   // 409 — conflitti
   EMAIL_TAKEN: { status: 409, message: "Email già in uso." },
   USERNAME_TAKEN: { status: 409, message: "Username già in uso." },

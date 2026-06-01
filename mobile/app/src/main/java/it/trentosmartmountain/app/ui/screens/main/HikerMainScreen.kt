@@ -64,6 +64,12 @@ fun HikerMainScreen(
   onNavigateToStoryViewer: (refId: String, kind: String) -> Unit = { _, _ -> },
   // Tap sulla barra "Trova persone" del feed → apre la ricerca utenti.
   onNavigateToUserSearch: () -> Unit = {},
+  // Tap sull'icona trofeo del feed → apre la classifica settimanale.
+  onNavigateToLeaderboard: () -> Unit = {},
+  // Tap sulla campanella del feed → apre il centro notifiche.
+  onNavigateToNotifications: () -> Unit = {},
+  // Voce "Bacheca rifugi" nel Profilo → consultazione avvisi/pericoli.
+  onNavigateToBoard: () -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
   // Scope Activity: il polling live/SOS continua anche se l'utente è su un'altra tab.
@@ -123,6 +129,8 @@ fun HikerMainScreen(
         onNavigateToSessionDetail = onNavigateToSessionDetail,
         onNavigateToStoryViewer = onNavigateToStoryViewer,
         onNavigateToUserSearch = onNavigateToUserSearch,
+        onNavigateToLeaderboard = onNavigateToLeaderboard,
+        onNavigateToNotifications = onNavigateToNotifications,
       )
       HikerTab.Session -> SessionHubScreen(
         modifier = Modifier.padding(innerPadding),
@@ -142,6 +150,7 @@ fun HikerMainScreen(
         onNavigateToChallenges = onNavigateToChallenges,
         onNavigateToBadges = onNavigateToBadges,
         onNavigateToProfileView = onNavigateToProfileView,
+        onNavigateToBoard = onNavigateToBoard,
         modifier = Modifier.padding(innerPadding),
       )
     }

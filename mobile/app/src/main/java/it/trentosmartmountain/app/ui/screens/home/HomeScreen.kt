@@ -35,6 +35,8 @@ fun HomeScreen(
   onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
   onNavigateToStoryViewer: (refId: String, kind: String) -> Unit = { _, _ -> },
   onNavigateToUserSearch: () -> Unit = {},
+  onNavigateToLeaderboard: () -> Unit = {},
+  onNavigateToNotifications: () -> Unit = {},
 ) {
   var subTab by rememberSaveable { mutableIntStateOf(0) }
 
@@ -57,6 +59,8 @@ fun HomeScreen(
         onLiveClick = onNavigateToSessionDetail,
         onStoryClick = onNavigateToStoryViewer,
         onSearchClick = onNavigateToUserSearch,
+        onLeaderboardClick = onNavigateToLeaderboard,
+        onNotificationsClick = onNavigateToNotifications,
       )
       1 -> ActivityListScreen(onActivityClick = onActivityClick)
     }

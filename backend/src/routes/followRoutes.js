@@ -34,7 +34,14 @@ import {
   getPostsByUser,
   getSocialRowForUser,
   searchUsers,
+  getPublicHikingStats,
+  getWeeklyLeaderboard,
 } from "../services/socialService.js";
+import {
+  getNotifications,
+  getUnreadCount,
+  markAllRead,
+} from "../services/notificationService.js";
 
 const router = express.Router();
 
@@ -127,6 +134,51 @@ router.get("/me/social-row", async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/v1/users/me/weekly-leaderboard — classifica settimanale (rolling 7gg)
+ * tra il viewer e gli utenti che segue. Vedi `socialService.getWeeklyLeaderboard`.
+ */
+router.get("/me/weekly-leaderboard", async (req, res, next) => {
+  try {
+    const result = await getWeeklyLeaderboard(req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/v1/users/me/notifications — centro notifiche paginato. */
+router.get("/me/notifications", async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const result = await getNotifications(req.user.userId, { page, limit });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/v1/users/me/notifications/unread-count — badge non-letti (polling). */
+router.get("/me/notifications/unread-count", async (req, res, next) => {
+  try {
+    const result = await getUnreadCount(req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/v1/users/me/notifications/read — segna tutte come lette. */
+router.post("/me/notifications/read", async (req, res, next) => {
+  try {
+    const result = await markAllRead(req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Target-specific: precedono :id "naked" ─────────────────────────────
 
 /** GET /api/v1/users/:id/follow-stats — counts + isFollowedByMe per il bottone. */
@@ -136,6 +188,23 @@ router.get(
   async (req, res, next) => {
     try {
       const stats = await getFollowStats(req.params.id, req.user.userId);
+      res.status(200).json(stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * GET /api/v1/users/:id/hiking-stats — totali escursionistici ALL-TIME.
+ * Alimenta il "biglietto da visita" del profilo (km/dislivello/uscite/punti).
+ */
+router.get(
+  "/:id/hiking-stats",
+  validate(followIdParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const stats = await getPublicHikingStats(req.params.id);
       res.status(200).json(stats);
     } catch (err) {
       next(err);

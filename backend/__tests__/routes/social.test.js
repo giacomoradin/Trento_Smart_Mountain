@@ -1490,4 +1490,203 @@ describe("Social Routes", () => {
       expect(res.status).toBe(422);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Profilo — GET /api/v1/users/:id/hiking-stats
+  // ──────────────────────────────────────────────────────────────────
+
+  describe("GET /api/v1/users/:id/hiking-stats", () => {
+    test("aggregates all-time totals from sessions + free activities", async () => {
+      const me = await createTestHiker({ username: "zzhstats", email: "zzhstats@test.com" });
+      // Attività libera: 5km, 300m, 50pt
+      await Activity.create({
+        userId: me.user._id,
+        name: "Libera",
+        startTimeMs: Date.now() - 3600_000,
+        endTimeMs: Date.now(),
+        actualStats: {
+          movingSeconds: 3000,
+          totalSeconds: 3600,
+          distanceMeters: 5000,
+          elevationGainM: 300,
+          finalPoints: 50,
+        },
+      });
+      // Sessione COMPLETED: 8km, 600m, 80pt
+      await HikeSession.create({
+        creatorId: me.user._id,
+        routeDetails: { name: "Cima", difficultyLevel: "EE" },
+        meetingDate: "2026-08-01",
+        inviteCode: "TSM-HS01",
+        status: "COMPLETED",
+        participants: [{ userId: me.user._id, role: "groupLeader" }],
+        actualStats: {
+          movingSeconds: 5000,
+          totalSeconds: 6000,
+          distanceMeters: 8000,
+          elevationGainM: 600,
+          finalPoints: 80,
+        },
+      });
+
+      const res = await request(app)
+        .get(`/api/v1/users/${me.user._id}/hiking-stats`)
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.totalActivities).toBe(2);
+      expect(res.body.totalDistanceKm).toBeCloseTo(13.0, 5);
+      expect(res.body.totalElevationGainM).toBe(900);
+      expect(res.body.totalPoints).toBe(130);
+    });
+
+    test("returns zeros for a user with no activities", async () => {
+      const me = await createTestHiker({ username: "zzhempty", email: "zzhempty@test.com" });
+      const res = await request(app)
+        .get(`/api/v1/users/${me.user._id}/hiking-stats`)
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        totalActivities: 0,
+        totalDistanceKm: 0,
+        totalElevationGainM: 0,
+        totalPoints: 0,
+      });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Classifica — GET /api/v1/users/me/weekly-leaderboard
+  // ──────────────────────────────────────────────────────────────────
+
+  describe("GET /api/v1/users/me/weekly-leaderboard", () => {
+    test("ranks viewer + followed users by weekly km, excludes non-followed", async () => {
+      const me = await createTestHiker({ username: "zzlbme", email: "zzlbme@test.com" });
+      const friend = await createTestHiker({ username: "zzlbfriend", email: "zzlbfriend@test.com" });
+      const stranger = await createTestHiker({ username: "zzlbstr", email: "zzlbstr@test.com" });
+      await request(app)
+        .post(`/api/v1/users/${friend.user._id}/follow`)
+        .set("Authorization", `Bearer ${me.token}`);
+
+      // friend: 10km — me: 5km — stranger (non seguito): 99km
+      await Activity.create({
+        userId: friend.user._id, name: "F",
+        startTimeMs: Date.now() - 3600_000, endTimeMs: Date.now(),
+        actualStats: { movingSeconds: 4000, totalSeconds: 4500, distanceMeters: 10000, elevationGainM: 500, finalPoints: 100 },
+      });
+      await Activity.create({
+        userId: me.user._id, name: "M",
+        startTimeMs: Date.now() - 3600_000, endTimeMs: Date.now(),
+        actualStats: { movingSeconds: 3000, totalSeconds: 3600, distanceMeters: 5000, elevationGainM: 200, finalPoints: 40 },
+      });
+      await Activity.create({
+        userId: stranger.user._id, name: "S",
+        startTimeMs: Date.now() - 3600_000, endTimeMs: Date.now(),
+        actualStats: { movingSeconds: 30000, totalSeconds: 33000, distanceMeters: 99000, elevationGainM: 9000, finalPoints: 900 },
+      });
+
+      const res = await request(app)
+        .get("/api/v1/users/me/weekly-leaderboard")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      const names = res.body.items.map((i) => i.user.username);
+      expect(names).toContain("zzlbme");
+      expect(names).toContain("zzlbfriend");
+      expect(names).not.toContain("zzlbstr");
+      // friend (10km) primo, me (5km) dopo
+      expect(res.body.items[0].user.username).toBe("zzlbfriend");
+      expect(res.body.items[0].km).toBeCloseTo(10.0, 5);
+      const meEntry = res.body.items.find((i) => i.user.username === "zzlbme");
+      expect(meEntry.isMe).toBe(true);
+    });
+
+    test("excludes activities older than 7 days", async () => {
+      const me = await createTestHiker({ username: "zzlbold", email: "zzlbold@test.com" });
+      const tenDaysAgo = Date.now() - 10 * 24 * 3600 * 1000;
+      await Activity.create({
+        userId: me.user._id, name: "Old",
+        startTimeMs: tenDaysAgo, endTimeMs: tenDaysAgo,
+        completedAt: new Date(tenDaysAgo),
+        actualStats: { movingSeconds: 8000, totalSeconds: 9000, distanceMeters: 20000, elevationGainM: 1000, finalPoints: 200 },
+      });
+      const res = await request(app)
+        .get("/api/v1/users/me/weekly-leaderboard")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items.find((i) => i.user.username === "zzlbold")).toBeUndefined();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Notifiche — /api/v1/users/me/notifications
+  // ──────────────────────────────────────────────────────────────────
+
+  describe("Notifications", () => {
+    test("follow creates a 'follow' notification for the followed user", async () => {
+      const a = await createTestHiker({ username: "zznfa", email: "zznfa@test.com" });
+      const b = await createTestHiker({ username: "zznfb", email: "zznfb@test.com" });
+      await request(app)
+        .post(`/api/v1/users/${b.user._id}/follow`)
+        .set("Authorization", `Bearer ${a.token}`);
+
+      const res = await request(app)
+        .get("/api/v1/users/me/notifications")
+        .set("Authorization", `Bearer ${b.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.unreadCount).toBe(1);
+      expect(res.body.items[0].type).toBe("follow");
+      expect(res.body.items[0].actor.username).toBe("zznfa");
+      expect(res.body.items[0].read).toBe(false);
+    });
+
+    test("liking a shared activity notifies the owner; no self-notification", async () => {
+      const owner = await createTestHiker({ username: "zznfowner", email: "zznfowner@test.com" });
+      const liker = await createTestHiker({ username: "zznfliker", email: "zznfliker@test.com" });
+      const act = await Activity.create({
+        userId: owner.user._id,
+        name: "Post",
+        startTimeMs: Date.now() - 3600_000,
+        endTimeMs: Date.now(),
+        actualStats: { movingSeconds: 3000, totalSeconds: 3600, distanceMeters: 5000, elevationGainM: 300 },
+        sharedAt: new Date(),
+      });
+      // owner mette like al proprio post → nessuna notifica (self)
+      await request(app)
+        .post(`/api/v1/activities/${act._id}/like`)
+        .set("Authorization", `Bearer ${owner.token}`);
+      // liker mette like → notifica all'owner
+      await request(app)
+        .post(`/api/v1/activities/${act._id}/like`)
+        .set("Authorization", `Bearer ${liker.token}`);
+
+      const res = await request(app)
+        .get("/api/v1/users/me/notifications")
+        .set("Authorization", `Bearer ${owner.token}`);
+      expect(res.body.unreadCount).toBe(1);
+      expect(res.body.items[0].type).toBe("like");
+      expect(res.body.items[0].targetKind).toBe("activity");
+      expect(res.body.items[0].actor.username).toBe("zznfliker");
+    });
+
+    test("mark-all-read zeroes the unread count", async () => {
+      const a = await createTestHiker({ username: "zznfra", email: "zznfra@test.com" });
+      const b = await createTestHiker({ username: "zznfrb", email: "zznfrb@test.com" });
+      await request(app)
+        .post(`/api/v1/users/${a.user._id}/follow`)
+        .set("Authorization", `Bearer ${b.token}`);
+
+      let cnt = await request(app)
+        .get("/api/v1/users/me/notifications/unread-count")
+        .set("Authorization", `Bearer ${a.token}`);
+      expect(cnt.body.unreadCount).toBe(1);
+
+      await request(app)
+        .post("/api/v1/users/me/notifications/read")
+        .set("Authorization", `Bearer ${a.token}`);
+
+      cnt = await request(app)
+        .get("/api/v1/users/me/notifications/unread-count")
+        .set("Authorization", `Bearer ${a.token}`);
+      expect(cnt.body.unreadCount).toBe(0);
+    });
+  });
 });

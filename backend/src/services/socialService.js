@@ -3,6 +3,7 @@ import Activity from "../models/activity.js";
 import HikeSession from "../models/hikeSession.js";
 import Hiker from "../models/hiker.js";
 import { getFollowingIds, isFollowing } from "./followService.js";
+import { createNotification } from "./notificationService.js";
 import { downsamplePolyline } from "../utils/geoPolyline.js";
 
 // Risoluzione della route signature nel feed: ~48 punti bastano a riconoscere
@@ -122,6 +123,14 @@ export async function likeActivity(activityId, userId) {
   if (!already) {
     activity.likes.push({ userId, createdAt: new Date() });
     await activity.save();
+    // Notifica l'autore (best-effort, no-op se mette like a sé stesso).
+    await createNotification({
+      recipientId: activity.userId,
+      actorId: userId,
+      type: "like",
+      targetKind: "activity",
+      targetId: activity._id,
+    });
   }
   return { likesCount: activity.likes.length, likedByMe: true };
 }
@@ -149,6 +158,13 @@ export async function likeSession(sessionId, userId) {
   if (!already) {
     session.likes.push({ userId, createdAt: new Date() });
     await session.save();
+    await createNotification({
+      recipientId: session.creatorId,
+      actorId: userId,
+      type: "like",
+      targetKind: "session",
+      targetId: session._id,
+    });
   }
   return { likesCount: session.likes.length, likedByMe: true };
 }
@@ -257,6 +273,171 @@ export async function searchUsers(viewerId, q, { limit = 20 } = {}) {
   });
 
   return { items };
+}
+
+// ── METRICHE PROFILO (riepilogo escursionistico pubblico) ───────────────────
+
+/**
+ * Totali escursionistici ALL-TIME di un utente, per il "biglietto da visita"
+ * sul profilo (km, dislivello, uscite, punti).
+ *
+ * Aggrega due sorgenti, identico criterio di [hikeSessionService.getActivityStats]
+ * ma senza filtro anno:
+ *   - HikeSession COMPLETED dove l'utente è creator o partecipante
+ *     (preferisce `actualStats`, fallback `gpxStats`);
+ *   - Activity libere dell'utente (`actualStats`).
+ *
+ * Le due collection sono disgiunte (una sessione completata NON crea anche
+ * un'Activity), quindi la somma non doppia-conta — coerente con le card
+ * "Le Mie Attività".
+ *
+ * @param {string|ObjectId} userId
+ * @returns {Promise<{totalActivities:number,totalDistanceKm:number,totalElevationGainM:number,totalPoints:number}>}
+ */
+export async function getPublicHikingStats(userId) {
+  const [sessions, activities] = await Promise.all([
+    HikeSession.find({
+      $or: [{ creatorId: userId }, { "participants.userId": userId }],
+      status: "COMPLETED",
+    })
+      .select("actualStats gpxStats")
+      .lean(),
+    Activity.find({ userId }).select("actualStats").lean(),
+  ]);
+
+  let totalDistanceKm = 0;
+  let totalElevationGainM = 0;
+  let totalPoints = 0;
+
+  for (const s of sessions) {
+    totalDistanceKm +=
+      s.actualStats?.distanceMeters != null
+        ? s.actualStats.distanceMeters / 1000.0
+        : s.gpxStats?.distanceKm || 0;
+    totalElevationGainM +=
+      s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
+    totalPoints += s.actualStats?.finalPoints ?? s.gpxStats?.estimatedPoints ?? 0;
+  }
+  for (const a of activities) {
+    totalDistanceKm += (a.actualStats?.distanceMeters || 0) / 1000.0;
+    totalElevationGainM += a.actualStats?.elevationGainM || 0;
+    totalPoints += a.actualStats?.finalPoints || 0;
+  }
+
+  return {
+    totalActivities: sessions.length + activities.length,
+    totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
+    totalElevationGainM,
+    totalPoints,
+  };
+}
+
+// ── CLASSIFICA SETTIMANALE ──────────────────────────────────────────────────
+
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+
+/**
+ * Classifica settimanale (rolling 7 giorni) tra il viewer e gli utenti che
+ * segue: per ciascuno aggrega km / dislivello / punti / uscite delle Activity
+ * libere e delle HikeSession COMPLETED (creator o partecipante).
+ *
+ * Restituisce TUTTE le metriche per ogni utente attivo, così il client può
+ * cambiare il criterio di ordinamento (km/dislivello/punti) senza ri-chiamare
+ * il server. Default ordinato per km desc. Include solo chi ha ≥1 uscita nella
+ * finestra; `isMe` evidenzia la riga del viewer.
+ *
+ * @param {string|ObjectId} viewerId
+ * @returns {Promise<{since:string, items:Array}>}
+ */
+export async function getWeeklyLeaderboard(viewerId) {
+  const followingIds = await getFollowingIds(viewerId);
+  const uniqueIds = [
+    ...new Set([...followingIds.map(String), String(viewerId)]),
+  ];
+  const since = new Date(Date.now() - WEEK_MS);
+
+  const totals = new Map(); // uid -> { km, elevM, points, count }
+  const bump = (uid, km, elev, pts) => {
+    if (!uniqueIds.includes(uid)) return; // solo viewer + seguiti
+    const cur = totals.get(uid) ?? { km: 0, elevM: 0, points: 0, count: 0 };
+    cur.km += km || 0;
+    cur.elevM += elev || 0;
+    cur.points += pts || 0;
+    cur.count += 1;
+    totals.set(uid, cur);
+  };
+
+  const [activities, sessions] = await Promise.all([
+    Activity.find({
+      userId: { $in: uniqueIds },
+      completedAt: { $gte: since },
+    })
+      .select("userId actualStats")
+      .lean(),
+    HikeSession.find({
+      status: "COMPLETED",
+      $or: [
+        { creatorId: { $in: uniqueIds } },
+        { "participants.userId": { $in: uniqueIds } },
+      ],
+    })
+      .select("creatorId participants actualStats gpxStats endTime createdAt")
+      .lean(),
+  ]);
+
+  for (const a of activities) {
+    bump(
+      String(a.userId),
+      (a.actualStats?.distanceMeters || 0) / 1000.0,
+      a.actualStats?.elevationGainM || 0,
+      a.actualStats?.finalPoints || 0,
+    );
+  }
+  for (const s of sessions) {
+    const ref = s.endTime || s.createdAt;
+    if (!ref || new Date(ref) < since) continue;
+    const km =
+      s.actualStats?.distanceMeters != null
+        ? s.actualStats.distanceMeters / 1000.0
+        : s.gpxStats?.distanceKm || 0;
+    const elev = s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
+    const pts = s.actualStats?.finalPoints ?? s.gpxStats?.estimatedPoints ?? 0;
+    // Chi "ha fatto" la sessione: creator + partecipanti (tutti hanno camminato).
+    const members = new Set([
+      String(s.creatorId),
+      ...(s.participants || []).map((p) => String(p.userId)),
+    ]);
+    for (const uid of members) bump(uid, km, elev, pts);
+  }
+
+  const rankedIds = [...totals.keys()];
+  const users = await Hiker.find({ _id: { $in: rankedIds } })
+    .select("username personalInfo.avatarUrl")
+    .lean();
+  const userMap = new Map(users.map((u) => [String(u._id), u]));
+
+  const items = rankedIds
+    .map((uid) => {
+      const t = totals.get(uid);
+      const u = userMap.get(uid);
+      return {
+        user: {
+          _id: uid,
+          username: u?.username ?? null,
+          personalInfo: u?.personalInfo?.avatarUrl
+            ? { avatarUrl: u.personalInfo.avatarUrl }
+            : null,
+        },
+        km: Math.round(t.km * 10) / 10,
+        elevM: t.elevM,
+        points: t.points,
+        count: t.count,
+        isMe: uid === String(viewerId),
+      };
+    })
+    .sort((a, b) => b.km - a.km || b.elevM - a.elevM);
+
+  return { since: since.toISOString(), items };
 }
 
 // ── FEED AGGREGATOR ─────────────────────────────────────────────────────────

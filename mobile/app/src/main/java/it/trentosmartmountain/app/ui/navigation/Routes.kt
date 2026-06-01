@@ -73,6 +73,16 @@ object Routes {
   // ── Social: ricerca/scoperta utenti ("aggiungi amici") ──────────────────────
   const val USER_SEARCH = "user_search"
 
+  // ── Social: classifica settimanale ─────────────────────────────────────────
+  const val LEADERBOARD = "leaderboard"
+
+  // ── Social: centro notifiche ────────────────────────────────────────────────
+  const val NOTIFICATIONS = "notifications"
+
+  // ── Bacheca rifugi (manage=true lato rifugista, false consultazione utente) ──
+  const val BOARD = "board/{manage}"
+  fun boardRoute(manage: Boolean) = "board/$manage"
+
   // ── Social: lista follower/seguiti di un utente ─────────────────────────────
   // `type` = "followers" | "following" (vedi FollowListType).
   const val FOLLOW_LIST = "follow_list/{userId}/{type}"

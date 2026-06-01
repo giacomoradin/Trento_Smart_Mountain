@@ -19,6 +19,8 @@ import challengeRoutes from "./routes/challengeRoutes.js";
 import badgeRoutes from "./routes/badgeRoutes.js";
 import emergencyRoutes from "./routes/emergencyRoutes.js";
 import followRoutes from "./routes/followRoutes.js";
+import refugeIotRoutes from "./routes/refugeIotRoutes.js";
+import boardRoutes from "./routes/boardRoutes.js";
 import "./models/emergency.js";
 import "./models/follow.js";
 import "./models/comment.js";
@@ -126,6 +128,8 @@ app.use("/api/v1/users", accountRoutes);
 app.use("/api/v1/users", followRoutes);
 app.use("/api/v1/challenges", challengeRoutes);
 app.use("/api/v1/users/me", badgeRoutes);
+app.use("/api/v1/refuge", refugeIotRoutes);
+app.use("/api/v1/board", boardRoutes);
 
 // ─── Compatibility shim: /users (deprecato, mantenuto per backward-compat) ───
 // Il refactor 2026-05 ha separato la collection in hikers/refuges/admins ma

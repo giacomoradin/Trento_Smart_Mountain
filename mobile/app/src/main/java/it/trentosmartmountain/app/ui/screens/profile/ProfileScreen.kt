@@ -96,6 +96,7 @@ fun ProfileScreen(
     onNavigateToChallenges: () -> Unit = {},
     onNavigateToBadges: () -> Unit = {},
     onNavigateToProfileView: () -> Unit = {},
+    onNavigateToBoard: () -> Unit = {},
     viewModel: ProfileViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application,
@@ -550,6 +551,30 @@ fun ProfileScreen(
                         Column {
                             Text("Sfide", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                             Text("Crea o partecipa a sfide con altri escursionisti", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { onNavigateToBoard() },
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("📋", fontSize = 22.sp)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Bacheca rifugi", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                            Text("Avvisi e segnalazioni dai rifugi", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)

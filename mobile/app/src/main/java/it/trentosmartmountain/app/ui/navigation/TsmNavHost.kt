@@ -30,12 +30,15 @@ import it.trentosmartmountain.app.ui.screens.account.ChangePasswordScreen
 import it.trentosmartmountain.app.ui.screens.account.DeleteAccountScreen
 import it.trentosmartmountain.app.ui.screens.auth.AuthEntryScreen
 import it.trentosmartmountain.app.ui.screens.badges.BadgesScreen
+import it.trentosmartmountain.app.ui.screens.board.BoardScreen
 import it.trentosmartmountain.app.ui.screens.challenges.ChallengeDetailScreen
 import it.trentosmartmountain.app.ui.screens.challenges.ChallengesScreen
 import it.trentosmartmountain.app.ui.screens.challenges.CreateChallengeScreen
 import it.trentosmartmountain.app.ui.screens.formazione.FormazioneScreen
 import it.trentosmartmountain.app.ui.screens.home.ActivityDetailScreen
 import it.trentosmartmountain.app.ui.screens.home.FollowListScreen
+import it.trentosmartmountain.app.ui.screens.home.LeaderboardScreen
+import it.trentosmartmountain.app.ui.screens.home.NotificationsScreen
 import it.trentosmartmountain.app.ui.screens.home.UserSearchScreen
 import it.trentosmartmountain.app.viewmodel.FollowListType
 import it.trentosmartmountain.app.ui.screens.login.LoginScreen
@@ -209,11 +212,17 @@ fun TsmNavHost() {
                     navController.navigate(Routes.storyViewerRoute(refId, kind))
                 },
                 onNavigateToUserSearch = { navController.navigate(Routes.USER_SEARCH) },
+                onNavigateToLeaderboard = { navController.navigate(Routes.LEADERBOARD) },
+                onNavigateToNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
+                onNavigateToBoard = { navController.navigate(Routes.boardRoute(false)) },
             )
         }
 
         composable(Routes.MAIN_RIFUGIO) {
-            RefugeMainScreen(onLoggedOut = { navigateToAuthEntry() })
+            RefugeMainScreen(
+                onLoggedOut = { navigateToAuthEntry() },
+                onNavigateToBoard = { navController.navigate(Routes.boardRoute(true)) },
+            )
         }
 
         // Dettaglio sessione — navigazione full-screen sopra HikerMainScreen
@@ -472,6 +481,34 @@ fun TsmNavHost() {
                 onBack = { navController.popBackStack() },
                 onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
             )
+        }
+
+        // ── Social: classifica settimanale ───────────────────────────────
+        composable(Routes.LEADERBOARD) {
+            LeaderboardScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+            )
+        }
+
+        // ── Social: centro notifiche ──────────────────────────────────────
+        composable(Routes.NOTIFICATIONS) {
+            NotificationsScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onOpenActivity = { activityId, sessionId ->
+                    navController.navigate(Routes.activityDetailRoute(activityId, sessionId))
+                },
+            )
+        }
+
+        // ── Bacheca rifugi (consultazione utente / gestione rifugista) ────
+        composable(
+            route = Routes.BOARD,
+            arguments = listOf(navArgument("manage") { type = NavType.BoolType; defaultValue = false }),
+        ) { backStackEntry ->
+            val manage = backStackEntry.arguments?.getBoolean("manage") ?: false
+            BoardScreen(manage = manage, onBack = { navController.popBackStack() })
         }
 
         // ── Social: lista follower/seguiti (navigazione del grafo) ───────

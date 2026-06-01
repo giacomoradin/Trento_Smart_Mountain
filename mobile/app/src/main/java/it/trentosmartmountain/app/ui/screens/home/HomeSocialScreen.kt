@@ -20,10 +20,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -84,6 +89,10 @@ fun HomeSocialScreen(
     onStoryClick: (refId: String, kind: String) -> Unit = { _, _ -> },
     /** Tap sulla barra "Trova persone": apre la ricerca utenti ("aggiungi amici"). */
     onSearchClick: () -> Unit = {},
+    /** Tap sull'icona trofeo: apre la classifica settimanale. */
+    onLeaderboardClick: () -> Unit = {},
+    /** Tap sulla campanella: apre il centro notifiche. */
+    onNotificationsClick: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -107,7 +116,34 @@ fun HomeSocialScreen(
 
     Surface(modifier = modifier.fillMaxSize(), color = DarkSurface) {
       Column(modifier = Modifier.fillMaxSize()) {
-        SearchEntryBar(onClick = onSearchClick)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+          Box(modifier = Modifier.weight(1f)) { SearchEntryBar(onClick = onSearchClick) }
+          IconButton(onClick = onLeaderboardClick) {
+            Icon(
+              Icons.Filled.EmojiEvents,
+              contentDescription = "Classifica settimanale",
+              tint = AccentCyan,
+            )
+          }
+          IconButton(
+            onClick = {
+              // Aprire = leggere: azzeriamo subito il badge locale (server le marca lette).
+              viewModel.clearNotificationBadge()
+              onNotificationsClick()
+            },
+            modifier = Modifier.padding(end = 8.dp),
+          ) {
+            BadgedBox(badge = {
+              if (state.unreadNotifications > 0) {
+                Badge {
+                  Text(if (state.unreadNotifications > 99) "99+" else "${state.unreadNotifications}")
+                }
+              }
+            }) {
+              Icon(Icons.Filled.Notifications, contentDescription = "Notifiche", tint = AccentCyan)
+            }
+          }
+        }
         PullToRefreshBox(
             // Lo spinner pull-to-refresh va mostrato solo durante un refresh CON
             // contenuti già a schermo; il primo caricamento usa TsmLoadingState.

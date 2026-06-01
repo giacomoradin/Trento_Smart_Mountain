@@ -242,6 +242,7 @@ fun RegistraScreen(
       modifier = Modifier.fillMaxSize(),
       userLocation = uiState.userLocation,
       trackGeoPoints = uiState.trackGeoPoints,
+      plannedRouteGeoPoints = uiState.plannedRouteGeoPoints,
       centerOnUserTick = uiState.centerOnUserTick,
       centerOnLivePointLat = uiState.centerOnLivePointLat,
       centerOnLivePointLon = uiState.centerOnLivePointLon,

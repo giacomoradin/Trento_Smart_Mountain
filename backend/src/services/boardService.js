@@ -82,6 +82,21 @@ export async function deleteBoardPost(postId, userId, { isAdmin = false } = {}) 
   return { _id: String(postId) };
 }
 
+/** Aggiorna un proprio post (autore o admin). Solo i campi forniti. */
+export async function updateBoardPost(postId, userId, { isAdmin = false, type, title, body, validUntil } = {}) {
+  const post = await RefugeBoardPost.findById(postId);
+  if (!post) throw new Error("POST_NOT_FOUND");
+  if (!isAdmin && String(post.refugeId) !== String(userId)) {
+    throw new Error("FORBIDDEN_NOT_OWNER");
+  }
+  if (type !== undefined && VALID_TYPES.includes(type)) post.type = type;
+  if (title !== undefined) post.title = String(title).trim().slice(0, 120);
+  if (body !== undefined) post.body = String(body).trim().slice(0, 2000);
+  if (validUntil !== undefined) post.validUntil = validUntil ? new Date(validUntil) : null;
+  await post.save();
+  return shape(post.toObject());
+}
+
 function shape(p) {
   return {
     _id: String(p._id),

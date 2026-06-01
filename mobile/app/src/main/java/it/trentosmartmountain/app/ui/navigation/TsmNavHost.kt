@@ -35,6 +35,9 @@ import it.trentosmartmountain.app.ui.screens.challenges.ChallengesScreen
 import it.trentosmartmountain.app.ui.screens.challenges.CreateChallengeScreen
 import it.trentosmartmountain.app.ui.screens.formazione.FormazioneScreen
 import it.trentosmartmountain.app.ui.screens.home.ActivityDetailScreen
+import it.trentosmartmountain.app.ui.screens.home.FollowListScreen
+import it.trentosmartmountain.app.ui.screens.home.UserSearchScreen
+import it.trentosmartmountain.app.viewmodel.FollowListType
 import it.trentosmartmountain.app.ui.screens.login.LoginScreen
 import it.trentosmartmountain.app.ui.screens.main.HikerMainScreen
 import it.trentosmartmountain.app.ui.screens.nfc.NfcResultScreen
@@ -205,6 +208,7 @@ fun TsmNavHost() {
                 onNavigateToStoryViewer = { refId, kind ->
                     navController.navigate(Routes.storyViewerRoute(refId, kind))
                 },
+                onNavigateToUserSearch = { navController.navigate(Routes.USER_SEARCH) },
             )
         }
 
@@ -454,6 +458,39 @@ fun TsmNavHost() {
             it.trentosmartmountain.app.ui.screens.home.UserProfileScreen(
                 userId = userId,
                 onBack = { navController.popBackStack() },
+                onOpenFollowList = { uid, type ->
+                    val typeArg =
+                        if (type == FollowListType.FOLLOWING) "following" else "followers"
+                    navController.navigate(Routes.followListRoute(uid, typeArg))
+                },
+            )
+        }
+
+        // ── Social: ricerca/scoperta utenti ("aggiungi amici") ───────────
+        composable(Routes.USER_SEARCH) {
+            UserSearchScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+            )
+        }
+
+        // ── Social: lista follower/seguiti (navigazione del grafo) ───────
+        composable(
+            route = Routes.FOLLOW_LIST,
+            arguments = listOf(
+                navArgument("userId") { type = NavType.StringType },
+                navArgument("type") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val uid = backStackEntry.arguments?.getString("userId").orEmpty()
+            val typeArg = backStackEntry.arguments?.getString("type") ?: "followers"
+            val listType =
+                if (typeArg == "following") FollowListType.FOLLOWING else FollowListType.FOLLOWERS
+            FollowListScreen(
+                userId = uid,
+                type = listType,
+                onBack = { navController.popBackStack() },
+                onUserClick = { targetId -> navController.navigate(Routes.userProfileRoute(targetId)) },
             )
         }
 

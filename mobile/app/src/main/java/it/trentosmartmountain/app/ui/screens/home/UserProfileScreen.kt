@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.home
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.viewmodel.FollowListType
 import it.trentosmartmountain.app.viewmodel.UserProfileViewModel
 
 private val DarkSurface = Color(0xFF1C1C1E)
@@ -84,6 +87,8 @@ fun UserProfileScreen(
     userId: String,
     onBack: () -> Unit,
     onCommentClick: (itemId: String, kind: String) -> Unit = { _, _ -> },
+    /** Tap sui contatori FOLLOWER/SEGUITI → lista navigabile del grafo sociale. */
+    onOpenFollowList: (userId: String, type: FollowListType) -> Unit = { _, _ -> },
     viewModel: UserProfileViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -134,6 +139,7 @@ fun UserProfileScreen(
                     commentsTarget = CommentsTarget(id, kind)
                     onCommentClick(id, kind)
                 },
+                onOpenFollowList = onOpenFollowList,
                 contentPadding = padding,
             )
         }
@@ -155,6 +161,7 @@ private fun ProfileContent(
     onLoadMore: () -> Unit,
     onLikeToggle: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
     onCommentClick: (String, String) -> Unit,
+    onOpenFollowList: (userId: String, type: FollowListType) -> Unit,
     contentPadding: PaddingValues,
 ) {
     val listState = rememberLazyListState()
@@ -180,7 +187,13 @@ private fun ProfileContent(
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item(key = "header") { ProfileHeader(state = state, onToggleFollow = onToggleFollow) }
+        item(key = "header") {
+            ProfileHeader(
+                state = state,
+                onToggleFollow = onToggleFollow,
+                onOpenFollowList = onOpenFollowList,
+            )
+        }
         item(key = "section-title") {
             Text(
                 text = "POST · ${state.posts.size}",
@@ -222,6 +235,7 @@ private fun ProfileContent(
 private fun ProfileHeader(
     state: it.trentosmartmountain.app.viewmodel.UserProfileState,
     onToggleFollow: () -> Unit,
+    onOpenFollowList: (userId: String, type: FollowListType) -> Unit,
 ) {
     val user = state.user ?: return
     val stats = state.stats
@@ -268,8 +282,16 @@ private fun ProfileHeader(
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 StatBlock(label = "POST", value = "${state.posts.size}")
-                StatBlock(label = "FOLLOWER", value = "${stats?.followers ?: 0}")
-                StatBlock(label = "SEGUITI", value = "${stats?.following ?: 0}")
+                StatBlock(
+                    label = "FOLLOWER",
+                    value = "${stats?.followers ?: 0}",
+                    onClick = { onOpenFollowList(state.targetUserId, FollowListType.FOLLOWERS) },
+                )
+                StatBlock(
+                    label = "SEGUITI",
+                    value = "${stats?.following ?: 0}",
+                    onClick = { onOpenFollowList(state.targetUserId, FollowListType.FOLLOWING) },
+                )
                 user.socialCredits?.let { credits ->
                     StatBlock(label = "CREDITI", value = "%,d".format(credits))
                 }
@@ -289,8 +311,18 @@ private fun ProfileHeader(
 }
 
 @Composable
-private fun StatBlock(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun StatBlock(label: String, value: String, onClick: (() -> Unit)? = null) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = if (onClick != null) {
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onClick() }
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        } else {
+            Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+        },
+    ) {
         Text(
             value,
             color = Color.White,

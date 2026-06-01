@@ -101,6 +101,22 @@ data class FollowListEntry(
     @SerializedName("since") val since: String?,
 )
 
+// ── Ricerca / scoperta utenti (GET /api/v1/users/search) ────────────────────
+
+/** Risposta di GET /users/search: lista di utenti che matchano lo username. */
+data class UserSearchResponse(
+    @SerializedName("items") val items: List<UserSearchItem> = emptyList(),
+)
+
+/**
+ * Singolo risultato di ricerca: utente pubblico (username + avatar) +
+ * `isFollowedByMe` per mostrare subito "Segui"/"Seguito" senza altra query.
+ */
+data class UserSearchItem(
+    @SerializedName("user") val user: FeedUser?,
+    @SerializedName("isFollowedByMe") val isFollowedByMe: Boolean = false,
+)
+
 // ── Commenti ───────────────────────────────────────────────────────────────
 
 /** Body POST commento — server valida 1..500 char + trim. */

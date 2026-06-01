@@ -1366,4 +1366,128 @@ describe("Social Routes", () => {
       expect(forbidden.status).toBe(403);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Discovery — GET /api/v1/users/search
+  // ──────────────────────────────────────────────────────────────────
+
+  describe("GET /api/v1/users/search", () => {
+    test("finds users by partial username, case-insensitive, excludes self", async () => {
+      const me = await createTestHiker({
+        username: "zzsrchviewer",
+        email: "zzsrchviewer@test.com",
+      });
+      await createTestHiker({ username: "zzsrchmarco", email: "zzsrchmarco@test.com" });
+      await createTestHiker({ username: "zzsrchmarta", email: "zzsrchmarta@test.com" });
+      await createTestHiker({ username: "zzsrchgianni", email: "zzsrchgianni@test.com" });
+
+      // Query uppercase contro username lowercase → match case-insensitive.
+      const res = await request(app)
+        .get("/api/v1/users/search")
+        .query({ q: "ZZSRCHMAR" })
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      const names = res.body.items.map((i) => i.user.username).sort();
+      expect(names).toEqual(["zzsrchmarco", "zzsrchmarta"]);
+      // Self mai incluso anche se matcha (qui non matcha, ma controllo difensivo).
+      expect(names).not.toContain("zzsrchviewer");
+    });
+
+    test("sets isFollowedByMe per result", async () => {
+      const me = await createTestHiker({
+        username: "zzfviewer",
+        email: "zzfviewer@test.com",
+      });
+      const marco = await createTestHiker({ username: "zzfmarco", email: "zzfmarco@test.com" });
+      await createTestHiker({ username: "zzfmarta", email: "zzfmarta@test.com" });
+      await request(app)
+        .post(`/api/v1/users/${marco.user._id}/follow`)
+        .set("Authorization", `Bearer ${me.token}`);
+
+      const res = await request(app)
+        .get("/api/v1/users/search")
+        .query({ q: "zzfmar" })
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      const byName = Object.fromEntries(
+        res.body.items.map((i) => [i.user.username, i.isFollowedByMe]),
+      );
+      expect(byName.zzfmarco).toBe(true);
+      expect(byName.zzfmarta).toBe(false);
+    });
+
+    test("returns empty for term shorter than 2 chars", async () => {
+      const me = await createTestHiker({ username: "zzshort", email: "zzshort@test.com" });
+      const res = await request(app)
+        .get("/api/v1/users/search")
+        .query({ q: "z" })
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items).toEqual([]);
+    });
+
+    test("escapes regex metacharacters (no injection / match-all)", async () => {
+      const me = await createTestHiker({ username: "zzrxviewer", email: "zzrxviewer@test.com" });
+      await createTestHiker({ username: "zzrxuser", email: "zzrxuser@test.com" });
+      // ".*" matcherebbe tutto se interpretato come regex; escapato → letterale
+      // "\.\*" che nessun username contiene → 0 risultati.
+      const res = await request(app)
+        .get("/api/v1/users/search")
+        .query({ q: ".*" })
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items.length).toBe(0);
+    });
+
+    test("requires authentication", async () => {
+      const res = await request(app).get("/api/v1/users/search").query({ q: "zz" });
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Social graph — GET /api/v1/users/:id/followers and /following
+  // ──────────────────────────────────────────────────────────────────
+
+  describe("GET /api/v1/users/:id/followers and /following", () => {
+    test("lists followers and following of an arbitrary user", async () => {
+      const alice = await createTestHiker({ username: "zzgalice", email: "zzgalice@test.com" });
+      const bob = await createTestHiker({ username: "zzgbob", email: "zzgbob@test.com" });
+      const carol = await createTestHiker({ username: "zzgcarol", email: "zzgcarol@test.com" });
+
+      // bob e carol seguono alice; alice segue carol.
+      await request(app)
+        .post(`/api/v1/users/${alice.user._id}/follow`)
+        .set("Authorization", `Bearer ${bob.token}`);
+      await request(app)
+        .post(`/api/v1/users/${alice.user._id}/follow`)
+        .set("Authorization", `Bearer ${carol.token}`);
+      await request(app)
+        .post(`/api/v1/users/${carol.user._id}/follow`)
+        .set("Authorization", `Bearer ${alice.token}`);
+
+      const followers = await request(app)
+        .get(`/api/v1/users/${alice.user._id}/followers`)
+        .set("Authorization", `Bearer ${bob.token}`);
+      expect(followers.status).toBe(200);
+      expect(followers.body.count).toBe(2);
+      const followerNames = followers.body.items.map((i) => i.user.username).sort();
+      expect(followerNames).toEqual(["zzgbob", "zzgcarol"]);
+
+      const following = await request(app)
+        .get(`/api/v1/users/${alice.user._id}/following`)
+        .set("Authorization", `Bearer ${bob.token}`);
+      expect(following.status).toBe(200);
+      expect(following.body.count).toBe(1);
+      expect(following.body.items[0].user.username).toBe("zzgcarol");
+    });
+
+    test("rejects malformed user id with 422", async () => {
+      const me = await createTestHiker({ username: "zzgbad", email: "zzgbad@test.com" });
+      const res = await request(app)
+        .get("/api/v1/users/not-an-id/followers")
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(422);
+    });
+  });
 });

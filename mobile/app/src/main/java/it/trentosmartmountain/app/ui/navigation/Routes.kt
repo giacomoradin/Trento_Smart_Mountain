@@ -70,6 +70,15 @@ object Routes {
   const val USER_PROFILE = "user_profile/{userId}"
   fun userProfileRoute(userId: String) = "user_profile/${Uri.encode(userId)}"
 
+  // ── Social: ricerca/scoperta utenti ("aggiungi amici") ──────────────────────
+  const val USER_SEARCH = "user_search"
+
+  // ── Social: lista follower/seguiti di un utente ─────────────────────────────
+  // `type` = "followers" | "following" (vedi FollowListType).
+  const val FOLLOW_LIST = "follow_list/{userId}/{type}"
+  fun followListRoute(userId: String, type: String) =
+    "follow_list/${Uri.encode(userId)}/${Uri.encode(type)}"
+
   // ── Social: story viewer full-screen ────────────────────────────────────────
   // refId = `_id` Activity/HikeSession, kind = "activity"|"session" (query arg).
   const val STORY_VIEWER = "story_viewer/{refId}?kind={kind}"

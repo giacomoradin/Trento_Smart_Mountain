@@ -74,6 +74,7 @@ import it.trentosmartmountain.app.data.remote.dto.SocialRowResponse
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.UpdateSessionStatusRequest
 import it.trentosmartmountain.app.data.remote.dto.UserResponse
+import it.trentosmartmountain.app.data.remote.dto.UserSearchResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherForecastResponse
 import it.trentosmartmountain.app.data.remote.dto.WeatherLocationsResponse
 import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
@@ -447,6 +448,33 @@ interface TsmApiService {
 
   @GET("api/v1/users/{id}/follow-stats")
   suspend fun getFollowStats(@Path("id") id: String): Response<FollowStatsResponse>
+
+  /**
+   * Ricerca escursionisti per username (match parziale, case-insensitive).
+   * Cuore del flusso "aggiungi amici": ritorna utenti + `isFollowedByMe`.
+   * Termine < 2 caratteri → lista vuota (gestito lato server).
+   */
+  @GET("api/v1/users/search")
+  suspend fun searchUsers(
+    @Query("q") query: String,
+    @Query("limit") limit: Int = 20,
+  ): Response<UserSearchResponse>
+
+  /** Follower di un utente qualsiasi (navigazione del grafo sociale dal profilo). */
+  @GET("api/v1/users/{id}/followers")
+  suspend fun getUserFollowers(
+    @Path("id") id: String,
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<FollowListResponse>
+
+  /** Utenti seguiti da un utente qualsiasi. */
+  @GET("api/v1/users/{id}/following")
+  suspend fun getUserFollowing(
+    @Path("id") id: String,
+    @Query("page") page: Int = 1,
+    @Query("limit") limit: Int = 20,
+  ): Response<FollowListResponse>
 
   @GET("api/v1/users/me/following")
   suspend fun getMyFollowing(

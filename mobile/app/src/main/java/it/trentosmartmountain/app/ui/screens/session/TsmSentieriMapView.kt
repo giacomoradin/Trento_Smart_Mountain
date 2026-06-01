@@ -1,10 +1,7 @@
 package it.trentosmartmountain.app.ui.screens.session
 
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.Typeface
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -17,7 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.graphics.createBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -98,8 +94,10 @@ fun TsmSentieriMapView(
 
     // Marker icons cache per tipo (evita di ricreare il bitmap a ogni marker).
     val iconCache = remember { mutableMapOf<SentieroMarkerType, Drawable>() }
-    fun iconFor(type: SentieroMarkerType): Drawable =
-        iconCache.getOrPut(type) { buildMarkerIcon(context.resources.displayMetrics.density, type) }
+    fun iconFor(type: SentieroMarkerType): android.graphics.drawable.Drawable =
+        iconCache.getOrPut(type) {
+            buildRouteEndpointIcon(context.resources.displayMetrics.density, type)
+        }
 
     // Info window custom (tema scuro) condivisa da tutti i marker, al posto del bubble di default.
     val sharedInfoWindow = remember(mapView) { TsmMarkerInfoWindow(mapView) }
@@ -153,28 +151,6 @@ fun TsmSentieriMapView(
     }
 
     AndroidView(factory = { mapView }, modifier = modifier, update = { it.invalidate() })
-}
-
-/** Costruisce un pin a goccia colorato in base al tipo di marker. */
-private fun buildMarkerIcon(density: Float, type: SentieroMarkerType): Drawable {
-    val color = when (type) {
-        SentieroMarkerType.DESTINATION -> android.graphics.Color.parseColor("#4FC3F7")
-        SentieroMarkerType.SELECTED_DESTINATION -> android.graphics.Color.parseColor("#66BB6A")
-        SentieroMarkerType.START -> android.graphics.Color.parseColor("#FFB300")
-    }
-    val sizePx = (28 * density).toInt().coerceAtLeast(24)
-    val bmp = createBitmap(sizePx, sizePx)
-    val canvas = Canvas(bmp)
-    val r = sizePx / 2f
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
-    val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = android.graphics.Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 2f * density
-    }
-    canvas.drawCircle(r, r, r - 2f * density, fill)
-    canvas.drawCircle(r, r, r - 2f * density, stroke)
-    return BitmapDrawable(android.content.res.Resources.getSystem(), bmp)
 }
 
 /**

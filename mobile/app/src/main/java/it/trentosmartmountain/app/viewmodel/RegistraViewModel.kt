@@ -89,6 +89,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     val elevationGainMeters: Int = 0,
     val currentAltitudeMeters: Int? = null,
     val trackGeoPoints: List<GeoPoint> = emptyList(),
+    /** Polyline del percorso pianificato (GPX/SAT) della sessione collegata. */
+    val plannedRouteGeoPoints: List<GeoPoint> = emptyList(),
     val showStopConfirm: Boolean = false,
     /** Sessione attiva collegata al tracking (null = sessione libera). */
     val activeSessionId: String? = null,
@@ -249,7 +251,10 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         .distinctUntilChanged()
         .collect { sessionId ->
           if (sessionId != null) {
-            viewModelScope.launch { refreshSessionRole(sessionId) }
+            viewModelScope.launch {
+              refreshSessionRole(sessionId)
+              loadPlannedRoute(sessionId)
+            }
             startEmergencyPolling(sessionId)
             val local = SessionLiveStateStore.getState(app, sessionId)
             val tracking = _uiState.value.trackingStatus != TrackingStatus.IDLE
@@ -265,6 +270,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
                 showIncomingEmergencyIcon = false,
                 showSosAlertBorder = false,
                 isSessionGroupLeader = false,
+                plannedRouteGeoPoints = emptyList(),
               )
             }
           }
@@ -323,6 +329,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
           showStopConfirm = false,
           shortActivityConfirm = false,
           trackGeoPoints = emptyList(),
+          plannedRouteGeoPoints = emptyList(),
           elapsedSeconds = 0,
           distanceMeters = 0.0,
           elevationGainMeters = 0,
@@ -1181,6 +1188,24 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
             p.userId?._id?.toString() == userId && p.role == "groupLeader"
           } == true
         _uiState.update { it.copy(isSessionGroupLeader = isLeader) }
+      }
+    }
+  }
+
+  /** Carica la polyline pianificata (GPX/SAT) della sessione per l'overlay su mappa Registra. */
+  private suspend fun loadPlannedRoute(sessionId: String) {
+    if (_uiState.value.activeSessionId != sessionId) return
+    runCatching {
+      val res = TsmApiClient.service().getSessionById(sessionId)
+      if (!res.isSuccessful || res.body() == null) return@runCatching
+      val points =
+        res.body()!!
+          .plannedRoute
+          ?.polylinePoints
+          .orEmpty()
+          .map { GeoPoint(it.lat, it.lon) }
+      if (_uiState.value.activeSessionId == sessionId) {
+        _uiState.update { it.copy(plannedRouteGeoPoints = points) }
       }
     }
   }

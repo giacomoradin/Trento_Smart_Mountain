@@ -1,6 +1,6 @@
 import HikeSession from "../../src/models/hikeSession.js";
+import { createTestHiker } from "../helpers/authHelper.js";
 import Sentiero from "../../src/models/sentiero.js";
-import { createTestHiker } from "./authHelper.js";
 import crypto from "crypto";
 
 /**

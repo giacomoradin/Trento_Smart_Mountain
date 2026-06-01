@@ -1,6 +1,7 @@
 import request from "supertest";
 import app from "../../src/app.js";
 import { createTestSentiero } from "../helpers/sessionHelper.js";
+import { createTestHiker } from "../helpers/authHelper.js";
 
 /**
  * Test suite per le route dei sentieri SAT.
@@ -12,26 +13,38 @@ import { createTestSentiero } from "../helpers/sessionHelper.js";
  * - GET /api/v1/sentieri/destinazioni               (tutte le destinazioni)
  * - GET /api/v1/sentieri/destinazioni/:nome/sentieri (sentieri per destinazione)
  *
- * Le route sono pubbliche — nessun token richiesto.
+ * Le route richiedono autenticazione — token generato via createTestHiker.
  */
 
 describe("Sentieri Routes", () => {
-  // ── Dati di test condivisi ────────────────────────────────────────
-  // Creati una volta per describe, usati nei test figli.
-  // afterEach del setup.js pulisce il DB dopo ogni test,
-  // quindi ogni test ricrea i sentieri di cui ha bisogno.
+  let token;
+
+  beforeEach(async () => {
+    const { token: t } = await createTestHiker({
+      username: `hiker_${Math.random().toString(36).slice(2, 8)}`,
+      email: `hiker_${Math.random().toString(36).slice(2, 8)}@test.com`,
+    });
+    token = t;
+  });
 
   // ══════════════════════════════════════════════════════════════════
   // GET /api/v1/sentieri — Lista con filtri
   // ══════════════════════════════════════════════════════════════════
 
   describe("GET /api/v1/sentieri", () => {
+    test("restituisce 401 senza token", async () => {
+      const response = await request(app).get("/api/v1/sentieri");
+      expect(response.status).toBe(401);
+    });
+
     test("restituisce tutti i sentieri senza filtri", async () => {
       await createTestSentiero({ codice: "E001", difficolta: "E" });
       await createTestSentiero({ codice: "T001", difficolta: "T" });
       await createTestSentiero({ codice: "EE001", difficolta: "EE" });
 
-      const response = await request(app).get("/api/v1/sentieri");
+      const response = await request(app)
+        .get("/api/v1/sentieri")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty("count", 3);
@@ -44,7 +57,9 @@ describe("Sentieri Routes", () => {
       await createTestSentiero({ codice: "E003", difficolta: "E" });
       await createTestSentiero({ codice: "EE002", difficolta: "EE" });
 
-      const response = await request(app).get("/api/v1/sentieri?difficolta=E");
+      const response = await request(app)
+        .get("/api/v1/sentieri?difficolta=E")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(2);
@@ -54,7 +69,9 @@ describe("Sentieri Routes", () => {
     test("filtra per difficoltà case-insensitive", async () => {
       await createTestSentiero({ codice: "EE003", difficolta: "EE" });
 
-      const response = await request(app).get("/api/v1/sentieri?difficolta=ee");
+      const response = await request(app)
+        .get("/api/v1/sentieri?difficolta=ee")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(1);
@@ -75,9 +92,9 @@ describe("Sentieri Routes", () => {
         puntoFine: { nome: "Cima Tosa", quota: 3173 },
       });
 
-      const response = await request(app).get(
-        "/api/v1/sentieri?destinazione=Rifugio",
-      );
+      const response = await request(app)
+        .get("/api/v1/sentieri?destinazione=Rifugio")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(2);
@@ -100,9 +117,9 @@ describe("Sentieri Routes", () => {
         quotaMassima: 1300,
       }); // dislivello 800
 
-      const response = await request(app).get(
-        "/api/v1/sentieri?dislivelloMax=800",
-      );
+      const response = await request(app)
+        .get("/api/v1/sentieri?dislivelloMax=800")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(2);
@@ -120,9 +137,9 @@ describe("Sentieri Routes", () => {
         lunghezzaPlanimetrica: 12000,
       });
 
-      const response = await request(app).get(
-        "/api/v1/sentieri?distanzaMax=8000",
-      );
+      const response = await request(app)
+        .get("/api/v1/sentieri?distanzaMax=8000")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(2);
@@ -136,9 +153,9 @@ describe("Sentieri Routes", () => {
       await createTestSentiero({ codice: "E014", tempoAndata: "03:30" });
       await createTestSentiero({ codice: "E015", tempoAndata: "05:00" });
 
-      const response = await request(app).get(
-        "/api/v1/sentieri?tempoMax=03:30",
-      );
+      const response = await request(app)
+        .get("/api/v1/sentieri?tempoMax=03:30")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(2);
@@ -164,9 +181,9 @@ describe("Sentieri Routes", () => {
         tempoAndata: "06:00",
       });
 
-      const response = await request(app).get(
-        "/api/v1/sentieri?difficolta=E&distanzaMax=5000&tempoMax=03:00",
-      );
+      const response = await request(app)
+        .get("/api/v1/sentieri?difficolta=E&distanzaMax=5000&tempoMax=03:00")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(1);
@@ -176,9 +193,9 @@ describe("Sentieri Routes", () => {
     test("restituisce lista vuota se nessun sentiero matcha i filtri", async () => {
       await createTestSentiero({ codice: "E018", difficolta: "E" });
 
-      const response = await request(app).get(
-        "/api/v1/sentieri?difficolta=EEA",
-      );
+      const response = await request(app)
+        .get("/api/v1/sentieri?difficolta=EEA")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(0);
@@ -190,7 +207,9 @@ describe("Sentieri Routes", () => {
       await createTestSentiero({ codice: "E020" });
       await createTestSentiero({ codice: "E021" });
 
-      const response = await request(app).get("/api/v1/sentieri?limit=2");
+      const response = await request(app)
+        .get("/api/v1/sentieri?limit=2")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.data.length).toBeLessThanOrEqual(2);
@@ -199,7 +218,9 @@ describe("Sentieri Routes", () => {
     test("non espone percorsoCoordinate nella lista", async () => {
       await createTestSentiero({ codice: "E022" });
 
-      const response = await request(app).get("/api/v1/sentieri");
+      const response = await request(app)
+        .get("/api/v1/sentieri")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       response.body.data.forEach((s) => {
@@ -213,13 +234,20 @@ describe("Sentieri Routes", () => {
   // ══════════════════════════════════════════════════════════════════
 
   describe("GET /api/v1/sentieri/stats", () => {
+    test("restituisce 401 senza token", async () => {
+      const response = await request(app).get("/api/v1/sentieri/stats");
+      expect(response.status).toBe(401);
+    });
+
     test("restituisce statistiche aggregate corrette", async () => {
       await createTestSentiero({ codice: "S001", difficolta: "T" });
       await createTestSentiero({ codice: "S002", difficolta: "E" });
       await createTestSentiero({ codice: "S003", difficolta: "E" });
       await createTestSentiero({ codice: "S004", difficolta: "EE" });
 
-      const response = await request(app).get("/api/v1/sentieri/stats");
+      const response = await request(app)
+        .get("/api/v1/sentieri/stats")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.data).toHaveProperty("totalTrails", 4);
@@ -231,7 +259,9 @@ describe("Sentieri Routes", () => {
     });
 
     test("restituisce zero totali se non ci sono sentieri", async () => {
-      const response = await request(app).get("/api/v1/sentieri/stats");
+      const response = await request(app)
+        .get("/api/v1/sentieri/stats")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.data.totalTrails).toBe(0);
@@ -244,29 +274,39 @@ describe("Sentieri Routes", () => {
   // ══════════════════════════════════════════════════════════════════
 
   describe("GET /api/v1/sentieri/:codice", () => {
+    test("restituisce 401 senza token", async () => {
+      const response = await request(app).get("/api/v1/sentieri/C001");
+      expect(response.status).toBe(401);
+    });
+
     test("restituisce il sentiero completo con coordinate", async () => {
       await createTestSentiero({ codice: "C001", difficolta: "E" });
 
-      const response = await request(app).get("/api/v1/sentieri/C001");
+      const response = await request(app)
+        .get("/api/v1/sentieri/C001")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.data).toHaveProperty("codice", "C001");
       expect(response.body.data).toHaveProperty("difficolta", "E");
-      // Il dettaglio include le coordinate (a differenza della lista)
       expect(response.body.data).toHaveProperty("percorsoCoordinate");
     });
 
     test("è case-insensitive sul codice", async () => {
       await createTestSentiero({ codice: "C002" });
 
-      const response = await request(app).get("/api/v1/sentieri/c002");
+      const response = await request(app)
+        .get("/api/v1/sentieri/c002")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.data.codice).toBe("C002");
     });
 
     test("restituisce 404 per codice inesistente", async () => {
-      const response = await request(app).get("/api/v1/sentieri/INESISTENTE");
+      const response = await request(app)
+        .get("/api/v1/sentieri/INESISTENTE")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty("message");
@@ -278,6 +318,11 @@ describe("Sentieri Routes", () => {
   // ══════════════════════════════════════════════════════════════════
 
   describe("GET /api/v1/sentieri/destinazioni", () => {
+    test("restituisce 401 senza token", async () => {
+      const response = await request(app).get("/api/v1/sentieri/destinazioni");
+      expect(response.status).toBe(401);
+    });
+
     test("restituisce le destinazioni uniche con statistiche", async () => {
       await createTestSentiero({
         codice: "D001",
@@ -292,10 +337,12 @@ describe("Sentieri Routes", () => {
         puntoFine: { nome: "Cima Tosa", quota: 3173 },
       });
 
-      const response = await request(app).get("/api/v1/sentieri/destinazioni");
+      const response = await request(app)
+        .get("/api/v1/sentieri/destinazioni")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.count).toBe(2); // 2 destinazioni uniche
+      expect(response.body.count).toBe(2);
       expect(Array.isArray(response.body.data)).toBe(true);
 
       const pedrotti = response.body.data.find(
@@ -306,7 +353,9 @@ describe("Sentieri Routes", () => {
     });
 
     test("restituisce lista vuota se non ci sono sentieri", async () => {
-      const response = await request(app).get("/api/v1/sentieri/destinazioni");
+      const response = await request(app)
+        .get("/api/v1/sentieri/destinazioni")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(0);
@@ -327,7 +376,9 @@ describe("Sentieri Routes", () => {
         puntoFine: { nome: "Monte Bondone", quota: 2180 },
       });
 
-      const response = await request(app).get("/api/v1/sentieri/destinazioni");
+      const response = await request(app)
+        .get("/api/v1/sentieri/destinazioni")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       const nomi = response.body.data.map((d) => d.nome);
@@ -340,6 +391,13 @@ describe("Sentieri Routes", () => {
   // ══════════════════════════════════════════════════════════════════
 
   describe("GET /api/v1/sentieri/destinazioni/:nome/sentieri", () => {
+    test("restituisce 401 senza token", async () => {
+      const response = await request(app).get(
+        "/api/v1/sentieri/destinazioni/Rifugio%20Pedrotti/sentieri",
+      );
+      expect(response.status).toBe(401);
+    });
+
     test("restituisce i sentieri che portano alla destinazione", async () => {
       await createTestSentiero({
         codice: "DN001",
@@ -354,9 +412,9 @@ describe("Sentieri Routes", () => {
         puntoFine: { nome: "Cima Tosa", quota: 3173 },
       });
 
-      const response = await request(app).get(
-        "/api/v1/sentieri/destinazioni/Rifugio%20Pedrotti/sentieri",
-      );
+      const response = await request(app)
+        .get("/api/v1/sentieri/destinazioni/Rifugio%20Pedrotti/sentieri")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(2);
@@ -372,9 +430,9 @@ describe("Sentieri Routes", () => {
         puntoFine: { nome: "Monte Altissimo", quota: 2079 },
       });
 
-      const response = await request(app).get(
-        "/api/v1/sentieri/destinazioni/Monte%20Altissimo/sentieri",
-      );
+      const response = await request(app)
+        .get("/api/v1/sentieri/destinazioni/Monte%20Altissimo/sentieri")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(200);
       response.body.data.forEach((s) => {
@@ -383,9 +441,9 @@ describe("Sentieri Routes", () => {
     });
 
     test("restituisce 404 per destinazione inesistente", async () => {
-      const response = await request(app).get(
-        "/api/v1/sentieri/destinazioni/DestinazioneInesistente/sentieri",
-      );
+      const response = await request(app)
+        .get("/api/v1/sentieri/destinazioni/DestinazioneInesistente/sentieri")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(404);
       expect(response.body).toHaveProperty("message");

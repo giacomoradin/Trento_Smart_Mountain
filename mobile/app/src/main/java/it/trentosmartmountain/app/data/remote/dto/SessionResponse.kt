@@ -34,6 +34,11 @@ data class SessionResponse(
      * Usato dalla SessionDetail per invocare la checklist dinamica con il codice corretto (US-7).
      */
     val sentieroCode: String? = null,
+    /**
+     * Tracciato pianificato (GPX importato o sentiero SAT) per overlay in tab Registra
+     * e controllo distanza dal percorso durante il live tracking.
+     */
+    val plannedRoute: PlannedRoute? = null,
 )
 
 /** Dettagli percorso inclusi nella sessione (nome, difficoltà, punti GeoJSON). */

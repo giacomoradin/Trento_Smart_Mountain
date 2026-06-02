@@ -43,21 +43,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import it.trentosmartmountain.app.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.NotificationItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.ListSkeleton
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.util.RelativeTime
 import it.trentosmartmountain.app.viewmodel.NotificationsViewModel
 
-private val DarkSurface = Color(0xFF1C1C1E)
-private val CardBackground = Color(0xFF2C2C2E)
-private val AccentCyan = Color(0xFF4DD0E1)
-private val AccentRed = Color(0xFFFF5252)
-private val AccentGreen = Color(0xFF4CAF50)
-private val TextSecondary = Color(0xFF8E8E93)
+private val DarkSurface = TsmColors.FeedBackground
+private val CardBackground = TsmColors.CardElevated
+private val AccentCyan = TsmColors.Cyan
+private val AccentRed = TsmColors.Danger
+private val AccentGreen = TsmColors.Online
+private val TextSecondary = TsmColors.TextSecondary
 
 /**
  * Centro notifiche: lista delle interazioni ricevute (follow/like/commento).
@@ -78,7 +82,7 @@ fun NotificationsScreen(
         containerColor = DarkSurface,
         topBar = {
             TopAppBar(
-                title = { Text("Notifiche", color = Color.White, fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.notifications_title), color = Color.White, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
@@ -101,13 +105,13 @@ fun NotificationsScreen(
         }
 
         when {
-            state.isLoading && state.items.isEmpty() -> Centered(padding) { CircularProgressIndicator(color = AccentCyan) }
+            state.isLoading && state.items.isEmpty() -> ListSkeleton(modifier = Modifier.padding(padding))
             state.items.isEmpty() -> Centered(padding) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("🔔", style = MaterialTheme.typography.displaySmall)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Nessuna notifica per ora.\nQuando qualcuno ti segue o interagisce coi tuoi post, lo vedrai qui.",
+                        stringResource(R.string.notifications_empty),
                         color = TextSecondary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -197,14 +201,19 @@ private fun typeIcon(type: String): Pair<ImageVector, Color> = when (type) {
     else -> Icons.Filled.PersonAdd to TextSecondary
 }
 
+@Composable
 private fun notifText(n: NotificationItem): String {
     val name = n.actor?.username ?: "Qualcuno"
-    val target = if (n.targetKind == "session") "uscita di gruppo" else "attività"
+    val isSession = n.targetKind == "session"
     return when (n.type) {
-        "follow" -> "$name ha iniziato a seguirti"
-        "like" -> "$name ha messo \"Mi piace\" alla tua $target"
-        "comment" -> "$name ha commentato la tua $target"
-        else -> "$name ha interagito con te"
+        "follow" -> stringResource(R.string.notif_follow, name)
+        "like" -> stringResource(
+            if (isSession) R.string.notif_like_session else R.string.notif_like_activity, name,
+        )
+        "comment" -> stringResource(
+            if (isSession) R.string.notif_comment_session else R.string.notif_comment_activity, name,
+        )
+        else -> stringResource(R.string.notif_generic, name)
     }
 }
 

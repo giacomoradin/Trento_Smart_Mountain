@@ -35,19 +35,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.remote.dto.LeaderboardEntry
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.ListSkeleton
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.LeaderboardMetric
 import it.trentosmartmountain.app.viewmodel.LeaderboardViewModel
 
-private val DarkSurface = Color(0xFF1C1C1E)
-private val CardBackground = Color(0xFF2C2C2E)
-private val AccentCyan = Color(0xFF4DD0E1)
-private val TextSecondary = Color(0xFF8E8E93)
+private val DarkSurface = TsmColors.FeedBackground
+private val CardBackground = TsmColors.CardElevated
+private val AccentCyan = TsmColors.Cyan
+private val TextSecondary = TsmColors.TextSecondary
 
 /**
  * Classifica settimanale (ultimi 7 giorni) tra l'utente e i suoi seguiti.
@@ -69,9 +74,9 @@ fun LeaderboardScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Classifica settimanale", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.leaderboard_title), color = Color.White, fontWeight = FontWeight.Bold)
                         Text(
-                            "Ultimi 7 giorni · tu e chi segui",
+                            stringResource(R.string.leaderboard_subtitle),
                             color = TextSecondary,
                             style = MaterialTheme.typography.labelSmall,
                         )
@@ -92,13 +97,13 @@ fun LeaderboardScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                MetricChip("Km", state.metric == LeaderboardMetric.KM) { viewModel.setMetric(LeaderboardMetric.KM) }
-                MetricChip("Dislivello", state.metric == LeaderboardMetric.ELEVATION) { viewModel.setMetric(LeaderboardMetric.ELEVATION) }
-                MetricChip("Punti", state.metric == LeaderboardMetric.POINTS) { viewModel.setMetric(LeaderboardMetric.POINTS) }
+                MetricChip(stringResource(R.string.leaderboard_metric_km), state.metric == LeaderboardMetric.KM) { viewModel.setMetric(LeaderboardMetric.KM) }
+                MetricChip(stringResource(R.string.leaderboard_metric_elev), state.metric == LeaderboardMetric.ELEVATION) { viewModel.setMetric(LeaderboardMetric.ELEVATION) }
+                MetricChip(stringResource(R.string.leaderboard_metric_points), state.metric == LeaderboardMetric.POINTS) { viewModel.setMetric(LeaderboardMetric.POINTS) }
             }
 
             when {
-                state.isLoading && state.items.isEmpty() -> Centered { CircularProgressIndicator(color = AccentCyan) }
+                state.isLoading && state.items.isEmpty() -> ListSkeleton()
                 state.error != null && state.items.isEmpty() -> Centered {
                     Text(state.error ?: "Errore", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
@@ -107,7 +112,7 @@ fun LeaderboardScreen(
                         Text("🏔️", style = MaterialTheme.typography.displaySmall)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Nessuna attività questa settimana.\nEsci a camminare o segui altri escursionisti!",
+                            stringResource(R.string.leaderboard_empty),
                             color = TextSecondary,
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -182,13 +187,14 @@ private fun LeaderboardRow(
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    if (entry.isMe) "${entry.user?.username ?: "Tu"} (tu)" else entry.user?.username ?: "—",
+                    if (entry.isMe) stringResource(R.string.leaderboard_you_suffix, entry.user?.username ?: "Tu")
+                    else entry.user?.username ?: "—",
                     color = Color.White,
                     fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.bodyLarge,
                 )
                 Text(
-                    "${entry.count} ${if (entry.count == 1) "uscita" else "uscite"}",
+                    pluralStringResource(R.plurals.leaderboard_outings, entry.count, entry.count),
                     color = TextSecondary,
                     style = MaterialTheme.typography.labelSmall,
                 )

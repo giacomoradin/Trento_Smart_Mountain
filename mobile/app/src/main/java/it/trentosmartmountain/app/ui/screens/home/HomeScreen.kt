@@ -37,6 +37,7 @@ fun HomeScreen(
   onNavigateToUserSearch: () -> Unit = {},
   onNavigateToLeaderboard: () -> Unit = {},
   onNavigateToNotifications: () -> Unit = {},
+  onNavigateToPostDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
 ) {
   var subTab by rememberSaveable { mutableIntStateOf(0) }
 
@@ -61,6 +62,7 @@ fun HomeScreen(
         onSearchClick = onNavigateToUserSearch,
         onLeaderboardClick = onNavigateToLeaderboard,
         onNotificationsClick = onNavigateToNotifications,
+        onOpenDetail = onNavigateToPostDetail,
       )
       1 -> ActivityListScreen(onActivityClick = onActivityClick)
     }

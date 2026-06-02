@@ -2,8 +2,24 @@
 
 > Documentazione delle collezioni MongoDB e dello schema Room (locale Android).
 >
-> **Ultima revisione**: 24/05/2026 — Sprint 2 in corso (aggiunta collezione `activities`).
+> **Ultima revisione**: 01/06/2026 — Sprint 3 (Social completo, Dashboard IoT rifugio, Bacheca rifugi).
 > **Riferimenti**: `backend/src/models/`, `mobile/.../data/local/db/`, D2 §4.1.
+
+---
+
+## 0. Aggiornamento Sprint 3 — nuove collezioni (giugno 2026)
+
+| Collection | Modello | Scopo |
+|---|---|---|
+| `notifications` | `notification.js` | Notifiche social: `recipientId`, `actorId`, `type` (follow/like/comment), `targetKind`, `targetId`, `read`, `createdAt`. |
+| `edgenodes` | `edgeNode.js` | Nodi BLE-mesh rifugio: `refugeId`, `code`, `name`, `signalPct`, `online`, `lastSeenAt`. |
+| `refugesensorreadings` | `refugeSensorReading.js` | Letture sensori (temp/umidità/vento/pressione + trend), time-series per rifugio. |
+| `refugepassages` | `refugePassage.js` | Passaggi escursionisti (mesh/nfc) + social credit. |
+| `refugeboardposts` | `refugeBoardPost.js` | Bacheca rifugi: `type` (info/avviso/pericolo), `title`, `body`, `validUntil`, `refugeName` (denorm). |
+
+> ⚠️ I dati IoT (`edgenodes`, `refugesensorreadings`, `refugepassages`) sono **mock generati lato server** (`refugeIotService.seedMockDashboard`) in attesa dell'ingest MQTT reale. Lo schema è definitivo.
+
+Esteso: `hiker.js` → `preferences.privacy.profileVisibility` (`public`/`friends`/`private`) ora **applicato** in `getHikerById` (gate profilo) + `socialService` (feed/bacheca). Room mobile: colonna `hidden` su `completed_activities` (tombstone eliminazioni).
 
 ---
 
@@ -422,6 +438,15 @@ Segnalazioni SOS legate a una `hikesessions` in stato `ACTIVE`. Il payload sensi
 ```javascript
 emergencies.sessionId_1_status_1_createdAt_ - 1; // lista SOS per sessione
 emergencies.idempotencyKey_1; // unique — idempotenza POST
+
+// TTL Indexes (Sprint 3)
+// Automatic cleanup di emergenze risolte dopo 3 giorni
+emergencies.index({ status: 1, dismissedAt: 1 }, { 
+  expireAfterSeconds: 259200, 
+  partialFilterExpression: { status: { $in: ["DISMISSED", "CANCELLED_BY_SENDER"] } } 
+});
+// Cleanup automatico di emergenze attive/non gestite dopo 7 giorni
+emergencies.index({ createdAt: 1 }, { expireAfterSeconds: 604800 });
 ```
 
 #### Note operative

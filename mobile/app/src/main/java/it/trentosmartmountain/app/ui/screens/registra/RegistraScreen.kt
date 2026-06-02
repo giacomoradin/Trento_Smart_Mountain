@@ -21,9 +21,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -73,6 +76,7 @@ import it.trentosmartmountain.app.viewmodel.RegistraViewModel
 @Composable
 fun RegistraScreen(
   modifier: Modifier = Modifier,
+  onNavigateToBoard: () -> Unit = {},
   viewModel: RegistraViewModel = viewModel(),
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -265,6 +269,21 @@ fun RegistraScreen(
       altitudeMeters = uiState.currentAltitudeMeters,
       modifier = Modifier.align(Alignment.TopCenter),
     )
+
+    // Accesso rapido alla bacheca rifugi (avvisi/pericoli) anche durante il tracking.
+    Surface(
+      onClick = onNavigateToBoard,
+      shape = CircleShape,
+      color = TsmSurface.copy(alpha = 0.92f),
+      modifier = Modifier
+        .align(Alignment.TopStart)
+        .padding(top = 8.dp, start = 12.dp)
+        .size(44.dp),
+    ) {
+      Box(contentAlignment = Alignment.Center) {
+        Icon(Icons.Outlined.Campaign, contentDescription = "Bacheca rifugi", tint = TsmAccent)
+      }
+    }
 
     if (uiState.showIncomingEmergencyIcon) {
       IncomingEmergencyIconButton(

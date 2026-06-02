@@ -245,10 +245,12 @@ mobile/app/src/main/java/it/trentosmartmountain/app/
 ├─ viewmodel/
 │  ├─ SocialFeedViewModel.kt         # nuovo
 │  ├─ UserProfileViewModel.kt        # nuovo (per tap avatar)
+│  ├─ PostDetailViewModel.kt         # nuovo (per dettaglio social avanzato)
 │  └─ WeeklyGoalsViewModel.kt        # nuovo
 └─ ui/screens/home/
    ├─ HomeSocialScreen.kt            # nuovo (cabla in HomeScreen)
-   ├─ FeedCard.kt                    # nuovo componente
+   ├─ PostDetailScreen.kt            # nuovo (mappa OSMdroid + split 5km + badges)
+   ├─ FeedCard.kt                    # nuovo componente con TsmRouteMapPreview
    ├─ AvatarRow.kt                   # nuovo componente con anello stato
    ├─ ShareActivityDialog.kt         # nuovo dialog "+Condividi"
    ├─ CommentsBottomSheet.kt         # nuovo

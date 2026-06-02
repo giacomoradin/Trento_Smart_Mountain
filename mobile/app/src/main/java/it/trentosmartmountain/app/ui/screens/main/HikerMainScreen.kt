@@ -70,6 +70,8 @@ fun HikerMainScreen(
   onNavigateToNotifications: () -> Unit = {},
   // Voce "Bacheca rifugi" nel Profilo → consultazione avvisi/pericoli.
   onNavigateToBoard: () -> Unit = {},
+  // Tap su una card del feed → dettaglio social del post.
+  onNavigateToPostDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
 ) {
   var selectedTab by rememberSaveable { mutableStateOf(HikerTab.Home) }
   // Scope Activity: il polling live/SOS continua anche se l'utente è su un'altra tab.
@@ -131,13 +133,16 @@ fun HikerMainScreen(
         onNavigateToUserSearch = onNavigateToUserSearch,
         onNavigateToLeaderboard = onNavigateToLeaderboard,
         onNavigateToNotifications = onNavigateToNotifications,
+        onNavigateToPostDetail = onNavigateToPostDetail,
       )
       HikerTab.Session -> SessionHubScreen(
         modifier = Modifier.padding(innerPadding),
         onNavigateToDetail = onNavigateToSessionDetail,
+        onNavigateToBoard = onNavigateToBoard,
       )
       HikerTab.Registra -> RegistraScreen(
         modifier = Modifier.padding(innerPadding),
+        onNavigateToBoard = onNavigateToBoard,
         viewModel = registraViewModel,
       )
       HikerTab.Profile -> ProfileScreen(

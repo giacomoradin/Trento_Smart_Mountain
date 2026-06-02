@@ -49,7 +49,7 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Crea un post (lato rifugista). `onDone` chiude il dialog su successo. */
-    fun create(type: String, title: String, body: String, onDone: () -> Unit) {
+    fun create(type: String, title: String, body: String, validUntil: String?, onDone: () -> Unit) {
         if (title.isBlank() || body.isBlank()) {
             _state.update { it.copy(error = "Inserisci titolo e testo.") }
             return
@@ -57,7 +57,7 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             val resp = runCatching {
-                api.createBoardPost(CreateBoardPostRequest(type, title.trim(), body.trim()))
+                api.createBoardPost(CreateBoardPostRequest(type, title.trim(), body.trim(), validUntil))
             }.getOrNull()
             if (resp != null && resp.isSuccessful) {
                 _state.update { it.copy(isSubmitting = false, message = "Pubblicato in bacheca.") }
@@ -65,6 +65,27 @@ class BoardViewModel(application: Application) : AndroidViewModel(application) {
                 load(true)
             } else {
                 _state.update { it.copy(isSubmitting = false, error = "Pubblicazione non riuscita.") }
+            }
+        }
+    }
+
+    /** Modifica un proprio post (lato rifugista). `onDone` chiude il dialog. */
+    fun update(id: String, type: String, title: String, body: String, validUntil: String?, onDone: () -> Unit) {
+        if (title.isBlank() || body.isBlank()) {
+            _state.update { it.copy(error = "Inserisci titolo e testo.") }
+            return
+        }
+        _state.update { it.copy(isSubmitting = true, error = null) }
+        viewModelScope.launch {
+            val resp = runCatching {
+                api.updateBoardPost(id, CreateBoardPostRequest(type, title.trim(), body.trim(), validUntil))
+            }.getOrNull()
+            if (resp != null && resp.isSuccessful) {
+                _state.update { it.copy(isSubmitting = false, message = "Post aggiornato.") }
+                onDone()
+                load(true)
+            } else {
+                _state.update { it.copy(isSubmitting = false, error = "Aggiornamento non riuscito.") }
             }
         }
     }

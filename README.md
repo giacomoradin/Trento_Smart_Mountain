@@ -1,3 +1,15 @@
+# Trento Smart Mountain
+
+> Stato corrente: **Sprint 3** (giugno 2026) — dettagli in `docs/TSM_PROJECT_STATE.md`; API in `docs/api_reference.md` e `/api-docs` (Swagger).
+
+## Novità Sprint 3
+
+- **Social completo**: ricerca/scoperta utenti, liste follower/seguiti, metriche escursionistiche sul profilo, classifica settimanale, **notifiche** (follow/like/commento) con badge non-letti, badge "Ti segue", **gate privacy** del profilo (`profileVisibility`).
+- **Dashboard IoT rifugio** (dati mock, no ingest MQTT): sensori ambientali, edge nodes BLE-mesh, passaggi/social-credit, + scheda profilo del rifugista.
+- **Bacheca rifugi**: i rifugi pubblicano avvisi/info/segnalazioni di pericolo (`/api/v1/board`), consultabili dagli escursionisti da Home, Pianificazione e Registra.
+
+---
+
 ## Checklist escursione
 
 ![Architettura Checklist](docs/checklist_architecture.svg)

@@ -79,7 +79,33 @@ const emergencySchema = new Schema(
     cancelledBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     createdAt: { type: Date, default: Date.now },
   },
-  { versionKey: false },
+  {
+    versionKey: false,
+    timestamps: true, // Abilita createdAt e updatedAt automatici
+  },
+);
+
+// TTL Index: Eliminazione automatica per evitare saturazione DB (Sprint 3 proattivo).
+// 1. Emergenze risolte (DISMISSED o CANCELLED) rimosse dopo 3 giorni dall'ultimo aggiornamento.
+emergencySchema.index(
+  { updatedAt: 1 },
+  {
+    expireAfterSeconds: 3 * 24 * 3600,
+    partialFilterExpression: {
+      status: { $in: ["DISMISSED", "CANCELLED_BY_SENDER"] },
+    },
+  },
+);
+
+// 2. Emergenze che rimangono "attive" o "condivise" (non gestite) rimosse dopo 7 giorni dalla creazione.
+emergencySchema.index(
+  { createdAt: 1 },
+  {
+    expireAfterSeconds: 7 * 24 * 3600,
+    partialFilterExpression: {
+      status: { $in: ["ACTIVE", "SHARED_WITH_GROUP"] },
+    },
+  },
 );
 
 emergencySchema.index({ sessionId: 1, status: 1, createdAt: -1 });

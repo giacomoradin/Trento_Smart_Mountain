@@ -2,7 +2,7 @@
 
 > Reference human-readable degli endpoint REST del backend TSM, complementare al Swagger autogenerato (`swagger-output.json` → UI su `/api-docs`).
 >
-> **Ultima revisione**: 26/05/2026 — Emergenze SOS (branch `SOS`); refactor discriminator Mongoose (user → hiker/refuge/admin).
+> **Ultima revisione**: 01/06/2026 — Sprint 3: Social completo, Dashboard IoT rifugio, Bacheca rifugi (vedi §"Sprint 3" sotto).
 > **Base URL produzione**: `https://trento-smart-mountain-xz7u.onrender.com`
 > **Base URL dev**: `http://10.0.2.2:3000` (emulator) / `http://localhost:3000` (Postman dev).
 
@@ -24,6 +24,50 @@ Il modello `User` è stato suddiviso in **3 discriminatori Mongoose** (Hiker, Re
 | —                                                   | `GET /refuges`                                                  | Lista pubblica rifugi (nuovo)                     |
 
 Il vecchio `POST /users` è mantenuto come **shim deprecato** che smista internamente (logga un warning). Verrà rimosso in Sprint 3.
+
+---
+
+## 🆕 Sprint 3 — Social completo, IoT rifugio, Bacheca (giugno 2026)
+
+Tutti gli endpoint richiedono JWT. Spec completa auto-generata in `swagger-output.json` (UI `/api-docs`).
+
+### Social — scoperta & grafo
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| GET | `/api/v1/users/search?q=&limit=` | Ricerca utenti per username (+ `isFollowedByMe`) |
+| GET | `/api/v1/users/:id/followers` · `/:id/following` | Follower / seguiti di un utente |
+| GET | `/api/v1/users/:id/hiking-stats` | Totali ALL-TIME (km/dislivello/uscite/punti) |
+| GET | `/api/v1/users/me/weekly-leaderboard` | Classifica settimanale tra i seguiti |
+| GET | `/api/v1/users/:id/follow-stats` | Ora include `followsViewer` (badge "Ti segue") |
+
+### Dettaglio Social (Mobile)
+| Route | Componente | Descrizione |
+|---|---|---|
+| `POST_DETAIL` | `PostDetailScreen.kt` | Dettaglio avanzato attività social con mappa OSMdroid, performance badges (Alpinista, Maratoneta) e timeline degli split ogni 5km. |
+
+### Notifiche
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| GET | `/api/v1/users/me/notifications?page=` | Centro notifiche (follow/like/comment) |
+| GET | `/api/v1/users/me/notifications/unread-count` | Conteggio non-letti (badge) |
+| POST | `/api/v1/users/me/notifications/read` | Segna tutte come lette |
+
+### Privacy profilo
+`GET /hikers/:id` applica `profileVisibility`: per viewer non-self, profili `private` (o `friends` senza follow) restituiscono un profilo **limitato** `{ _id, username, isVerified, personalInfo.avatarUrl, restricted: true, visibility }`.
+
+### Rifugio — Dashboard IoT (dati mock)
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| GET | `/api/v1/refuge/dashboard` | Sensori + edge nodes BLE-mesh + passaggi del rifugio loggato |
+
+### Bacheca rifugi
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| GET | `/api/v1/board?type=&activeOnly=` | Feed bacheca (tutti gli utenti) |
+| GET | `/api/v1/board/mine` | Post del rifugio loggato |
+| POST | `/api/v1/board` | Crea (solo rifugio/admin) — Joi `createBoardPostSchema` |
+| PATCH | `/api/v1/board/:id` | Modifica (autore/admin) |
+| DELETE | `/api/v1/board/:id` | Elimina (autore/admin) |
 
 ---
 

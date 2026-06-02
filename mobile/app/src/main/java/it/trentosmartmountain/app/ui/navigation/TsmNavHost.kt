@@ -23,6 +23,7 @@ import androidx.navigation.navArgument
 import it.trentosmartmountain.app.TsmApplication
 import it.trentosmartmountain.app.data.local.AuthSession
 import it.trentosmartmountain.app.data.remote.JwtDecoder
+import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizSubmissionResponse
 import it.trentosmartmountain.app.ui.screens.account.AccountEditScreen
@@ -39,6 +40,7 @@ import it.trentosmartmountain.app.ui.screens.home.ActivityDetailScreen
 import it.trentosmartmountain.app.ui.screens.home.FollowListScreen
 import it.trentosmartmountain.app.ui.screens.home.LeaderboardScreen
 import it.trentosmartmountain.app.ui.screens.home.NotificationsScreen
+import it.trentosmartmountain.app.ui.screens.home.PostDetailScreen
 import it.trentosmartmountain.app.ui.screens.home.UserSearchScreen
 import it.trentosmartmountain.app.viewmodel.FollowListType
 import it.trentosmartmountain.app.ui.screens.login.LoginScreen
@@ -48,6 +50,7 @@ import it.trentosmartmountain.app.ui.screens.nfc.NfcScanScreen
 import it.trentosmartmountain.app.ui.screens.quiz.QuizResultScreen
 import it.trentosmartmountain.app.ui.screens.quiz.QuizScreen
 import it.trentosmartmountain.app.ui.screens.refuge.RefugeMainScreen
+import it.trentosmartmountain.app.ui.screens.refuge.RefugeProfileScreen
 import it.trentosmartmountain.app.ui.screens.register.EmailVerificationPendingScreen
 import it.trentosmartmountain.app.ui.screens.register.ForgotPasswordScreen
 import it.trentosmartmountain.app.ui.screens.register.RegisterRifugioScreen
@@ -96,6 +99,9 @@ fun TsmNavHost() {
     }
     var pendingQuizTitle by rememberSaveable { mutableStateOf("") }
     var pendingQuizId by rememberSaveable { mutableStateOf("") }
+    var pendingPostDetail by rememberSaveable(stateSaver = gsonSaver<FeedItem>()) {
+        mutableStateOf<FeedItem?>(null)
+    }
 
     fun navigateToMainAfterLogin() {
         val token = application.tokenStorage.getToken()
@@ -215,13 +221,40 @@ fun TsmNavHost() {
                 onNavigateToLeaderboard = { navController.navigate(Routes.LEADERBOARD) },
                 onNavigateToNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
                 onNavigateToBoard = { navController.navigate(Routes.boardRoute(false)) },
+                onNavigateToPostDetail = { item ->
+                    pendingPostDetail = item
+                    navController.navigate(Routes.POST_DETAIL)
+                },
             )
+        }
+
+        composable(Routes.POST_DETAIL) {
+            val item = pendingPostDetail
+            if (item != null) {
+                PostDetailScreen(
+                    item = item,
+                    onBack = { navController.popBackStack() },
+                    onUserClick = { userId ->
+                        navController.navigate(Routes.userProfileRoute(userId))
+                    }
+                )
+            } else {
+                // Fallback se per qualche motivo lo stato viene perso
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
         }
 
         composable(Routes.MAIN_RIFUGIO) {
             RefugeMainScreen(
-                onLoggedOut = { navigateToAuthEntry() },
+                onNavigateToProfile = { navController.navigate(Routes.REFUGE_PROFILE) },
+            )
+        }
+
+        composable(Routes.REFUGE_PROFILE) {
+            RefugeProfileScreen(
+                onBack = { navController.popBackStack() },
                 onNavigateToBoard = { navController.navigate(Routes.boardRoute(true)) },
+                onLoggedOut = { navigateToAuthEntry() },
             )
         }
 
@@ -471,6 +504,10 @@ fun TsmNavHost() {
                     val typeArg =
                         if (type == FollowListType.FOLLOWING) "following" else "followers"
                     navController.navigate(Routes.followListRoute(uid, typeArg))
+                },
+                onOpenDetail = { item ->
+                    pendingPostDetail = item
+                    navController.navigate(Routes.POST_DETAIL)
                 },
             )
         }

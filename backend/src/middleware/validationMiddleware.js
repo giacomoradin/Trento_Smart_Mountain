@@ -437,6 +437,29 @@ export const commentSchema = Joi.object({
 });
 
 /**
+ * Body POST bacheca rifugi: `type` whitelist, titolo 1..120, testo 1..2000,
+ * `validUntil` ISO opzionale. Allineato a models/refugeBoardPost.js + boardService.
+ * La validazione nel service resta come defense-in-depth.
+ */
+export const createBoardPostSchema = Joi.object({
+  type: Joi.string().valid("info", "avviso", "pericolo").default("info"),
+  title: Joi.string().min(1).max(120).trim().required(),
+  body: Joi.string().min(1).max(2000).trim().required(),
+  validUntil: Joi.date().iso().allow(null).optional(),
+});
+
+/**
+ * Body PATCH bacheca: tutti i campi opzionali ma almeno uno presente (`.min(1)`).
+ * Stessi vincoli del create per i campi forniti.
+ */
+export const updateBoardPostSchema = Joi.object({
+  type: Joi.string().valid("info", "avviso", "pericolo"),
+  title: Joi.string().min(1).max(120).trim(),
+  body: Joi.string().min(1).max(2000).trim(),
+  validUntil: Joi.date().iso().allow(null),
+}).min(1);
+
+/**
  * Params per DELETE /comments/:cid. ObjectId del commento.
  * Nominato `cid` per distinguerlo dal `:id` del parent nelle route nested.
  */

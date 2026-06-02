@@ -11,6 +11,9 @@ package it.trentosmartmountain.app.util
  */
 const val ELEVATION_PROFILE_MAX_POINTS = 50
 
+/** Cap punti route signature inviati al backend (allineato a geoPolyline.js). */
+const val ROUTE_SIGNATURE_MAX_POINTS = 80
+
 /**
  * Riduce [points] ad al massimo [maxPoints] elementi campionando in modo
  * uniforme per indice. Primo e ultimo elemento sono sempre preservati.

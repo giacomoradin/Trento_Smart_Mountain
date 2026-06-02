@@ -18,16 +18,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.WaterDrop
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,24 +46,25 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.remote.dto.EdgeNodeDto
 import it.trentosmartmountain.app.data.remote.dto.PassageDto
 import it.trentosmartmountain.app.data.remote.dto.RefugeSensorsDto
-import it.trentosmartmountain.app.viewmodel.ProfileViewModel
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.RefugeDashboardViewModel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private val Bg = Color(0xFF0D0D0F)
-private val CardBg = Color(0xFF161618)
-private val CardBorder = Color(0xFF242428)
-private val Cyan = Color(0xFF29B6F6)
-private val Peach = Color(0xFFE0A87E)
-private val WindGreen = Color(0xFF9CCC65)
-private val OnlineGreen = Color(0xFF4CAF50)
-private val OfflineRed = Color(0xFFE53935)
-private val TextSecondary = Color(0xFF8E8E93)
-private val TextDim = Color(0xFF6B6B70)
+private val Bg = TsmColors.DashboardBackground
+private val CardBg = TsmColors.DashboardCard
+private val CardBorder = TsmColors.DashboardBorder
+private val Cyan = TsmColors.Info
+private val Peach = TsmColors.Peach
+private val WindGreen = TsmColors.Wind
+private val OnlineGreen = TsmColors.Online
+private val OfflineRed = TsmColors.Offline
+private val TextSecondary = TsmColors.TextSecondary
+private val TextDim = TsmColors.TextDim
 
 /**
  * Shell account rifugio: **Dashboard IoT** (mockup) — sensori ambientali,
@@ -72,15 +73,9 @@ private val TextDim = Color(0xFF6B6B70)
  */
 @Composable
 fun RefugeMainScreen(
-  onLoggedOut: () -> Unit,
-  onNavigateToBoard: () -> Unit = {},
+  onNavigateToProfile: () -> Unit = {},
   modifier: Modifier = Modifier,
   dashboardViewModel: RefugeDashboardViewModel = viewModel(
-    factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-      LocalContext.current.applicationContext as Application,
-    ),
-  ),
-  profileViewModel: ProfileViewModel = viewModel(
     factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
       LocalContext.current.applicationContext as Application,
     ),
@@ -100,6 +95,7 @@ fun RefugeMainScreen(
         refugeName = state.data?.refuge?.name ?: "Rifugio",
         altitudeM = state.data?.refuge?.altitudeM,
         live = state.data?.live == true,
+        onProfileClick = onNavigateToProfile,
       )
       Spacer(Modifier.height(16.dp))
 
@@ -111,9 +107,9 @@ fun RefugeMainScreen(
         }
         state.data == null -> {
           Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Dashboard non disponibile.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.refuge_dashboard_unavailable), color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
-            TextButton(onClick = { dashboardViewModel.refresh() }) { Text("Riprova", color = Cyan) }
+            TextButton(onClick = { dashboardViewModel.refresh() }) { Text(stringResource(R.string.action_retry), color = Cyan) }
           }
         }
         else -> {
@@ -127,19 +123,6 @@ fun RefugeMainScreen(
       }
 
       Spacer(Modifier.height(24.dp))
-      Button(
-        onClick = onNavigateToBoard,
-        modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.buttonColors(containerColor = Cyan),
-      ) {
-        Text("Gestisci bacheca", color = Color(0xFF0D0D0F), fontWeight = FontWeight.Bold)
-      }
-      Spacer(Modifier.height(12.dp))
-      OutlinedButton(
-        onClick = { profileViewModel.logout(onLoggedOut) },
-        modifier = Modifier.fillMaxWidth(),
-      ) { Text("Esci") }
-      Spacer(Modifier.height(24.dp))
     }
   }
 }
@@ -147,7 +130,7 @@ fun RefugeMainScreen(
 // ── Header ──────────────────────────────────────────────────────────────────
 
 @Composable
-private fun DashboardHeader(refugeName: String, altitudeM: Int?, live: Boolean) {
+private fun DashboardHeader(refugeName: String, altitudeM: Int?, live: Boolean, onProfileClick: () -> Unit) {
   Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
     Column(modifier = Modifier.weight(1f)) {
       val alt = altitudeM?.let { " · ${"%,d".format(it).replace(",", ".")} M" } ?: ""
@@ -160,11 +143,20 @@ private fun DashboardHeader(refugeName: String, altitudeM: Int?, live: Boolean) 
         overflow = TextOverflow.Ellipsis,
       )
       Text(
-        "Dashboard IoT",
+        stringResource(R.string.refuge_dashboard_title),
         color = Color.White,
         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
       )
     }
+    IconButton(onClick = onProfileClick) {
+      Icon(
+        Icons.Filled.AccountCircle,
+        contentDescription = stringResource(R.string.cd_refuge_profile),
+        tint = Cyan,
+        modifier = Modifier.size(28.dp),
+      )
+    }
+    Spacer(Modifier.width(4.dp))
     if (live) {
       Surface(
         shape = RoundedCornerShape(20.dp),
@@ -177,7 +169,7 @@ private fun DashboardHeader(refugeName: String, altitudeM: Int?, live: Boolean) 
         ) {
           Box(Modifier.size(8.dp).clip(CircleShape).background(OnlineGreen))
           Spacer(Modifier.width(6.dp))
-          Text("LIVE", color = OnlineGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+          Text(stringResource(R.string.refuge_live), color = OnlineGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
         }
       }
     }
@@ -188,12 +180,12 @@ private fun DashboardHeader(refugeName: String, altitudeM: Int?, live: Boolean) 
 
 @Composable
 private fun SensorsSection(sensors: RefugeSensorsDto?) {
-  SectionLabel("SENSORI EDGE NODES · 4 ATTIVI")
+  SectionLabel(stringResource(R.string.refuge_sensors_header))
   Spacer(Modifier.height(10.dp))
   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
     SensorCard(
       modifier = Modifier.weight(1f),
-      label = "TEMPERATURA EST.",
+      label = stringResource(R.string.sensor_temp),
       icon = Icons.Outlined.Thermostat,
       iconTint = Cyan,
       value = sensors?.temperature?.value?.let { "%.1f".format(it) } ?: "—",
@@ -203,7 +195,7 @@ private fun SensorsSection(sensors: RefugeSensorsDto?) {
     )
     SensorCard(
       modifier = Modifier.weight(1f),
-      label = "UMIDITÀ",
+      label = stringResource(R.string.sensor_humidity),
       icon = Icons.Outlined.WaterDrop,
       iconTint = Peach,
       value = sensors?.humidity?.value?.roundToInt()?.toString() ?: "—",
@@ -216,17 +208,17 @@ private fun SensorsSection(sensors: RefugeSensorsDto?) {
   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
     SensorCard(
       modifier = Modifier.weight(1f),
-      label = "VENTO",
+      label = stringResource(R.string.sensor_wind),
       icon = Icons.Outlined.Air,
       iconTint = WindGreen,
       value = sensors?.wind?.value?.roundToInt()?.toString() ?: "—",
       valueColor = WindGreen,
-      unit = "km/h ${sensors?.wind?.dir ?: ""}".trim(),
-      sub = sensors?.wind?.gust?.let { "raff. ${it.roundToInt()}" },
+      unit = stringResource(R.string.sensor_wind_unit, sensors?.wind?.dir ?: "").trim(),
+      sub = sensors?.wind?.gust?.let { stringResource(R.string.sensor_gust, it.roundToInt()) },
     )
     SensorCard(
       modifier = Modifier.weight(1f),
-      label = "PRESSIONE",
+      label = stringResource(R.string.sensor_pressure),
       icon = Icons.Outlined.Speed,
       iconTint = Cyan,
       value = sensors?.pressure?.value?.roundToInt()?.toString() ?: "—",
@@ -294,7 +286,7 @@ private fun EdgeNodesSection(nodes: List<EdgeNodeDto>, online: Int, total: Int) 
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Text(
-          "EDGE NODES BLE-MESH",
+          stringResource(R.string.edge_nodes_header),
           color = TextSecondary,
           style = MaterialTheme.typography.labelMedium,
           letterSpacing = 1.sp,
@@ -306,7 +298,7 @@ private fun EdgeNodesSection(nodes: List<EdgeNodeDto>, online: Int, total: Int) 
           border = androidx.compose.foundation.BorderStroke(1.dp, OnlineGreen.copy(alpha = 0.4f)),
         ) {
           Text(
-            "$online/$total ONLINE",
+            stringResource(R.string.edge_online_badge, online, total),
             color = OnlineGreen,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelMedium,
@@ -337,9 +329,9 @@ private fun EdgeNodeRow(node: EdgeNodeDto) {
     Column(horizontalAlignment = Alignment.End) {
       if (node.online) {
         Text("${node.signalPct}%", color = Cyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-        Text("segnale", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+        Text(stringResource(R.string.node_signal), color = TextSecondary, style = MaterialTheme.typography.labelSmall)
       } else {
-        Text("OFFLINE", color = TextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.node_offline), color = TextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
         Text(lastSeenText(node.lastSeenAt), color = TextDim, style = MaterialTheme.typography.labelSmall)
       }
     }
@@ -362,7 +354,7 @@ private fun PassagesSection(totalCredits: Int, items: List<PassageDto>) {
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Text(
-          "PASSAGGI OGGI · SOCIAL CREDITS",
+          stringResource(R.string.passages_header),
           color = TextSecondary,
           style = MaterialTheme.typography.labelMedium,
           letterSpacing = 1.sp,
@@ -408,7 +400,7 @@ private fun PassageRow(p: PassageDto) {
     Column(modifier = Modifier.weight(1f)) {
       Text(p.displayName, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
       Text(
-        "passato alle ${formatTime(p.passedAt)} · via ${p.via ?: "mesh"}",
+        stringResource(R.string.passage_line, formatTime(p.passedAt), p.via ?: "mesh"),
         color = TextSecondary,
         style = MaterialTheme.typography.bodySmall,
       )

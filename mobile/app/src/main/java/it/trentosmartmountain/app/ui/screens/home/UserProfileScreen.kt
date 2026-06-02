@@ -49,20 +49,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.FollowListType
 import it.trentosmartmountain.app.viewmodel.UserProfileViewModel
 
-private val DarkSurface = Color(0xFF1C1C1E)
-private val CardBackground = Color(0xFF2C2C2E)
-private val AccentCyan = Color(0xFF4DD0E1)
-private val AccentGreen = Color(0xFF4CAF50)
-private val TextSecondary = Color(0xFF8E8E93)
+private val DarkSurface = TsmColors.FeedBackground
+private val CardBackground = TsmColors.CardElevated
+private val AccentCyan = TsmColors.Cyan
+private val AccentGreen = TsmColors.Online
+private val TextSecondary = TsmColors.TextSecondary
 private val ChipBlue = Color(0xFF1A3A5C)
 
 /**
@@ -90,6 +93,7 @@ fun UserProfileScreen(
     onCommentClick: (itemId: String, kind: String) -> Unit = { _, _ -> },
     /** Tap sui contatori FOLLOWER/SEGUITI → lista navigabile del grafo sociale. */
     onOpenFollowList: (userId: String, type: FollowListType) -> Unit = { _, _ -> },
+    onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     viewModel: UserProfileViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -141,6 +145,7 @@ fun UserProfileScreen(
                     onCommentClick(id, kind)
                 },
                 onOpenFollowList = onOpenFollowList,
+                onOpenDetail = onOpenDetail,
                 contentPadding = padding,
             )
         }
@@ -163,6 +168,7 @@ private fun ProfileContent(
     onLikeToggle: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
     onCommentClick: (String, String) -> Unit,
     onOpenFollowList: (userId: String, type: FollowListType) -> Unit,
+    onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
     contentPadding: PaddingValues,
 ) {
     val listState = rememberLazyListState()
@@ -195,24 +201,29 @@ private fun ProfileContent(
                 onOpenFollowList = onOpenFollowList,
             )
         }
-        item(key = "section-title") {
-            Text(
-                text = "POST · ${state.posts.size}",
-                color = TextSecondary,
-                style = MaterialTheme.typography.labelSmall,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(top = 8.dp, start = 4.dp),
-            )
-        }
-        if (state.posts.isEmpty() && !state.isLoading) {
-            item(key = "empty") { EmptyPostsBlock(isSelf = state.isSelf) }
+        if (state.user?.restricted == true) {
+            item(key = "locked") { LockedProfileBlock(visibility = state.user?.visibility) }
         } else {
-            items(items = state.posts, key = { "${it.kind}-${it.id}" }) { item ->
-                FeedCard(
-                    item = item,
-                    onLikeToggle = { onLikeToggle(item) },
-                    onCommentClick = { onCommentClick(item.id, item.kind) },
+            item(key = "section-title") {
+                Text(
+                    text = "POST · ${state.posts.size}",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(top = 8.dp, start = 4.dp),
                 )
+            }
+            if (state.posts.isEmpty() && !state.isLoading) {
+                item(key = "empty") { EmptyPostsBlock(isSelf = state.isSelf) }
+            } else {
+                items(items = state.posts, key = { "${it.kind}-${it.id}" }) { item ->
+                    FeedCard(
+                        item = item,
+                        onLikeToggle = { onLikeToggle(item) },
+                        onCommentClick = { onCommentClick(item.id, item.kind) },
+                        onOpenDetail = { onOpenDetail(item) },
+                    )
+                }
             }
         }
         if (state.isLoadingMore) {
@@ -283,7 +294,7 @@ private fun ProfileHeader(
                     color = TextSecondary.copy(alpha = 0.18f),
                 ) {
                     Text(
-                        "Ti segue",
+                        stringResource(R.string.profile_follows_you),
                         color = TextSecondary,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -314,18 +325,21 @@ private fun ProfileHeader(
             }
 
             // ── Riepilogo escursionistico (km/dislivello/uscite/punti) ──
-            Spacer(Modifier.height(16.dp))
-            HorizontalDivider(color = TextSecondary.copy(alpha = 0.15f))
-            Spacer(Modifier.height(14.dp))
-            val hs = state.hikingStats
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                HikingMetric(value = "${hs?.totalActivities ?: 0}", label = "USCITE", color = Color.White)
-                HikingMetric(value = formatKmTotal(hs?.totalDistanceKm ?: 0.0), label = "KM", color = AccentCyan)
-                HikingMetric(value = "${hs?.totalElevationGainM ?: 0}", label = "DISLIVELLO m", color = Color(0xFFFF9800))
-                HikingMetric(value = "${hs?.totalPoints ?: 0}", label = "PUNTI", color = AccentGreen)
+            // Nascosto sui profili limitati (privacy): non esporre i totali.
+            if (state.user?.restricted != true) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = TextSecondary.copy(alpha = 0.15f))
+                Spacer(Modifier.height(14.dp))
+                val hs = state.hikingStats
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    HikingMetric(value = "${hs?.totalActivities ?: 0}", label = "USCITE", color = Color.White)
+                    HikingMetric(value = formatKmTotal(hs?.totalDistanceKm ?: 0.0), label = "KM", color = AccentCyan)
+                    HikingMetric(value = "${hs?.totalElevationGainM ?: 0}", label = "DISLIVELLO m", color = Color(0xFFFF9800))
+                    HikingMetric(value = "${hs?.totalPoints ?: 0}", label = "PUNTI", color = AccentGreen)
+                }
             }
 
             // Bottone Segui/Smetti — solo se non sono io
@@ -436,6 +450,31 @@ private fun FollowButton(
                 Spacer(Modifier.width(6.dp))
                 Text("SEGUI", fontWeight = FontWeight.Bold, color = DarkSurface)
             }
+        }
+    }
+}
+
+@Composable
+private fun LockedProfileBlock(visibility: String?) {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("🔒", style = MaterialTheme.typography.displayMedium)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(if (visibility == "private") R.string.profile_private_title else R.string.profile_friends_title),
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(if (visibility == "private") R.string.profile_private_msg else R.string.profile_friends_msg),
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 }

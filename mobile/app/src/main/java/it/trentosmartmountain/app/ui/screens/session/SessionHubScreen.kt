@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Map
@@ -120,22 +121,35 @@ import it.trentosmartmountain.app.ui.util.SessionDateFormats
 fun SessionHubScreen(
     modifier: Modifier = Modifier,
     onNavigateToDetail: (sessionId: String) -> Unit = {},
+    onNavigateToBoard: () -> Unit = {},
 ) {
     var subTab by rememberSaveable { mutableIntStateOf(0) }
 
     Column(modifier = modifier.fillMaxSize().background(TsmBackground)) {
         // Header
-        Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp)) {
-            Text(
-                text = "Sessione",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-            )
-            Text(
-                text = "Pianifica e unisciti alle escursioni",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 20.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Sessione",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                )
+                Text(
+                    text = "Pianifica e unisciti alle escursioni",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onNavigateToBoard) {
+                Icon(
+                    Icons.Outlined.Campaign,
+                    contentDescription = "Bacheca rifugi",
+                    tint = TsmAccent,
+                )
+            }
         }
 
         PrimaryTabRow(

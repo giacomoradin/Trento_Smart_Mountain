@@ -44,10 +44,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.ui.components.FeedSkeleton
 import it.trentosmartmountain.app.ui.components.TsmEmptyState
 import it.trentosmartmountain.app.ui.components.TsmErrorState
 import it.trentosmartmountain.app.ui.components.TsmLoadingState
@@ -83,6 +86,8 @@ fun HomeSocialScreen(
     ),
     onUserClick: (userId: String) -> Unit = {},
     onCommentClick: (itemId: String, kind: String) -> Unit = { _, _ -> },
+    /** Tap sul corpo della card: apre il dettaglio social del post. */
+    onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     /** Tap su anello LIVE: apre la SessionDetail della sessione in corso. */
     onLiveClick: (sessionId: String) -> Unit = {},
     /** Tap su anello STORY: apre lo StoryViewerScreen full-screen. */
@@ -121,7 +126,7 @@ fun HomeSocialScreen(
           IconButton(onClick = onLeaderboardClick) {
             Icon(
               Icons.Filled.EmojiEvents,
-              contentDescription = "Classifica settimanale",
+              contentDescription = stringResource(R.string.cd_leaderboard),
               tint = AccentCyan,
             )
           }
@@ -140,7 +145,7 @@ fun HomeSocialScreen(
                 }
               }
             }) {
-              Icon(Icons.Filled.Notifications, contentDescription = "Notifiche", tint = AccentCyan)
+              Icon(Icons.Filled.Notifications, contentDescription = stringResource(R.string.cd_notifications), tint = AccentCyan)
             }
           }
         }
@@ -152,7 +157,7 @@ fun HomeSocialScreen(
             modifier = Modifier.weight(1f),
         ) {
             when {
-                state.isLoading && state.items.isEmpty() -> TsmLoadingState()
+                state.isLoading && state.items.isEmpty() -> FeedSkeleton()
                 // Errore di rete con lista vuota: stato dedicato (prima appariva
                 // come "feed vuoto", facendo credere all'utente di non seguire
                 // nessuno invece che a un problema di connessione).
@@ -174,6 +179,7 @@ fun HomeSocialScreen(
                     onLoadMore = viewModel::loadMore,
                     onLikeToggle = viewModel::toggleLike,
                     onUserClick = onUserClick,
+                    onOpenDetail = onOpenDetail,
                     onCommentClick = { id, kind ->
                         // Apre la BottomSheet commenti per il post tappato.
                         // L'on demand: il VM carica la lista la prima volta che
@@ -230,7 +236,7 @@ private fun SearchEntryBar(onClick: () -> Unit) {
             )
             Spacer(Modifier.width(10.dp))
             Text(
-                "Trova persone da seguire",
+                stringResource(R.string.social_search_bar),
                 color = TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -246,6 +252,7 @@ private fun FeedList(
     onLoadMore: () -> Unit,
     onLikeToggle: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
     onUserClick: (String) -> Unit,
+    onOpenDetail: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     onCommentClick: (String, String) -> Unit,
     socialRow: List<it.trentosmartmountain.app.data.remote.dto.SocialRowItem> = emptyList(),
     viewedStoryIds: Set<String> = emptySet(),
@@ -295,6 +302,7 @@ private fun FeedList(
                 onLikeToggle = { onLikeToggle(feedItem) },
                 onCommentClick = { onCommentClick(feedItem.id, feedItem.kind) },
                 onUserClick = onUserClick,
+                onOpenDetail = { onOpenDetail(feedItem) },
             )
         }
         if (isLoadingMore) {

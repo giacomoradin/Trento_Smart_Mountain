@@ -39,13 +39,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.FollowListEntry
+import androidx.compose.ui.res.stringResource
+import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.ListSkeleton
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.FollowListType
 import it.trentosmartmountain.app.viewmodel.FollowListViewModel
 
-private val DarkSurface = Color(0xFF1C1C1E)
-private val AccentCyan = Color(0xFF4DD0E1)
-private val TextSecondary = Color(0xFF8E8E93)
+private val DarkSurface = TsmColors.FeedBackground
+private val AccentCyan = TsmColors.Cyan
+private val TextSecondary = TsmColors.TextSecondary
 
 /**
  * Lista follower / seguiti di un utente (navigazione del grafo sociale).
@@ -66,10 +70,9 @@ fun FollowListScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(userId, type) { viewModel.load(userId, type) }
 
-    val title = when (type) {
-        FollowListType.FOLLOWERS -> "Follower"
-        FollowListType.FOLLOWING -> "Seguiti"
-    }
+    val title = stringResource(
+        if (type == FollowListType.FOLLOWERS) R.string.followers_title else R.string.following_title,
+    )
 
     Scaffold(
         containerColor = DarkSurface,
@@ -101,15 +104,12 @@ fun FollowListScreen(
         }
 
         when {
-            state.isLoading && state.entries.isEmpty() -> Centered(padding) {
-                CircularProgressIndicator(color = AccentCyan)
-            }
+            state.isLoading && state.entries.isEmpty() -> ListSkeleton(modifier = Modifier.padding(padding))
             state.entries.isEmpty() -> Centered(padding) {
                 Text(
-                    when (type) {
-                        FollowListType.FOLLOWERS -> "Nessun follower."
-                        FollowListType.FOLLOWING -> "Non segue ancora nessuno."
-                    },
+                    stringResource(
+                        if (type == FollowListType.FOLLOWERS) R.string.followers_empty else R.string.following_empty,
+                    ),
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
                 )

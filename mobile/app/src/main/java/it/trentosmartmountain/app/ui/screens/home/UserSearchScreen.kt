@@ -44,19 +44,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.remote.dto.UserSearchItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.ListSkeleton
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.UserSearchViewModel
 
-private val DarkSurface = Color(0xFF1C1C1E)
-private val CardBackground = Color(0xFF2C2C2E)
-private val AccentCyan = Color(0xFF4DD0E1)
-private val TextSecondary = Color(0xFF8E8E93)
+private val DarkSurface = TsmColors.FeedBackground
+private val CardBackground = TsmColors.CardElevated
+private val AccentCyan = TsmColors.Cyan
+private val TextSecondary = TsmColors.TextSecondary
 
 /**
  * Schermata "Cerca persone da seguire" — cuore del flusso "aggiungi amici".
@@ -86,7 +90,7 @@ fun UserSearchScreen(
         containerColor = DarkSurface,
         topBar = {
             TopAppBar(
-                title = { Text("Trova persone", color = Color.White, fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.search_title), color = Color.White, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
@@ -101,13 +105,13 @@ fun UserSearchScreen(
                 value = state.query,
                 onValueChange = viewModel::onQueryChange,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Cerca per username", color = TextSecondary) },
+                placeholder = { Text(stringResource(R.string.search_hint), color = TextSecondary) },
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = TextSecondary) },
                 trailingIcon = {
                     if (state.query.isNotEmpty()) {
                         IconButton(onClick = { viewModel.onQueryChange("") }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Cancella", tint = TextSecondary)
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_clear), tint = TextSecondary)
                         }
                     }
                 },
@@ -122,16 +126,14 @@ fun UserSearchScreen(
             )
 
             when {
-                state.isLoading && state.results.isEmpty() -> CenteredBox(padding = PaddingValues(0.dp)) {
-                    CircularProgressIndicator(color = AccentCyan)
-                }
+                state.isLoading && state.results.isEmpty() -> ListSkeleton()
                 !state.hasSearched -> HintBlock(
                     emoji = "🔍",
-                    text = "Digita almeno 2 caratteri per cercare altri escursionisti da seguire.",
+                    text = stringResource(R.string.search_initial),
                 )
                 state.results.isEmpty() -> HintBlock(
                     emoji = "🤷",
-                    text = "Nessun utente trovato per \"${state.query.trim()}\".",
+                    text = stringResource(R.string.search_no_results, state.query.trim()),
                 )
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -202,7 +204,7 @@ private fun FollowPill(
             } else {
                 Icon(Icons.Filled.Check, null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Seguito")
+                Text(stringResource(R.string.action_followed))
             }
         }
     } else {
@@ -218,7 +220,7 @@ private fun FollowPill(
             } else {
                 Icon(Icons.Filled.PersonAdd, null, modifier = Modifier.size(16.dp), tint = DarkSurface)
                 Spacer(Modifier.width(4.dp))
-                Text("Segui", color = DarkSurface, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.action_follow), color = DarkSurface, fontWeight = FontWeight.Bold)
             }
         }
     }

@@ -10,7 +10,9 @@ import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.ActualStats
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
+import it.trentosmartmountain.app.data.remote.dto.RoutePoint
 import it.trentosmartmountain.app.util.ELEVATION_PROFILE_MAX_POINTS
+import it.trentosmartmountain.app.util.ROUTE_SIGNATURE_MAX_POINTS
 import it.trentosmartmountain.app.util.downsampleByIndex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -116,6 +118,7 @@ object SyncManager {
                     actualStats = buildActualStats(entity),
                     difficultyLevel = entity.difficultyLevel,
                     elevationProfile = parseElevationProfile(entity.trackLatLng),
+                    routePolyline = parseRoutePolyline(entity.trackLatLng),
                 )
                 val resp = TsmApiClient.service().createActivity(req)
                 if (resp.isSuccessful) {
@@ -160,6 +163,16 @@ object SyncManager {
             val raw: List<List<Double>> = com.google.gson.Gson().fromJson(trackJson, type)
             val elevations = raw.mapNotNull { pts -> pts.getOrNull(2) }
             downsampleByIndex(elevations, ELEVATION_PROFILE_MAX_POINTS)
+        } catch (_: Exception) { null }
+    }
+
+    private fun parseRoutePolyline(trackJson: String): List<RoutePoint>? {
+        if (trackJson.isBlank() || trackJson == "[]") return null
+        return try {
+            val type = object : com.google.gson.reflect.TypeToken<List<List<Double>>>() {}.type
+            val raw: List<List<Double>> = com.google.gson.Gson().fromJson(trackJson, type)
+            val points = raw.map { pts -> RoutePoint(pts[0], pts[1]) }
+            downsampleByIndex(points, ROUTE_SIGNATURE_MAX_POINTS)
         } catch (_: Exception) { null }
     }
 

@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { sendVerificationEmail } from "./emailService.js";
 import { stripPrivateFields, isSelfOrAdmin } from "../utils/userPrivacy.js";
+import { isFollowing } from "./followService.js";
 
 /**
  * Servizio dedicato agli utenti **escursionisti** (capogruppo).
@@ -102,12 +103,42 @@ export const getHikerById = async (req, res) => {
     if (!hiker) {
       return res.status(404).json({ message: "Escursionista non trovato." });
     }
-    // Privacy gate (vedi utils/userPrivacy.js): per other-view nasconde
-    // personalInfo, experience, preferences, weeklyGoals, profileCompletedAt.
-    const safe = stripPrivateFields(
-      hiker,
-      isSelfOrAdmin(req.user, req.params.id),
-    );
+
+    const selfOrAdmin = isSelfOrAdmin(req.user, req.params.id);
+
+    // Gate di visibilità a livello account (solo per viewer != self/admin):
+    //   - "private"  → profilo limitato a chiunque
+    //   - "friends"  → profilo limitato se il viewer NON è follower
+    //   - "public"   → profilo completo (post-privacy gate sui campi)
+    // Il profilo limitato espone solo identità (username, avatar, verificato)
+    // + i flag `restricted`/`visibility`, così la UI mostra "profilo privato"
+    // con il bottone Segui ma nessun dato/post (i post sono già gated server-side
+    // in socialService.getPostsByUser).
+    if (!selfOrAdmin) {
+      const visibility =
+        hiker.preferences?.privacy?.profileVisibility ?? "friends";
+      let restricted = visibility === "private";
+      if (visibility === "friends") {
+        const follows = await isFollowing(req.user.userId, req.params.id);
+        restricted = !follows;
+      }
+      if (restricted) {
+        return res.status(200).json({
+          _id: hiker._id,
+          username: hiker.username,
+          isVerified: hiker.isVerified,
+          personalInfo: hiker.personalInfo?.avatarUrl
+            ? { avatarUrl: hiker.personalInfo.avatarUrl }
+            : null,
+          restricted: true,
+          visibility,
+        });
+      }
+    }
+
+    // Privacy gate sui campi (vedi utils/userPrivacy.js): per other-view nasconde
+    // personalInfo (tranne avatar), experience, preferences, weeklyGoals, ecc.
+    const safe = stripPrivateFields(hiker, selfOrAdmin);
     res.status(200).json(safe);
   } catch (error) {
     if (error.name === "CastError") {

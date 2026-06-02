@@ -126,7 +126,9 @@ export const updateAnyUser = async (req, res) => {
       groupLeader: Hiker,
       admin: Admin,
     };
-    const TargetModel = ModelByRole[targetUser.role] || User;
+    const TargetModel = updates.role
+      ? User
+      : ModelByRole[targetUser.role] || User;
 
     const updated = await TargetModel.findByIdAndUpdate(
       req.params.id,
@@ -134,6 +136,7 @@ export const updateAnyUser = async (req, res) => {
       {
         new: true,
         runValidators: true,
+        strict: false,
       },
     ).select("-passwordHash -__v");
 

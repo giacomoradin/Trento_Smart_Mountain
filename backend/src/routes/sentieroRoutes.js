@@ -1,4 +1,5 @@
 import express from "express";
+import { authenticate } from "../middleware/authMiddleware.js";
 import { 
   getAllSentieri, 
   getSentieroByCode, 
@@ -8,7 +9,7 @@ import {
 } from "../services/sentieroService.js";
 
 const router = express.Router();
-
+router.use(authenticate);
 /**
  * Route per i sentieri SAT (mountain pathways).
  *

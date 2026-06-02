@@ -53,13 +53,14 @@ npm run test:watch
 
 ## Risultati
 
-**239 test — 239 passati — 0 falliti**
+**258 test — 258 passati — 0 falliti**
 
 | File | Test | Cosa copre |
 |------|------|-----------|
 | `auth.test.js` | 12 | Registrazione hiker, login, validazione campi, utente non verificato |
 | `refreshToken.test.js` | 8 | Login con token pair, rotation, riuso token revocato, logout |
 | `account.test.js` | 22 | Anti-cheat birthDate/caiLevel, username italiani, obiettivi, change password, eliminazione account con cascade |
+| `admin.test.js` | 13 | Update role/username utente, eliminazione, 401/403/404/400/409 |
 | `hiker.test.js` | 13 | Profilo escursionista, token invalidi/scaduti/malformati, accesso tra utenti |
 | `session.test.js` | 24 | Crea sessione, join, status, leave, delete, stats, live tracking, meetingDate persistence |
 | `hikeSession.test.js` | 23 | Checklist dinamica POST/PUT/GET, freeze, autorizzazioni, meteo opzionale |

@@ -69,7 +69,7 @@ export function buildSentieroLikeFromSession(session) {
   const rd = session.routeDetails || {};
   const gs = session.gpxStats || {};
   const ore = estimateOreFromSession(session);
-  if (ore <= 0 && !rd.difficultyLevel && !gs.distanceKm) return null;
+  if (ore <= 0 && !gs.distanceKm) return null;
 
   let quotaMassima = null;
   let quotaMinima = null;

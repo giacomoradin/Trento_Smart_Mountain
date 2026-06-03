@@ -516,6 +516,53 @@ describe("HikeSession Routes", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════
+  // DELETE /api/v1/sessions/:id/from-activities — hide per-utente
+  // ══════════════════════════════════════════════════════════════════
+
+  describe("DELETE /api/v1/sessions/:id/from-activities", () => {
+    test("member hides session from own activity list; it no longer appears in /my", async () => {
+      const { token } = await createTestHiker({
+        username: "hideowner",
+        email: "hideowner@test.com",
+      });
+      const created = await createSessionAs(token);
+
+      const hideRes = await request(app)
+        .delete(`/api/v1/sessions/${created.body._id}/from-activities`)
+        .set("Authorization", `Bearer ${token}`);
+      expect(hideRes.status).toBe(200);
+
+      // Documento NON cancellato (resta nel DB per gli altri partecipanti).
+      const stillThere = await HikeSession.findById(created.body._id);
+      expect(stillThere).not.toBeNull();
+
+      // Non compare più nella lista "Le mie attività" del chiamante.
+      const myRes = await request(app)
+        .get("/api/v1/sessions/my")
+        .set("Authorization", `Bearer ${token}`);
+      expect(myRes.status).toBe(200);
+      expect(myRes.body.find((s) => s._id === created.body._id)).toBeUndefined();
+    });
+
+    test("non-member cannot hide (403 NOT_IN_SESSION)", async () => {
+      const { token: ownerToken } = await createTestHiker({
+        username: "hideowner2",
+        email: "hideowner2@test.com",
+      });
+      const created = await createSessionAs(ownerToken);
+      const { token: strangerToken } = await createTestHiker({
+        username: "stranger",
+        email: "stranger@test.com",
+      });
+
+      const res = await request(app)
+        .delete(`/api/v1/sessions/${created.body._id}/from-activities`)
+        .set("Authorization", `Bearer ${strangerToken}`);
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
   // GET /api/v1/sessions/stats — Aggregato annuale
   // ══════════════════════════════════════════════════════════════════
 

@@ -644,13 +644,43 @@ export async function getSessionById(sessionId) {
   return HikeSession.findById(sessionId).populate(SESSION_POPULATE);
 }
 
-// Recupera tutte le sessioni di un utente (come creator o partecipante)
+// Recupera tutte le sessioni di un utente (come creator o partecipante).
+// Esclude le sessioni che l'utente ha nascosto dalla propria lista attività
+// (hiddenForUsers) — vedi hideSessionFromActivities.
 export async function getSessionsByUser(userId) {
   return HikeSession.find({
-    $or: [{ creatorId: userId }, { "participants.userId": userId }],
+    $and: [
+      { $or: [{ creatorId: userId }, { "participants.userId": userId }] },
+      { hiddenForUsers: { $ne: userId } },
+    ],
   })
     .populate(SESSION_POPULATE)
     .sort({ meetingDate: 1 });
+}
+
+/**
+ * "Elimina" una sessione COMPLETED dalla lista "Le mie attività" di un utente.
+ * Non cancella il documento (appartiene anche agli altri partecipanti): aggiunge
+ * l'utente a `hiddenForUsers` così getSessionsByUser non gliela restituisce più.
+ * Idempotente. Autorizzazione: l'utente deve essere membro della sessione.
+ */
+export async function hideSessionFromActivities(sessionId, userId) {
+  const session = await HikeSession.findById(sessionId);
+  if (!session) throw new Error("SESSION_NOT_FOUND");
+  const isMember =
+    session.creatorId.toString() === userId.toString() ||
+    (session.participants || []).some(
+      (p) => (p.userId?._id || p.userId).toString() === userId.toString(),
+    );
+  if (!isMember) throw new Error("NOT_IN_SESSION");
+  const already = (session.hiddenForUsers || []).some(
+    (id) => id.toString() === userId.toString(),
+  );
+  if (!already) {
+    session.hiddenForUsers.push(userId);
+    await session.save();
+  }
+  return { message: "Sessione rimossa dalle tue attività." };
 }
 
 // Abbandona una sessione (non disponibile per il creator)

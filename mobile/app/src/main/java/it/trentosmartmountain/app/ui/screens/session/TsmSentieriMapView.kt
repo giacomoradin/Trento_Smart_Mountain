@@ -7,10 +7,18 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.TextView
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import it.trentosmartmountain.app.ui.components.RouteDirectionArrowsOverlay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -97,6 +105,32 @@ fun TsmSentieriMapView(
         }
     }
 
+    // Frecce direzionali animate (Komoot-style) sulla polyline interattiva: stessa
+    // logica usata da TsmRouteMapPreview, qui con un periodo leggermente più
+    // lungo (2.8s) perché la mappa è interattiva e i gesti si combinano peggio
+    // con animazioni veloci.
+    val arrowsTransition = rememberInfiniteTransition(label = "sentieri-arrows")
+    val arrowsPhaseAnim by arrowsTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "sentieri-arrows-tween",
+    )
+    // Holder mutabile letto dal callback overlay (OSMdroid Overlay.draw() gira
+    // fuori da Compose, quindi una semplice cella di un FloatArray ci basta).
+    val phaseHolder = remember { floatArrayOf(0f) }
+    phaseHolder[0] = arrowsPhaseAnim
+    val directionArrows = remember(mapView) {
+        RouteDirectionArrowsOverlay(
+            pointsProvider = { trackPolyline.actualPoints ?: emptyList() },
+            phaseProvider = { phaseHolder[0] },
+        )
+    }
+    LaunchedEffect(arrowsPhaseAnim) { mapView.invalidate() }
+
     // Marker icons cache per tipo (evita di ricreare il bitmap a ogni marker).
     val iconCache = remember { mutableMapOf<SentieroMarkerType, Drawable>() }
     fun iconFor(type: SentieroMarkerType): android.graphics.drawable.Drawable =
@@ -115,6 +149,7 @@ fun TsmSentieriMapView(
         if (polyline.size >= 2) {
             trackPolyline.setPoints(ArrayList(polyline))
             mapView.overlays.add(trackPolyline)
+            mapView.overlays.add(directionArrows) // frecce sopra alla traccia
         }
 
         // Marker

@@ -125,32 +125,57 @@ fun ActivityDetailScreen(
     LaunchedEffect(activityId) { viewModel.load(activityId, sessionId) }
 
     if (showShareDialog) {
+        // Determina se l'utente loggato è il creator della sessione: solo lui
+        // può condividere la SESSIONE come post di gruppo. I partecipanti non-
+        // creator hanno la PROPRIA Activity sincronizzata (entity.remoteId) e
+        // condividono quella — è la loro versione personale dell'uscita.
+        val currentUserId = remember {
+            runCatching {
+                it.trentosmartmountain.app.data.local.TokenStorage
+                    .getInstance(context)
+                    .getToken()
+                    ?.let { tok -> it.trentosmartmountain.app.data.remote.JwtDecoder.userIdFrom(tok) }
+            }.getOrNull()
+        }
+        val isCreator = uiState.session?.creatorId?._id == currentUserId
         ShareActivityDialog(
             activityName = uiState.name,
             onDismiss = { showShareDialog = false },
             onShare = { caption ->
                 showShareDialog = false
-                // Distingue share di session (gruppo) da activity (libera):
-                // se l'attività ha sessionId, è una sessione completata e
-                // la condivisione passa per /sessions/:id/share. Authorization
-                // server-side: solo creator può condividere la sessione.
-                if (sessionId.isNullOrBlank()) {
-                    // Lo share di un'attività libera richiede l'ID backend (ObjectId
-                    // MongoDB), NON l'id Room locale (che per le attività registrate
-                    // sul device è un UUID → 422 "ID non valido"). Usiamo il remoteId,
-                    // disponibile solo dopo la sincronizzazione.
-                    val remoteId = uiState.local?.remoteId
-                    if (remoteId != null) {
+                // Tre casi:
+                //   (a) attività libera (sessionId null) → share via /activities/:id/share
+                //   (b) sessione e sono il creator → share via /sessions/:id/share
+                //   (c) sessione ma sono partecipante → share dell'attività personale
+                //       collegata alla sessione (il backend rifiuterebbe lo shareSession
+                //       con 403). È UX coerente con Strava: ognuno condivide la propria.
+                val remoteId = uiState.local?.remoteId
+                when {
+                    sessionId.isNullOrBlank() -> {
+                        if (remoteId != null) {
+                            socialFeedViewModel.shareActivity(remoteId, caption)
+                        } else {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Sincronizza l'attività prima di condividerla.",
+                                android.widget.Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    }
+                    isCreator -> socialFeedViewModel.shareSession(sessionId, caption)
+                    remoteId != null -> {
+                        // Partecipante: pubblica la propria registrazione individuale
+                        // (mappa + altimetria dei punti realmente camminati).
                         socialFeedViewModel.shareActivity(remoteId, caption)
-                    } else {
+                    }
+                    else -> {
                         android.widget.Toast.makeText(
                             context,
-                            "Sincronizza l'attività prima di condividerla.",
+                            "Solo il capogruppo può condividere la sessione del gruppo. " +
+                                "Attendi che la tua attività si sincronizzi per condividere la tua versione.",
                             android.widget.Toast.LENGTH_LONG,
                         ).show()
                     }
-                } else {
-                    socialFeedViewModel.shareSession(sessionId, caption)
                 }
             },
         )

@@ -51,9 +51,16 @@ async function checkUserAlreadyInActiveSession(userId) {
   }
 }
 
-// Crea una nuova sessione — il creator diventa automaticamente Capogruppo
+// Crea una nuova sessione — il creator diventa automaticamente Capogruppo.
+//
+// Nota: NON imponiamo qui il check "una sola sessione ACTIVE alla volta".
+// La creazione produce una sessione in stato PLANNED — è sempre lecita: gli
+// utenti pianificano spesso più escursioni future in parallelo (D2 §4 vincola
+// SOLO le sessioni effettivamente in tracking live, non quelle pianificate).
+// Il check resta su `joinSession` e sul passaggio PLANNED → ACTIVE, dove
+// l'esclusività ha senso pratico (un partecipante che tracka in due gruppi
+// simultaneamente non avrebbe coordinate coerenti).
 export async function createSession(creatorId, routeDetails, sessionMeta = {}) {
-  await checkUserAlreadyInActiveSession(creatorId);
   let inviteCode = null;
 
   // Loop limitato: vedi MAX_INVITE_CODE_ATTEMPTS sopra. Se sforiamo, lanciamo
@@ -792,6 +799,18 @@ export async function updateSessionStatus(sessionId, creatorId, newStatus) {
 
   if (session.creatorId.toString() !== creatorId) {
     throw new Error("ONLY_CREATOR_CAN_UPDATE_SESSION");
+  }
+
+  // L'esclusività "una sola sessione ACTIVE" si applica QUI (transizione
+  // PLANNED → ACTIVE), non in createSession: pianificare più escursioni in
+  // parallelo è lecito; tracciare due gruppi simultaneamente no.
+  if (newStatus === "ACTIVE" && session.status !== "ACTIVE") {
+    const conflict = await HikeSession.findOne({
+      _id: { $ne: session._id },
+      status: "ACTIVE",
+      participants: { $elemMatch: { userId: creatorId, status: { $ne: "pending" } } },
+    });
+    if (conflict) throw new Error("USER_ALREADY_IN_SESSION");
   }
 
   session.status = newStatus;

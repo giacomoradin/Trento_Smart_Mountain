@@ -64,6 +64,7 @@ import it.trentosmartmountain.app.ui.components.AvatarImage
 import it.trentosmartmountain.app.ui.components.tsmNavigationBarPadding
 import it.trentosmartmountain.app.ui.components.tsmStatusBarPadding
 import it.trentosmartmountain.app.ui.util.AvatarUtils
+import it.trentosmartmountain.app.ui.screens.home.story.StoryViewerDecorations
 import it.trentosmartmountain.app.viewmodel.StoryViewerViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -310,16 +311,28 @@ private fun StoryPager(
             )
         }
 
-        current.overlay?.routePolyline?.takeIf { it.size >= 2 }?.let { pts ->
-            RouteTracePreview(
-                points = pts,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .fillMaxWidth()
-                    .height(260.dp)
-                    .padding(24.dp),
-                lineColor = Color.White,
-            )
+        val decor = current.overlay?.editorDecor
+        val routePts = current.overlay?.routePolyline.orEmpty()
+        when {
+            decor != null && routePts.size >= 2 -> {
+                StoryViewerDecorations(
+                    decor = decor,
+                    routePoints = routePts,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            decor == null && routePts.size >= 2 && media?.kind != "image" -> {
+                RouteTracePreview(
+                    points = routePts,
+                    modifier =
+                        Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth()
+                            .height(260.dp)
+                            .padding(24.dp),
+                    lineColor = Color.White,
+                )
+            }
         }
 
         Box(

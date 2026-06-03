@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import it.trentosmartmountain.app.data.remote.dto.RoutePoint
-import kotlin.math.cos
 import kotlin.math.max
 
 /**
@@ -46,7 +45,7 @@ fun RouteTracePreview(
 ) {
     // Proietta una sola volta per ogni lista di punti (evita ricomputo a ogni
     // ricomposizione mentre l'utente scrolla il feed).
-    val projected = remember(points) { projectPoints(points) }
+    val projected = remember(points) { projectRoutePoints(points) }
 
     Canvas(modifier = modifier) {
         if (projected.size < 2) return@Canvas
@@ -113,23 +112,3 @@ fun RouteTracePreview(
     }
 }
 
-/** Punto proiettato in coordinate planari relative (metri-equivalenti scalati). */
-private data class ProjectedPoint(val x: Float, val y: Float)
-
-/**
- * Proietta i punti lat/lon in coordinate planari relative al primo punto.
- * Sottrae il riferimento in `Double` (precisione piena) PRIMA del cast a Float.
- */
-private fun projectPoints(points: List<RoutePoint>): List<ProjectedPoint> {
-    if (points.isEmpty()) return emptyList()
-    val meanLat = points.sumOf { it.lat } / points.size
-    val k = cos(Math.toRadians(meanLat)) // compressione longitudine alla latitudine media
-    val refLat = points[0].lat
-    val refLon = points[0].lon
-    return points.map { p ->
-        ProjectedPoint(
-            x = ((p.lon - refLon) * k).toFloat(),
-            y = (p.lat - refLat).toFloat(),
-        )
-    }
-}

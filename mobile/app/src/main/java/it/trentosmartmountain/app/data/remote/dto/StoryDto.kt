@@ -39,6 +39,26 @@ data class StoryMedia(
     @SerializedName("durationSec") val durationSec: Double? = null,
 )
 
+/** Trasformazione sticker salvata per storie video (overlay dinamico nel viewer). */
+data class StoryStickerTransformDto(
+    @SerializedName("offsetX") val offsetX: Float = 0f,
+    @SerializedName("offsetY") val offsetY: Float = 0f,
+    @SerializedName("scale") val scale: Float = 1f,
+    @SerializedName("rotationDeg") val rotationDeg: Float = 0f,
+)
+
+/** Decorazioni editor (traccia/testo) per playback video; le immagini sono composte lato client. */
+data class StoryEditorDecor(
+    /** trace | map_widget | map_scene */
+    @SerializedName("routeOverlayKind") val routeOverlayKind: String? = null,
+    @SerializedName("routeColor") val routeColor: String? = null,
+    @SerializedName("routeTransform") val routeTransform: StoryStickerTransformDto? = null,
+    @SerializedName("mapWidgetTransform") val mapWidgetTransform: StoryStickerTransformDto? = null,
+    @SerializedName("floatingText") val floatingText: String? = null,
+    @SerializedName("textColor") val textColor: String? = null,
+    @SerializedName("textTransform") val textTransform: StoryStickerTransformDto? = null,
+)
+
 /** Snapshot dei dati di tracciamento da disegnare in overlay sul media. */
 data class StoryOverlay(
     @SerializedName("title") val title: String? = null,
@@ -48,6 +68,7 @@ data class StoryOverlay(
     @SerializedName("elevationGainM") val elevationGainM: Int? = null,
     @SerializedName("movingSeconds") val movingSeconds: Long? = null,
     @SerializedName("routePolyline") val routePolyline: List<RoutePoint>? = null,
+    @SerializedName("editorDecor") val editorDecor: StoryEditorDecor? = null,
 )
 
 /**

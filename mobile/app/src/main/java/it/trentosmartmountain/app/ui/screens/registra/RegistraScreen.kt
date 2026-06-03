@@ -17,11 +17,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -41,7 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -270,20 +270,32 @@ fun RegistraScreen(
       modifier = Modifier.align(Alignment.TopCenter),
     )
 
-    // Accesso rapido alla bacheca rifugi (avvisi/pericoli) anche durante il tracking.
-    Surface(
+    // Bacheca rifugi in alto a sinistra.
+    RegistraTopCircleButton(
       onClick = onNavigateToBoard,
-      shape = CircleShape,
-      color = TsmSurface.copy(alpha = 0.92f),
+      icon = Icons.Outlined.Campaign,
+      contentDescription = "Bacheca rifugi",
       modifier = Modifier
         .align(Alignment.TopStart)
-        .padding(top = 8.dp, start = 12.dp)
-        .size(44.dp),
-    ) {
-      Box(contentAlignment = Alignment.Center) {
-        Icon(Icons.Outlined.Campaign, contentDescription = "Bacheca rifugi", tint = TsmAccent)
-      }
-    }
+        .padding(
+          top = RegistraLayout.topActionPaddingTop,
+          start = RegistraLayout.topActionPaddingStart,
+        ),
+    )
+
+    // Centra GPS in alto a destra.
+    RegistraTopCircleButton(
+      onClick = { if (canCenterOnUser) viewModel.centerOnUser() },
+      enabled = canCenterOnUser,
+      icon = Icons.Filled.MyLocation,
+      contentDescription = stringResource(R.string.registra_center_location_cd),
+      modifier = Modifier
+        .align(Alignment.TopEnd)
+        .padding(
+          top = RegistraLayout.topActionPaddingTop,
+          end = RegistraLayout.topActionPaddingEnd,
+        ),
+    )
 
     if (uiState.showIncomingEmergencyIcon) {
       IncomingEmergencyIconButton(
@@ -330,34 +342,27 @@ fun RegistraScreen(
       }
     }
 
-    RegistraMapActionFabs(
-      canCenterOnUser = canCenterOnUser,
-      onCenterOnUser = viewModel::centerOnUser,
+    RegistraBottomControlsBar(
+      showParticipants = uiState.activeSessionId != null && uiState.isSessionGroupLeader && uiState.liveLocations.isNotEmpty(),
+      onParticipantsClick = viewModel::toggleGroupRosterMenu,
+      showSos = viewModel.canShowSosFab(),
       onSosClick = viewModel::onSosFabClicked,
-      showGroupRoster = uiState.activeSessionId != null && uiState.isSessionGroupLeader,
-      onGroupRosterClick = viewModel::toggleGroupRosterMenu,
-      modifier = Modifier.align(Alignment.BottomEnd),
+      modifier =
+        Modifier
+          .align(Alignment.BottomCenter)
+          .padding(bottom = RegistraLayout.bottomInset),
+      centerContent = {
+        if (isTrackingActive) {
+          RegistraTrackingControls(
+            trackingStatus = uiState.trackingStatus,
+            onTogglePause = viewModel::togglePause,
+            onStop = viewModel::requestStopTracking,
+          )
+        } else {
+          RegistraRecFab(onClick = onStartTracking)
+        }
+      },
     )
-
-    if (isTrackingActive) {
-      RegistraTrackingControls(
-        trackingStatus = uiState.trackingStatus,
-        onTogglePause = viewModel::togglePause,
-        onStop = viewModel::requestStopTracking,
-        modifier =
-          Modifier
-            .align(Alignment.BottomCenter)
-            .padding(bottom = RegistraLayout.bottomInset),
-      )
-    } else {
-      RegistraRecFab(
-        onClick = onStartTracking,
-        modifier =
-          Modifier
-            .align(Alignment.BottomCenter)
-            .padding(bottom = RegistraLayout.bottomInset),
-      )
-    }
 
     val sosBannerMessage = uiState.sosStatusMessage
     if (

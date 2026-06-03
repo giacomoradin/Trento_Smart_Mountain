@@ -738,13 +738,21 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       }
   }
 
-  fun canTriggerSos(): Boolean {
-    val state = _uiState.value
-    val trackingOk =
-      state.trackingStatus == TrackingStatus.RECORDING ||
-        state.trackingStatus == TrackingStatus.PAUSED
-    return trackingOk && state.activeSessionId != null && state.sosPhase == SosPhase.IDLE
+  private fun hasOtherLiveParticipants(): Boolean {
+    val selfId = currentUserId ?: return false
+    return _uiState.value.liveLocations.any { it.user.id != selfId }
   }
+
+  /** SOS visibile e attivabile: sessione live, registrazione in corso, almeno un altro partecipante. */
+  fun canShowSosFab(): Boolean {
+    val state = _uiState.value
+    return state.activeSessionId != null &&
+      state.trackingStatus == TrackingStatus.RECORDING &&
+      hasOtherLiveParticipants() &&
+      state.sosPhase == SosPhase.IDLE
+  }
+
+  fun canTriggerSos(): Boolean = canShowSosFab()
 
   fun onSosFabClicked() {
     if (!canTriggerSos()) return

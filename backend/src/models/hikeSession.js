@@ -289,6 +289,12 @@ const hikSessionSchema = new Schema({
   // QUESTA sessione (ban locale alla sessione).
   removedUserIds: [{ type: Schema.Types.ObjectId, ref: "User" }],
 
+  // Utenti che hanno "eliminato" questa sessione COMPLETED dalla propria lista
+  // "Le mie attività" sul mobile. La sessione resta nel DB (appartiene anche
+  // agli altri partecipanti) ma viene esclusa da getSessionsByUser per questi
+  // utenti — così non riappare dopo logout/login con DB locale ripulito.
+  hiddenForUsers: [{ type: Schema.Types.ObjectId, ref: "User" }],
+
   // Stato della sessione
   status: {
     type: String,

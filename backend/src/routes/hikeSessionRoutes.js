@@ -42,6 +42,7 @@ import {
   approveParticipant,
   rejectParticipant,
   removeParticipant,
+  hideSessionFromActivities,
 } from "../services/hikeSessionService.js";
 import { listSessionEmergencies } from "../services/emergencyService.js";
 import {
@@ -665,6 +666,31 @@ router.post(
     try {
       const session = await leaveSession(req.user.userId, req.params.id);
       res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// DELETE /api/v1/sessions/:id/from-activities — nasconde una sessione COMPLETED
+// dalla lista "Le mie attività" dell'utente (non cancella il documento, che
+// appartiene anche agli altri partecipanti). Fix: senza questo, eliminando
+// un'attività di sessione dal mobile (solo tombstone locale) la sessione
+// riappariva dopo logout/login.
+router.delete(
+  "/:id/from-activities",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Rimuove la sessione dalla lista "Le mie attività" del chiamante (hide per-utente, non cancella il documento).'
+    */
+    try {
+      const result = await hideSessionFromActivities(
+        req.params.id,
+        req.user.userId,
+      );
+      res.status(200).json(result);
     } catch (err) {
       next(err);
     }

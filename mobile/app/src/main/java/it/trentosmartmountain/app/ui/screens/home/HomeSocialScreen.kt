@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -46,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -60,10 +62,14 @@ import it.trentosmartmountain.app.ui.components.TsmEmptyState
 import it.trentosmartmountain.app.ui.components.TsmErrorState
 import it.trentosmartmountain.app.ui.components.TsmLoadingState
 import it.trentosmartmountain.app.ui.theme.TsmColors
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.remote.JwtDecoder
+import it.trentosmartmountain.app.data.remote.dto.StoryViewerLaunchContext
 import it.trentosmartmountain.app.viewmodel.SocialFeedViewModel
 
 private val DarkSurface = TsmColors.FeedBackground
 private val AccentCyan = TsmColors.Cyan
+private val TextPrimary = TsmColors.TextPrimary
 private val TextSecondary = TsmColors.TextSecondary
 
 /**
@@ -95,8 +101,8 @@ fun HomeSocialScreen(
     onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     /** Tap su anello LIVE: apre la SessionDetail della sessione in corso. */
     onLiveClick: (sessionId: String) -> Unit = {},
-    /** Tap su anello STORY: apre lo StoryViewerScreen full-screen (per autore). */
-    onStoryClick: (userId: String) -> Unit = {},
+    /** Tap su anello STORY: apre lo StoryViewerScreen (coda autori per swipe tra utenti). */
+    onStoryClick: (StoryViewerLaunchContext) -> Unit = {},
     /** Tap sulla barra "Trova persone": apre la ricerca utenti ("aggiungi amici"). */
     onSearchClick: () -> Unit = {},
     /** Tap sull'icona trofeo: apre la classifica settimanale. */
@@ -106,6 +112,14 @@ fun HomeSocialScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val storyAuthorIds = remember(state.socialRow) {
+        state.socialRow.filter { it.status == "story" }.map { it.user._id }
+    }
+    val currentUserId = remember {
+        JwtDecoder.userIdFrom(
+            (context.applicationContext as TsmApplication).tokenStorage.getToken().orEmpty(),
+        )
+    }
     // Target attuale della BottomSheet commenti (null = chiusa).
     var commentsTarget by remember { mutableStateOf<CommentsTarget?>(null) }
 
@@ -121,6 +135,18 @@ fun HomeSocialScreen(
         state.shareError?.let {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
             viewModel.clearShareMessages()
+        }
+    }
+    LaunchedEffect(state.deleteSuccess) {
+        state.deleteSuccess?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearDeleteMessages()
+        }
+    }
+    LaunchedEffect(state.deleteError) {
+        state.deleteError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.clearDeleteMessages()
         }
     }
 
@@ -181,20 +207,13 @@ fun HomeSocialScreen(
             modifier = Modifier.weight(1f),
         ) {
             when {
-                state.isLoading && state.items.isEmpty() -> FeedSkeleton()
+                state.isLoading && state.items.isEmpty() && state.socialRow.isEmpty() -> FeedSkeleton()
                 // Errore di rete con lista vuota: stato dedicato (prima appariva
                 // come "feed vuoto", facendo credere all'utente di non seguire
                 // nessuno invece che a un problema di connessione).
-                state.error != null && state.items.isEmpty() -> TsmErrorState(
+                state.error != null && state.items.isEmpty() && state.socialRow.isEmpty() -> TsmErrorState(
                     message = "Non riesco a caricare il feed. Controlla la connessione e riprova.",
                     onRetry = { viewModel.refresh() },
-                )
-                state.items.isEmpty() -> TsmEmptyState(
-                    emoji = "👥",
-                    title = "Il tuo feed è vuoto",
-                    message = "Segui qualcuno o pubblica una tua attività dalla sezione \"Personale\" → tap su un'attività → Condividi.",
-                    actionLabel = "Aggiorna",
-                    onAction = { viewModel.refresh() },
                 )
                 else -> FeedList(
                     items = state.items,
@@ -217,7 +236,17 @@ fun HomeSocialScreen(
                     socialRow = state.socialRow,
                     onUserAvatarClick = onUserClick,
                     onLiveClick = onLiveClick,
-                    onStoryClick = onStoryClick,
+                    onStoryClick = { authorId ->
+                        onStoryClick(
+                            StoryViewerLaunchContext(
+                                userIds = storyAuthorIds,
+                                startIndex = storyAuthorIds.indexOf(authorId).coerceAtLeast(0),
+                            ),
+                        )
+                    },
+                    currentUserId = currentUserId,
+                    onDeletePost = { item -> viewModel.removeFeedPost(item) },
+                    onRefreshEmpty = { viewModel.refresh() },
                 )
             }
         }
@@ -283,6 +312,9 @@ private fun FeedList(
     onUserAvatarClick: (String) -> Unit = {},
     onLiveClick: (String) -> Unit = {},
     onStoryClick: (String) -> Unit = {},
+    currentUserId: String? = null,
+    onDeletePost: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
+    onRefreshEmpty: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
 
@@ -316,6 +348,35 @@ private fun FeedList(
                 )
             }
         }
+        if (items.isEmpty()) {
+            item(key = "feed-empty") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp, horizontal = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("👥", style = MaterialTheme.typography.displaySmall)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Il tuo feed è vuoto",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Segui qualcuno o pubblica una tua attività dalla sezione \"Personale\" → tap su un'attività → Condividi.",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    TextButton(onClick = onRefreshEmpty) {
+                        Text("Aggiorna", color = AccentCyan, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
         items(
             items = items,
             key = { "${it.kind}-${it.id}" },
@@ -326,6 +387,8 @@ private fun FeedList(
                 onCommentClick = { onCommentClick(feedItem.id, feedItem.kind) },
                 onUserClick = onUserClick,
                 onOpenDetail = { onOpenDetail(feedItem) },
+                currentUserId = currentUserId,
+                onDeletePost = { onDeletePost(feedItem) },
             )
         }
         if (isLoadingMore) {

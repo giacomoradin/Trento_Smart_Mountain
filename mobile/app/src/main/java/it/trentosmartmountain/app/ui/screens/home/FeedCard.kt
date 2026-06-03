@@ -17,7 +17,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -87,11 +93,17 @@ fun FeedCard(
     onCommentClick: () -> Unit = {},
     onUserClick: (userId: String) -> Unit = {},
     onOpenDetail: () -> Unit = {},
+    /** Id utente loggato: se coincide con l'autore del post, mostra "Rimuovi dal feed". */
+    currentUserId: String? = null,
+    onDeletePost: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val route = item.routePolyline
     val profile = item.elevationProfile
     val haptic = LocalHapticFeedback.current
+    val isOwnPost = !currentUserId.isNullOrBlank() && item.user?._id == currentUserId
+    var showPostMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     // "Pop" del cuore quando si AGGIUNGE il like (transizione false→true),
     // non al primo render di un post già likato (evita pop durante lo scroll).
@@ -120,6 +132,33 @@ fun FeedCard(
             burstScale.snapTo(0f)
             likeBurst = false
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Rimuovere dal feed?", color = TextPrimary) },
+            text = {
+                Text(
+                    "Il post non sarà più visibile nel feed. L'attività o la sessione restano sul tuo account.",
+                    color = TextSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDeletePost?.invoke()
+                    },
+                ) { Text("Rimuovi", color = AccentRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Annulla", color = TextSecondary)
+                }
+            },
+            containerColor = CardBackground,
+        )
     }
 
     Card(
@@ -185,7 +224,36 @@ fun FeedCard(
                         )
                     }
                 }
-                KindChip(kind = item.kind)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    KindChip(kind = item.kind)
+                    if (isOwnPost && onDeletePost != null) {
+                        Box {
+                            IconButton(onClick = { showPostMenu = true }) {
+                                Icon(
+                                    Icons.Filled.MoreVert,
+                                    contentDescription = "Opzioni post",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showPostMenu,
+                                onDismissRequest = { showPostMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Rimuovi dal feed", color = AccentRed) },
+                                    onClick = {
+                                        showPostMenu = false
+                                        showDeleteConfirm = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Outlined.Delete, null, tint = AccentRed)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -214,12 +282,14 @@ fun FeedCard(
             TsmRouteElevationPager(
                 routePoints = route,
                 elevationProfile = profile,
+                distanceKm = (item.distanceMeters ?: 0.0) / 1000.0,
                 modifier = Modifier.fillMaxWidth(),
                 height = 176.dp,
                 backgroundBrush = Brush.verticalGradient(listOf(HeroTop, HeroBottom)),
                 elevationLineColor = AccentCyan,
                 activeDotColor = AccentCyan,
                 difficultyLevel = item.difficultyLevel,
+                expandable = false,
             )
 
             // ── 4. Stat strip ─────────────────────────────────────────────────

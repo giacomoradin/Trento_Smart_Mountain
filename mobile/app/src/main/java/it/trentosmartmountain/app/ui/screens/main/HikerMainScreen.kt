@@ -63,7 +63,7 @@ fun HikerMainScreen(
   // avatar nel feed Social. Default no-op per backward-compat con i preview.
   onNavigateToUserProfile: (userId: String) -> Unit = {},
   // Tap su anello story della AvatarRow → apre StoryViewerScreen full-screen (per autore).
-  onNavigateToStoryViewer: (userId: String) -> Unit = {},
+  onNavigateToStoryViewer: (it.trentosmartmountain.app.data.remote.dto.StoryViewerLaunchContext) -> Unit = {},
   // Tap sulla barra "Trova persone" del feed → apre la ricerca utenti.
   onNavigateToUserSearch: () -> Unit = {},
   // Tap sull'icona trofeo del feed → apre la classifica settimanale.

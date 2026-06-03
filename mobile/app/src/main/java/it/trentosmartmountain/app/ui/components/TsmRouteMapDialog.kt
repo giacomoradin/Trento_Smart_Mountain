@@ -10,6 +10,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,6 +18,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import it.trentosmartmountain.app.data.remote.dto.RoutePoint
+import it.trentosmartmountain.app.ui.components.tsmStatusBarPadding
+import it.trentosmartmountain.app.ui.screens.session.SentieroMapMarker
+import it.trentosmartmountain.app.ui.screens.session.SentieroMarkerType
 import it.trentosmartmountain.app.ui.screens.session.TsmSentieriMapView
 import org.osmdroid.util.GeoPoint
 
@@ -36,14 +40,25 @@ fun TsmRouteMapDialog(
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
             Box(modifier = Modifier.fillMaxSize()) {
+                val geoPoints = routePoints.map { GeoPoint(it.lat, it.lon) }
+                val endpointMarkers = remember(routePoints) {
+                    if (geoPoints.size < 2) emptyList()
+                    else listOf(
+                        SentieroMapMarker("start", geoPoints.first(), "Partenza", SentieroMarkerType.START),
+                        SentieroMapMarker("end", geoPoints.last(), "Arrivo", SentieroMarkerType.SELECTED_DESTINATION),
+                    )
+                }
                 TsmSentieriMapView(
                     modifier = Modifier.fillMaxSize(),
-                    markers = emptyList(),
-                    polyline = routePoints.map { GeoPoint(it.lat, it.lon) },
+                    markers = endpointMarkers,
+                    polyline = geoPoints,
                 )
                 Surface(
                     onClick = onClose,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .tsmStatusBarPadding()
+                        .padding(12.dp),
                     shape = CircleShape,
                     color = Color.Black.copy(alpha = 0.45f),
                 ) {

@@ -246,6 +246,24 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
      * senza ricaricare profilo+stats+posts. Chiamato alla chiusura della sheet
      * commenti (vedi [SocialFeedViewModel.setCommentCount] per la stessa logica).
      */
+    /** Rimuove un post dalla bacheca profilo (solo se [isSelf]). */
+    fun removePost(item: FeedItem) {
+        if (!_state.value.isSelf) return
+        viewModelScope.launch {
+            val resp = runCatching {
+                when (item.kind) {
+                    "session" -> api.unshareSession(item.id)
+                    else -> api.unshareActivity(item.id)
+                }
+            }.getOrNull()
+            if (resp?.isSuccessful == true) {
+                _state.value = _state.value.copy(
+                    posts = _state.value.posts.filter { it.id != item.id || it.kind != item.kind },
+                )
+            }
+        }
+    }
+
     fun setCommentCount(id: String, kind: String, count: Int) {
         val item = _state.value.posts.firstOrNull { it.id == id && it.kind == kind } ?: return
         if (item.commentsCount == count) return

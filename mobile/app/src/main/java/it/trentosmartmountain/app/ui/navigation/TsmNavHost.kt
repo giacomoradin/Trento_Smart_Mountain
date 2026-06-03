@@ -24,9 +24,11 @@ import it.trentosmartmountain.app.TsmApplication
 import it.trentosmartmountain.app.data.local.AuthSession
 import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
+import it.trentosmartmountain.app.data.remote.dto.StoryViewerLaunchContext
 import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizSubmissionResponse
 import it.trentosmartmountain.app.ui.screens.account.AccountEditScreen
+import it.trentosmartmountain.app.ui.screens.account.AccountPasswordGateScreen
 import it.trentosmartmountain.app.ui.screens.account.ChangePasswordScreen
 import it.trentosmartmountain.app.ui.screens.account.DeleteAccountScreen
 import it.trentosmartmountain.app.ui.screens.auth.AuthEntryScreen
@@ -108,6 +110,11 @@ fun TsmNavHost() {
         stateSaver = gsonSaver<it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs>(),
     ) {
         mutableStateOf<it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs?>(null)
+    }
+    var pendingStoryViewerContext by rememberSaveable(
+        stateSaver = gsonSaver<StoryViewerLaunchContext>(),
+    ) {
+        mutableStateOf<StoryViewerLaunchContext?>(null)
     }
 
     fun navigateToMainAfterLogin() {
@@ -212,7 +219,7 @@ fun TsmNavHost() {
                 },
                 onNavigateToFormazione = { navController.navigate(Routes.FORMAZIONE) },
                 onNavigateToNfcScan = { navController.navigate(Routes.NFC_SCAN) },
-                onNavigateToAccount = { navController.navigate(Routes.ACCOUNT_EDIT) },
+                onNavigateToAccount = { navController.navigate(Routes.ACCOUNT_PASSWORD_GATE) },
                 onNavigateToOnboarding = { navController.navigate(Routes.ONBOARDING_PERSONAL_INFO) },
                 onNavigateToGoals = { navController.navigate(Routes.GOALS_EDIT) },
                 onNavigateToChallenges = { navController.navigate(Routes.CHALLENGES) },
@@ -221,8 +228,11 @@ fun TsmNavHost() {
                 onNavigateToUserProfile = { userId ->
                     navController.navigate(Routes.userProfileRoute(userId))
                 },
-                onNavigateToStoryViewer = { authorId ->
-                    navController.navigate(Routes.storyViewerRoute(authorId))
+                onNavigateToStoryViewer = { launch ->
+                    launch.startUserId?.let { startId ->
+                        pendingStoryViewerContext = launch
+                        navController.navigate(Routes.storyViewerRoute(startId))
+                    }
                 },
                 onNavigateToUserSearch = { navController.navigate(Routes.USER_SEARCH) },
                 onNavigateToLeaderboard = { navController.navigate(Routes.LEADERBOARD) },
@@ -421,6 +431,17 @@ fun TsmNavHost() {
             }
         }
 
+        composable(Routes.ACCOUNT_PASSWORD_GATE) {
+            AccountPasswordGateScreen(
+                onBack = { navController.popBackStack() },
+                onVerified = {
+                    navController.navigate(Routes.ACCOUNT_EDIT) {
+                        popUpTo(Routes.ACCOUNT_PASSWORD_GATE) { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable(Routes.ACCOUNT_EDIT) {
             AccountEditScreen(
                 onBack = { navController.popBackStack() },
@@ -502,7 +523,7 @@ fun TsmNavHost() {
         composable(Routes.PROFILE_VIEW) {
             ProfileViewScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToEdit = { navController.navigate(Routes.ACCOUNT_EDIT) },
+                onNavigateToEdit = { navController.navigate(Routes.ACCOUNT_PASSWORD_GATE) },
             )
         }
 
@@ -554,6 +575,9 @@ fun TsmNavHost() {
                 onOpenActivity = { activityId, sessionId ->
                     navController.navigate(Routes.activityDetailRoute(activityId, sessionId))
                 },
+                onOpenSession = { sessionId ->
+                    navController.navigate(Routes.sessionDetailRoute(sessionId))
+                },
             )
         }
 
@@ -594,7 +618,11 @@ fun TsmNavHost() {
             val storyUserId = backStackEntry.arguments?.getString("userId").orEmpty()
             it.trentosmartmountain.app.ui.screens.home.StoryViewerScreen(
                 userId = storyUserId,
-                onClose = { navController.popBackStack() },
+                launchContext = pendingStoryViewerContext,
+                onClose = {
+                    pendingStoryViewerContext = null
+                    navController.popBackStack()
+                },
                 onOpenSession = { sid -> navController.navigate(Routes.sessionDetailRoute(sid)) },
             )
         }

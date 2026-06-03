@@ -125,8 +125,9 @@ Se `POST /emergencies` fallisce per assenza rete, la richiesta resta in Room (`p
 
 **Cleanup automatico (TTL):**  
 Il database MongoDB esegue il cleanup automatico delle emergenze per evitare saturazione:
-- **3 giorni**: Emergenze risolte (`DISMISSED` o `CANCELLED_BY_SENDER`).
-- **7 giorni**: Emergenze attive o non gestite (basato su `createdAt`).
+- **Immediato**: `cancel` con `reason: MISTAKE` → hard delete (nessun record residuo).
+- **3 giorni**: `DISMISSED` (falso allarme capogruppo) o `CANCELLED_BY_SENDER` con `RESOLVED_SELF` (situazione risolta), da `updatedAt`.
+- **7 giorni**: `ACTIVE` / `SHARED_WITH_GROUP` non gestite, da `createdAt`.
 
 `PATCH` azioni: `cancel`, `dismiss`, `share_with_group`, `unshare_with_group`, `ack` (solo capogruppo, tranne `cancel` = mittente).
 

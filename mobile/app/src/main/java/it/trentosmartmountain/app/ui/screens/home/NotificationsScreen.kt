@@ -77,6 +77,8 @@ private val AccentRed = TsmColors.Danger
 private val AccentGreen = TsmColors.Online
 private val AccentAmber = Color(0xFFFFC107)
 private val TextSecondary = TsmColors.TextSecondary
+/** Sfondo opaco per notifiche non lette (evita che il rosso dello swipe traspaia). */
+private val UnreadCardBackground = Color(0xFF1A2D3A)
 
 /**
  * Centro notifiche. Oltre alle social (follow/like/commento) mostra:
@@ -93,6 +95,7 @@ fun NotificationsScreen(
     onBack: () -> Unit,
     onUserClick: (userId: String) -> Unit,
     onOpenActivity: (activityId: String, sessionId: String?) -> Unit,
+    onOpenSession: (sessionId: String) -> Unit,
     viewModel: NotificationsViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -120,8 +123,11 @@ fun NotificationsScreen(
         when (n.type) {
             "follow" -> n.actor?._id?.let(onUserClick)
             "refuge_alert" -> { /* nessun deep-link: l'allerta è informativa */ }
-            else -> n.targetId?.let { tid ->
-                onOpenActivity(tid, if (n.targetKind == "session") tid else null)
+            else -> when {
+                n.targetKind == "session" && !n.targetId.isNullOrBlank() ->
+                    onOpenSession(n.targetId)
+                !n.targetId.isNullOrBlank() ->
+                    onOpenActivity(n.targetId, null)
             }
         }
     }
@@ -210,15 +216,21 @@ fun NotificationsScreen(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(AccentRed.copy(alpha = 0.85f))
-                                            .padding(horizontal = 20.dp),
+                                            .background(AccentRed),
                                         contentAlignment = Alignment.CenterEnd,
                                     ) {
-                                        Icon(Icons.Filled.Delete, contentDescription = "Elimina", tint = Color.White)
+                                        Icon(
+                                            Icons.Filled.Delete,
+                                            contentDescription = "Elimina",
+                                            tint = Color.White,
+                                            modifier = Modifier.padding(end = 20.dp),
+                                        )
                                     }
                                 },
                             ) {
-                                NotificationRow(n = n, onClick = { handleClick(n) })
+                                Box(modifier = Modifier.clip(RoundedCornerShape(12.dp))) {
+                                    NotificationRow(n = n, onClick = { handleClick(n) })
+                                }
                             }
                         } else {
                             NotificationRow(n = n, onClick = { handleClick(n) })
@@ -242,7 +254,7 @@ private fun NotificationRow(n: NotificationItem, onClick: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
-        color = if (n.read) CardBackground else AccentCyan.copy(alpha = 0.10f),
+        color = if (n.read) CardBackground else UnreadCardBackground,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),

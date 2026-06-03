@@ -136,7 +136,7 @@ describe("Emergency Routes", () => {
   });
 
   describe("PATCH /api/v1/emergencies/:id", () => {
-    test("sender can cancel SOS", async () => {
+    test("sender cancel MISTAKE deletes document immediately", async () => {
       const { member, sessionId } = await createActiveSessionWithParticipant();
 
       const created = await request(app)
@@ -150,7 +150,29 @@ describe("Emergency Routes", () => {
         .send({ action: "cancel", reason: "MISTAKE" });
 
       expect(res.status).toBe(200);
+      expect(res.body._id).toBe(created.body._id);
+      const remaining = await Emergency.findById(created.body._id);
+      expect(remaining).toBeNull();
+    });
+
+    test("sender cancel RESOLVED_SELF keeps record for TTL cleanup", async () => {
+      const { member, sessionId } = await createActiveSessionWithParticipant();
+
+      const created = await request(app)
+        .post("/api/v1/emergencies")
+        .set("Authorization", `Bearer ${member.token}`)
+        .send(VALID_EMERGENCY_BODY(sessionId));
+
+      const res = await request(app)
+        .patch(`/api/v1/emergencies/${created.body._id}`)
+        .set("Authorization", `Bearer ${member.token}`)
+        .send({ action: "cancel", reason: "RESOLVED_SELF" });
+
+      expect(res.status).toBe(200);
       expect(res.body.status).toBe("CANCELLED_BY_SENDER");
+      expect(res.body.cancelReason).toBe("RESOLVED_SELF");
+      const remaining = await Emergency.findById(created.body._id);
+      expect(remaining).not.toBeNull();
     });
 
     test("leader can dismiss SOS", async () => {

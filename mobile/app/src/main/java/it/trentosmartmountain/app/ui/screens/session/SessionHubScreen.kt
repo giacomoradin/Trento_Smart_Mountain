@@ -1111,6 +1111,7 @@ private fun SessionCard(
                     elevationLineColor = TsmAccent,
                     activeDotColor = TsmAccent,
                     difficultyLevel = session.routeDetails?.difficultyLevel,
+                    expandable = false,
                 )
             }
 

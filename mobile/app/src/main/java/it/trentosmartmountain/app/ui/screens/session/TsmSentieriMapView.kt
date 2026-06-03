@@ -63,6 +63,11 @@ fun TsmSentieriMapView(
             setMultiTouchControls(true)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             isTilesScaledToDpi = true
+            // Limiti zoom espliciti: garantiscono il de-zoom (pinch-out) anche sotto
+            // il livello di auto-fit. Senza, alcune versioni OSMdroid bloccano il
+            // min-zoom dopo zoomToBoundingBox → "non si riesce a rimpicciolire".
+            minZoomLevel = 3.0
+            maxZoomLevel = 19.0
             controller.setZoom(12.0)
             controller.setCenter(TSM_DEFAULT_MAP_CENTER)
         }

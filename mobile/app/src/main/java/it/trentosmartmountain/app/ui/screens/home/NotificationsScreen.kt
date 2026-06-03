@@ -21,23 +21,37 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,12 +75,17 @@ private val CardBackground = TsmColors.CardElevated
 private val AccentCyan = TsmColors.Cyan
 private val AccentRed = TsmColors.Danger
 private val AccentGreen = TsmColors.Online
+private val AccentAmber = Color(0xFFFFC107)
 private val TextSecondary = TsmColors.TextSecondary
 
 /**
- * Centro notifiche: lista delle interazioni ricevute (follow/like/commento).
- * Deep-link al tap: follow → profilo dell'attore; like/commento → il post
- * coinvolto. Le notifiche non lette hanno un leggero tint + pallino accent.
+ * Centro notifiche. Oltre alle social (follow/like/commento) mostra:
+ *  - richieste di partecipazione, accettazioni e rimozioni dalle sessioni;
+ *  - promemoria delle proprie escursioni entro ~24h;
+ *  - allerte pubblicate dai rifugisti.
+ *
+ * Gesti: swipe verso sinistra → cestino (elimina), tasto "Elimina tutte" in fondo,
+ * pull-to-refresh per aggiornare.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +96,35 @@ fun NotificationsScreen(
     viewModel: NotificationsViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var showClearAll by remember { mutableStateOf(false) }
+
+    if (showClearAll) {
+        AlertDialog(
+            onDismissRequest = { showClearAll = false },
+            containerColor = CardBackground,
+            title = { Text("Eliminare tutte le notifiche?", color = Color.White) },
+            text = { Text("L'operazione non è reversibile.", color = TextSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteAll()
+                    showClearAll = false
+                }) { Text("Elimina tutte", color = AccentRed, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAll = false }) { Text("Annulla", color = TextSecondary) }
+            },
+        )
+    }
+
+    fun handleClick(n: NotificationItem) {
+        when (n.type) {
+            "follow" -> n.actor?._id?.let(onUserClick)
+            "refuge_alert" -> { /* nessun deep-link: l'allerta è informativa */ }
+            else -> n.targetId?.let { tid ->
+                onOpenActivity(tid, if (n.targetKind == "session") tid else null)
+            }
+        }
+    }
 
     Scaffold(
         containerColor = DarkSurface,
@@ -91,6 +139,20 @@ fun NotificationsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
             )
         },
+        bottomBar = {
+            if (state.items.isNotEmpty()) {
+                Surface(color = DarkSurface) {
+                    TextButton(
+                        onClick = { showClearAll = true },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Icon(Icons.Filled.Delete, contentDescription = null, tint = AccentRed, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Elimina tutte", color = AccentRed, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        },
     ) { padding ->
         val listState = rememberLazyListState()
         val shouldLoadMore by remember {
@@ -104,45 +166,69 @@ fun NotificationsScreen(
             if (shouldLoadMore && state.hasMore) viewModel.loadMore()
         }
 
-        when {
-            state.isLoading && state.items.isEmpty() -> ListSkeleton(modifier = Modifier.padding(padding))
-            state.items.isEmpty() -> Centered(padding) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🔔", style = MaterialTheme.typography.displaySmall)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.notifications_empty),
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+        PullToRefreshBox(
+            isRefreshing = state.isLoading && state.items.isNotEmpty(),
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.padding(padding),
+        ) {
+            when {
+                state.isLoading && state.items.isEmpty() -> ListSkeleton()
+                state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🔔", style = MaterialTheme.typography.displaySmall)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.notifications_empty),
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                 }
-            }
-            else -> LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    top = padding.calculateTopPadding() + 8.dp,
-                    start = 12.dp, end = 12.dp, bottom = 16.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(state.items, key = { it._id }) { n ->
-                    NotificationRow(
-                        n = n,
-                        onClick = {
-                            when (n.type) {
-                                "follow" -> n.actor?._id?.let(onUserClick)
-                                else -> n.targetId?.let { tid ->
-                                    onOpenActivity(tid, if (n.targetKind == "session") tid else null)
-                                }
+                else -> LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 8.dp, start = 12.dp, end = 12.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(state.items, key = { it._id }) { n ->
+                        if (n.deletable) {
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        viewModel.delete(n._id)
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                },
+                            )
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                enableDismissFromStartToEnd = false,
+                                backgroundContent = {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(AccentRed.copy(alpha = 0.85f))
+                                            .padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.CenterEnd,
+                                    ) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "Elimina", tint = Color.White)
+                                    }
+                                },
+                            ) {
+                                NotificationRow(n = n, onClick = { handleClick(n) })
                             }
-                        },
-                    )
-                }
-                if (state.isLoadingMore) {
-                    item(key = "loading-more") {
-                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = AccentCyan, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                        } else {
+                            NotificationRow(n = n, onClick = { handleClick(n) })
+                        }
+                    }
+                    if (state.isLoadingMore) {
+                        item(key = "loading-more") {
+                            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = AccentCyan, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                            }
                         }
                     }
                 }
@@ -162,15 +248,24 @@ private fun NotificationRow(n: NotificationItem, onClick: () -> Unit) {
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(contentAlignment = Alignment.BottomEnd) {
-                AvatarImage(avatarUrl = n.actor?.avatarUrl, fallbackName = n.actor?.username ?: "?", size = 44.dp)
-                // Badge tipo notifica sull'angolo dell'avatar.
-                val (icon, tint) = typeIcon(n.type)
+            val (icon, tint) = typeIcon(n.type)
+            if (n.actor != null) {
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    AvatarImage(avatarUrl = n.actor.avatarUrl, fallbackName = n.actor.username ?: "?", size = 44.dp)
+                    Box(
+                        modifier = Modifier.size(18.dp).clip(CircleShape).background(DarkSurface),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(12.dp))
+                    }
+                }
+            } else {
+                // Notifiche di sistema (promemoria/allerte): solo icona tonda colorata.
                 Box(
-                    modifier = Modifier.size(18.dp).clip(CircleShape).background(DarkSurface),
+                    modifier = Modifier.size(44.dp).clip(CircleShape).background(tint.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(12.dp))
+                    Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
                 }
             }
             Spacer(Modifier.width(12.dp))
@@ -198,11 +293,18 @@ private fun typeIcon(type: String): Pair<ImageVector, Color> = when (type) {
     "follow" -> Icons.Filled.PersonAdd to AccentGreen
     "like" -> Icons.Filled.Favorite to AccentRed
     "comment" -> Icons.Filled.ChatBubble to AccentCyan
-    else -> Icons.Filled.PersonAdd to TextSecondary
+    "join_request" -> Icons.Filled.Group to AccentCyan
+    "join_accepted" -> Icons.Filled.CheckCircle to AccentGreen
+    "removed" -> Icons.Filled.Block to AccentRed
+    "activity_reminder" -> Icons.Filled.Schedule to AccentAmber
+    "refuge_alert" -> Icons.Filled.Warning to AccentAmber
+    else -> Icons.Filled.Schedule to TextSecondary
 }
 
 @Composable
 private fun notifText(n: NotificationItem): String {
+    // I tipi non-social arrivano col testo già pronto dal server.
+    if (!n.message.isNullOrBlank()) return n.message
     val name = n.actor?.username ?: "Qualcuno"
     val isSession = n.targetKind == "session"
     return when (n.type) {
@@ -213,11 +315,9 @@ private fun notifText(n: NotificationItem): String {
         "comment" -> stringResource(
             if (isSession) R.string.notif_comment_session else R.string.notif_comment_activity, name,
         )
+        "join_request" -> "$name ha chiesto di unirsi alla tua escursione"
+        "join_accepted" -> "$name ha accettato la tua richiesta di partecipazione"
+        "removed" -> "Sei stato rimosso da un'escursione"
         else -> stringResource(R.string.notif_generic, name)
     }
-}
-
-@Composable
-private fun Centered(padding: PaddingValues, content: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { content() }
 }

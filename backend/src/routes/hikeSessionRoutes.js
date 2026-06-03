@@ -602,22 +602,11 @@ router.get(
       if (!session)
         return res.status(404).json({ error: "Sessione non trovata" });
 
-      // Restringi la lettura ai partecipanti (creator incluso) e agli admin.
-      // Evita che chiunque con un ObjectId valido possa leggere sessioni altrui.
-      const userId = req.user.userId.toString();
-      const isAdmin = req.user.role === "admin";
-      const creatorId = (
-        session.creatorId?._id || session.creatorId
-      )?.toString();
-      const isParticipant = (session.participants || []).some((p) => {
-        const pid = (p.userId?._id || p.userId)?.toString();
-        return pid === userId;
-      });
-      if (!isAdmin && creatorId !== userId && !isParticipant) {
-        return res
-          .status(403)
-          .json({ error: "Non sei autorizzato a vedere questa sessione" });
-      }
+      // Lettura consentita a QUALSIASI utente autenticato: le sessioni sono
+      // referenziate dalle storie e dal feed ("vedi escursione"), quindi devono
+      // essere visualizzabili anche dai non-membri (sola lettura). Le operazioni
+      // sensibili (posizioni live, checklist, gestione partecipanti) restano
+      // protette dai rispettivi controlli a valle.
       res.status(200).json(session);
     } catch (err) {
       // CastError di Mongoose per ObjectId malformato → 400 (semantica diversa

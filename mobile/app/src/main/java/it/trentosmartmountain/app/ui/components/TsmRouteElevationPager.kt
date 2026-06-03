@@ -1,6 +1,7 @@
 package it.trentosmartmountain.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,11 +15,18 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +59,10 @@ fun TsmRouteElevationPager(
     elevationLineColor: Color = TsmColors.Cyan,
     activeDotColor: Color = TsmColors.Primary, // Allineato al brand High-Vis Athletic Orange
     difficultyLevel: String? = null,
+    /** Se true, un tap sulla mappa apre una mappa full-screen INTERATTIVA
+     *  (pinch zoom in/out, pan). Lasciare false dove il tap ha già un'azione
+     *  (es. la card del feed apre il dettaglio). */
+    expandable: Boolean = false,
     emptyContent: (@Composable () -> Unit)? = null,
 ) {
     val hasRoute = routePoints != null && routePoints.size >= 2
@@ -58,6 +70,7 @@ fun TsmRouteElevationPager(
     val pageCount = listOf(hasRoute, hasProfile).count { it }
     val pagerState = rememberPagerState { pageCount }
     val scope = rememberCoroutineScope()
+    var showFullMap by remember { mutableStateOf(false) }
 
     val shape = RoundedCornerShape(cornerRadius)
     
@@ -87,7 +100,14 @@ fun TsmRouteElevationPager(
                 val showMap = hasRoute && pageIdx == 0
 
                 if (showMap && routePoints != null) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (expandable) Modifier.clickable { showFullMap = true }
+                                else Modifier,
+                            ),
+                    ) {
                         TsmRouteMapPreview(
                             points = routePoints,
                             modifier = Modifier.fillMaxSize(),
@@ -99,6 +119,23 @@ fun TsmRouteElevationPager(
                                     .align(Alignment.TopStart)
                                     .padding(12.dp),
                             )
+                        }
+                        // Hint "tocca per ingrandire" → mappa full-screen zoomabile.
+                        if (expandable) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color.Black.copy(alpha = 0.45f),
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(12.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Fullscreen,
+                                    contentDescription = "Ingrandisci mappa",
+                                    tint = Color.White,
+                                    modifier = Modifier.padding(4.dp).size(20.dp),
+                                )
+                            }
                         }
                     }
                 } else if (elevationProfile != null) {
@@ -170,6 +207,14 @@ fun TsmRouteElevationPager(
                     }
                 }
             }
+        }
+
+        // Mappa full-screen interattiva (pinch zoom in/out) aperta dal tap.
+        if (showFullMap && routePoints != null) {
+            TsmRouteMapDialog(
+                routePoints = routePoints,
+                onClose = { showFullMap = false },
+            )
         }
     }
 }

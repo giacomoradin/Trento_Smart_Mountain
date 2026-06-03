@@ -80,3 +80,48 @@ export function isSelfOrAdmin(viewerUser, targetUserId) {
   if (viewerUser.role === "admin") return true;
   return viewerUser.userId?.toString() === targetUserId?.toString();
 }
+
+/**
+ * Visibilità account (`preferences.privacy.profileVisibility`) per il campo
+ * `personalInfo.sex` in contesto sessione di gruppo (live locations).
+ *
+ * - private → solo il proprietario vede il proprio sesso
+ * - friends → il viewer deve seguire il proprietario (modello follower)
+ * - public  → visibile a tutti i membri della sessione
+ */
+export function canViewerSeeSexInGroupContext(
+  viewerId,
+  targetUser,
+  viewerFollowsTarget,
+) {
+  const viewerStr = viewerId?.toString();
+  const targetStr = (targetUser?._id || targetUser)?.toString();
+  if (!viewerStr || !targetStr) return false;
+  if (viewerStr === targetStr) return true;
+  const visibility =
+    targetUser?.preferences?.privacy?.profileVisibility ?? "friends";
+  if (visibility === "private") return false;
+  if (visibility === "public") return true;
+  return Boolean(viewerFollowsTarget);
+}
+
+/**
+ * Raccoglie i documenti utente unici da una sessione populate (partecipanti +
+ * creatore) per calcolare la visibilità del sesso.
+ */
+export function collectSessionMemberUsers(session) {
+  const users = [];
+  const seen = new Set();
+  const add = (u) => {
+    if (!u) return;
+    const id = (u._id || u).toString();
+    if (seen.has(id)) return;
+    seen.add(id);
+    users.push(u);
+  };
+  for (const p of session.participants || []) {
+    add(p.userId);
+  }
+  add(session.creatorId);
+  return users;
+}

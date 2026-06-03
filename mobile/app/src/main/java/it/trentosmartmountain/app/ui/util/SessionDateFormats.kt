@@ -14,6 +14,38 @@ object SessionDateFormats {
 
     fun todayApi(): String = API_FORMAT.format(Date())
 
+    /** Data di domani in formato API (`YYYY-MM-DD`), timezone locale del dispositivo. */
+    fun tomorrowApi(): String {
+        val cal = java.util.Calendar.getInstance(Locale.getDefault())
+        cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        return API_FORMAT.format(cal.time)
+    }
+
+    /** Ora di ritrovo predefinita in pianificazione (`HH:mm`). */
+    const val DEFAULT_MEETING_TIME = "12:00"
+
+    fun apiDateToMillis(apiDate: String): Long? {
+        val raw = apiDate.trim()
+        if (!API_PATTERN.matches(raw)) return null
+        return try {
+            API_FORMAT.parse(raw)!!.time
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Interpreta `HH:mm`; null se formato non valido. */
+    fun parseMeetingTime(time: String?): Pair<Int, Int>? {
+        val raw = time?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        val parts = raw.split(":")
+        if (parts.size != 2) return null
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return hour to minute
+    }
+
     fun formatDisplayFromApi(apiDate: String?): String {
         val raw = apiDate?.trim().orEmpty()
         if (raw.isEmpty()) return ""

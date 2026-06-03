@@ -106,7 +106,7 @@ private fun RosterActiveRow(
   onClick: () -> Unit,
 ) {
   val user = item.user
-  // Sesso visibile a tutti i membri (Fase 0): appeso allo stato se noto.
+  // Sesso se il backend lo espone (gate visibilità profilo).
   val sexLabel = formatSex(user.sex)
   val secondary =
     if (sexLabel != "—") {

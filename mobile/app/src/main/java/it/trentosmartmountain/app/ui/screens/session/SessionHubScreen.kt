@@ -249,7 +249,16 @@ private fun SessionPlanTab(
     }
 
     if (showDatePicker) {
-        val dateState = rememberDatePickerState()
+        val initialDateMillis =
+            remember(uiState.meetingDate) {
+                SessionDateFormats.toApiOrNull(uiState.meetingDate)
+                    ?.let { SessionDateFormats.apiDateToMillis(it) }
+                    ?: SessionDateFormats.apiDateToMillis(SessionDateFormats.tomorrowApi())
+            }
+        val dateState =
+            rememberDatePickerState(
+                initialSelectedDateMillis = initialDateMillis,
+            )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -267,7 +276,16 @@ private fun SessionPlanTab(
     }
 
     if (showTimePicker) {
-        val timeState = rememberTimePickerState(initialHour = 6, initialMinute = 30)
+        val (initialHour, initialMinute) =
+            remember(uiState.meetingTime) {
+                SessionDateFormats.parseMeetingTime(uiState.meetingTime)
+                    ?: SessionDateFormats.parseMeetingTime(SessionDateFormats.DEFAULT_MEETING_TIME)!!
+            }
+        val timeState =
+            rememberTimePickerState(
+                initialHour = initialHour,
+                initialMinute = initialMinute,
+            )
         Dialog(onDismissRequest = { showTimePicker = false }) {
             Surface(color = TsmSurface, shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -467,33 +485,54 @@ private fun SessionPlanTab(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
                     SessionFieldLabel(stringResource(R.string.session_date_label))
-                    OutlinedTextField(
-                        value = meetingDateDisplay,
-                        onValueChange = {},
-                        modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true },
-                        placeholder = { Text(SessionDateFormats.formatDisplayFromApi("2026-05-26"), color = Color.Gray) },
-                        singleLine = true,
-                        readOnly = true,
-                        enabled = false,
-                        leadingIcon = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null, tint = TsmAccent) },
-                        colors = sessionFieldColors(),
-                        shape = RoundedCornerShape(8.dp),
-                    )
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { showDatePicker = true },
+                    ) {
+                        OutlinedTextField(
+                            value = meetingDateDisplay,
+                            onValueChange = {},
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(
+                                    SessionDateFormats.formatDisplayFromApi(SessionDateFormats.tomorrowApi()),
+                                    color = Color.Gray,
+                                )
+                            },
+                            singleLine = true,
+                            readOnly = true,
+                            enabled = false,
+                            leadingIcon = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null, tint = TsmAccent) },
+                            colors = sessionFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                    }
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     SessionFieldLabel(stringResource(R.string.session_time_label))
-                    OutlinedTextField(
-                        value = uiState.meetingTime,
-                        onValueChange = {},
-                        modifier = Modifier.fillMaxWidth().clickable { showTimePicker = true },
-                        placeholder = { Text("06:30", color = Color.Gray) },
-                        singleLine = true,
-                        readOnly = true,
-                        enabled = false,
-                        leadingIcon = { Icon(Icons.Outlined.Schedule, contentDescription = null, tint = TsmAccent) },
-                        colors = sessionFieldColors(),
-                        shape = RoundedCornerShape(8.dp),
-                    )
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { showTimePicker = true },
+                    ) {
+                        OutlinedTextField(
+                            value = uiState.meetingTime,
+                            onValueChange = {},
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(SessionDateFormats.DEFAULT_MEETING_TIME, color = Color.Gray)
+                            },
+                            singleLine = true,
+                            readOnly = true,
+                            enabled = false,
+                            leadingIcon = { Icon(Icons.Outlined.Schedule, contentDescription = null, tint = TsmAccent) },
+                            colors = sessionFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                    }
                 }
             }
 
@@ -1133,6 +1172,7 @@ private fun sessionFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = Color.White,
     unfocusedTextColor = Color.White,
     disabledTextColor = Color.White,
+    disabledPlaceholderColor = Color.Gray,
     cursorColor = TsmAccent,
 )
 

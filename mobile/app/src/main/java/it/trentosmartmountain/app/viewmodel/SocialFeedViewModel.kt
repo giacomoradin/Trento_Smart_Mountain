@@ -46,6 +46,8 @@ data class SocialFeedState(
     val viewedStoryIds: Set<String> = emptySet(),
     /** Notifiche non lette → badge sulla campanella in cima al feed. */
     val unreadNotifications: Int = 0,
+    val deleteSuccess: String? = null,
+    val deleteError: String? = null,
 )
 
 /**
@@ -280,14 +282,35 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    /** Rimuove la condivisione di un'attività dal feed (DELETE share). */
-    fun unshareActivity(activityId: String) {
+    /**
+     * Rimuove un post dal feed (solo il proprietario).
+     * Attività → unshare activity; sessione → unshare session.
+     */
+    fun removeFeedPost(item: FeedItem, onRemoved: () -> Unit = {}) {
         viewModelScope.launch {
-            runCatching { api.unshareActivity(activityId) }
-                .onSuccess { resp ->
-                    if (resp.isSuccessful) refresh()
+            _state.value = _state.value.copy(deleteError = null, deleteSuccess = null)
+            val resp = runCatching {
+                when (item.kind) {
+                    "session" -> api.unshareSession(item.id)
+                    else -> api.unshareActivity(item.id)
                 }
+            }.getOrNull()
+            if (resp?.isSuccessful == true) {
+                _state.value = _state.value.copy(
+                    items = _state.value.items.filter { it.id != item.id || it.kind != item.kind },
+                    deleteSuccess = "Post rimosso dal feed.",
+                )
+                onRemoved()
+            } else {
+                _state.value = _state.value.copy(
+                    deleteError = "Impossibile rimuovere il post (${resp?.code() ?: "rete"}).",
+                )
+            }
         }
+    }
+
+    fun clearDeleteMessages() {
+        _state.value = _state.value.copy(deleteSuccess = null, deleteError = null)
     }
 
     /**

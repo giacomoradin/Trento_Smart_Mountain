@@ -5,6 +5,7 @@ import {
   updateAccountSchema,
   changePasswordSchema,
   deleteAccountSchema,
+  verifyPasswordSchema,
   goalsSchema,
   personalInfoSchema,
   experienceSchema,
@@ -14,6 +15,7 @@ import {
   updateUser,
   changePassword,
   deleteAccount,
+  verifyPassword,
   updateGoals,
   updatePersonalInfo,
   updateExperience,
@@ -44,6 +46,17 @@ router.patch("/me", ...mw, async (req, res, next) => {
     if (!v.ok) return res.status(v.response.status).json(v.response.body);
     const result = await updateUser(req.user.userId, v.value);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/me/verify-password", ...mw, async (req, res, next) => {
+  try {
+    const v = validateBody(verifyPasswordSchema, req.body);
+    if (!v.ok) return res.status(v.response.status).json(v.response.body);
+    await verifyPassword(req.user.userId, v.value);
+    res.json({ verified: true });
   } catch (err) {
     next(err);
   }

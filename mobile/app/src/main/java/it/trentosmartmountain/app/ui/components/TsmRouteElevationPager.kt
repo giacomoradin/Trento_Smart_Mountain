@@ -1,7 +1,6 @@
 package it.trentosmartmountain.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -36,8 +36,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import it.trentosmartmountain.app.data.remote.dto.RoutePoint
 import it.trentosmartmountain.app.ui.screens.home.ElevationSparkline
+import it.trentosmartmountain.app.ui.screens.home.elevationRangeFromProfile
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.theme.difficultyColor
 import kotlinx.coroutines.launch
@@ -45,24 +47,25 @@ import kotlinx.coroutines.launch
 /**
  * Hero unico e riusabile per visualizzare il tracciato di un'escursione come
  * due schede scorrevoli orizzontalmente (Mappa GPX / Profilo Altimetrico).
- *
- * Implementa la nuova palette ad alte prestazioni unendo il Tech Navy e il profondo Alpine Pine.
  */
 @Composable
 fun TsmRouteElevationPager(
     routePoints: List<RoutePoint>?,
     elevationProfile: List<Double>?,
     modifier: Modifier = Modifier,
-    height: Dp = 220.dp, // Incrementato leggermente per ospitare la telemetria densa senza compressione degli assi
-    cornerRadius: Dp = 12.dp, // Arrotondamento standardizzato per le card del modulo Social/Feed
+    height: Dp = 220.dp,
+    cornerRadius: Dp = 12.dp,
     backgroundBrush: Brush? = null,
     elevationLineColor: Color = TsmColors.Cyan,
-    activeDotColor: Color = TsmColors.Primary, // Allineato al brand High-Vis Athletic Orange
+    activeDotColor: Color = TsmColors.Primary,
     difficultyLevel: String? = null,
-    /** Se true, un tap sulla mappa apre una mappa full-screen INTERATTIVA
-     *  (pinch zoom in/out, pan). Lasciare false dove il tap ha già un'azione
-     *  (es. la card del feed apre il dettaglio). */
+    /** Se true, il pulsante ingrandisci apre mappa full-screen interattiva. */
     expandable: Boolean = false,
+    /** Distanza totale (km) per l'asse X del profilo altimetrico nel pager. */
+    distanceKm: Double? = null,
+    /** Quote min/max in metri; se null derivate dal profilo quando possibile. */
+    elevationMinM: Double? = null,
+    elevationMaxM: Double? = null,
     emptyContent: (@Composable () -> Unit)? = null,
 ) {
     val hasRoute = routePoints != null && routePoints.size >= 2
@@ -72,14 +75,19 @@ fun TsmRouteElevationPager(
     val scope = rememberCoroutineScope()
     var showFullMap by remember { mutableStateOf(false) }
 
+    val (derivedMin, derivedMax) = remember(elevationProfile, elevationMinM, elevationMaxM) {
+        if (elevationMinM != null && elevationMaxM != null) {
+            elevationMinM to elevationMaxM
+        } else if (elevationProfile != null) {
+            elevationRangeFromProfile(elevationProfile)
+        } else {
+            0.0 to 0.0
+        }
+    }
+
     val shape = RoundedCornerShape(cornerRadius)
-    
-    // Gradiente di default se non viene passato un brush personalizzato dal modulo chiamante
     val defaultHeroBrush = Brush.verticalGradient(
-        colors = listOf(
-            TsmColors.HeroTop,       // Tech Navy (#003748)
-            TsmColors.AlpinePineDark // Transizione verso il profondo abete (#004225)
-        )
+        colors = listOf(TsmColors.HeroTop, TsmColors.AlpinePineDark),
     )
 
     Box(
@@ -87,30 +95,23 @@ fun TsmRouteElevationPager(
             .fillMaxWidth()
             .height(height)
             .clip(shape)
-            .background(backgroundBrush ?: defaultHeroBrush)
+            .background(backgroundBrush ?: defaultHeroBrush),
     ) {
         if (pageCount == 0) {
             emptyContent?.invoke()
         } else {
             HorizontalPager(
-                state = pagerState, 
-                modifier = Modifier.fillMaxSize()
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
             ) { pageIdx ->
-                // Mappatura sequenziale delle pagine basata sulla presenza dei dati (Mappa prioritari)
                 val showMap = hasRoute && pageIdx == 0
 
                 if (showMap && routePoints != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(
-                                if (expandable) Modifier.clickable { showFullMap = true }
-                                else Modifier,
-                            ),
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         TsmRouteMapPreview(
                             points = routePoints,
                             modifier = Modifier.fillMaxSize(),
+                            interactive = false,
                         )
                         if (!difficultyLevel.isNullOrBlank()) {
                             DifficultyChip(
@@ -120,44 +121,28 @@ fun TsmRouteElevationPager(
                                     .padding(12.dp),
                             )
                         }
-                        // Hint "tocca per ingrandire" → mappa full-screen zoomabile.
-                        if (expandable) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color.Black.copy(alpha = 0.45f),
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(12.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Fullscreen,
-                                    contentDescription = "Ingrandisci mappa",
-                                    tint = Color.White,
-                                    modifier = Modifier.padding(4.dp).size(20.dp),
-                                )
-                            }
-                        }
                     }
                 } else if (elevationProfile != null) {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         ElevationSparkline(
                             profile = elevationProfile,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp, vertical = 20.dp), // Padding calibrato per isolare le label sui canvas
+                            modifier = Modifier.fillMaxSize(),
                             lineColor = elevationLineColor,
+                            distanceKm = distanceKm,
+                            minAltM = derivedMin,
+                            maxAltM = derivedMax,
+                            // Assi solo nel dettaglio (altezza hero ≥ 200dp); nel feed evita layout stretto.
+                            showAxisLabels = distanceKm != null && distanceKm > 0 && height >= 200.dp,
                         )
                     }
                 }
             }
 
-            // Overlay di gesto: pilota lo swipe mappa↔altimetria in modo deterministico.
-            // La MapView (AndroidView) può intercettare i drag a livello View; questo
-            // overlay Compose, sovrapposto, consuma SOLO i drag orizzontali e cambia
-            // pagina, lasciando passare i drag verticali al contenitore (es. LazyColumn).
             if (pageCount > 1) {
                 Box(
                     modifier = Modifier
@@ -185,7 +170,6 @@ fun TsmRouteElevationPager(
                 )
             }
 
-            // Indicatore dei punti di scorrimento (Pager Indicator)
             if (pageCount > 1) {
                 Row(
                     modifier = Modifier
@@ -196,20 +180,40 @@ fun TsmRouteElevationPager(
                     repeat(pageCount) { i ->
                         val isSelected = pagerState.currentPage == i
                         val dotColor = if (isSelected) activeDotColor else TsmColors.TextSecondary.copy(alpha = 0.4f)
-                        val dotWidth = if (isSelected) 14.dp else 6.dp // Feedback visivo elastico sull'indice attivo
-                        
+                        val dotWidth = if (isSelected) 14.dp else 6.dp
                         Box(
                             modifier = Modifier
                                 .size(width = dotWidth, height = 6.dp)
                                 .clip(CircleShape)
-                                .background(dotColor)
+                                .background(dotColor),
+                        )
+                    }
+                }
+            }
+
+            if (expandable && hasRoute) {
+                IconButton(
+                    onClick = { showFullMap = true },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .zIndex(2f)
+                        .padding(4.dp),
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Black.copy(alpha = 0.45f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Fullscreen,
+                            contentDescription = "Ingrandisci mappa",
+                            tint = Color.White,
+                            modifier = Modifier.padding(6.dp).size(20.dp),
                         )
                     }
                 }
             }
         }
 
-        // Mappa full-screen interattiva (pinch zoom in/out) aperta dal tap.
         if (showFullMap && routePoints != null) {
             TsmRouteMapDialog(
                 routePoints = routePoints,
@@ -219,23 +223,18 @@ fun TsmRouteElevationPager(
     }
 }
 
-/** * Chip difficoltà CAI (T/E/EE/EEA) ottimizzato.
- * Sfrutta il sistema di calcolo deterministico `difficultyColor` aggiornato.
- */
 @Composable
 private fun DifficultyChip(level: String, modifier: Modifier = Modifier) {
     val chipColor = difficultyColor(level)
     Surface(
-        shape = RoundedCornerShape(4.dp), // Angoli rigidi per interfacce di tipo "data-focused math"
+        shape = RoundedCornerShape(4.dp),
         color = chipColor.copy(alpha = 0.95f),
-        modifier = modifier
+        modifier = modifier,
     ) {
         Text(
             text = level,
             color = Color.White,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = FontWeight.Black // Massima leggibilità su mappa OpenTopoMap
-            ),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }

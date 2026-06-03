@@ -342,6 +342,9 @@ fun ActivityDetailScreen(
                     TsmRouteElevationPager(
                         routePoints = uiState.trackPoints.map { RoutePoint(it.first, it.second) },
                         elevationProfile = uiState.elevationProfile,
+                        distanceKm = uiState.distanceKm,
+                        elevationMinM = uiState.elevationMinM,
+                        elevationMaxM = uiState.elevationMaxM,
                         modifier = Modifier.fillMaxWidth(),
                         height = 200.dp,
                         cornerRadius = 8.dp,

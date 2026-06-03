@@ -41,6 +41,7 @@ object Routes {
   const val NFC_RESULT = "nfc_result"
 
   // ── Sprint 2: Account ────────────────────────────────────────────────────────
+  const val ACCOUNT_PASSWORD_GATE = "account_password_gate"
   const val ACCOUNT_EDIT = "account_edit"
   const val CHANGE_PASSWORD = "change_password"
   const val DELETE_ACCOUNT = "delete_account"

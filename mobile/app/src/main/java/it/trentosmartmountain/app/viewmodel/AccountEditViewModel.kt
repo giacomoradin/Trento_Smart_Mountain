@@ -9,6 +9,7 @@ import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.AccountUpdateRequest
 import it.trentosmartmountain.app.data.remote.dto.ChangePasswordRequest
 import it.trentosmartmountain.app.data.remote.dto.DeleteAccountRequest
+import it.trentosmartmountain.app.data.remote.dto.VerifyPasswordRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +24,7 @@ data class AccountEditUiState(
     val error: String? = null,
     val requiresEmailVerification: Boolean = false,
     val accountDeleted: Boolean = false,
+    val passwordVerified: Boolean = false,
 )
 
 class AccountEditViewModel(application: Application) : AndroidViewModel(application) {
@@ -111,6 +113,28 @@ class AccountEditViewModel(application: Application) : AndroidViewModel(applicat
                 _state.value = _state.value.copy(isLoading = false, error = it.message ?: "Errore di rete")
             }
         }
+    }
+
+    fun verifyPassword(password: String) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = true, success = null, error = null, passwordVerified = false)
+            runCatching {
+                api.verifyPassword(VerifyPasswordRequest(password))
+            }.onSuccess { resp ->
+                if (resp.isSuccessful) {
+                    _state.value = _state.value.copy(isLoading = false, passwordVerified = true)
+                } else {
+                    val msg = if (resp.code() == 401) "Password errata." else "Errore (${resp.code()})."
+                    _state.value = _state.value.copy(isLoading = false, error = msg)
+                }
+            }.onFailure {
+                _state.value = _state.value.copy(isLoading = false, error = it.message ?: "Errore di rete")
+            }
+        }
+    }
+
+    fun resetPasswordVerified() {
+        _state.value = _state.value.copy(passwordVerified = false)
     }
 
     fun changePassword(oldPassword: String, newPassword: String) {

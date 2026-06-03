@@ -370,7 +370,11 @@ fun RegistraScreen(
         modifier =
           Modifier
             .align(Alignment.TopCenter)
-            .padding(top = 120.dp, start = 16.dp, end = 16.dp),
+            .padding(
+              top = RegistraLayout.sosBannerTop(isTrackingActive, uiState.isAutoPaused),
+              start = 16.dp,
+              end = 16.dp,
+            ),
         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
         shape = MaterialTheme.shapes.small,
         onClick = viewModel::requestCancelActiveSos,

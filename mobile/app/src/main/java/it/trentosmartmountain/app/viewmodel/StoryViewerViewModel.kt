@@ -27,6 +27,8 @@ class StoryViewerViewModel(application: Application) : AndroidViewModel(applicat
         val error: String? = null,
         /** Feedback dopo il tap su "Unisciti" da una storia planned_session. */
         val joinInfo: String? = null,
+        val deleteInfo: String? = null,
+        val isDeleting: Boolean = false,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -34,12 +36,18 @@ class StoryViewerViewModel(application: Application) : AndroidViewModel(applicat
 
     private var loadedUserId: String? = null
 
-    /** Idempotente sull'autore: evita ricariche a ogni recomposition. */
+    /** Carica le storie di un autore (richiamato al cambio utente nella coda Instagram-like). */
     fun load(userId: String) {
-        if (loadedUserId == userId) return
+        if (userId.isBlank()) return
+        val switchingAuthor = loadedUserId != userId
+        if (!switchingAuthor && !_state.value.isLoading &&
+            (_state.value.stories.isNotEmpty() || _state.value.error != null)
+        ) {
+            return
+        }
         loadedUserId = userId
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
+            _state.update { it.copy(isLoading = true, error = null, stories = emptyList()) }
             runCatching { api.getStoriesByUser(userId) }
                 .onSuccess { resp ->
                     if (resp.isSuccessful) {
@@ -53,6 +61,30 @@ class StoryViewerViewModel(application: Application) : AndroidViewModel(applicat
                 .onFailure { _state.update { it.copy(isLoading = false, error = "Errore di rete.") } }
         }
     }
+
+    fun deleteStory(storyId: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            _state.update { it.copy(isDeleting = true) }
+            val ok = runCatching { api.deleteStory(storyId) }.getOrNull()?.isSuccessful == true
+            if (ok) {
+                val remaining = _state.value.stories.filter { it.id != storyId }
+                _state.update {
+                    it.copy(
+                        isDeleting = false,
+                        stories = remaining,
+                        deleteInfo = "Storia eliminata.",
+                    )
+                }
+                onDone()
+            } else {
+                _state.update {
+                    it.copy(isDeleting = false, deleteInfo = "Impossibile eliminare la storia.")
+                }
+            }
+        }
+    }
+
+    fun clearDeleteInfo() = _state.update { it.copy(deleteInfo = null) }
 
     /** Marca la storia come vista (best-effort, idempotente lato server). */
     fun markViewed(storyId: String) {

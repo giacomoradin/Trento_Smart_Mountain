@@ -1,9 +1,9 @@
 package it.trentosmartmountain.app.ui.screens.home
 
 import android.widget.Toast
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,11 +31,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,18 +46,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.data.remote.dto.StoryItem
 import it.trentosmartmountain.app.data.remote.dto.StoryMedia
+import it.trentosmartmountain.app.data.remote.dto.StoryViewerLaunchContext
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.tsmNavigationBarPadding
+import it.trentosmartmountain.app.ui.components.tsmStatusBarPadding
 import it.trentosmartmountain.app.ui.util.AvatarUtils
 import it.trentosmartmountain.app.viewmodel.StoryViewerViewModel
 import kotlinx.coroutines.Dispatchers
@@ -64,27 +73,39 @@ import kotlin.math.roundToInt
 
 private const val IMAGE_SEGMENT_MS = 5000L
 
-/**
- * Visualizzatore storie full-screen (rework Fase C).
- *
- * Carica le storie REALI dell'autore (`/stories/user/:id`) e le riproduce in
- * sequenza, stile Instagram:
- *  - barra di progresso segmentata (una per storia) con auto-advance;
- *  - media: foto (Base64) o video breve (Base64 → cache file → VideoView);
- *  - overlay tracciamento (titolo, traccia, distanza/dislivello/tempo);
- *  - per le storie planned_session: bottone "UNISCITI" (→ richiesta pending);
- *  - tap a sinistra = precedente, a destra = successiva, X = chiudi.
- */
 @Composable
 fun StoryViewerScreen(
     userId: String,
+    launchContext: StoryViewerLaunchContext? = null,
     onClose: () -> Unit,
     onOpenSession: (sessionId: String) -> Unit = {},
     viewModel: StoryViewerViewModel = viewModel(),
 ) {
-    LaunchedEffect(userId) { viewModel.load(userId) }
-    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val app = context.applicationContext as TsmApplication
+    val myUserId = remember {
+        JwtDecoder.userIdFrom(app.tokenStorage.getToken().orEmpty())
+    }
+
+    val queue = remember(userId, launchContext) {
+        val fromCtx = launchContext?.userIds?.filter { it.isNotBlank() }.orEmpty()
+        when {
+            fromCtx.isEmpty() -> listOf(userId)
+            fromCtx.contains(userId) -> fromCtx
+            else -> listOf(userId) + fromCtx
+        }
+    }
+    val initialUserIndex = remember(userId, launchContext) {
+        launchContext?.startIndex?.takeIf { queue.isNotEmpty() }
+            ?: queue.indexOf(userId).coerceAtLeast(0)
+    }
+
+    var userIndex by remember(userId, queue) { mutableIntStateOf(initialUserIndex.coerceIn(queue.indices)) }
+    var openAtLastStory by remember { mutableStateOf(false) }
+    val currentUserId = queue.getOrNull(userIndex) ?: userId
+
+    LaunchedEffect(currentUserId) { viewModel.load(currentUserId) }
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.joinInfo) {
         state.joinInfo?.let {
@@ -92,8 +113,48 @@ fun StoryViewerScreen(
             viewModel.clearJoinInfo()
         }
     }
+    LaunchedEffect(state.deleteInfo) {
+        state.deleteInfo?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearDeleteInfo()
+        }
+    }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    fun goToNextUser() {
+        if (userIndex < queue.lastIndex) {
+            userIndex++
+        } else {
+            onClose()
+        }
+    }
+
+    fun goToPrevUser() {
+        if (userIndex > 0) {
+            openAtLastStory = true
+            userIndex--
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .pointerInput(queue, userIndex) {
+                var drag = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { drag = 0f },
+                    onDragCancel = { drag = 0f },
+                    onDragEnd = {
+                        val threshold = 72.dp.toPx()
+                        when {
+                            drag <= -threshold -> goToNextUser()
+                            drag >= threshold -> goToPrevUser()
+                        }
+                        drag = 0f
+                    },
+                ) { _, amount -> drag += amount }
+            },
+    ) {
         when {
             state.isLoading -> {
                 CircularProgressIndicator(
@@ -103,7 +164,9 @@ fun StoryViewerScreen(
             }
             state.stories.isEmpty() -> {
                 Column(
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
@@ -111,15 +174,34 @@ fun StoryViewerScreen(
                         color = Color.White.copy(alpha = 0.8f),
                     )
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = onClose) { Text("Chiudi") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (userIndex > 0) {
+                            TextButton(onClick = { goToPrevUser() }) {
+                                Text("Precedente", color = Color.White)
+                            }
+                        }
+                        if (userIndex < queue.lastIndex) {
+                            TextButton(onClick = { goToNextUser() }) {
+                                Text("Successivo", color = Color.White)
+                            }
+                        }
+                        Button(onClick = onClose) { Text("Chiudi") }
+                    }
                 }
             }
             else -> StoryPager(
                 stories = state.stories,
+                myUserId = myUserId,
+                isDeleting = state.isDeleting,
+                openAtLastStory = openAtLastStory,
+                onConsumedOpenAtLast = { openAtLastStory = false },
                 onClose = onClose,
                 onMarkViewed = viewModel::markViewed,
                 onJoin = viewModel::joinSession,
                 onOpenSession = onOpenSession,
+                onDeleteStory = viewModel::deleteStory,
+                onFinishedLastStory = { goToNextUser() },
+                onPrevAtFirstStory = { goToPrevUser() },
             )
         }
     }
@@ -128,42 +210,99 @@ fun StoryViewerScreen(
 @Composable
 private fun StoryPager(
     stories: List<StoryItem>,
+    myUserId: String?,
+    isDeleting: Boolean,
+    openAtLastStory: Boolean,
+    onConsumedOpenAtLast: () -> Unit,
     onClose: () -> Unit,
     onMarkViewed: (String) -> Unit,
     onJoin: (inviteCode: String) -> Unit,
     onOpenSession: (sessionId: String) -> Unit,
+    onDeleteStory: (String, () -> Unit) -> Unit,
+    onFinishedLastStory: () -> Unit,
+    onPrevAtFirstStory: () -> Unit,
 ) {
-    var index by remember { mutableIntStateOf(0) }
-    val current = stories.getOrNull(index) ?: return
-    val media = current.media.firstOrNull()
+    var index by remember(stories) { mutableIntStateOf(0) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    // Durata del segmento: foto = 5s, video = durata (clamp 3-10s).
-    val segmentMs = remember(index) {
+    LaunchedEffect(stories, openAtLastStory) {
+        index = if (openAtLastStory && stories.isNotEmpty()) {
+            onConsumedOpenAtLast()
+            stories.lastIndex
+        } else {
+            0
+        }
+    }
+
+    // Se la lista si accorcia (es. elimina storia), evita IndexOutOfBounds.
+    LaunchedEffect(stories.size) {
+        if (stories.isNotEmpty() && index > stories.lastIndex) {
+            index = stories.lastIndex
+        }
+    }
+
+    val safeIndex = index.coerceIn(0, (stories.size - 1).coerceAtLeast(0))
+    if (safeIndex != index) index = safeIndex
+    val current = stories.getOrNull(safeIndex) ?: return
+    val media = current.media.firstOrNull()
+    val isOwnStory = !myUserId.isNullOrBlank() && current.author?._id == myUserId
+
+    val segmentMs = remember(index, media) {
         if (media?.kind == "video") {
             ((media.durationSec ?: 8.0) * 1000).toLong().coerceIn(3000L, 10000L)
         } else IMAGE_SEGMENT_MS
     }
 
-    var elapsed by remember(index) { mutableStateOf(0L) }
-    LaunchedEffect(index, stories.size) {
+    var elapsed by remember(current.id) { mutableStateOf(0L) }
+    LaunchedEffect(current.id, segmentMs) {
         onMarkViewed(current.id)
         elapsed = 0L
         while (elapsed < segmentMs) {
             delay(50L)
             elapsed += 50L
         }
-        if (index < stories.lastIndex) index++ else onClose()
+        val pos = stories.indexOfFirst { it.id == current.id }
+        if (pos < 0) return@LaunchedEffect
+        if (pos < stories.lastIndex) {
+            index = pos + 1
+        } else {
+            onFinishedLastStory()
+        }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Eliminare la storia?", color = Color.White) },
+            text = { Text("La storia verrà rimossa per tutti i follower.", color = Color.Gray) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDeleteStory(current.id) {
+                            if (stories.size <= 1) onClose()
+                            else if (index >= stories.lastIndex) index = (index - 1).coerceAtLeast(0)
+                        }
+                    },
+                    enabled = !isDeleting,
+                ) { Text("Elimina", color = Color(0xFFFF5252)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Annulla", color = Color.Gray)
+                }
+            },
+            containerColor = Color(0xFF2C2C2E),
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // ── Media ──
         if (media != null) {
             when (media.kind) {
                 "video" -> StoryVideo(media = media, modifier = Modifier.fillMaxSize())
                 else -> StoryImage(media = media, modifier = Modifier.fillMaxSize())
             }
         } else {
-            // Storia senza media: sfondo gradiente con la sola traccia/overlay.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -171,7 +310,6 @@ private fun StoryPager(
             )
         }
 
-        // Traccia GPS in overlay (se disponibile) — "firma" del percorso.
         current.overlay?.routePolyline?.takeIf { it.size >= 2 }?.let { pts ->
             RouteTracePreview(
                 points = pts,
@@ -184,7 +322,6 @@ private fun StoryPager(
             )
         }
 
-        // Scrim inferiore per leggibilità testo.
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -197,7 +334,6 @@ private fun StoryPager(
                 ),
         )
 
-        // ── Zone di tap: sx = precedente, dx = successiva ──
         Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
@@ -206,7 +342,9 @@ private fun StoryPager(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                    ) { if (index > 0) index-- else { /* resta */ } },
+                    ) {
+                        if (index > 0) index-- else onPrevAtFirstStory()
+                    },
             )
             Box(
                 modifier = Modifier
@@ -215,12 +353,19 @@ private fun StoryPager(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                    ) { if (index < stories.lastIndex) index++ else onClose() },
+                    ) {
+                        if (index < stories.lastIndex) index++
+                        else onFinishedLastStory()
+                    },
             )
         }
 
-        // ── Progress segmentata + header ──
-        Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tsmStatusBarPadding()
+                .padding(top = 12.dp),
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -267,18 +412,29 @@ private fun StoryPager(
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.weight(1f))
+                if (isOwnStory) {
+                    IconButton(
+                        onClick = { showDeleteConfirm = true },
+                        enabled = !isDeleting,
+                    ) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Elimina storia", tint = Color.White)
+                    }
+                }
                 IconButton(onClick = onClose) {
                     Icon(Icons.Filled.Close, contentDescription = "Chiudi", tint = Color.White)
                 }
             }
         }
 
-        // ── Overlay informativo in basso ──
         StoryOverlayInfo(
             story = current,
             onJoin = onJoin,
             onOpenSession = onOpenSession,
-            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(16.dp),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .tsmNavigationBarPadding()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
         )
     }
 }
@@ -292,7 +448,6 @@ private fun StoryOverlayInfo(
 ) {
     val o = story.overlay
     Column(modifier = modifier) {
-        // Chip tipo storia
         Surface(
             shape = RoundedCornerShape(6.dp),
             color = (if (story.type == "planned_session") Color(0xFF4DD0E1) else Color(0xFF66BB6A)).copy(alpha = 0.2f),
@@ -314,7 +469,6 @@ private fun StoryOverlayInfo(
             Text(story.caption, color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.bodyMedium)
         }
 
-        // Stat chips
         if (o != null) {
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -324,7 +478,6 @@ private fun StoryOverlayInfo(
             }
         }
 
-        // Azione: planned_session → Unisciti; activity → vedi sessione (se presente)
         Spacer(Modifier.height(14.dp))
         if (story.type == "planned_session" && !story.inviteCode.isNullOrBlank()) {
             Button(
@@ -358,13 +511,17 @@ private fun StatChip(label: String, value: String) {
     }
 }
 
-/** Immagine da data URI Base64 (riusa il decoder degli avatar). */
 @Composable
 private fun StoryImage(media: StoryMedia, modifier: Modifier = Modifier) {
-    val bitmap = remember(media.dataUri) { AvatarUtils.decodeDataUri(media.dataUri) }
-    if (bitmap != null) {
-        Image(
-            bitmap = bitmap.asImageBitmap(),
+    val decoded by produceState<android.graphics.Bitmap?>(initialValue = null, media.dataUri) {
+        value = withContext(Dispatchers.Default) {
+            AvatarUtils.decodeDataUri(media.dataUri)
+        }
+    }
+    val bmp = decoded
+    if (bmp != null) {
+        androidx.compose.foundation.Image(
+            bitmap = bmp.asImageBitmap(),
             contentDescription = null,
             modifier = modifier,
             contentScale = ContentScale.Crop,
@@ -374,10 +531,6 @@ private fun StoryImage(media: StoryMedia, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Video breve da data URI Base64: scriviamo i byte in un file di cache e li
- * riproduciamo con un VideoView in loop (niente dipendenze extra tipo ExoPlayer).
- */
 @Composable
 private fun StoryVideo(media: StoryMedia, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -386,8 +539,6 @@ private fun StoryVideo(media: StoryMedia, modifier: Modifier = Modifier) {
     LaunchedEffect(media.dataUri) {
         val decoded = withContext(Dispatchers.IO) {
             runCatching {
-                // Il data URI è "data:video/mp4;base64,XXXX". Se manca il marker
-                // base64, o i byte sono vuoti, consideriamo il media non valido.
                 val base64 = media.dataUri.substringAfter("base64,", "")
                 if (base64.isBlank()) return@runCatching null
                 val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
@@ -408,8 +559,6 @@ private fun StoryVideo(media: StoryMedia, modifier: Modifier = Modifier) {
         f != null -> AndroidView(
             factory = { ctx ->
                 android.widget.VideoView(ctx).apply {
-                    // Consuma gli errori del MediaPlayer: niente dialog di sistema /
-                    // crash se il codec non gradisce il file (mostriamo solo il nero).
                     setOnErrorListener { _, _, _ -> true }
                     setOnPreparedListener { mp ->
                         mp.isLooping = true
@@ -420,7 +569,6 @@ private fun StoryVideo(media: StoryMedia, modifier: Modifier = Modifier) {
                 }
             },
             modifier = modifier,
-            // Rilascia il player quando il segmento esce di scena (auto-advance).
             onRelease = { it.stopPlayback() },
         )
         else -> Box(modifier = modifier.background(Color(0xFF101012)))

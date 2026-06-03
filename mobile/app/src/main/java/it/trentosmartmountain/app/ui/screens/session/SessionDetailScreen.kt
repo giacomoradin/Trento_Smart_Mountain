@@ -46,6 +46,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -348,14 +349,22 @@ fun SessionDetailScreen(
             return@Scaffold
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.loadSession(sessionId, manualRefresh = true) },
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
         ) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             Spacer(modifier = Modifier.height(4.dp))
 
             AnimatedVisibility(
@@ -412,6 +421,7 @@ fun SessionDetailScreen(
                 TsmRouteElevationPager(
                     routePoints = routePoints,
                     elevationProfile = session.gpxStats?.elevationProfile,
+                    distanceKm = dist,
                     modifier = Modifier.fillMaxWidth(),
                     height = 180.dp,
                     cornerRadius = 8.dp,
@@ -557,6 +567,7 @@ fun SessionDetailScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+            }
         }
     }
 }

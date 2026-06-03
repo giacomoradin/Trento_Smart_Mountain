@@ -36,6 +36,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -43,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -84,7 +86,7 @@ private val TextSecondary = Color(0xFF8E8E93)
 private val ChipBlue = Color(0xFF1A3A5C)
 private val ChipGreen = Color(0xFF1A3D1A)
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     modifier: Modifier = Modifier,
@@ -195,12 +197,21 @@ fun ProfileScreen(
             return@Surface
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+        PullToRefreshBox(
+            isRefreshing = profileV2State.isRefreshing || uiState.showInlineRefresh,
+            onRefresh = {
+                viewModel.loadProfile()
+                profileV2ViewModel.loadProfile(manualRefresh = true)
+            },
+            modifier = Modifier.fillMaxSize(),
         ) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -647,6 +658,7 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(24.dp))
+            }
         }
       }
     }

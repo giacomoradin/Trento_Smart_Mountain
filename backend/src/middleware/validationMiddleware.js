@@ -371,6 +371,10 @@ export const deleteAccountSchema = Joi.object({
   password: Joi.string().required(),
 });
 
+export const verifyPasswordSchema = Joi.object({
+  password: Joi.string().required(),
+});
+
 export const goalsSchema = Joi.object({
   km: Joi.number().min(0).max(500).optional(),
   elevM: Joi.number().min(0).max(20000).optional(),

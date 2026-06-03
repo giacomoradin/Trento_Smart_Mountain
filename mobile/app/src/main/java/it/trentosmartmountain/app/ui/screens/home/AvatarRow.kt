@@ -116,7 +116,10 @@ fun AvatarRow(
                 onClick = {
                     when (entry.status) {
                         ResolvedRingStatus.LIVE -> entry.item.liveSessionId?.let(onLiveClick)
-                        ResolvedRingStatus.STORY -> onStoryClick(entry.item.user._id)
+                        ResolvedRingStatus.STORY -> {
+                            val uid = entry.item.user._id
+                            onStoryClick(uid)
+                        }
                         else -> onUserClick(entry.item.user._id)
                     }
                 },

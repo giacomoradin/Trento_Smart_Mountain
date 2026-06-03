@@ -11,6 +11,9 @@ object RegistraLayout {
   val metricsToGpsGap = 6.dp
   val gpsIndicatorApproxHeight = 32.dp
   val autoPauseBelowGps = 8.dp
+  val autoPauseBannerHeight = 40.dp
+  val sosBelowAutoPauseGap = 8.dp
+  val sosBelowGpsGap = 24.dp
 
   /** Altezza approssimativa della striscia metriche (per posizionare banner auto-pausa). */
   val metricsStripHeight = 46.dp
@@ -38,4 +41,15 @@ object RegistraLayout {
   /** Icona emergenze in entrata: sotto striscia metriche + indicatore GPS. */
   fun incomingEmergencyIconTop(isTrackingActive: Boolean) =
     autoPauseTop(isTrackingActive) + 8.dp
+
+  /** Banner SOS attivo: sotto auto-pausa se presente, altrimenti sotto HUD GPS. */
+  fun sosBannerTop(isTrackingActive: Boolean, isAutoPaused: Boolean) =
+    if (isAutoPaused) {
+      autoPauseTop(isTrackingActive) + autoPauseBannerHeight + sosBelowAutoPauseGap
+    } else {
+      topInset +
+        (if (isTrackingActive) metricsStripHeight + metricsToGpsGap else 0.dp) +
+        gpsIndicatorApproxHeight +
+        sosBelowGpsGap
+    }
 }

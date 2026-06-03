@@ -34,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -46,11 +47,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.FeedSkeleton
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
 import it.trentosmartmountain.app.ui.components.TsmEmptyState
 import it.trentosmartmountain.app.ui.components.TsmErrorState
 import it.trentosmartmountain.app.ui.components.TsmLoadingState
@@ -119,7 +124,26 @@ fun HomeSocialScreen(
         }
     }
 
-    Surface(modifier = modifier.fillMaxSize(), color = DarkSurface) {
+    // Al ritorno sul feed (es. dopo aver pubblicato una storia dal composer)
+    // aggiorniamo SOLO gli anelli live/story — così "La tua storia" appena creata
+    // compare subito, senza pull-to-refresh e senza resettare lo scroll del feed.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshSocialRow()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+     // Aurora di profondità dietro al feed: le card glass "galleggiano" sopra.
+     TsmAuroraBackground(
+        modifier = Modifier.fillMaxSize(),
+        baseColor = DarkSurface,
+        particleCount = 22,
+     )
+     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
       Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
           Box(modifier = Modifier.weight(1f)) { SearchEntryBar(onClick = onSearchClick) }
@@ -198,6 +222,7 @@ fun HomeSocialScreen(
             }
         }
       }
+     }
     }
 
     // BottomSheet condivisa: si apre solo quando `commentsTarget != null`.

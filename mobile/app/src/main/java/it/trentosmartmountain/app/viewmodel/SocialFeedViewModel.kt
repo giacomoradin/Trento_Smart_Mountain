@@ -120,6 +120,23 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     /**
+     * Aggiorna SOLO la social-row (anelli live/story), senza ricaricare il feed
+     * né resettare lo scroll. Chiamata al ritorno sul feed (ON_RESUME) così la
+     * storia appena pubblicata — inclusa "La tua storia" — compare subito senza
+     * dover fare un pull-to-refresh manuale.
+     */
+    fun refreshSocialRow() {
+        viewModelScope.launch {
+            val rowResp = runCatching { api.getSocialRow() }.getOrNull()
+            if (rowResp?.isSuccessful == true) {
+                _state.value = _state.value.copy(
+                    socialRow = rowResp.body()?.items.orEmpty(),
+                )
+            }
+        }
+    }
+
+    /**
      * Azzera il badge notifiche in locale: chiamato quando l'utente apre il
      * centro notifiche (che le marca come lette lato server). Evita di mostrare
      * un badge stale al ritorno sul feed senza dover ri-fare il fetch.

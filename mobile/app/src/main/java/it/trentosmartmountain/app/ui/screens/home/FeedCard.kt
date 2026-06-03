@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -50,6 +53,7 @@ import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.util.RelativeTime
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 // Colori della card derivati dalla palette centrale (vedi ui/theme/TsmPalette.kt).
 private val CardBackground = TsmColors.Card
@@ -101,19 +105,50 @@ fun FeedCard(
         likedPrev = item.likedByMe
     }
 
+    // "Burst" del cuore sul doppio tap (stile Instagram): compare grande al centro
+    // e svanisce. Indipendente dal cuore della action-bar.
+    var likeBurst by remember { mutableStateOf(false) }
+    val burstScale = remember { Animatable(0f) }
+    val burstAlpha = remember { Animatable(0f) }
+    LaunchedEffect(likeBurst) {
+        if (likeBurst) {
+            burstAlpha.snapTo(0.95f)
+            burstScale.snapTo(0.3f)
+            burstScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            delay(350)
+            burstAlpha.animateTo(0f, tween(250))
+            burstScale.snapTo(0f)
+            likeBurst = false
+        }
+    }
+
     Card(
-        onClick = onOpenDetail,
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.07f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
     ) {
+      Box {
         Column(
             // Materiale glass: gradiente sottile dentro la card bordata.
-            modifier = Modifier.background(
-                Brush.verticalGradient(listOf(TsmColors.CardElevated, TsmColors.Card)),
-            ),
+            // Gesti: tap singolo = apri dettaglio, doppio tap = like (+ burst cuore).
+            modifier = Modifier
+                .background(
+                    Brush.verticalGradient(listOf(TsmColors.CardElevated, TsmColors.Card)),
+                )
+                .pointerInput(item.id) {
+                    detectTapGestures(
+                        onTap = { onOpenDetail() },
+                        onDoubleTap = {
+                            if (!item.likedByMe) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onLikeToggle()
+                            }
+                            likeBurst = true
+                        },
+                    )
+                },
         ) {
             // ── 1. Header atleta ──────────────────────────────────────────────
             Row(
@@ -295,6 +330,19 @@ fun FeedCard(
                 }
             }
         }
+        // Cuore "burst" del doppio tap: appare grande al centro della card e svanisce.
+        if (burstScale.value > 0.01f) {
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = burstAlpha.value),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(110.dp)
+                    .scale(burstScale.value),
+            )
+        }
+      }
     }
 }
 

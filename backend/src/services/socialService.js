@@ -669,15 +669,48 @@ function computeProgressPct(goals, totals) {
  * Implementazione: 5 query parallele Promise.all → merge per userId → priority assignment.
  */
 export async function getSocialRowForUser(viewerId) {
+  // ── "La tua storia" (stile Instagram) ──────────────────────────────────────
+  // Il viewer NON segue se stesso, quindi le PROPRIE storie non passerebbero mai
+  // dalle query sui `followingIds`: senza questo blocco, dopo aver pubblicato una
+  // storia l'utente "non la vede da nessuna parte". La recuperiamo a parte e
+  // mettiamo l'eventuale entry self IN TESTA alla row.
+  const ownStories = await Story.find({
+    authorId: viewerId,
+    expiresAt: { $gt: new Date() },
+  })
+    .select("_id")
+    .lean();
+  let selfItem = null;
+  if (ownStories.length > 0) {
+    const self = await Hiker.findById(viewerId)
+      .select("username personalInfo.avatarUrl")
+      .lean();
+    if (self) {
+      selfItem = {
+        user: {
+          _id: String(self._id),
+          username: self.username,
+          personalInfo: self.personalInfo
+            ? { avatarUrl: self.personalInfo.avatarUrl ?? null }
+            : null,
+        },
+        status: "story",
+        isSelf: true,
+        // Anello pieno: feedback chiaro che la TUA storia è online (24h).
+        hasUnviewedStory: true,
+      };
+    }
+  }
+
   const rawFollowingIds = await getFollowingIds(viewerId);
-  if (rawFollowingIds.length === 0) return { items: [] };
+  if (rawFollowingIds.length === 0) return { items: selfItem ? [selfItem] : [] };
   // Gate di visibilità: gli autori "private" non compaiono nella row (né story
   // né live). "public"/"friends" restano visibili (il viewer ne è follower).
   const visMap = await getVisibilityForAuthors(rawFollowingIds);
   const followingIds = rawFollowingIds.filter(
     (id) => visMap.get(String(id)) !== "private",
   );
-  if (followingIds.length === 0) return { items: [] };
+  if (followingIds.length === 0) return { items: selfItem ? [selfItem] : [] };
 
   const since7d = new Date(Date.now() - 7 * STORY_WINDOW_MS);
 
@@ -837,7 +870,8 @@ export async function getSocialRowForUser(viewerId) {
     return 0;
   });
 
-  return { items };
+  // "La tua storia" sempre in testa alla row (come Instagram).
+  return { items: selfItem ? [selfItem, ...items] : items };
 }
 
 /**

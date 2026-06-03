@@ -49,11 +49,17 @@ fun TsmRouteMapPreview(
     val mapView = remember {
         MapView(context).apply {
             setTileSource(openTopoMapTileSource())
-            setMultiTouchControls(false) // Disabilita interazione per performance e stabilità in lista
+            setMultiTouchControls(false) // niente pinch-zoom: è un'anteprima statica
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             isTilesScaledToDpi = true
-            setOnClickListener { /* Impedisce click pass-through */ }
-            setOnTouchListener { _, _ -> true } // Consuma tocchi per non far scrollare la mappa
+            isFlingEnabled = false
+            // IMPORTANTE: NON consumare i tocchi (prima ritornava true). Se la mappa
+            // "mangia" il gesto, il contenitore non lo riceve mai: niente swipe
+            // orizzontale nel HorizontalPager (mappa↔altimetria) né scroll verticale
+            // nel LazyColumn del feed. Ritornando false lasciamo che il genitore
+            // gestisca i gesti; lo swipe orizzontale è poi pilotato esplicitamente
+            // dall'overlay in TsmRouteElevationPager.
+            setOnTouchListener { _, _ -> false }
         }
     }
 

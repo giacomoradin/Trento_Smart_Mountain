@@ -1,6 +1,7 @@
 package it.trentosmartmountain.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -17,9 +18,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +32,7 @@ import it.trentosmartmountain.app.data.remote.dto.RoutePoint
 import it.trentosmartmountain.app.ui.screens.home.ElevationSparkline
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.theme.difficultyColor
+import kotlinx.coroutines.launch
 
 /**
  * Hero unico e riusabile per visualizzare il tracciato di un'escursione come
@@ -53,6 +57,7 @@ fun TsmRouteElevationPager(
     val hasProfile = elevationProfile != null && elevationProfile.size >= 2
     val pageCount = listOf(hasRoute, hasProfile).count { it }
     val pagerState = rememberPagerState { pageCount }
+    val scope = rememberCoroutineScope()
 
     val shape = RoundedCornerShape(cornerRadius)
     
@@ -110,6 +115,37 @@ fun TsmRouteElevationPager(
                         )
                     }
                 }
+            }
+
+            // Overlay di gesto: pilota lo swipe mappa↔altimetria in modo deterministico.
+            // La MapView (AndroidView) può intercettare i drag a livello View; questo
+            // overlay Compose, sovrapposto, consuma SOLO i drag orizzontali e cambia
+            // pagina, lasciando passare i drag verticali al contenitore (es. LazyColumn).
+            if (pageCount > 1) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .pointerInput(pageCount) {
+                            var drag = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { drag = 0f },
+                                onDragCancel = { drag = 0f },
+                                onDragEnd = {
+                                    val threshold = 40.dp.toPx()
+                                    val cur = pagerState.currentPage
+                                    val target = when {
+                                        drag <= -threshold -> (cur + 1).coerceAtMost(pageCount - 1)
+                                        drag >= threshold -> (cur - 1).coerceAtLeast(0)
+                                        else -> cur
+                                    }
+                                    scope.launch { pagerState.animateScrollToPage(target) }
+                                },
+                            ) { change, dragAmount ->
+                                change.consume()
+                                drag += dragAmount
+                            }
+                        },
+                )
             }
 
             // Indicatore dei punti di scorrimento (Pager Indicator)

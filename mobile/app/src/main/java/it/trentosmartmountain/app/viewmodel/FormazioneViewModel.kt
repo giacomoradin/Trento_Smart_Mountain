@@ -24,7 +24,9 @@ class FormazioneViewModel(application: Application) : AndroidViewModel(applicati
     private val _uiState = MutableStateFlow(FormazioneUiState())
     val uiState: StateFlow<FormazioneUiState> = _uiState.asStateFlow()
 
-    init { load() }
+    // NB: niente più `init { load() }`. Il caricamento è guidato dalla schermata
+    // su ON_RESUME, così tornando dal quiz la progressione (passed/punti) viene
+    // SEMPRE ri-letta dal backend (prima restava ferma sui valori stale → 0/5).
 
     fun load() {
         viewModelScope.launch {

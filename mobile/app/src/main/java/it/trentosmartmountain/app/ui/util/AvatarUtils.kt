@@ -36,11 +36,23 @@ object AvatarUtils {
 
     private const val TAG = "AvatarUtils"
 
-    /** Lato massimo dell'avatar dopo il downscale (px). */
-    const val TARGET_DIMENSION_PX: Int = 500
+    /**
+     * Lato massimo dell'avatar dopo il downscale (px).
+     *
+     * Bump da 500 → 720: il vecchio valore generava avatar visibilmente sgranati
+     * sui device Hi-DPI (un avatar 56dp su Pixel 7 = ~336 px reali). 720 mantiene
+     * sample 1:1 anche su display ad alta densità senza far esplodere il base64.
+     */
+    const val TARGET_DIMENSION_PX: Int = 720
 
-    /** Qualità JPEG usata per la compressione (0–100). */
-    const val JPEG_QUALITY: Int = 70
+    /**
+     * Qualità JPEG usata per la compressione (0–100).
+     *
+     * Bump da 70 → 88: 70 introduceva artefatti di blocking visibili sui dettagli
+     * fini (volti) anche dopo downscale. 88 è il sweet-spot Strava/Instagram:
+     * ~1.6× byte-size del 70, qualità percettiva pulita.
+     */
+    const val JPEG_QUALITY: Int = 88
 
     /** Prefisso del data URI che l'app produce e si aspetta dal server. */
     const val DATA_URI_PREFIX: String = "data:image/jpeg;base64,"

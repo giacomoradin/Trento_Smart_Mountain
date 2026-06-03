@@ -126,8 +126,11 @@ const BUSINESS_ERROR_MAP = {
   USERNAME_TAKEN: { status: 409, message: "Username già in uso." },
   USER_ALREADY_IN_SESSION: {
     status: 409,
+    // Aggiornato dopo che `createSession` non vincola più: il messaggio ora
+    // copre solo il caso "non puoi unirti / avviare il tracking perché stai
+    // già camminando in un altro gruppo".
     message:
-      "Hai una sessione attualmente in corso. Concludila prima di crearne / unirti a un'altra.",
+      "Hai già una sessione in corso. Concludi quella prima di unirti o avviarne un'altra.",
   },
   ALREADY_IN_SESSION: { status: 409, message: "Sei già in questa sessione." },
   JOIN_REQUEST_PENDING: {

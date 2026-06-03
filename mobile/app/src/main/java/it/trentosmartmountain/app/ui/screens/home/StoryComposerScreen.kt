@@ -4,16 +4,21 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,7 +27,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -96,8 +103,33 @@ fun StoryComposerScreen(
     Scaffold(
         containerColor = TsmColors.FeedBackground,
         topBar = {
+            // Header con badge sottile "STORIA · 24H" per dare contesto editoriale.
             TopAppBar(
-                title = { Text("Nuova storia", color = TsmColors.TextPrimary, fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Filled.AutoAwesome,
+                                contentDescription = null,
+                                tint = TsmColors.Cyan,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "STORIA · 24H",
+                                color = TsmColors.Cyan,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        Text(
+                            "Crea la tua storia",
+                            color = TsmColors.TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = TsmColors.TextPrimary)
@@ -192,25 +224,51 @@ fun StoryComposerScreen(
                 Text(it, color = TsmColors.Danger, style = MaterialTheme.typography.bodySmall)
             }
 
-            Spacer(Modifier.height(8.dp))
-            Button(
+            Spacer(Modifier.height(10.dp))
+            // CTA Pubblica: pill premium con icona Send + label + counter caption.
+            // Quando encoding/publishing in corso, mostra spinner + descrizione.
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = TsmColors.Cyan,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shadowElevation = 6.dp,
                 onClick = {
                     val w = editorCanvasWidthPx.takeIf { it > 0f } ?: 1080f
                     val h = editorCanvasHeightPx.takeIf { it > 0f } ?: 1920f
-                    viewModel.publish(args, hostActivity, w, h)
+                    if (!state.isPublishing && !state.isEncoding) {
+                        viewModel.publish(args, hostActivity, w, h)
+                    }
                 },
-                enabled = !state.isPublishing && !state.isEncoding,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = TsmColors.Cyan),
-                shape = RoundedCornerShape(10.dp),
             ) {
-                if (state.isPublishing) {
-                    CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                } else {
-                    Text("PUBBLICA STORIA", color = Color.Black, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    if (state.isPublishing || state.isEncoding) {
+                        CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            if (state.isEncoding) "Preparo media…" else "Pubblicazione…",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    } else {
+                        Icon(Icons.Filled.Send, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "PUBBLICA STORIA",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
         }
     }
 }

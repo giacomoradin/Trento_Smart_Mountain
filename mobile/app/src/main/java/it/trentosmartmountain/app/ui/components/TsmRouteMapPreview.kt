@@ -2,10 +2,19 @@ package it.trentosmartmountain.app.ui.components
 
 import android.graphics.Paint
 import android.view.ViewTreeObserver
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInteropFilter
@@ -50,6 +59,22 @@ fun TsmRouteMapPreview(
     val geoPoints = remember(points) {
         points.map { GeoPoint(it.lat, it.lon) }
     }
+
+    // Animazione della fase delle chevron (frecce direzionali stile Komoot):
+    // 0→1 in ~2.4s lineare = effetto "scorrimento" continuo verso il fine percorso.
+    // Salviamo la fase in una mutable state per leggerla dal callback Overlay.draw.
+    val transition = rememberInfiniteTransition(label = "route-arrows-phase")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "route-arrows-tween",
+    )
+    var arrowsPhase by remember { mutableStateOf(0f) }
+    arrowsPhase = phase
 
     val mapView = remember(interactive, storySceneMode) {
         MapView(context).apply {
@@ -96,6 +121,21 @@ fun TsmRouteMapPreview(
         }
     }
 
+    // Overlay frecce direzionali: ricalcola i pixel a ogni invalidate (zoom/pan),
+    // legge la fase animata dalla state Compose `arrowsPhase`.
+    val directionArrows = remember(mapView) {
+        RouteDirectionArrowsOverlay(
+            pointsProvider = { geoPoints },
+            phaseProvider = { arrowsPhase },
+        )
+    }
+
+    // Tick di redraw allineato all'animazione della fase: ogni cambio invalida la
+    // MapView così l'overlay frecce ridisegna nella nuova posizione.
+    LaunchedEffect(arrowsPhase, geoPoints) {
+        if (geoPoints.size >= 2 && showTrack) mapView.invalidate()
+    }
+
     LaunchedEffect(geoPoints, interactive, lineColor, showTrack, storySceneMode) {
         trackPolyline.outlinePaint.color = lineColor
         when {
@@ -108,6 +148,10 @@ fun TsmRouteMapPreview(
             if (showTrack) {
                 trackPolyline.setPoints(ArrayList(geoPoints))
                 mapView.overlays.add(trackPolyline)
+                // Frecce direzionali sopra alla polyline ma sotto ai marker
+                // start/end (così rimangono "incollate" alla traccia senza
+                // sovrapporsi all'iconografia dei capi del percorso).
+                mapView.overlays.add(directionArrows)
                 RouteMapMarkerOverlays.attachStartEndMarkers(mapView, context, geoPoints)
             }
             val bbox = BoundingBox.fromGeoPoints(geoPoints)

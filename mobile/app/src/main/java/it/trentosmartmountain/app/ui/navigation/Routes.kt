@@ -92,10 +92,13 @@ object Routes {
     "follow_list/${Uri.encode(userId)}/${Uri.encode(type)}"
 
   // ── Social: story viewer full-screen ────────────────────────────────────────
-  // refId = `_id` Activity/HikeSession, kind = "activity"|"session" (query arg).
-  const val STORY_VIEWER = "story_viewer/{refId}?kind={kind}"
-  fun storyViewerRoute(refId: String, kind: String): String =
-    "story_viewer/${Uri.encode(refId)}?kind=${Uri.encode(kind)}"
+  // userId = autore di cui riprodurre le storie reali (GET /stories/user/:id).
+  const val STORY_VIEWER = "story_viewer/{userId}"
+  fun storyViewerRoute(userId: String): String =
+    "story_viewer/${Uri.encode(userId)}"
+
+  /** Composer per creare una nuova storia (args passati via holder pendingStoryDraft). */
+  const val STORY_COMPOSER = "story_composer"
 
   /** Dettaglio social di un post condiviso nel feed. */
   const val POST_DETAIL = "post_detail"

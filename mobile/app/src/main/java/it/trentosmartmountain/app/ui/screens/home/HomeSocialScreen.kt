@@ -90,8 +90,8 @@ fun HomeSocialScreen(
     onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     /** Tap su anello LIVE: apre la SessionDetail della sessione in corso. */
     onLiveClick: (sessionId: String) -> Unit = {},
-    /** Tap su anello STORY: apre lo StoryViewerScreen full-screen. */
-    onStoryClick: (refId: String, kind: String) -> Unit = { _, _ -> },
+    /** Tap su anello STORY: apre lo StoryViewerScreen full-screen (per autore). */
+    onStoryClick: (userId: String) -> Unit = {},
     /** Tap sulla barra "Trova persone": apre la ricerca utenti ("aggiungi amici"). */
     onSearchClick: () -> Unit = {},
     /** Tap sull'icona trofeo: apre la classifica settimanale. */
@@ -191,7 +191,6 @@ fun HomeSocialScreen(
                         onCommentClick(id, kind)
                     },
                     socialRow = state.socialRow,
-                    viewedStoryIds = state.viewedStoryIds,
                     onUserAvatarClick = onUserClick,
                     onLiveClick = onLiveClick,
                     onStoryClick = onStoryClick,
@@ -205,6 +204,7 @@ fun HomeSocialScreen(
     CommentsBottomSheet(
         target = commentsTarget,
         onDismiss = { commentsTarget = null },
+        onUserClick = onUserClick,
         // Aggiorna SOLO il contatore dell'item interessato alla chiusura: niente
         // più refresh totale del feed (che ricaricava tutto e perdeva lo scroll).
         onCountChanged = viewModel::setCommentCount,
@@ -255,10 +255,9 @@ private fun FeedList(
     onOpenDetail: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     onCommentClick: (String, String) -> Unit,
     socialRow: List<it.trentosmartmountain.app.data.remote.dto.SocialRowItem> = emptyList(),
-    viewedStoryIds: Set<String> = emptySet(),
     onUserAvatarClick: (String) -> Unit = {},
     onLiveClick: (String) -> Unit = {},
-    onStoryClick: (String, String) -> Unit = { _, _ -> },
+    onStoryClick: (String) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
 
@@ -286,7 +285,6 @@ private fun FeedList(
             item(key = "avatar-row") {
                 AvatarRow(
                     items = socialRow,
-                    viewedStoryIds = viewedStoryIds,
                     onUserClick = onUserAvatarClick,
                     onLiveClick = onLiveClick,
                     onStoryClick = onStoryClick,

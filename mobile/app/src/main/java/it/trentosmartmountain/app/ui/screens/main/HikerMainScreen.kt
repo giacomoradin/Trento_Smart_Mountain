@@ -19,7 +19,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.map
 import it.trentosmartmountain.app.viewmodel.RegistraViewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.session.SessionStartCoordinator
@@ -60,8 +62,8 @@ fun HikerMainScreen(
   // Apertura del profilo pubblico di un altro utente: chiamato dal tap su
   // avatar nel feed Social. Default no-op per backward-compat con i preview.
   onNavigateToUserProfile: (userId: String) -> Unit = {},
-  // Tap su anello story della AvatarRow → apre StoryViewerScreen full-screen.
-  onNavigateToStoryViewer: (refId: String, kind: String) -> Unit = { _, _ -> },
+  // Tap su anello story della AvatarRow → apre StoryViewerScreen full-screen (per autore).
+  onNavigateToStoryViewer: (userId: String) -> Unit = {},
   // Tap sulla barra "Trova persone" del feed → apre la ricerca utenti.
   onNavigateToUserSearch: () -> Unit = {},
   // Tap sull'icona trofeo del feed → apre la classifica settimanale.
@@ -79,6 +81,18 @@ fun HikerMainScreen(
 
   LaunchedEffect(Unit) {
     registraViewModel.syncActiveSessionFromServer()
+  }
+
+  // Il dialog "Salva attività" vive in RegistraScreen: se una richiesta di stop
+  // (anche dal tasto "Arresta" in Unisciti) accende showStopConfirm mentre l'utente
+  // è su un'altra tab, portiamolo sulla tab Registra così il dialog è visibile e
+  // l'attività non viene persa. Osserviamo solo il booleano derivato per non
+  // ricomporre la shell ad ogni tick GPS.
+  val stopDialogPending by registraViewModel.uiState
+    .map { it.showStopConfirm || it.shortActivityConfirm }
+    .collectAsStateWithLifecycle(initialValue = false)
+  LaunchedEffect(stopDialogPending) {
+    if (stopDialogPending) selectedTab = HikerTab.Registra
   }
 
   // Quando SessionDetail / SessionHub.AVVIA conferma, il Coordinator emette un sessionId:
@@ -139,6 +153,11 @@ fun HikerMainScreen(
         modifier = Modifier.padding(innerPadding),
         onNavigateToDetail = onNavigateToSessionDetail,
         onNavigateToBoard = onNavigateToBoard,
+        onNavigateToUserProfile = onNavigateToUserProfile,
+        onRequestStopTracking = {
+          selectedTab = HikerTab.Registra
+          registraViewModel.requestStopTracking()
+        }
       )
       HikerTab.Registra -> RegistraScreen(
         modifier = Modifier.padding(innerPadding),

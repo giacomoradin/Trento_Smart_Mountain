@@ -294,6 +294,184 @@ describe("HikeSession Routes", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════
+  // Approvazione partecipanti (Fase A) — pending / approve / reject / remove+ban
+  // ══════════════════════════════════════════════════════════════════
+
+  describe("Participant approval workflow", () => {
+    async function setupSessionWithPendingJoiner(creatorName, joinerName) {
+      const { token: creatorToken } = await createTestHiker({
+        username: creatorName,
+        email: `${creatorName}@test.com`,
+      });
+      const created = await createSessionAs(creatorToken);
+      const { user: joiner, token: joinerToken } = await createTestHiker({
+        username: joinerName,
+        email: `${joinerName}@test.com`,
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+      return {
+        sessionId: created.body._id,
+        inviteCode: created.body.inviteCode,
+        creatorToken,
+        joiner,
+        joinerToken,
+      };
+    }
+
+    function findParticipant(body, userId) {
+      return (body.participants || []).find(
+        (p) => (p.userId?._id || p.userId)?.toString() === userId.toString(),
+      );
+    }
+
+    test("join puts the user in 'pending' status", async () => {
+      const { sessionId, creatorToken, joiner } =
+        await setupSessionWithPendingJoiner("apprc1", "apprj1");
+      const res = await request(app)
+        .get(`/api/v1/sessions/${sessionId}`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+      expect(res.status).toBe(200);
+      const p = findParticipant(res.body, joiner._id);
+      expect(p).toBeDefined();
+      expect(p.status).toBe("pending");
+    });
+
+    test("leader approves a pending participant", async () => {
+      const { sessionId, creatorToken, joiner } =
+        await setupSessionWithPendingJoiner("apprc2", "apprj2");
+      const res = await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${joiner._id}/approve`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+      expect(res.status).toBe(200);
+      const p = findParticipant(res.body, joiner._id);
+      expect(p.status).toBe("accepted");
+      expect(p.approvedBy).toBeTruthy();
+    });
+
+    test("an already-accepted participant can approve another pending", async () => {
+      const { token: creatorToken } = await createTestHiker({
+        username: "apprc3",
+        email: "apprc3@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+      const code = created.body.inviteCode;
+      const sessionId = created.body._id;
+
+      const { user: m1, token: m1Token } = await createTestHiker({
+        username: "apprm1",
+        email: "apprm1@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${m1Token}`)
+        .send({ inviteCode: code });
+      await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${m1._id}/approve`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+
+      const { user: m2, token: m2Token } = await createTestHiker({
+        username: "apprm2",
+        email: "apprm2@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${m2Token}`)
+        .send({ inviteCode: code });
+
+      // m1, già accettato, approva m2.
+      const res = await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${m2._id}/approve`)
+        .set("Authorization", `Bearer ${m1Token}`);
+      expect(res.status).toBe(200);
+      const p = findParticipant(res.body, m2._id);
+      expect(p.status).toBe("accepted");
+    });
+
+    test("a non-member cannot approve (403)", async () => {
+      const { sessionId, joiner } = await setupSessionWithPendingJoiner(
+        "apprc4",
+        "apprj4",
+      );
+      const { token: strangerToken } = await createTestHiker({
+        username: "stranger4",
+        email: "stranger4@test.com",
+      });
+      const res = await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${joiner._id}/approve`)
+        .set("Authorization", `Bearer ${strangerToken}`);
+      expect(res.status).toBe(403);
+    });
+
+    test("leader rejects a pending participant (removed from list)", async () => {
+      const { sessionId, creatorToken, joiner } =
+        await setupSessionWithPendingJoiner("apprc5", "apprj5");
+      const res = await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${joiner._id}/reject`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+      expect(res.status).toBe(200);
+      expect(findParticipant(res.body, joiner._id)).toBeUndefined();
+    });
+
+    test("leader removes a participant and bans re-join (409)", async () => {
+      const { sessionId, creatorToken, joiner, joinerToken } =
+        await setupSessionWithPendingJoiner("apprc6", "apprj6");
+      await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${joiner._id}/approve`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+      const del = await request(app)
+        .delete(`/api/v1/sessions/${sessionId}/participants/${joiner._id}`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+      expect(del.status).toBe(200);
+      expect(findParticipant(del.body, joiner._id)).toBeUndefined();
+      // Re-join bloccato dal ban locale.
+      const rejoin = await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: del.body.inviteCode });
+      expect(rejoin.status).toBe(409);
+    });
+
+    test("a non-leader member cannot remove participants (403)", async () => {
+      const { token: creatorToken } = await createTestHiker({
+        username: "apprc7",
+        email: "apprc7@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+      const code = created.body.inviteCode;
+      const sessionId = created.body._id;
+
+      const { user: m1, token: m1Token } = await createTestHiker({
+        username: "apprm71",
+        email: "apprm71@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${m1Token}`)
+        .send({ inviteCode: code });
+      await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${m1._id}/approve`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+
+      const { user: m2, token: m2Token } = await createTestHiker({
+        username: "apprm72",
+        email: "apprm72@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${m2Token}`)
+        .send({ inviteCode: code });
+
+      const res = await request(app)
+        .delete(`/api/v1/sessions/${sessionId}/participants/${m2._id}`)
+        .set("Authorization", `Bearer ${m1Token}`);
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
   // DELETE /api/v1/sessions/:id — Solo creator
   // ══════════════════════════════════════════════════════════════════
 

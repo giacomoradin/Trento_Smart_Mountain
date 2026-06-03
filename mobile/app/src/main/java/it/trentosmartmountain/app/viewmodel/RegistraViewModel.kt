@@ -240,7 +240,15 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     viewModelScope.launch {
       SessionStopCoordinator.pendingSessionStop.collect { sessionId ->
         if (_uiState.value.activeSessionId == sessionId) {
-          detachFromLiveTracking()
+          // Arresto della sessione (da Unisciti / dettaglio / lista): se c'è
+          // un'attività in corso NON la perdiamo. Mostriamo lo stesso dialog di
+          // conferma del tasto "Termina" in Registra (Salva/Scarta) così l'utente
+          // può salvare l'escursione. Senza tracking attivo, stacchiamo soltanto.
+          if (_uiState.value.trackingStatus != TrackingStatus.IDLE) {
+            requestStopTracking()
+          } else {
+            detachFromLiveTracking()
+          }
         }
         SessionStopCoordinator.consume()
       }
@@ -533,6 +541,7 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     currentTrackId = null
 
     // 1. Resetta subito lo state UI (nasconde i controlli di tracking)
+    val sessionIdToClear = current.activeSessionId
     _uiState.update {
       it.copy(
         trackingStatus = TrackingStatus.IDLE,
@@ -544,6 +553,10 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
         elevationGainMeters = 0,
         activeSessionId = null,
       )
+    }
+    
+    if (sessionIdToClear != null) {
+        SessionLiveStateStore.remove(app, sessionIdToClear)
     }
 
     // Salva in Room (via WAL → CompletedActivity) e poi tenta il sync immediato.

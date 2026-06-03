@@ -253,19 +253,14 @@ data class SocialRowResponse(
  *
  * Campi opzionali popolati solo per il loro status:
  *  - [liveSessionId] solo per "live" → deep link a SessionDetail
- *  - [storyActivityRef] solo per "story" → apre StoryViewerScreen
+ *  - [hasUnviewedStory] solo per "story" → anello pieno se ≥1 storia non vista;
+ *    il viewer si apre per `user._id` (le storie reali stanno in /stories/user/:id)
  *  - [weeklyProgressPct] solo per "goal" ∈ [0,1]
  */
 data class SocialRowItem(
     @SerializedName("user") val user: FeedUser,
     @SerializedName("status") val status: String,
     @SerializedName("liveSessionId") val liveSessionId: String? = null,
-    @SerializedName("storyActivityRef") val storyActivityRef: StoryActivityRef? = null,
+    @SerializedName("hasUnviewedStory") val hasUnviewedStory: Boolean = false,
     @SerializedName("weeklyProgressPct") val weeklyProgressPct: Float? = null,
-)
-
-data class StoryActivityRef(
-    @SerializedName("id") val id: String,
-    @SerializedName("kind") val kind: String,         // "activity" | "session"
-    @SerializedName("sharedAt") val sharedAt: String?,
 )

@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -60,22 +61,16 @@ private data class ResolvedRow(
     val status: ResolvedRingStatus,
     /** Solo per status GOAL: percentuale 0..1. */
     val goalPct: Float = 0f,
+    /** Solo per status STORY: true se ci sono storie non viste (anello pieno). */
+    val storyUnviewed: Boolean = false,
 )
 
-private fun resolveStatus(item: SocialRowItem, viewedIds: Set<String>): ResolvedRow {
+private fun resolveStatus(item: SocialRowItem): ResolvedRow {
     return when (item.status) {
         "live" -> ResolvedRow(item, ResolvedRingStatus.LIVE)
-        "story" -> {
-            val refId = item.storyActivityRef?.id
-            if (refId != null && refId in viewedIds) {
-                // Story già vista: degrada a goal/neutral.
-                val pct = item.weeklyProgressPct ?: 0f
-                if (pct > 0f) ResolvedRow(item, ResolvedRingStatus.GOAL, pct)
-                else ResolvedRow(item, ResolvedRingStatus.NEUTRAL)
-            } else {
-                ResolvedRow(item, ResolvedRingStatus.STORY)
-            }
-        }
+        // L'autore ha storie → anello STORY (pieno se non viste, attenuato se viste).
+        // Apribile in entrambi i casi (re-view consentito entro le 24h).
+        "story" -> ResolvedRow(item, ResolvedRingStatus.STORY, storyUnviewed = item.hasUnviewedStory)
         "goal" -> ResolvedRow(item, ResolvedRingStatus.GOAL, item.weeklyProgressPct ?: 0f)
         else -> ResolvedRow(item, ResolvedRingStatus.NEUTRAL)
     }
@@ -99,15 +94,14 @@ private fun resolveStatus(item: SocialRowItem, viewedIds: Set<String>): Resolved
 @Composable
 fun AvatarRow(
     items: List<SocialRowItem>,
-    viewedStoryIds: Set<String>,
     onUserClick: (userId: String) -> Unit,
     onLiveClick: (sessionId: String) -> Unit,
-    onStoryClick: (refId: String, kind: String) -> Unit,
+    onStoryClick: (userId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return // nessun follower → niente row
 
-    val resolved = items.map { resolveStatus(it, viewedStoryIds) }
+    val resolved = items.map { resolveStatus(it) }
 
     LazyRow(
         modifier = modifier
@@ -122,9 +116,7 @@ fun AvatarRow(
                 onClick = {
                     when (entry.status) {
                         ResolvedRingStatus.LIVE -> entry.item.liveSessionId?.let(onLiveClick)
-                        ResolvedRingStatus.STORY -> entry.item.storyActivityRef?.let { ref ->
-                            onStoryClick(ref.id, ref.kind)
-                        }
+                        ResolvedRingStatus.STORY -> onStoryClick(entry.item.user._id)
                         else -> onUserClick(entry.item.user._id)
                     }
                 },
@@ -150,7 +142,7 @@ private fun AvatarRowItem(
             contentAlignment = Alignment.Center,
         ) {
             // Anello stato sotto l'avatar (Canvas customizzato per arco proporzionale GOAL)
-            StatusRing(status = entry.status, goalPct = entry.goalPct)
+            StatusRing(status = entry.status, goalPct = entry.goalPct, storyUnviewed = entry.storyUnviewed)
             // Avatar al centro (ridotto di ~8dp così l'anello è visibile)
             AvatarImage(
                 avatarUrl = user.avatarUrl,
@@ -181,6 +173,7 @@ private fun AvatarRowItem(
 private fun StatusRing(
     status: ResolvedRingStatus,
     goalPct: Float,
+    storyUnviewed: Boolean = false,
 ) {
     // Animazione pulse solo per LIVE (alpha sinusoidale via tween infinito)
     val pulseAlpha = if (status == ResolvedRingStatus.LIVE) {
@@ -197,6 +190,19 @@ private fun StatusRing(
     } else 1f
 
     Canvas(modifier = Modifier.size(64.dp)) {
+        // Glow "athletic" dietro l'anello per LIVE e storie non viste.
+        if (status == ResolvedRingStatus.LIVE || (status == ResolvedRingStatus.STORY && storyUnviewed)) {
+            val glow = if (status == ResolvedRingStatus.LIVE) LiveYellow else StoryCyan
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(glow.copy(alpha = 0.40f), Color.Transparent),
+                    center = center,
+                    radius = size.minDimension * 0.6f,
+                ),
+                radius = size.minDimension * 0.6f,
+                center = center,
+            )
+        }
         val strokeWidth = 3.dp.toPx()
         val inset = strokeWidth / 2f
         val drawSize = Size(size.width - strokeWidth, size.height - strokeWidth)
@@ -212,7 +218,7 @@ private fun StatusRing(
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
             )
             ResolvedRingStatus.STORY -> drawArc(
-                color = StoryCyan,
+                color = if (storyUnviewed) StoryCyan else StoryCyan.copy(alpha = 0.35f),
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,

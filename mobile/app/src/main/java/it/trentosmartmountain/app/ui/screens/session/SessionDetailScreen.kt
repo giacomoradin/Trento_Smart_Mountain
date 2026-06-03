@@ -91,8 +91,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.checklist.ChecklistMapper
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
+import it.trentosmartmountain.app.data.remote.dto.SessionParticipant
+import it.trentosmartmountain.app.data.remote.dto.RoutePoint
+import it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs
+import it.trentosmartmountain.app.data.remote.dto.StoryOverlay
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.SessionParticipationActions
+import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmBorder
@@ -127,6 +132,8 @@ fun SessionDetailScreen(
     onBack: () -> Unit,
     onAvviaConfirmed: (sessionId: String) -> Unit = {},
     currentUserId: String = "",
+    onUserClick: (userId: String) -> Unit = {},
+    onShareStory: (it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs) -> Unit = {},
     viewModel: SessionDetailViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -342,13 +349,59 @@ fun SessionDetailScreen(
 
             InviteCodeCard(inviteCode = session.inviteCode)
 
+            // Condividi la pianificazione come STORIA (pre-hike) col link "Unisciti".
+            if (session.status == "PLANNED") {
+                Button(
+                    onClick = {
+                        onShareStory(
+                            StoryComposerArgs(
+                                type = "planned_session",
+                                sessionId = session._id,
+                                overlay = StoryOverlay(
+                                    title = session.routeDetails?.name,
+                                    difficultyLevel = session.routeDetails?.difficultyLevel,
+                                    distanceMeters = session.gpxStats?.distanceKm?.let { it * 1000.0 },
+                                    elevationGainM = session.gpxStats?.elevationGainM,
+                                    routePolyline = session.plannedRoute?.polylinePoints?.map { RoutePoint(it.lat, it.lon) },
+                                ),
+                            ),
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmAccent),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text(
+                        "CONDIVIDI COME STORIA",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    )
+                }
+            }
+
             DetailCard {
                 val dist = session.gpxStats?.distanceKm
                 val elev = session.gpxStats?.elevationGainM
 
-                ElevationProfileChart(
+                val routePoints = session.plannedRoute?.polylinePoints?.map { RoutePoint(it.lat, it.lon) }
+                TsmRouteElevationPager(
+                    routePoints = routePoints,
                     elevationProfile = session.gpxStats?.elevationProfile,
-                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    height = 180.dp,
+                    cornerRadius = 8.dp,
+                    backgroundBrush = androidx.compose.ui.graphics.SolidColor(TsmSurfaceVariant),
+                    elevationLineColor = TsmAccent,
+                    activeDotColor = TsmAccent,
+                    difficultyLevel = session.routeDetails?.difficultyLevel,
+                    emptyContent = {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                "Nessun tracciato disponibile",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray,
+                            )
+                        }
+                    },
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -428,7 +481,14 @@ fun SessionDetailScreen(
                 onRefresh = viewModel::refreshChecklistManual,
             )
 
-            ParticipantsCard(session = session)
+            ParticipantsCard(
+                session = session,
+                currentUserId = currentUserId,
+                onUserClick = onUserClick,
+                onApprove = { viewModel.approveParticipant(it) },
+                onReject = { viewModel.rejectParticipant(it) },
+                onRemove = { viewModel.removeParticipant(it) },
+            )
 
             val participation = remember(uiState.session, uiState.liveUiEpoch, currentUserId) {
                 viewModel.participationUi()
@@ -439,14 +499,24 @@ fun SessionDetailScreen(
                     onLeaderStart = {
                         viewModel.requestLeaderStart { onAvviaConfirmed(sessionId) }
                     },
-                    onLeaderStop = { viewModel.leaderStop() },
+                    onLeaderStop = {
+                        // Arresta la sessione: se è in corso un'attività, il
+                        // SessionStopCoordinator fa comparire su Registra il dialog
+                        // "Salva attività" (stessa logica di "Termina"). Torniamo alla
+                        // shell così il dialog è visibile e l'attività non viene persa.
+                        viewModel.leaderStop()
+                        onBack()
+                    },
                     onJoinLive = {
                         viewModel.joinLive { onAvviaConfirmed(sessionId) }
                     },
                     onSoloPractice = {
                         viewModel.startSoloPractice { onAvviaConfirmed(sessionId) }
                     },
-                    onLeaveLive = { viewModel.leaveLive() },
+                    onLeaveLive = {
+                        viewModel.leaveLive()
+                        onBack()
+                    },
                     compact = false,
                     leaderStartLabel = stringResource(R.string.session_detail_avvia),
                     leaderStopLabel = stringResource(R.string.session_detail_arresta),
@@ -1188,45 +1258,132 @@ private fun ChecklistItemList(
 }
 
 @Composable
-private fun ParticipantsCard(session: SessionResponse) {
+private fun ParticipantsCard(
+    session: SessionResponse,
+    currentUserId: String,
+    onUserClick: (userId: String) -> Unit = {},
+    onApprove: (userId: String) -> Unit = {},
+    onReject: (userId: String) -> Unit = {},
+    onRemove: (userId: String) -> Unit = {},
+) {
     val participants = session.participants ?: emptyList()
-    val max = session.maxParticipants ?: participants.size
+    val accepted = participants.filter { !it.isPending }
+    val pending = participants.filter { it.isPending }
+    val max = session.maxParticipants ?: accepted.size
+
+    val isViewerLeader = session.creatorId?._id == currentUserId
+    // Un membro già accettato (incluso il capogruppo) può approvare/rifiutare i pending.
+    val isViewerAcceptedMember = accepted.any { it.userId?._id == currentUserId }
 
     DetailCard {
         Text(
-            "PARTECIPANTI · ${participants.size}/$max",
+            "PARTECIPANTI · ${accepted.size}/$max",
             style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
             color = Color.Gray,
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            participants.forEach { p ->
-                val username = p.userId?.username ?: "?"
-                val isCreator = p.role == "groupLeader"
-                // Borda accent solo per il creator; usiamo un Box wrapper così la
-                // border non interferisce con il clip circolare dell'AvatarImage.
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .then(if (isCreator) Modifier.border(2.dp, TsmAccent, CircleShape) else Modifier),
-                ) {
-                    AvatarImage(
-                        avatarUrl = p.userId?.avatarUrl,
-                        fallbackName = username,
-                        size = 40.dp,
-                    )
-                }
+        Spacer(modifier = Modifier.height(8.dp))
+        accepted.forEach { p ->
+            val subtitle = when {
+                p.role == "groupLeader" -> "Capogruppo"
+                !p.approvedBy?.username.isNullOrBlank() -> "Accettato da ${p.approvedBy?.username}"
+                else -> "Partecipante"
             }
-            val emptySlots = (max - participants.size).coerceIn(0, 4)
-            repeat(emptySlots) {
-                Box(
-                    modifier = Modifier.size(40.dp).clip(CircleShape).background(TsmSurfaceVariant).border(1.dp, Color(0xFF3A3A3A), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("+", style = MaterialTheme.typography.labelMedium, color = Color(0xFF555555))
-                }
+            ParticipantRow(
+                participant = p,
+                subtitle = subtitle,
+                onUserClick = onUserClick,
+                trailing = {
+                    // Solo il capogruppo può rimuovere definitivamente (no se stesso).
+                    if (isViewerLeader && p.role != "groupLeader") {
+                        IconButton(onClick = { p.userId?._id?.let(onRemove) }) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = TsmSos)
+                        }
+                    }
+                },
+            )
+        }
+
+        if (pending.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                "IN ATTESA · ${pending.size}",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                color = Color(0xFFFB8C00),
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            pending.forEach { p ->
+                ParticipantRow(
+                    participant = p,
+                    subtitle = "Richiesta in attesa di approvazione",
+                    pendingBadge = true,
+                    onUserClick = onUserClick,
+                    trailing = {
+                        if (isViewerAcceptedMember) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { p.userId?._id?.let(onApprove) }) {
+                                    Icon(Icons.Filled.CheckCircle, contentDescription = "Accetta", tint = TsmPrimary)
+                                }
+                                IconButton(onClick = { p.userId?._id?.let(onReject) }) {
+                                    Icon(Icons.Outlined.Close, contentDescription = "Rifiuta", tint = TsmSos)
+                                }
+                            }
+                        }
+                    },
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun ParticipantRow(
+    participant: SessionParticipant,
+    subtitle: String,
+    onUserClick: (userId: String) -> Unit,
+    pendingBadge: Boolean = false,
+    trailing: @Composable () -> Unit = {},
+) {
+    val pid = participant.userId?._id
+    val name = participant.userId?.username ?: "?"
+    val isCreator = participant.role == "groupLeader"
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable(enabled = !pid.isNullOrBlank()) { pid?.let(onUserClick) }
+                .then(if (isCreator) Modifier.border(2.dp, TsmAccent, CircleShape) else Modifier),
+        ) {
+            AvatarImage(avatarUrl = participant.userId?.avatarUrl, fallbackName = name, size = 40.dp)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    name,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                )
+                if (pendingBadge) {
+                    Surface(color = Color(0xFFFB8C00).copy(alpha = 0.18f), shape = RoundedCornerShape(4.dp)) {
+                        Text(
+                            "IN ATTESA",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color(0xFFFB8C00),
+                        )
+                    }
+                }
+            }
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        }
+        trailing()
     }
 }
 

@@ -59,7 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
-import it.trentosmartmountain.app.ui.components.TsmRouteMapPreview
+import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.theme.difficultyColor
 import it.trentosmartmountain.app.ui.util.RelativeTime
@@ -71,9 +71,8 @@ import kotlin.math.roundToInt
  * Dettaglio "social" di un post (Activity/HikeSession condivisa).
  *
  * Riusa i dati già presenti nel [FeedItem] del feed — niente fetch — e li
- * rilegge in chiave più ricca/sociale: autore in evidenza, route signature
- * grande, profilo altimetrico, griglia metriche completa, partecipanti, e le
- * azioni like/commento inline. Aperto tappando una card del feed o della bacheca.
+ * rilegge in chiave più ricca/sociale: autore in evidenza, Hero Pager (Mappa + Altimetria),
+ * griglia metriche completa, partecipanti, e le azioni like/commento inline.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,32 +146,22 @@ fun PostDetailScreen(
                 KindChip(post.kind)
             }
 
-            // ── Hero: route signature o profilo altimetrico ──
+            // ── Hero: traccia GPX (mappa) + altimetria come schede swipe ──
             val route = post.routePolyline
             val hasRoute = route != null && route.size >= 2
             val profile = post.elevationProfile
             val hasProfile = profile != null && profile.size >= 2
-            when {
-                hasRoute -> Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(240.dp)
-                        .background(Brush.verticalGradient(listOf(TsmColors.HeroTop, TsmColors.HeroBottom))),
-                ) {
-                    TsmRouteMapPreview(points = route!!, modifier = Modifier.fillMaxSize())
-                    post.difficultyLevel?.let {
-                        DifficultyChip(it, Modifier.align(Alignment.TopStart).padding(12.dp))
-                    }
-                }
-                hasProfile -> Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp)
-                        .background(Brush.verticalGradient(listOf(TsmColors.HeroTop, TsmColors.HeroBottom))),
-                ) {
-                    ElevationSparkline(profile = profile!!, modifier = Modifier.fillMaxSize().padding(12.dp), lineColor = TsmColors.Cyan)
-                }
-            }
+
+            TsmRouteElevationPager(
+                routePoints = route,
+                elevationProfile = profile,
+                modifier = Modifier.fillMaxWidth(),
+                height = 240.dp,
+                backgroundBrush = Brush.verticalGradient(listOf(TsmColors.HeroTop, TsmColors.HeroBottom)),
+                elevationLineColor = TsmColors.Cyan,
+                activeDotColor = TsmColors.Cyan,
+                difficultyLevel = post.difficultyLevel,
+            )
 
             // ── Titolo + caption ──
             Spacer(Modifier.height(14.dp))
@@ -359,6 +348,7 @@ fun PostDetailScreen(
     CommentsBottomSheet(
         target = commentsTarget,
         onDismiss = { commentsTarget = null },
+        onUserClick = onUserClick,
         onCountChanged = { _, _, count -> viewModel.setCommentCount(count) },
     )
 }

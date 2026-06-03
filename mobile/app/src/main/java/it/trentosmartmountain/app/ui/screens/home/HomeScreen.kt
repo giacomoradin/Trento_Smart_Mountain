@@ -33,7 +33,7 @@ fun HomeScreen(
   onActivityClick: (activityId: String, sessionId: String?) -> Unit = { _, _ -> },
   onNavigateToUserProfile: (userId: String) -> Unit = {},
   onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
-  onNavigateToStoryViewer: (refId: String, kind: String) -> Unit = { _, _ -> },
+  onNavigateToStoryViewer: (userId: String) -> Unit = {},
   onNavigateToUserSearch: () -> Unit = {},
   onNavigateToLeaderboard: () -> Unit = {},
   onNavigateToNotifications: () -> Unit = {},

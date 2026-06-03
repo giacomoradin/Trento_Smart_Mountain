@@ -285,6 +285,69 @@ export const idParamSchema = Joi.object({
   id: objectIdField.required(),
 });
 
+// Path params `:id` (sessione) + `:userId` (partecipante target) per le route
+// di approvazione/rifiuto/rimozione partecipanti.
+export const participantParamsSchema = Joi.object({
+  id: objectIdField.required(),
+  userId: objectIdField.required(),
+});
+
+// Path param `:userId` (es. GET /stories/user/:userId).
+export const userIdParamSchema = Joi.object({
+  userId: objectIdField.required(),
+});
+
+// ── Stories ─────────────────────────────────────────────────────────────────
+// Cap dimensione media (lunghezza Base64 ≈ byte). Il body limit globale è 5mb
+// (securityMiddleware): teniamo margine col cap per-media; il controllo del
+// totale per-storia è nel service. durationSec ≤ 10 per i video brevi.
+const STORY_MEDIA_MAX_CHARS = 3_800_000; // ~3.8MB per singolo media (video)
+
+const storyMediaItemSchema = Joi.object({
+  kind: Joi.string().valid("image", "video").required(),
+  dataUri: Joi.string()
+    .pattern(/^data:(image|video)\/[a-zA-Z0-9.+-]+;base64,/)
+    .max(STORY_MEDIA_MAX_CHARS)
+    .required(),
+  durationSec: Joi.number().min(0).max(10).optional(),
+});
+
+const storyOverlayPointSchema = Joi.object({
+  lat: Joi.number().min(-90).max(90).required(),
+  lon: Joi.number().min(-180).max(180).required(),
+});
+
+export const createStorySchema = Joi.object({
+  type: Joi.string().valid("planned_session", "activity").required(),
+  sessionId: objectIdField.optional(),
+  activityId: objectIdField.optional(),
+  caption: Joi.string().trim().max(200).allow("", null).optional(),
+  media: Joi.array().items(storyMediaItemSchema).max(4).default([]),
+  overlay: Joi.object({
+    title: Joi.string().max(120).allow("", null),
+    activityType: Joi.string().max(40).allow("", null),
+    difficultyLevel: Joi.string().max(8).allow("", null),
+    distanceMeters: Joi.number().min(0).allow(null),
+    elevationGainM: Joi.number().min(0).allow(null),
+    movingSeconds: Joi.number().min(0).allow(null),
+    routePolyline: Joi.array().items(storyOverlayPointSchema).max(500).optional(),
+  }).optional(),
+})
+  .custom((value, helpers) => {
+    // Almeno un riferimento coerente col type (validazione semantica).
+    if (value.type === "planned_session" && !value.sessionId) {
+      return helpers.error("any.invalid");
+    }
+    if (value.type === "activity" && !value.activityId && !value.sessionId) {
+      return helpers.error("any.invalid");
+    }
+    return value;
+  })
+  .messages({
+    "any.invalid":
+      "Riferimento mancante: planned_session richiede sessionId, activity richiede activityId o sessionId.",
+  });
+
 export const statsQuerySchema = Joi.object({
   year: Joi.number().integer().min(2000).max(3000),
 });

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- File temporanei di cattura (foto/video storie) in cacheDir. -->
+    <cache-path name="story_cache" path="." />
+</paths>

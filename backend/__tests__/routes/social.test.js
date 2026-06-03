@@ -841,7 +841,7 @@ describe("Social Routes", () => {
       expect(res.body.items[0].user.username).toBe("friend61");
     });
 
-    test("followed user with recent share → story status with ref", async () => {
+    test("followed user with a non-expired story → story status (unviewed)", async () => {
       const me = await createTestHiker({
         username: "viewer62",
         email: "viewer62@test.com",
@@ -853,19 +853,20 @@ describe("Social Routes", () => {
       await request(app)
         .post(`/api/v1/users/${friend.user._id}/follow`)
         .set("Authorization", `Bearer ${me.token}`);
-      const act = await createTestActivity(friend.user._id);
-      await request(app)
-        .post(`/api/v1/activities/${act._id}/share`)
+      // friend crea una sessione e una storia reale (planned_session) su di essa.
+      const session = await request(app)
+        .post("/api/v1/sessions")
         .set("Authorization", `Bearer ${friend.token}`)
-        .send({});
+        .send({ routeDetails: { name: "Story route", difficultyLevel: "E" }, meetingDate: "2026-08-01" });
+      await request(app)
+        .post("/api/v1/stories")
+        .set("Authorization", `Bearer ${friend.token}`)
+        .send({ type: "planned_session", sessionId: session.body._id });
       const res = await request(app)
         .get("/api/v1/users/me/social-row")
         .set("Authorization", `Bearer ${me.token}`);
       expect(res.body.items[0].status).toBe("story");
-      expect(res.body.items[0].storyActivityRef).toMatchObject({
-        id: String(act._id),
-        kind: "activity",
-      });
+      expect(res.body.items[0].hasUnviewedStory).toBe(true);
     });
 
     test("followed user with ACTIVE session → live status with sessionId", async () => {

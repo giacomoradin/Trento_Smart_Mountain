@@ -83,7 +83,13 @@ fun RefugeMainScreen(
 ) {
   val state by dashboardViewModel.state.collectAsStateWithLifecycle()
 
-  Surface(modifier = modifier.fillMaxSize(), color = Bg) {
+  Box(modifier = modifier.fillMaxSize()) {
+    // Profondità "telemetria": aurora sottile dietro la dashboard.
+    it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+      modifier = Modifier.fillMaxSize(),
+      baseColor = Bg,
+      particleCount = 16,
+    )
     Column(
       modifier = Modifier
         .fillMaxSize()

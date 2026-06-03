@@ -3,6 +3,7 @@ package it.trentosmartmountain.app.ui.screens.home
 import android.app.Application
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,7 +74,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.estimation.HikeEstimation
 import it.trentosmartmountain.app.data.remote.dto.RoutePoint
-import it.trentosmartmountain.app.ui.components.TsmRouteMapPreview
+import it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs
+import it.trentosmartmountain.app.data.remote.dto.StoryOverlay
+import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
@@ -93,6 +97,8 @@ fun ActivityDetailScreen(
     activityId: String,
     sessionId: String? = null,
     onBack: () -> Unit,
+    onUserClick: (userId: String) -> Unit = {},
+    onShareStory: (it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs) -> Unit = {},
     viewModel: ActivityDetailViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application,
@@ -331,23 +337,26 @@ fun ActivityDetailScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                    if (uiState.trackPoints.isNotEmpty()) {
-                        TsmRouteMapPreview(
-                            points = uiState.trackPoints.map { RoutePoint(it.first, it.second) },
-                            modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(8.dp)),
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().height(200.dp)
-                                .clip(RoundedCornerShape(8.dp)).background(TsmSurfaceVariant),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    TsmRouteElevationPager(
+                        routePoints = uiState.trackPoints.map { RoutePoint(it.first, it.second) },
+                        elevationProfile = uiState.elevationProfile,
+                        modifier = Modifier.fillMaxWidth(),
+                        height = 200.dp,
+                        cornerRadius = 8.dp,
+                        backgroundBrush = androidx.compose.ui.graphics.SolidColor(TsmSurfaceVariant),
+                        elevationLineColor = TsmAccent,
+                        activeDotColor = TsmAccent,
+                        emptyContent = {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
                                 Icon(Icons.Outlined.RadioButtonChecked, null, tint = Color.Gray, modifier = Modifier.size(32.dp))
                                 Text("Nessun tracciato GPS disponibile", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
-                        }
-                    }
+                        },
+                    )
 
                     Spacer(modifier = Modifier.height(10.dp))
                     // Condividi sul feed sociale (apre dialog "Pubblica" con caption opzionale)
@@ -360,6 +369,37 @@ fun ActivityDetailScreen(
                         Icon(Icons.Outlined.Share, null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("CONDIVIDI SUL FEED", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    // Condividi come STORIA (foto/video breve + overlay tracciamento, 24h)
+                    Button(
+                        onClick = {
+                            onShareStory(
+                                StoryComposerArgs(
+                                    type = "activity",
+                                    sessionId = sessionId,
+                                    activityId = if (sessionId == null) uiState.local?.remoteId else null,
+                                    overlay = StoryOverlay(
+                                        title = uiState.name,
+                                        activityType = uiState.activityType,
+                                        difficultyLevel = uiState.difficultyLevel,
+                                        distanceMeters = uiState.distanceKm * 1000.0,
+                                        elevationGainM = uiState.elevationGainM,
+                                        movingSeconds = uiState.movingSeconds.toLong(),
+                                        routePolyline = uiState.trackPoints
+                                            .map { RoutePoint(it.first, it.second) }
+                                            .takeIf { it.isNotEmpty() },
+                                    ),
+                                ),
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4DD0E1)),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Icon(Icons.Outlined.Share, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("CONDIVIDI COME STORIA", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     // Download GPX
@@ -398,15 +438,19 @@ fun ActivityDetailScreen(
                         participants.forEach { p ->
                             val name = p.userId?.username ?: "Utente"
                             val isOrganizer = p.role == "groupLeader"
+                            val pid = p.userId?._id
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !pid.isNullOrBlank()) { pid?.let(onUserClick) }
+                                    .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                val initials = name.split(" ").take(2).joinToString("") { it.firstOrNull()?.uppercaseChar()?.toString() ?: "" }
-                                Box(
-                                    modifier = Modifier.size(36.dp).clip(CircleShape).background(TsmAccent),
-                                    contentAlignment = Alignment.Center,
-                                ) { Text(initials, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = Color.Black) }
+                                AvatarImage(
+                                    avatarUrl = p.userId?.avatarUrl,
+                                    fallbackName = name,
+                                    size = 36.dp,
+                                )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(if (isOrganizer) "Tu" else name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)

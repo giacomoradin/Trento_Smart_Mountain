@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -65,8 +66,16 @@ fun AuthEntryScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Logo badge brandizzato direttamente sull'aurora (nessuna card).
-            TsmMountainLogo(iconSize = 116.dp)
+            // Logo TSM UFFICIALE (immagine reale dell'utente) sulla schermata di
+            // benvenuto. Nel resto dell'app si usa il vettoriale `TsmMountainLogo`.
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = R.drawable.tsm_logo_photo),
+                contentDescription = "Logo TSM",
+                modifier = Modifier
+                    .size(132.dp)
+                    .clip(RoundedCornerShape(28.dp)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            )
 
             Spacer(modifier = Modifier.height(20.dp))
 

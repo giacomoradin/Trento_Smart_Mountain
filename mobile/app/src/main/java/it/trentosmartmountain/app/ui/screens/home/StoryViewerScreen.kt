@@ -382,33 +382,48 @@ private fun StoryImage(media: StoryMedia, modifier: Modifier = Modifier) {
 private fun StoryVideo(media: StoryMedia, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var file by remember(media.dataUri) { mutableStateOf<File?>(null) }
+    var failed by remember(media.dataUri) { mutableStateOf(false) }
     LaunchedEffect(media.dataUri) {
-        file = withContext(Dispatchers.IO) {
+        val decoded = withContext(Dispatchers.IO) {
             runCatching {
+                // Il data URI è "data:video/mp4;base64,XXXX". Se manca il marker
+                // base64, o i byte sono vuoti, consideriamo il media non valido.
                 val base64 = media.dataUri.substringAfter("base64,", "")
+                if (base64.isBlank()) return@runCatching null
                 val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                if (bytes.isEmpty()) return@runCatching null
                 val f = File(context.cacheDir, "story_${media.dataUri.hashCode()}.mp4")
                 f.writeBytes(bytes)
                 f
             }.getOrNull()
         }
+        file = decoded
+        failed = decoded == null
     }
     val f = file
-    if (f != null) {
-        AndroidView(
+    when {
+        failed -> Box(modifier = modifier.background(Color(0xFF101012)), contentAlignment = Alignment.Center) {
+            Text("Video non disponibile", color = Color.White.copy(alpha = 0.6f))
+        }
+        f != null -> AndroidView(
             factory = { ctx ->
                 android.widget.VideoView(ctx).apply {
-                    setVideoPath(f.absolutePath)
+                    // Consuma gli errori del MediaPlayer: niente dialog di sistema /
+                    // crash se il codec non gradisce il file (mostriamo solo il nero).
+                    setOnErrorListener { _, _, _ -> true }
                     setOnPreparedListener { mp ->
                         mp.isLooping = true
+                        mp.setVolume(1f, 1f)
                         start()
                     }
+                    setVideoPath(f.absolutePath)
                 }
             },
             modifier = modifier,
+            // Rilascia il player quando il segmento esce di scena (auto-advance).
+            onRelease = { it.stopPlayback() },
         )
-    } else {
-        Box(modifier = modifier.background(Color(0xFF101012)))
+        else -> Box(modifier = modifier.background(Color(0xFF101012)))
     }
 }
 

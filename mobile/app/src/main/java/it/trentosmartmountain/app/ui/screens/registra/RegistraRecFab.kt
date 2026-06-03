@@ -35,8 +35,8 @@ fun RegistraRecFab(
 ) {
   val transition = rememberInfiniteTransition(label = "rec-glow")
   val glowAlpha by transition.animateFloat(
-    initialValue = 0.30f,
-    targetValue = 0.62f,
+    initialValue = 0.40f,
+    targetValue = 0.85f,
     animationSpec = infiniteRepeatable(
       animation = tween(durationMillis = 1100, easing = LinearEasing),
       repeatMode = RepeatMode.Reverse,
@@ -47,7 +47,7 @@ fun RegistraRecFab(
   Box(modifier = modifier, contentAlignment = Alignment.Center) {
     TsmGlow(
       color = TsmPrimary,
-      modifier = Modifier.size(96.dp),
+      modifier = Modifier.size(124.dp),
       alpha = glowAlpha,
     )
     FloatingActionButton(

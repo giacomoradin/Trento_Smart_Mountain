@@ -67,6 +67,7 @@ import it.trentosmartmountain.app.data.preferences.UnitsFormatter
 import it.trentosmartmountain.app.data.remote.dto.WeeklyGoals
 import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.util.AvatarUtils
 import it.trentosmartmountain.app.viewmodel.ProfileV2ViewModel
@@ -179,7 +180,14 @@ fun ProfileScreen(
         )
     }
 
-    Surface(modifier = modifier.fillMaxSize(), color = DarkSurface) {
+    Box(modifier = modifier.fillMaxSize()) {
+      // Aurora di profondità dietro al profilo (materiale premium percepibile).
+      TsmAuroraBackground(
+          modifier = Modifier.fillMaxSize(),
+          baseColor = DarkSurface,
+          particleCount = 18,
+      )
+      Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         if (uiState.showBlockingLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = AccentCyan)
@@ -640,6 +648,7 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(24.dp))
         }
+      }
     }
 }
 

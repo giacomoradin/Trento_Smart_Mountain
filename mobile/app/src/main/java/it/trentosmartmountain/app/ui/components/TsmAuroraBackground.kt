@@ -87,17 +87,18 @@ fun TsmAuroraBackground(
             )
         }
 
-        // Tre blob aurora che derivano lentamente.
-        blob(glowDeep, w * (0.55f + 0.05f * sin(t * 0.6f)), h * (0.86f + 0.04f * cos(t)), w * 0.75f, 0.24f)
-        blob(glowWarm, w * (0.24f + 0.08f * sin(t)), h * (0.20f + 0.05f * cos(t)), w * 0.55f, 0.14f)
-        blob(glowCool, w * (0.82f + 0.06f * cos(t * 0.8f)), h * (0.30f + 0.06f * sin(t * 1.1f)), w * 0.5f, 0.10f)
+        // Tre blob aurora che derivano lentamente. Intensità "decisa ma curata":
+        // alpha alzate per renderli percepibili anche su sfondi chiari di card glass.
+        blob(glowDeep, w * (0.55f + 0.05f * sin(t * 0.6f)), h * (0.86f + 0.04f * cos(t)), w * 0.78f, 0.42f)
+        blob(glowWarm, w * (0.24f + 0.08f * sin(t)), h * (0.18f + 0.05f * cos(t)), w * 0.62f, 0.30f)
+        blob(glowCool, w * (0.82f + 0.06f * cos(t * 0.8f)), h * (0.30f + 0.06f * sin(t * 1.1f)), w * 0.55f, 0.22f)
 
-        // Particelle che salgono con twinkle.
+        // Particelle che salgono con twinkle (più presenti ma sempre eteree).
         particles.forEach { p ->
             val y = (((p.baseY - phase * p.speed) % 1f) + 1f) % 1f
             val tw = 0.4f + 0.6f * (0.5f + 0.5f * sin((phase * p.speed * 6f + p.twinkle) * 2f * PI.toFloat()))
             drawCircle(
-                color = Color.White.copy(alpha = 0.09f * tw),
+                color = Color.White.copy(alpha = 0.16f * tw),
                 radius = p.radius.dp.toPx(),
                 center = Offset(p.x * w, y * h),
             )

@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
-
+1
     // Gestione deep link al cold start: l'app viene aperta dal link nell'email.
     // Salviamo il JWT in TokenStorage PRIMA di comporre il NavHost così
     // AuthSession.startDestinationFor() trova già il token e parte dalla shell.

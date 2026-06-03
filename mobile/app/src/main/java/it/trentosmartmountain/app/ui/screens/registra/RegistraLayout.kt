@@ -18,18 +18,26 @@ object RegistraLayout {
   /** Altezza approssimativa della striscia metriche (per posizionare banner auto-pausa). */
   val metricsStripHeight = 46.dp
 
-  val bottomInset = 20.dp
+  val bottomInset = 10.dp
 
-  /** Play/pausa, centra GPS e SOS — stessa dimensione. */
+  /** Bacheca rifugi / centra GPS in alto. */
+  val topActionButtonSize = 44.dp
+  val topActionPaddingTop = 8.dp
+  val topActionPaddingEnd = 12.dp
+  val topActionPaddingStart = 12.dp
+  val topActionSpacing = 8.dp
+
+  /** Play/pausa, SOS, partecipanti — stessa dimensione. */
   val primaryFabSize = 65.dp
   val primaryFabIconSize = 33.dp
+  val primaryGlowSize = 124.dp
 
   /** Stop — leggermente più piccolo di play/pausa. */
   val secondaryFabSize = 53.dp
   val secondaryFabIconSize = 27.dp
 
-  /** Padding inferiore FAB GPS+SOS (angolo in basso a destra). */
-  val fabBottomRest = bottomInset
+  /** Padding orizzontale barra controlli in basso. */
+  val bottomBarHorizontalPadding = 12.dp
 
   /** Offset verticale del banner auto-pausa sotto l’HUD GPS (+ metriche se attive). */
   fun autoPauseTop(isTrackingActive: Boolean) =

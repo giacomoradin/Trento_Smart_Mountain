@@ -4,10 +4,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,13 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,39 +24,29 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs
+import it.trentosmartmountain.app.ui.screens.home.story.StoryEditorCanvas
+import it.trentosmartmountain.app.ui.screens.home.story.StoryEditorControlsBar
+import it.trentosmartmountain.app.ui.screens.home.story.StoryStickerKind
 import it.trentosmartmountain.app.ui.theme.TsmColors
-import it.trentosmartmountain.app.ui.util.AvatarUtils
 import it.trentosmartmountain.app.viewmodel.StoryComposerViewModel
 
-/**
- * Composer storie (Fase C): pick di una foto/video breve dalla galleria,
- * didascalia opzionale, pubblicazione. L'overlay di tracciamento + i riferimenti
- * arrivano già pronti negli [args] dall'origine (dettaglio attività/sessione).
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoryComposerScreen(
@@ -75,6 +57,9 @@ fun StoryComposerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val hostActivity = context as ComponentActivity
+
+    LaunchedEffect(args) { viewModel.initFromArgs(args) }
 
     LaunchedEffect(state.published) {
         if (state.published) {
@@ -87,9 +72,6 @@ fun StoryComposerScreen(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri -> uri?.let { viewModel.onMediaPicked(context.contentResolver, it) } }
 
-    // Cattura da fotocamera: scriviamo il media in un file di cache esposto via
-    // FileProvider e lo passiamo all'app camera (TakePicture/CaptureVideo →
-    // ACTION_IMAGE/VIDEO_CAPTURE, nessun permesso CAMERA dichiarato/richiesto).
     var pendingCaptureUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         if (ok) pendingCaptureUri?.let { viewModel.onMediaPicked(context.contentResolver, it) }
@@ -107,6 +89,10 @@ fun StoryComposerScreen(
         if (isVideo) captureVideo.launch(uri) else takePhoto.launch(uri)
     }
 
+    val hasRoute = state.routePoints.size >= 2
+    var editorCanvasWidthPx by remember { mutableStateOf(0f) }
+    var editorCanvasHeightPx by remember { mutableStateOf(0f) }
+
     Scaffold(
         containerColor = TsmColors.FeedBackground,
         topBar = {
@@ -122,107 +108,99 @@ fun StoryComposerScreen(
         },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 12.dp),
         ) {
-            Text(
-                text = if (args.type == "planned_session") {
-                    "Condividi l'escursione pianificata: i tuoi follower potranno unirsi direttamente dalla storia."
-                } else {
-                    "Condividi la tua attività con una foto o un breve video."
+            StoryEditorCanvas(
+                routePoints = state.routePoints,
+                hasCustomBackground = state.hasCustomBackground,
+                mediaKind = state.mediaKind,
+                mediaDataUri = state.mediaDataUri,
+                isEncoding = state.isEncoding,
+                routeOverlayMode = state.routeOverlayMode,
+                mapSceneTransform = state.mapSceneTransform,
+                routeTransform = state.routeTransform,
+                mapWidgetTransform = state.mapWidgetTransform,
+                routeColor = state.routeColor,
+                selectedSticker = state.selectedSticker,
+                onSelectSticker = viewModel::selectSticker,
+                onMapSceneTransformChange = viewModel::onMapSceneTransformChange,
+                onRouteTransformChange = viewModel::onRouteTransformChange,
+                onMapWidgetTransformChange = viewModel::onMapWidgetTransformChange,
+                showTextSticker = state.showTextSticker,
+                textEditMode = state.textEditMode,
+                floatingText = state.floatingText,
+                textTransform = state.textTransform,
+                textColor = state.textColor,
+                onTextTransformChange = viewModel::onTextTransformChange,
+                onEditorCanvasSize = { w, h ->
+                    editorCanvasWidthPx = w
+                    editorCanvasHeightPx = h
                 },
-                color = TsmColors.TextSecondary,
-                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.height(14.dp))
 
-            // ── Area media (tap per scegliere) ──
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(TsmColors.CardElevated)
-                    .clickable {
-                        picker.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-                        )
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                when {
-                    state.isEncoding -> CircularProgressIndicator(color = TsmColors.Cyan)
-                    state.mediaKind == "image" && state.mediaDataUri != null -> {
-                        val bmp = remember(state.mediaDataUri) { AvatarUtils.decodeDataUri(state.mediaDataUri) }
-                        if (bmp != null) {
-                            Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                            )
-                        } else {
-                            Text("Anteprima non disponibile", color = TsmColors.TextSecondary)
-                        }
-                    }
-                    state.mediaKind == "video" -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = TsmColors.Cyan, modifier = Modifier.size(56.dp))
-                        Text("Video pronto", color = TsmColors.TextSecondary)
-                    }
-                    else -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Filled.Add, contentDescription = null, tint = TsmColors.Cyan, modifier = Modifier.size(48.dp))
-                        Spacer(Modifier.height(8.dp))
-                        Text("Tocca per aggiungere foto o video", color = TsmColors.TextSecondary)
-                    }
-                }
-            }
             Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Galleria") }
-                OutlinedButton(
-                    onClick = { launchCapture(isVideo = false) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Foto") }
-                OutlinedButton(
-                    onClick = { launchCapture(isVideo = true) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Video") }
-            }
-            if (state.mediaDataUri != null) {
-                TextButton(onClick = { viewModel.clearMedia() }) {
-                    Text("Rimuovi media", color = TsmColors.Danger)
-                }
+
+            StoryEditorControlsBar(
+                hasCustomBackground = state.hasCustomBackground,
+                hasRoute = hasRoute,
+                routeOverlayMode = state.routeOverlayMode,
+                selectedSticker = state.selectedSticker,
+                routeColor = state.routeColor,
+                textColor = state.textColor,
+                showTextSticker = state.showTextSticker,
+                textEditMode = state.textEditMode,
+                onImportGallery = {
+                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                },
+                onImportPhoto = { launchCapture(isVideo = false) },
+                onImportVideo = { launchCapture(isVideo = true) },
+                onRemoveBackground = viewModel::clearMedia,
+                onAddTraceOverlay = viewModel::addTraceOverlay,
+                onAddMapWidget = viewModel::addMapWidgetOverlay,
+                onRemoveRouteOverlay = viewModel::removeRouteOverlay,
+                onAddText = viewModel::addTextSticker,
+                onConfirmText = viewModel::confirmTextSticker,
+                onRemoveText = viewModel::removeTextSticker,
+                onRouteColor = viewModel::onRouteColorChange,
+                onTextColor = viewModel::onTextColorChange,
+            )
+
+            if (state.textEditMode || state.selectedSticker == StoryStickerKind.TEXT) {
+                OutlinedTextField(
+                    value = state.floatingText,
+                    onValueChange = viewModel::onFloatingTextChange,
+                    label = { Text("Testo sticker") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 2,
+                )
             }
 
-            Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = state.caption,
                 onValueChange = viewModel::onCaptionChange,
-                label = { Text("Didascalia (opzionale)") },
+                label = { Text("Didascalia") },
                 modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
-                maxLines = 4,
+                maxLines = 2,
             )
 
             state.error?.let {
-                Spacer(Modifier.height(8.dp))
                 Text(it, color = TsmColors.Danger, style = MaterialTheme.typography.bodySmall)
             }
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(8.dp))
             Button(
-                onClick = { viewModel.publish(args) },
+                onClick = {
+                    val w = editorCanvasWidthPx.takeIf { it > 0f } ?: 1080f
+                    val h = editorCanvasHeightPx.takeIf { it > 0f } ?: 1920f
+                    viewModel.publish(args, hostActivity, w, h)
+                },
                 enabled = !state.isPublishing && !state.isEncoding,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = TsmColors.Cyan),
                 shape = RoundedCornerShape(10.dp),
             ) {
@@ -233,11 +211,6 @@ fun StoryComposerScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Text(
-                "La storia sarà visibile ai tuoi follower per 24 ore.",
-                color = TsmColors.TextTertiary,
-                style = MaterialTheme.typography.labelSmall,
-            )
         }
     }
 }

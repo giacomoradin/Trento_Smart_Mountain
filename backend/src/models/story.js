@@ -36,6 +36,23 @@ const storyOverlaySchema = new Schema(
     elevationGainM: { type: Number, default: null },
     movingSeconds: { type: Number, default: null },
     routePolyline: { type: [overlayPointSchema], default: undefined },
+    editorDecor: {
+      routeColor: { type: String, default: null },
+      routeTransform: {
+        offsetX: { type: Number, default: 0 },
+        offsetY: { type: Number, default: 0 },
+        scale: { type: Number, default: 1 },
+        rotationDeg: { type: Number, default: 0 },
+      },
+      floatingText: { type: String, default: null, maxlength: 80 },
+      textColor: { type: String, default: null },
+      textTransform: {
+        offsetX: { type: Number, default: 0 },
+        offsetY: { type: Number, default: 0 },
+        scale: { type: Number, default: 1 },
+        rotationDeg: { type: Number, default: 0 },
+      },
+    },
   },
   { _id: false },
 );

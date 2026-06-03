@@ -317,6 +317,15 @@ const storyOverlayPointSchema = Joi.object({
   lon: Joi.number().min(-180).max(180).required(),
 });
 
+const storyStickerTransformSchema = Joi.object({
+  offsetX: Joi.number().required(),
+  offsetY: Joi.number().required(),
+  scale: Joi.number().min(0.1).max(5).required(),
+  rotationDeg: Joi.number().required(),
+});
+
+const hexColorField = Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/);
+
 export const createStorySchema = Joi.object({
   type: Joi.string().valid("planned_session", "activity").required(),
   sessionId: objectIdField.optional(),
@@ -331,6 +340,13 @@ export const createStorySchema = Joi.object({
     elevationGainM: Joi.number().min(0).allow(null),
     movingSeconds: Joi.number().min(0).allow(null),
     routePolyline: Joi.array().items(storyOverlayPointSchema).max(500).optional(),
+    editorDecor: Joi.object({
+      routeColor: hexColorField.optional(),
+      routeTransform: storyStickerTransformSchema.optional(),
+      floatingText: Joi.string().trim().max(80).allow("", null).optional(),
+      textColor: hexColorField.optional(),
+      textTransform: storyStickerTransformSchema.optional(),
+    }).optional(),
   }).optional(),
 })
   .custom((value, helpers) => {

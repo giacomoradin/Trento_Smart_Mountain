@@ -92,7 +92,7 @@ fun LiveParticipantContent(
       }
     }
 
-    // Sesso — visibile a tutti i membri del gruppo (Fase 0).
+    // Sesso — rispetta profileVisibility (privato / solo amici / pubblico).
     LeaderDetailRow(
       label = stringResource(R.string.live_participant_sex),
       value = formatSex(user.sex),

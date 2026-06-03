@@ -1,35 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Logo TSM completo (badge a rombo): sfondo Tech Navy, sole Athletic Orange,
-     picchi low-poly con neve, pini alla base, cornice a rombo arancione.
-     Usato in-app (auth/login/top bar). -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-  android:width="108dp"
-  android:height="108dp"
-  android:viewportWidth="108"
-  android:viewportHeight="108">
-
-  <!-- Badge a rombo (sfondo navy) -->
-  <path android:fillColor="@color/tsm_icon_bg" android:pathData="M54,8 L100,54 L54,100 L8,54 Z" />
-
-  <!-- Sole -->
-  <path
-    android:fillColor="@color/tsm_orange"
-    android:pathData="M54,46 m-14,0 a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0 z" />
-
-  <!-- Picchi laterali -->
-  <path android:fillColor="@color/tsm_teal" android:pathData="M28,80 L44,57 L60,80 Z" />
-  <path android:fillColor="@color/tsm_teal" android:pathData="M56,80 L68,59 L80,80 Z" />
-  <!-- Picco centrale -->
-  <path android:fillColor="@color/tsm_teal_dark" android:pathData="M40,80 L56,36 L72,80 Z" />
-  <path android:fillColor="@color/tsm_teal_light" android:pathData="M56,36 L41,80 L56,80 Z" />
-  <!-- Neve di vetta -->
-  <path android:fillColor="@color/tsm_cream" android:pathData="M56,36 L51,49 L61,49 Z" />
-
-  <!-- Pini alla base -->
-  <path android:fillColor="@color/tsm_navy_pine"
-    android:pathData="M35,88 L39,80 L43,88 Z M44,90 L48,82 L52,90 Z M54,89 L58,80 L62,89 Z M63,90 L67,82 L71,90 Z" />
-
-  <!-- Cornice a rombo -->
-  <path android:strokeColor="@color/tsm_orange" android:strokeWidth="2.4"
-    android:fillColor="#00000000" android:pathData="M54,8 L100,54 L54,100 L8,54 Z" />
-</vector>
+<!-- Logo in-app (stesso asset Figma / docs/TSM_logo.jpeg) -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/tsm_logo_photo"
+    android:gravity="center" />

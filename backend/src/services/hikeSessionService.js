@@ -6,6 +6,11 @@ import { addCredits } from "./creditService.js";
 import { applyBaselineMultiplier } from "./userScoringService.js";
 import { evaluateAllBadges } from "./badgeService.js";
 import { isSessionParticipant, isSessionGroupLeader } from "./emergencyService.js";
+import Follow from "../models/follow.js";
+import {
+  canViewerSeeSexInGroupContext,
+  collectSessionMemberUsers,
+} from "../utils/userPrivacy.js";
 import crypto from "crypto";
 
 // Populate condiviso per le risposte sessione: creator + partecipanti + chi ha
@@ -393,14 +398,40 @@ export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {
   assertInSession(sessionDoc, userId);
   const viewerIsLeader = isSessionGroupLeader(sessionDoc, userId);
 
-  // Il sesso è visibile a TUTTI i membri della sessione (resta comunque privato
-  // verso l'esterno: solo chi è nel gruppo riceve questo payload live). Fase 0.
-  const participantFields = "username personalInfo.avatarUrl personalInfo.sex";
+  const participantFields =
+    "username personalInfo.avatarUrl personalInfo.sex preferences.privacy.profileVisibility";
 
   const session = await HikeSession.findById(sessionId)
     .populate("participants.userId", participantFields)
     .populate("creatorId", participantFields);
   if (!session) throw new Error("SESSION_NOT_FOUND");
+
+  const memberUsers = collectSessionMemberUsers(session);
+  const viewerStr = userId.toString();
+  const friendsCheckIds = memberUsers
+    .map((u) => (u._id || u).toString())
+    .filter((uid) => {
+      if (uid === viewerStr) return false;
+      const vis = memberUsers.find((u) => (u._id || u).toString() === uid)
+        ?.preferences?.privacy?.profileVisibility ?? "friends";
+      return vis === "friends";
+    });
+  const followedSet = new Set(
+    friendsCheckIds.length > 0
+      ? (
+          await Follow.find({
+            followerId: viewerStr,
+            followingId: { $in: friendsCheckIds },
+          }).distinct("followingId")
+        ).map((id) => id.toString())
+      : [],
+  );
+  const sexVisibleFor = (targetUser) =>
+    canViewerSeeSexInGroupContext(
+      viewerStr,
+      targetUser,
+      followedSet.has((targetUser?._id || targetUser).toString()),
+    );
 
   const cutoff = new Date(Date.now() - maxAgeSec * 1000);
 
@@ -431,7 +462,9 @@ export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {
       lastName,
       avatarUrl: u?.personalInfo?.avatarUrl,
       role,
-      ...(u?.personalInfo?.sex ? { sex: u.personalInfo.sex } : {}),
+      ...(u && sexVisibleFor(u) && u.personalInfo?.sex
+        ? { sex: u.personalInfo.sex }
+        : {}),
     };
   };
 

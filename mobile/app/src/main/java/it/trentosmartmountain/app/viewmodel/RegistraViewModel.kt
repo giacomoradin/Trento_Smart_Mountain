@@ -1429,7 +1429,8 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
                   firstName = first,
                   lastName = last,
                   avatarUrl = body.personalInfo?.avatarUrl,
-                  sex = body.personalInfo?.sex,
+                  // getUserById non espone sex ad altri: conserva il valore da live-locations.
+                  sex = body.personalInfo?.sex ?: current.user.sex,
                 ),
             ),
         )

@@ -1,5 +1,7 @@
 import request from "supertest";
 import app from "../../src/app.js";
+import Follow from "../../src/models/follow.js";
+import Hiker from "../../src/models/hiker.js";
 import HikeSession from "../../src/models/hikeSession.js";
 import { createTestHiker, generateValidToken } from "../helpers/authHelper.js";
 
@@ -611,6 +613,75 @@ describe("HikeSession Routes", () => {
   // ══════════════════════════════════════════════════════════════════
 
   describe("Live tracking endpoints", () => {
+    async function setProfileVisibility(userId, visibility) {
+      await Hiker.updateOne(
+        { _id: userId },
+        { "preferences.privacy.profileVisibility": visibility },
+      );
+    }
+
+    async function setUserSex(userId, sex) {
+      await Hiker.updateOne({ _id: userId }, { "personalInfo.sex": sex });
+    }
+
+    test("GET /:id/live-locations: sex rispetta profileVisibility (anche per capogruppo)", async () => {
+      const { token: leaderToken, user: leader } = await createTestHiker({
+        username: "sexvis_leader",
+        email: "sexvis_leader@test.com",
+      });
+      await setUserSex(leader._id, "M");
+
+      const created = await createSessionAs(leaderToken);
+
+      const { token: memberToken, user: member } = await createTestHiker({
+        username: "sexvis_member",
+        email: "sexvis_member@test.com",
+      });
+      await setUserSex(member._id, "F");
+
+      const joinRes = await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${memberToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+      expect([200, 201]).toContain(joinRes.status);
+
+      await activateSession(created.body._id, leaderToken);
+
+      const postLoc = async (token) => {
+        const res = await request(app)
+          .post(`/api/v1/sessions/${created.body._id}/live-location`)
+          .set("Authorization", `Bearer ${token}`)
+          .send({ lat: 46.07, lon: 11.12 });
+        expect(res.status).toBe(200);
+      };
+      await postLoc(leaderToken);
+      await postLoc(memberToken);
+
+      const fetchSexAsLeader = async () => {
+        const res = await request(app)
+          .get(`/api/v1/sessions/${created.body._id}/live-locations?maxAgeSec=120`)
+          .set("Authorization", `Bearer ${leaderToken}`);
+        expect(res.status).toBe(200);
+        const row = res.body.data.find((l) => l.user.id === member._id.toString());
+        return row?.user?.sex;
+      };
+
+      // Profilo pubblico → il capogruppo vede il sesso del membro.
+      await setProfileVisibility(member._id, "public");
+      expect(await fetchSexAsLeader()).toBe("F");
+
+      // Profilo privato → nessun sesso esposto.
+      await setProfileVisibility(member._id, "private");
+      expect(await fetchSexAsLeader()).toBeUndefined();
+
+      // Solo amici: visibile solo se il capogruppo segue il membro.
+      await setProfileVisibility(member._id, "friends");
+      expect(await fetchSexAsLeader()).toBeUndefined();
+
+      await Follow.create({ followerId: leader._id, followingId: member._id });
+      expect(await fetchSexAsLeader()).toBe("F");
+    });
+
     test("POST /:id/live-location stores last location (upsert)", async () => {
       const { token } = await createTestHiker({
         username: "liveu1",

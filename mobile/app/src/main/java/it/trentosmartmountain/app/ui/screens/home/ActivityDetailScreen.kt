@@ -75,6 +75,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.estimation.HikeEstimation
 import it.trentosmartmountain.app.data.remote.dto.RoutePoint
 import it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs
+import it.trentosmartmountain.app.ui.components.TsmShareStoryButton
+import it.trentosmartmountain.app.util.downsampleByIndex
 import it.trentosmartmountain.app.data.remote.dto.StoryOverlay
 import it.trentosmartmountain.app.ui.components.AvatarImage
 import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
@@ -346,6 +348,7 @@ fun ActivityDetailScreen(
                         backgroundBrush = androidx.compose.ui.graphics.SolidColor(TsmSurfaceVariant),
                         elevationLineColor = TsmAccent,
                         activeDotColor = TsmAccent,
+                        expandable = true,
                         emptyContent = {
                             Column(
                                 modifier = Modifier.fillMaxSize(),
@@ -372,7 +375,7 @@ fun ActivityDetailScreen(
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     // Condividi come STORIA (foto/video breve + overlay tracciamento, 24h)
-                    Button(
+                    TsmShareStoryButton(
                         onClick = {
                             onShareStory(
                                 StoryComposerArgs(
@@ -386,21 +389,16 @@ fun ActivityDetailScreen(
                                         distanceMeters = uiState.distanceKm * 1000.0,
                                         elevationGainM = uiState.elevationGainM,
                                         movingSeconds = uiState.movingSeconds.toLong(),
+                                        // Cap a 300 punti (overlay backend max 500).
                                         routePolyline = uiState.trackPoints
                                             .map { RoutePoint(it.first, it.second) }
-                                            .takeIf { it.isNotEmpty() },
+                                            .let { downsampleByIndex(it, 300) }
+                                            ?.takeIf { it.isNotEmpty() },
                                     ),
                                 ),
                             )
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4DD0E1)),
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        Icon(Icons.Outlined.Share, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("CONDIVIDI COME STORIA", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-                    }
+                    )
                     Spacer(modifier = Modifier.height(10.dp))
                     // Download GPX
                     Button(

@@ -29,7 +29,15 @@ const notificationSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ["follow", "like", "comment"],
+    // social: follow/like/comment · sessione: join_request/join_accepted/removed
+    enum: [
+      "follow",
+      "like",
+      "comment",
+      "join_request",
+      "join_accepted",
+      "removed",
+    ],
     required: true,
   },
   targetKind: {
@@ -41,6 +49,9 @@ const notificationSchema = new Schema({
     type: Schema.Types.ObjectId,
     default: null,
   },
+  // Testo precomputato opzionale (per notifiche non-social; le social derivano
+  // il testo client-side da type+actor).
+  message: { type: String, default: null },
   read: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });

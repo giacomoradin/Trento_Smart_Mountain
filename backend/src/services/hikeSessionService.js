@@ -6,6 +6,7 @@ import { addCredits } from "./creditService.js";
 import { applyBaselineMultiplier } from "./userScoringService.js";
 import { evaluateAllBadges } from "./badgeService.js";
 import { isSessionParticipant, isSessionGroupLeader } from "./emergencyService.js";
+import { createNotification } from "./notificationService.js";
 import Follow from "../models/follow.js";
 import {
   canViewerSeeSexInGroupContext,
@@ -122,10 +123,14 @@ export async function joinSession(userId, inviteCode) {
     throw new Error("PARTICIPANT_BANNED");
   }
 
-  const alreadyIn = session.participants.some(
+  const existing = session.participants.find(
     (p) => (p.userId?._id || p.userId).toString() === userId.toString(),
   );
-  if (alreadyIn) {
+  if (existing) {
+    // Distinguo "richiesta già in attesa" da "già membro accettato": il client
+    // mostra il messaggio corretto e la richiesta resta idempotente (no doppio
+    // pending reinviando lo stesso codice).
+    if (existing.status === "pending") throw new Error("JOIN_REQUEST_PENDING");
     throw new Error("ALREADY_IN_SESSION");
   }
 
@@ -142,6 +147,15 @@ export async function joinSession(userId, inviteCode) {
         createdBy: session.creatorId,
       },
     },
+  });
+
+  // Notifica al capogruppo: nuova richiesta di partecipazione da approvare.
+  await createNotification({
+    recipientId: session.creatorId,
+    actorId: userId,
+    type: "join_request",
+    targetKind: "session",
+    targetId: session._id,
   });
 
   return session.populate(SESSION_POPULATE);
@@ -173,6 +187,14 @@ export async function approveParticipant(sessionId, callerId, targetUserId) {
   target.status = "accepted";
   target.approvedBy = callerId;
   await session.save();
+  // Notifica all'utente: la sua richiesta è stata accettata.
+  await createNotification({
+    recipientId: targetUserId,
+    actorId: callerId,
+    type: "join_accepted",
+    targetKind: "session",
+    targetId: session._id,
+  });
   return session.populate(SESSION_POPULATE);
 }
 
@@ -228,6 +250,14 @@ export async function removeParticipant(sessionId, leaderId, targetUserId) {
   await session.save();
   await User.findByIdAndUpdate(targetUserId, {
     $pull: { sessionRoles: { groupId: session._id } },
+  });
+  // Notifica all'utente: è stato rimosso dalla sessione dal capogruppo.
+  await createNotification({
+    recipientId: targetUserId,
+    actorId: leaderId,
+    type: "removed",
+    targetKind: "session",
+    targetId: session._id,
   });
   return session.populate(SESSION_POPULATE);
 }

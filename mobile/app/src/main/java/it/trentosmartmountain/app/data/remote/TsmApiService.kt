@@ -551,6 +551,14 @@ interface TsmApiService {
   @POST("api/v1/users/me/notifications/read")
   suspend fun markNotificationsRead(): Response<MarkReadResponse>
 
+  /** Elimina una singola notifica (swipe-to-delete). */
+  @DELETE("api/v1/users/me/notifications/{id}")
+  suspend fun deleteNotification(@Path("id") id: String): Response<Unit>
+
+  /** Elimina TUTTE le notifiche dell'utente ("Elimina tutte"). */
+  @DELETE("api/v1/users/me/notifications")
+  suspend fun deleteAllNotifications(): Response<Unit>
+
   /**
    * Ricerca escursionisti per username (match parziale, case-insensitive).
    * Cuore del flusso "aggiungi amici": ritorna utenti + `isFollowedByMe`.

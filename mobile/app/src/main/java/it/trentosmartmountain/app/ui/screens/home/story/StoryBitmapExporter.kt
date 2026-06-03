@@ -322,7 +322,9 @@ object StoryBitmapExporter {
 }
 
 object StoryComposerExport {
-    const val QUALITY = 80
+    // Bump 80 → 92: 80 produceva macroblock visibili sui dettagli mappa/foto;
+    // 92 è il livello di referenza per la pubblicazione su feed social (≈ IG).
+    const val QUALITY = 92
     const val WIDTH = 1080
     const val HEIGHT = 1920
 }

@@ -409,7 +409,17 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
 
     companion object {
         const val VIDEO_MAX_BYTES = 3_500_000
-        const val STORY_IMAGE_MAX_SIDE = 1080
-        const val STORY_IMAGE_QUALITY = 75
+
+        // Lato massimo del media importato (prima dell'export con overlay).
+        // Bump 1080 → 1440: con display moderni (1080p+) il 1080 mostrava
+        // perdita di dettaglio già nel viewer; 1440 dà render nitido anche
+        // dopo lo scaling del canvas storia (1080×1920).
+        const val STORY_IMAGE_MAX_SIDE = 1440
+
+        // Qualità JPEG del media importato. Bump 75 → 90: il composer applica
+        // un secondo passaggio di compressione (StoryComposerExport.QUALITY)
+        // quando flatten-a la scena, quindi conviene partire con qualità
+        // alta per non accumulare artefatti su due encode consecutivi.
+        const val STORY_IMAGE_QUALITY = 90
     }
 }

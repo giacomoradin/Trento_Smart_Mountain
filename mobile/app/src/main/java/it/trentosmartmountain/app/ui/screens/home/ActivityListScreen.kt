@@ -569,6 +569,9 @@ private fun ActivityListItem(
                     color = Color.Gray,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+                // Riga metrica principale: km · tempo · +dislivello.
+                // Difficoltà spostata su riga 2 per evitare l'overflow che la nascondeva
+                // quando il dislivello era presente (causa apparente esclusione mutuale).
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "%.1f km".format(activity.distanceKm),
@@ -589,34 +592,68 @@ private fun ActivityListItem(
                             color = Color(0xFFFF9800),
                         )
                     }
-                    // Difficulty dots
-                    DifficultyIndicator(activity.difficultyLevel)
+                }
+                // Riga 2 (compatta): livello difficoltà con chip-label + dots — sempre
+                // visibile se il livello è noto, anche con dislivello presente.
+                if (!activity.difficultyLevel.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            "DIFF.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Gray,
+                            fontSize = 9.sp,
+                        )
+                        Text(
+                            activity.difficultyLevel ?: "",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = difficultyTint(activity.difficultyLevel),
+                            fontSize = 11.sp,
+                        )
+                        DifficultyIndicator(activity.difficultyLevel)
+                    }
                 }
             }
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Sync status
                 if (activity.isSynced) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = "Sincronizzato", tint = TsmPrimary, modifier = Modifier.size(16.dp))
                 } else {
                     Icon(Icons.Outlined.Sync, contentDescription = "Non sincronizzato", tint = Color.Gray, modifier = Modifier.size(16.dp))
                 }
-                // Condividi sul feed: solo per attività libere già sincronizzate
-                // (le sessioni di gruppo si pubblicano dal loro dettaglio, creator-only;
-                //  un'attività non ancora sincronizzata non ha id backend per lo share).
-                if (activity.sessionId == null && activity.remoteId != null) {
-                    IconButton(onClick = onShareClick, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            Icons.Outlined.Share,
-                            contentDescription = "Condividi sul feed",
-                            tint = TsmAccent,
-                            modifier = Modifier.size(16.dp),
-                        )
+                // Condividi sul feed: shortcut su TUTTE le attività sincronizzate
+                // (sia libere sia legate a sessione). Per le sessioni il dialog gestirà
+                // il caso "non sei il creator" condividendo l'attività personale.
+                if (activity.remoteId != null) {
+                    Surface(
+                        shape = CircleShape,
+                        color = TsmAccent.copy(alpha = 0.18f),
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clickable { onShareClick() },
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                Icons.Outlined.Share,
+                                contentDescription = "Condividi sul feed",
+                                tint = TsmAccent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+private fun difficultyTint(level: String?): Color = when (level) {
+    "T" -> Color(0xFF7CB342)
+    "E" -> Color(0xFF4DD0E1)
+    "EE" -> Color(0xFFFF9800)
+    "EEA" -> Color(0xFFFF5722)
+    else -> Color.Gray
 }
 
 @Composable

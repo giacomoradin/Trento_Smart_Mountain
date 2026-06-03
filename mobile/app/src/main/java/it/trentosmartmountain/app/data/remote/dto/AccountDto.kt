@@ -16,6 +16,10 @@ data class DeleteAccountRequest(
     @SerializedName("password") val password: String,
 )
 
+data class VerifyPasswordRequest(
+    @SerializedName("password") val password: String,
+)
+
 data class WeeklyGoals(
     @SerializedName("km") val km: Int,
     @SerializedName("elevM") val elevM: Int,

@@ -149,6 +149,7 @@ fun UserProfileScreen(
                 onUserClick = onUserClick,
                 onOpenFollowList = onOpenFollowList,
                 onOpenDetail = onOpenDetail,
+                onDeletePost = viewModel::removePost,
                 contentPadding = padding,
             )
         }
@@ -174,6 +175,7 @@ private fun ProfileContent(
     onUserClick: (userId: String) -> Unit = {},
     onOpenFollowList: (userId: String, type: FollowListType) -> Unit,
     onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
+    onDeletePost: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     contentPadding: PaddingValues,
 ) {
     val listState = rememberLazyListState()
@@ -228,6 +230,12 @@ private fun ProfileContent(
                         onCommentClick = { onCommentClick(item.id, item.kind) },
                         onUserClick = onUserClick,
                         onOpenDetail = { onOpenDetail(item) },
+                        currentUserId = if (state.isSelf) state.user?._id else null,
+                        onDeletePost = if (state.isSelf) {
+                            { onDeletePost(item) }
+                        } else {
+                            null
+                        },
                     )
                 }
             }

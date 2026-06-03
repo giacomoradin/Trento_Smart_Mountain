@@ -178,6 +178,15 @@ export async function patchEmergency(emergencyId, userId, action, extras = {}) {
   switch (action) {
     case "cancel": {
       if (emergency.senderUserId.toString() !== userId.toString()) throw new Error("FORBIDDEN");
+      if (extras.reason === "MISTAKE") {
+        await emergency.populate([
+          { path: "senderUserId", select: "username email" },
+          { path: "sessionId", select: "routeDetails.name inviteCode status" },
+        ]);
+        const deleted = emergency.toObject();
+        await Emergency.findByIdAndDelete(emergency._id);
+        return deleted;
+      }
       emergency.status = "CANCELLED_BY_SENDER";
       emergency.cancelledAt = new Date();
       emergency.cancelledBy = userId;

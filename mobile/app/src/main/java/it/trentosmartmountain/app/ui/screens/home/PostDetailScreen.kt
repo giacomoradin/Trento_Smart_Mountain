@@ -26,8 +26,14 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,7 +56,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.activity.ComponentActivity
+import android.widget.Toast
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.remote.JwtDecoder
+import it.trentosmartmountain.app.viewmodel.SocialFeedViewModel
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -60,6 +72,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
 import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
+import it.trentosmartmountain.app.ui.screens.home.elevationRangeFromProfile
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.theme.difficultyColor
 import it.trentosmartmountain.app.ui.util.RelativeTime
@@ -70,8 +83,8 @@ import kotlin.math.roundToInt
 /**
  * Dettaglio "social" di un post (Activity/HikeSession condivisa).
  *
- * Riusa i dati già presenti nel [FeedItem] del feed — niente fetch — e li
- * rilegge in chiave più ricca/sociale: autore in evidenza, Hero Pager (Mappa + Altimetria),
+ * Parte dal [FeedItem] del feed e arricchisce mappa/altimetria se necessario.
+ * Hero Pager (Mappa + swipe altimetria come in Le mie attività),
  * griglia metriche completa, partecipanti, e le azioni like/commento inline.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,10 +95,37 @@ fun PostDetailScreen(
     onUserClick: (userId: String) -> Unit = {},
     viewModel: PostDetailViewModel = viewModel(),
 ) {
+    val context = LocalContext.current
+    val socialFeedViewModel: SocialFeedViewModel = viewModel(
+        viewModelStoreOwner = context as ComponentActivity,
+    )
+    val feedState by socialFeedViewModel.state.collectAsStateWithLifecycle()
+    val currentUserId = remember {
+        JwtDecoder.userIdFrom(
+            (context.applicationContext as TsmApplication).tokenStorage.getToken().orEmpty(),
+        )
+    }
+
     LaunchedEffect(item.id) { viewModel.init(item) }
     val current by viewModel.item.collectAsStateWithLifecycle()
     val post = current ?: item
     var commentsTarget by remember { mutableStateOf<CommentsTarget?>(null) }
+    val isOwnPost = !currentUserId.isNullOrBlank() && post.user?._id == currentUserId
+    var showPostMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    LaunchedEffect(feedState.deleteSuccess) {
+        feedState.deleteSuccess?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            socialFeedViewModel.clearDeleteMessages()
+        }
+    }
+    LaunchedEffect(feedState.deleteError) {
+        feedState.deleteError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            socialFeedViewModel.clearDeleteMessages()
+        }
+    }
 
     val haptic = LocalHapticFeedback.current
     val likeScale = remember { Animatable(1f) }
@@ -96,6 +136,33 @@ fun PostDetailScreen(
             likeScale.animateTo(1f)
         }
         likedPrev = post.likedByMe
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Rimuovere dal feed?", color = TsmColors.TextPrimary) },
+            text = {
+                Text(
+                    "Il post non sarà più visibile nel feed. L'attività o la sessione restano sul tuo account.",
+                    color = TsmColors.TextSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        socialFeedViewModel.removeFeedPost(post, onRemoved = onBack)
+                    },
+                ) { Text("Rimuovi", color = TsmColors.Danger) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Annulla", color = TsmColors.TextSecondary)
+                }
+            },
+            containerColor = TsmColors.Card,
+        )
     }
 
     Scaffold(
@@ -112,6 +179,30 @@ fun PostDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = TsmColors.TextPrimary)
+                    }
+                },
+                actions = {
+                    if (isOwnPost) {
+                        Box {
+                            IconButton(onClick = { showPostMenu = true }) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "Opzioni post", tint = TsmColors.TextPrimary)
+                            }
+                            DropdownMenu(
+                                expanded = showPostMenu,
+                                onDismissRequest = { showPostMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Rimuovi dal feed", color = TsmColors.Danger) },
+                                    onClick = {
+                                        showPostMenu = false
+                                        showDeleteConfirm = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Outlined.Delete, null, tint = TsmColors.Danger)
+                                    },
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = TsmColors.FeedBackground),
@@ -148,13 +239,22 @@ fun PostDetailScreen(
 
             // ── Hero: traccia GPX (mappa) + altimetria come schede swipe ──
             val route = post.routePolyline
-            val hasRoute = route != null && route.size >= 2
             val profile = post.elevationProfile
-            val hasProfile = profile != null && profile.size >= 2
+            val distKm = (post.distanceMeters ?: 0.0) / 1000.0
+            val (elevMin, elevMax) = remember(profile) {
+                if (profile != null && profile.size >= 2) {
+                    elevationRangeFromProfile(profile)
+                } else {
+                    0.0 to 0.0
+                }
+            }
 
             TsmRouteElevationPager(
                 routePoints = route,
                 elevationProfile = profile,
+                distanceKm = distKm.takeIf { it > 0 },
+                elevationMinM = elevMin,
+                elevationMaxM = elevMax,
                 modifier = Modifier.fillMaxWidth(),
                 height = 240.dp,
                 backgroundBrush = Brush.verticalGradient(listOf(TsmColors.HeroTop, TsmColors.HeroBottom)),
@@ -201,25 +301,6 @@ fun PostDetailScreen(
                         StatCell("PASSO", formatPace(post.distanceMeters, post.movingSeconds), TsmColors.TextPrimary, Modifier.weight(1f))
                         StatCell("VEL. MEDIA", formatSpeed(post.distanceMeters, post.movingSeconds), Color(0xFFFF9800), Modifier.weight(1f))
                         StatCell("PUNTI", post.finalPoints?.let { "$it" } ?: "—", TsmColors.Gold, Modifier.weight(1f))
-                    }
-                }
-            }
-
-            // ── Profilo altimetrico (se la route era l'hero) ──
-            if (hasRoute && hasProfile) {
-                Spacer(Modifier.height(16.dp))
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    color = TsmColors.Card,
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("PROFILO ALTIMETRICO", color = TsmColors.TextSecondary, style = MaterialTheme.typography.labelSmall, letterSpacing = 1.sp)
-                            Text("+${post.elevationGainM ?: 0} m D+", color = TsmColors.Cyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        ElevationSparkline(profile = profile!!, modifier = Modifier.fillMaxWidth().height(90.dp), lineColor = TsmColors.Cyan)
                     }
                 }
             }

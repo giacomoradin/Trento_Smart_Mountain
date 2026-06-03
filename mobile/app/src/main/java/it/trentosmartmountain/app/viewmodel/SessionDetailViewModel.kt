@@ -60,6 +60,8 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
     data class UiState(
         val session: SessionResponse? = null,
         val isLoading: Boolean = false,
+        /** Pull-to-refresh: lista già visibile, solo indicatore in cima. */
+        val isRefreshing: Boolean = false,
         val isSaving: Boolean = false,
         val editMode: Boolean = false,
         val checklist: List<ChecklistItem> = emptyList(),
@@ -138,9 +140,15 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
     fun removeParticipant(targetUserId: String) =
         participantAction("Impossibile rimuovere il partecipante.", { api.removeParticipant(it, targetUserId) }, targetUserId)
 
-    fun loadSession(sessionId: String) {
+    fun loadSession(sessionId: String, manualRefresh: Boolean = false) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update {
+                when {
+                    manualRefresh && it.session != null ->
+                        it.copy(isRefreshing = true, error = null)
+                    else -> it.copy(isLoading = true, error = null)
+                }
+            }
             try {
                 val response = api.getSessionById(sessionId)
                 if (response.isSuccessful) {
@@ -148,18 +156,25 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
                     _uiState.update {
                         it.copy(
                             isLoading = false,
+                            isRefreshing = false,
                             session = session,
                         )
                     }
                     loadMeteo(session)
                     syncChecklist(session, regenerate = false)
                 } else {
-                    _uiState.update { it.copy(isLoading = false, error = "Sessione non trovata.") }
+                    _uiState.update {
+                        it.copy(isLoading = false, isRefreshing = false, error = "Sessione non trovata.")
+                    }
                 }
             } catch (e: IOException) {
-                _uiState.update { it.copy(isLoading = false, error = "Nessuna connessione.") }
+                _uiState.update {
+                    it.copy(isLoading = false, isRefreshing = false, error = "Nessuna connessione.")
+                }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
+                _uiState.update {
+                    it.copy(isLoading = false, isRefreshing = false, error = e.message)
+                }
             }
         }
     }

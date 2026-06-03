@@ -33,6 +33,7 @@ import it.trentosmartmountain.app.data.remote.dto.CreateSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreditHistoryResponse
 import it.trentosmartmountain.app.data.remote.dto.CreditsResponse
 import it.trentosmartmountain.app.data.remote.dto.DeleteAccountRequest
+import it.trentosmartmountain.app.data.remote.dto.VerifyPasswordRequest
 import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
 import it.trentosmartmountain.app.data.remote.dto.Experience
 import it.trentosmartmountain.app.data.remote.dto.ExperienceResponse
@@ -307,6 +308,9 @@ interface TsmApiService {
   @GET("api/v1/activities")
   suspend fun getMyActivities(): Response<List<ActivityResponse>>
 
+  @GET("api/v1/activities/{id}")
+  suspend fun getActivityById(@Path("id") id: String): Response<ActivityResponse>
+
   /**
    * Statistiche aggregate annuali/mensili per l'utente loggato (sessioni completate
    * + attivitÔö£├í libere). L'endpoint Ôö£┬┐ esposto da hikeSessionRoutes (non activityRoutes)
@@ -417,6 +421,9 @@ interface TsmApiService {
 
   @POST("api/v1/users/change-password")
   suspend fun changePassword(@Body body: ChangePasswordRequest): Response<ApiMessageBody>
+
+  @POST("api/v1/users/me/verify-password")
+  suspend fun verifyPassword(@Body body: VerifyPasswordRequest): Response<ApiMessageBody>
 
   @retrofit2.http.HTTP(method = "DELETE", path = "api/v1/users/me", hasBody = true)
   @DELETE("api/v1/users/me")

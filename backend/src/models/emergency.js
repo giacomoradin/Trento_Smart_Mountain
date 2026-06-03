@@ -86,7 +86,8 @@ const emergencySchema = new Schema(
 );
 
 // TTL Index: Eliminazione automatica per evitare saturazione DB (Sprint 3 proattivo).
-// 1. Emergenze risolte (DISMISSED o CANCELLED) rimosse dopo 3 giorni dall'ultimo aggiornamento.
+// MISTAKE: cancellazione immediata in emergencyService (hard delete, nessun TTL).
+// 1. Emergenze risolte (DISMISSED o CANCELLED_BY_SENDER con RESOLVED_SELF) rimosse dopo 3 giorni dall'ultimo aggiornamento.
 emergencySchema.index(
   { updatedAt: 1 },
   {

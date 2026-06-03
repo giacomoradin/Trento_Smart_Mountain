@@ -50,6 +50,17 @@ data class StoryOverlay(
     @SerializedName("routePolyline") val routePolyline: List<RoutePoint>? = null,
 )
 
+/**
+ * Contesto di apertura dello Story Viewer: coda di autori con storie (ordine
+ * della social-row) e indice di partenza, per navigazione stile Instagram.
+ */
+data class StoryViewerLaunchContext(
+    val userIds: List<String>,
+    val startIndex: Int = 0,
+) {
+    val startUserId: String? get() = userIds.getOrNull(startIndex.coerceIn(userIds.indices))
+}
+
 /** Body di POST /api/v1/stories. */
 data class CreateStoryRequest(
     @SerializedName("type") val type: String,

@@ -37,8 +37,19 @@ const storyOverlaySchema = new Schema(
     movingSeconds: { type: Number, default: null },
     routePolyline: { type: [overlayPointSchema], default: undefined },
     editorDecor: {
+      routeOverlayKind: {
+        type: String,
+        enum: ["trace", "map_widget", "map_scene"],
+        default: null,
+      },
       routeColor: { type: String, default: null },
       routeTransform: {
+        offsetX: { type: Number, default: 0 },
+        offsetY: { type: Number, default: 0 },
+        scale: { type: Number, default: 1 },
+        rotationDeg: { type: Number, default: 0 },
+      },
+      mapWidgetTransform: {
         offsetX: { type: Number, default: 0 },
         offsetY: { type: Number, default: 0 },
         scale: { type: Number, default: 1 },

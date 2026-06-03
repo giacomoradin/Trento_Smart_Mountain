@@ -341,8 +341,10 @@ export const createStorySchema = Joi.object({
     movingSeconds: Joi.number().min(0).allow(null),
     routePolyline: Joi.array().items(storyOverlayPointSchema).max(500).optional(),
     editorDecor: Joi.object({
+      routeOverlayKind: Joi.string().valid("trace", "map_widget", "map_scene").optional(),
       routeColor: hexColorField.optional(),
       routeTransform: storyStickerTransformSchema.optional(),
+      mapWidgetTransform: storyStickerTransformSchema.optional(),
       floatingText: Joi.string().trim().max(80).allow("", null).optional(),
       textColor: hexColorField.optional(),
       textTransform: storyStickerTransformSchema.optional(),

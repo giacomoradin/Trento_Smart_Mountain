@@ -33,7 +33,6 @@ import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Map
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -52,6 +51,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
@@ -668,6 +668,7 @@ private fun SessionPlanTab(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SessionJoinTab(
     onNavigateToDetail: (sessionId: String) -> Unit = {},
@@ -756,10 +757,12 @@ private fun SessionJoinTab(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // CODE INPUT + JOIN
+        // CODE INPUT + JOIN (fisso in alto; il pull-to-refresh parte sotto)
         SectionCard {
             SectionLabel(stringResource(R.string.session_join_code_label))
             Spacer(modifier = Modifier.height(8.dp))
@@ -817,14 +820,27 @@ private fun SessionJoinTab(
             }
         }
 
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoadingSessions && uiState.sessions.isNotEmpty(),
+            onRefresh = { viewModel.loadSessions(preserveJoinInfo = false) },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
         // SESSION LIST
         when {
-            uiState.isLoadingSessions -> {
+            // Spinner centrale solo al caricamento automatico (tab aperta / lista ancora vuota).
+            // Con pull-to-refresh la lista resta visibile e usa solo l'indicatore del PullToRefreshBox.
+            uiState.isLoadingSessions && uiState.sessions.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = TsmAccent)
                 }
             }
-            uiState.generalError != null -> {
+            uiState.generalError != null && uiState.sessions.isEmpty() -> {
                 Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = TsmSurface) {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(uiState.generalError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
@@ -850,16 +866,16 @@ private fun SessionJoinTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(stringResource(R.string.session_join_sessions_header), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp), color = Color.Gray)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(uiState.sessions.size.toString(), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = TsmAccent)
-                        IconButton(
-                            onClick = { viewModel.loadSessions(preserveJoinInfo = false) },
-                            enabled = !uiState.isLoadingSessions,
-                        ) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "Aggiorna lista", tint = TsmAccent)
-                        }
-                    }
+                    Text(
+                        stringResource(R.string.session_join_sessions_header),
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                        color = Color.Gray,
+                    )
+                    Text(
+                        uiState.sessions.size.toString(),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TsmAccent,
+                    )
                 }
                 uiState.sessions.forEach { session ->
                     val isToday = SessionDateFormats.isTodayApi(session.meetingDate)
@@ -898,6 +914,8 @@ private fun SessionJoinTab(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
     }
 }
 

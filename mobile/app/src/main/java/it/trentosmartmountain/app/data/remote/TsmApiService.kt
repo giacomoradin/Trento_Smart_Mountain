@@ -3,6 +3,9 @@ package it.trentosmartmountain.app.data.remote
 import it.trentosmartmountain.app.data.remote.dto.AccountUpdateRequest
 import it.trentosmartmountain.app.data.remote.dto.AccountUpdateResponse
 import it.trentosmartmountain.app.data.remote.dto.ActivityResponse
+import it.trentosmartmountain.app.data.remote.dto.CreateStoryRequest
+import it.trentosmartmountain.app.data.remote.dto.StoriesResponse
+import it.trentosmartmountain.app.data.remote.dto.StoryItem
 import it.trentosmartmountain.app.data.remote.dto.ApiItemResponse
 import it.trentosmartmountain.app.data.remote.dto.ApiListResponse
 import it.trentosmartmountain.app.data.remote.dto.ActivityStatsResponse
@@ -213,6 +216,38 @@ interface TsmApiService {
     @Path("id") id: String,
     @Body body: CompleteSessionRequest,
   ): Response<ApiMessageBody>
+
+  // Gestione partecipanti (Fase A): approva/rifiuta richieste pending, rimuovi+banna.
+  @POST("api/v1/sessions/{id}/participants/{userId}/approve")
+  suspend fun approveParticipant(
+    @Path("id") id: String,
+    @Path("userId") userId: String,
+  ): Response<SessionResponse>
+
+  @POST("api/v1/sessions/{id}/participants/{userId}/reject")
+  suspend fun rejectParticipant(
+    @Path("id") id: String,
+    @Path("userId") userId: String,
+  ): Response<SessionResponse>
+
+  @DELETE("api/v1/sessions/{id}/participants/{userId}")
+  suspend fun removeParticipant(
+    @Path("id") id: String,
+    @Path("userId") userId: String,
+  ): Response<SessionResponse>
+
+  // ── Stories (Fase B/C) ──
+  @POST("api/v1/stories")
+  suspend fun createStory(@Body body: CreateStoryRequest): Response<StoryItem>
+
+  @GET("api/v1/stories/user/{userId}")
+  suspend fun getStoriesByUser(@Path("userId") userId: String): Response<StoriesResponse>
+
+  @POST("api/v1/stories/{id}/view")
+  suspend fun markStoryViewed(@Path("id") id: String): Response<ApiMessageBody>
+
+  @DELETE("api/v1/stories/{id}")
+  suspend fun deleteStory(@Path("id") id: String): Response<ApiMessageBody>
 
   // ── Checklist dinamica (US-7) ──
 

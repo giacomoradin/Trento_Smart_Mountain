@@ -45,9 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
-import it.trentosmartmountain.app.ui.components.TsmRouteMapPreview
+import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
 import it.trentosmartmountain.app.ui.theme.TsmColors
-import it.trentosmartmountain.app.ui.theme.difficultyColor
 import it.trentosmartmountain.app.ui.util.RelativeTime
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -68,16 +67,11 @@ private val Divider = TsmColors.Divider
  * Anatomia (dall'alto):
  *  1. **Header atleta**: avatar + nome + meta ("3 h fa · Trail") + chip kind.
  *  2. **Titolo** + caption opzionale.
- *  3. **Hero visivo**:
- *       - se l'item ha una `routePolyline` → *route signature* ([RouteTracePreview])
- *         con chip difficoltà in overlay;
- *       - altrimenti, se ha un `elevationProfile` → quello diventa l'hero;
- *       - altrimenti nessun hero (card compatta).
+ *  3. **Hero visivo (Swipeable)**:
+ *       - Pager tra **Mappa Tracciato** e **Profilo Altimetrico**.
  *  4. **Stat strip**: Distanza · Dislivello · Tempo · Passo (4 celle).
- *  5. **Banda altimetrica** sottile (solo se la route era già l'hero e c'è un
- *     profilo: evita di duplicare l'altimetria quando è già l'hero).
- *  6. **Partecipanti** (solo sessioni di gruppo).
- *  7. **Action bar**: like (ottimistico) + commenti + badge punti.
+ *  5. **Partecipanti** (solo sessioni di gruppo).
+ *  6. **Action bar**: like (ottimistico) + commenti + badge punti.
  *
  * La firma resta invariata rispetto alla versione precedente → nessun call site
  * da toccare (HomeSocialScreen, UserProfileScreen, dettagli).
@@ -92,9 +86,7 @@ fun FeedCard(
     modifier: Modifier = Modifier,
 ) {
     val route = item.routePolyline
-    val hasRoute = route != null && route.size >= 2
     val profile = item.elevationProfile
-    val hasProfile = profile != null && profile.size >= 2
     val haptic = LocalHapticFeedback.current
 
     // "Pop" del cuore quando si AGGIUNGE il like (transizione false→true),
@@ -112,11 +104,17 @@ fun FeedCard(
     Card(
         onClick = onOpenDetail,
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.07f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
     ) {
-        Column {
+        Column(
+            // Materiale glass: gradiente sottile dentro la card bordata.
+            modifier = Modifier.background(
+                Brush.verticalGradient(listOf(TsmColors.CardElevated, TsmColors.Card)),
+            ),
+        ) {
             // ── 1. Header atleta ──────────────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -177,12 +175,17 @@ fun FeedCard(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── 3. Hero visivo ────────────────────────────────────────────────
-            when {
-                hasRoute -> RouteHero(item = item, route = route!!)
-                hasProfile -> ProfileHero(profile = profile!!)
-                else -> Unit
-            }
+            // ── 3. Hero visivo: traccia GPX (mappa) + altimetria come schede swipe ──
+            TsmRouteElevationPager(
+                routePoints = route,
+                elevationProfile = profile,
+                modifier = Modifier.fillMaxWidth(),
+                height = 176.dp,
+                backgroundBrush = Brush.verticalGradient(listOf(HeroTop, HeroBottom)),
+                elevationLineColor = AccentCyan,
+                activeDotColor = AccentCyan,
+                difficultyLevel = item.difficultyLevel,
+            )
 
             // ── 4. Stat strip ─────────────────────────────────────────────────
             Row(
@@ -199,27 +202,6 @@ fun FeedCard(
                     formatPace(item.distanceMeters, item.movingSeconds),
                     Modifier.weight(1f),
                 )
-            }
-
-            // ── 5. Banda altimetrica (solo se la route era l'hero) ────────────
-            if (hasRoute && hasProfile) {
-                Column(modifier = Modifier.padding(horizontal = 14.dp)) {
-                    Text(
-                        "ALTIMETRIA",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.labelSmall,
-                        letterSpacing = 1.sp,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    ElevationSparkline(
-                        profile = profile!!,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp),
-                        lineColor = AccentCyan,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                }
             }
 
             // ── 6. Partecipanti (solo sessioni) ───────────────────────────────
@@ -242,6 +224,7 @@ fun FeedCard(
                                 avatarUrl = p.avatarUrl,
                                 fallbackName = p.username,
                                 size = 24.dp,
+                                modifier = Modifier.clickable(enabled = p._id.isNotBlank()) { onUserClick(p._id) }
                             )
                         }
                         if (participants.size > 4) {
@@ -315,57 +298,6 @@ fun FeedCard(
     }
 }
 
-/** Hero con la route signature + chip difficoltà in overlay. */
-@Composable
-private fun RouteHero(item: FeedItem, route: List<it.trentosmartmountain.app.data.remote.dto.RoutePoint>) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(176.dp)
-            .background(Brush.verticalGradient(listOf(HeroTop, HeroBottom))),
-    ) {
-        TsmRouteMapPreview(
-            points = route,
-            modifier = Modifier.fillMaxWidth().height(176.dp),
-        )
-        item.difficultyLevel?.let { diff ->
-            DifficultyChip(
-                level = diff,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp),
-            )
-        }
-    }
-}
-
-/** Hero alternativo quando manca la route: il profilo altimetrico a tutta larghezza. */
-@Composable
-private fun ProfileHero(profile: List<Double>) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(132.dp)
-            .background(Brush.verticalGradient(listOf(HeroTop, HeroBottom))),
-    ) {
-        Text(
-            "ALTIMETRIA",
-            color = TextSecondary,
-            style = MaterialTheme.typography.labelSmall,
-            letterSpacing = 1.sp,
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
-        )
-        ElevationSparkline(
-            profile = profile,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(132.dp)
-                .padding(top = 24.dp),
-            lineColor = AccentCyan,
-        )
-    }
-}
-
 @Composable
 private fun KindChip(kind: String) {
     val (label, color) = when (kind) {
@@ -376,24 +308,6 @@ private fun KindChip(kind: String) {
         Text(
             text = label,
             color = color,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-        )
-    }
-}
-
-@Composable
-private fun DifficultyChip(level: String, modifier: Modifier = Modifier) {
-    val color = difficultyColor(level)
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = color.copy(alpha = 0.9f),
-        modifier = modifier,
-    ) {
-        Text(
-            text = level,
-            color = Color.White,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),

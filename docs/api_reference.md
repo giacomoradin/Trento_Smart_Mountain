@@ -69,6 +69,30 @@ Tutti gli endpoint richiedono JWT. Spec completa auto-generata in `swagger-outpu
 | PATCH | `/api/v1/board/:id` | Modifica (autore/admin) |
 | DELETE | `/api/v1/board/:id` | Elimina (autore/admin) |
 
+### Sessione — approvazione partecipanti (giugno 2026)
+> `joinSession` ora crea una richiesta **`pending`** (non più ingresso immediato). Il sub-doc `participants[]` ha `status` (`pending`/`accepted`) + `approvedBy`; la sessione ha `removedUserIds[]` (ban locale).
+
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| POST | `/api/v1/sessions/:id/participants/:userId/approve` | Approva un pending (capogruppo **o** un partecipante già accettato) |
+| POST | `/api/v1/sessions/:id/participants/:userId/reject` | Rifiuta/rimuove un pending (capogruppo o partecipante accettato) |
+| DELETE | `/api/v1/sessions/:id/participants/:userId` | Rimuove **definitivamente** + ban (solo capogruppo) |
+
+Errori: `403 FORBIDDEN_NOT_MEMBER`/`FORBIDDEN_NOT_LEADER`, `404 PARTICIPANT_NOT_FOUND`, `409 PARTICIPANT_NOT_PENDING`/`PARTICIPANT_BANNED`, `400 CANNOT_REMOVE_CREATOR`.
+
+### Stories (`/api/v1/stories`) — giugno 2026
+> Storie effimere (TTL **24h**). `type`: `planned_session` (pre-hike + `inviteCode` per "Unisciti") o `activity` (preview post-hike). Media foto/video **Base64** capped (no object storage). Auth + rate limit + Joi `createStorySchema`.
+
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| POST | `/api/v1/stories` | Crea storia (`type`, `sessionId`/`activityId`, `caption`, `media[]`, `overlay`) — 413 se media troppo grande, 403 se ref non autorizzato |
+| GET | `/api/v1/stories/user/:userId` | Storie non scadute di un autore (gate visibilità) + `viewedByMe` |
+| GET | `/api/v1/stories/:id` | Singola storia (deep-link) |
+| POST | `/api/v1/stories/:id/view` | Marca come vista (idempotente) |
+| DELETE | `/api/v1/stories/:id` | Elimina (solo autore) |
+
+> Avatar Row: `getSocialRowForUser` espone `status: "story"` + `hasUnviewedStory` quando l'autore ha ≥1 Story non scaduta; il viewer mobile si apre **per autore**.
+
 ---
 
 ## 1. Convenzioni generali

@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
@@ -53,11 +54,10 @@ fun AuthEntryScreen(
     onRegisterRifugioClick: () -> Unit,
     onLoginClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(TsmBackground),
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Materiale premium: aurora + particelle dietro al contenuto (effetto brand).
+        TsmAuroraBackground(modifier = Modifier.fillMaxSize())
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -65,17 +65,10 @@ fun AuthEntryScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Surface(
-                modifier = Modifier.size(120.dp),
-                shape = RoundedCornerShape(20.dp),
-                color = TsmSurface,
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    TsmMountainLogo(iconSize = 72.dp)
-                }
-            }
+            // Logo badge brandizzato direttamente sull'aurora (nessuna card).
+            TsmMountainLogo(iconSize = 116.dp)
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Text(
                 text = "TSM",
@@ -156,36 +149,12 @@ fun AuthEntryScreen(
     }
 }
 
-/** Logo montagna stilizzato (Canvas) riusato in auth e login. */
+/** Logo TSM (vector drawable brandizzato) riusato in auth e login. */
 @Composable
 fun TsmMountainLogo(iconSize: Dp = 48.dp) {
-    Box(modifier = Modifier.size(iconSize)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val strokePx = (3f / 48f) * w
-            val stroke = Stroke(width = strokePx, cap = StrokeCap.Round, join = StrokeJoin.Round)
-
-            val mountainPath = Path().apply {
-                moveTo(w * 0.08f, h * 0.78f)
-                lineTo(w * 0.50f, h * 0.22f)
-                lineTo(w * 0.92f, h * 0.78f)
-            }
-            drawPath(mountainPath, color = TsmPrimary, style = stroke)
-
-            drawLine(
-                color = TsmPrimary.copy(alpha = 0.35f),
-                start = Offset(w * 0.05f, h * 0.78f),
-                end = Offset(w * 0.95f, h * 0.78f),
-                strokeWidth = strokePx * 0.7f,
-                cap = StrokeCap.Round,
-            )
-
-            drawCircle(
-                color = TsmAccent,
-                radius = w * 0.07f,
-                center = Offset(w * 0.63f, h * 0.28f),
-            )
-        }
-    }
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(id = R.drawable.tsm_logo),
+        contentDescription = "Logo TSM",
+        modifier = Modifier.size(iconSize),
+    )
 }

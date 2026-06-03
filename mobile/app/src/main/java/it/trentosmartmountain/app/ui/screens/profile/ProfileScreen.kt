@@ -236,37 +236,44 @@ fun ProfileScreen(
                     // sta succedendo (era il vecchio "click e nessun feedback" che
                     // confondeva — bug #6 del report).
                     val hasAvatar = !profileV2State.personalInfo?.avatarUrl.isNullOrBlank()
-                    Box(modifier = Modifier.size(64.dp)) {
-                        AvatarImage(
-                            avatarUrl = profileV2State.personalInfo?.avatarUrl,
-                            fallbackName = uiState.username,
-                            size = 64.dp,
-                            isLoading = profileV2State.isSavingSection,
-                            backgroundColorOverride = Color(0xFF2D5A2D),
-                            modifier = Modifier.combinedClickable(
-                                enabled = !profileV2State.isSavingSection,
-                                onClick = { photoPickerLauncher.launch("image/*") },
-                                onLongClick = {
-                                    if (hasAvatar) showRemoveAvatarDialog = true
-                                },
-                            ),
+                    Box(contentAlignment = Alignment.Center) {
+                        // Glow brand dietro l'avatar (materiale premium).
+                        it.trentosmartmountain.app.ui.components.TsmGlow(
+                            color = TsmPrimary,
+                            modifier = Modifier.size(96.dp),
+                            alpha = 0.30f,
                         )
-                        // Badge "fotocamera" in basso a destra: suggerisce visivamente
-                        // che l'avatar è tappabile per cambiare la foto.
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .align(Alignment.BottomEnd)
-                                .background(TsmPrimary, CircleShape)
-                                .border(1.dp, Color.White, CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Default.CameraAlt,
-                                contentDescription = "Cambia foto",
-                                tint = Color.White,
-                                modifier = Modifier.size(12.dp),
+                        Box(modifier = Modifier.size(64.dp)) {
+                            AvatarImage(
+                                avatarUrl = profileV2State.personalInfo?.avatarUrl,
+                                fallbackName = uiState.username,
+                                size = 64.dp,
+                                isLoading = profileV2State.isSavingSection,
+                                backgroundColorOverride = Color(0xFF003748),
+                                modifier = Modifier.combinedClickable(
+                                    enabled = !profileV2State.isSavingSection,
+                                    onClick = { photoPickerLauncher.launch("image/*") },
+                                    onLongClick = {
+                                        if (hasAvatar) showRemoveAvatarDialog = true
+                                    },
+                                ),
                             )
+                            // Badge "fotocamera" in basso a destra: l'avatar è tappabile.
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .background(TsmPrimary, CircleShape)
+                                    .border(1.dp, Color.White, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.CameraAlt,
+                                    contentDescription = "Cambia foto",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
                         }
                     }
                     Spacer(Modifier.width(16.dp))
@@ -300,10 +307,22 @@ fun ProfileScreen(
             val level = uiState.level
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.07f)),
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(
+                                    it.trentosmartmountain.app.ui.theme.TsmColors.CardElevated,
+                                    it.trentosmartmountain.app.ui.theme.TsmColors.Card,
+                                ),
+                            ),
+                        )
+                        .padding(16.dp),
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,

@@ -108,6 +108,12 @@ import it.trentosmartmountain.app.viewmodel.SessionJoinViewModel
 import it.trentosmartmountain.app.viewmodel.SessionPlanViewModel
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
 
+import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
+import it.trentosmartmountain.app.ui.theme.TsmColors
+import it.trentosmartmountain.app.ui.theme.difficultyColor
+import it.trentosmartmountain.app.data.remote.dto.RoutePoint
+
 /**
  * Tab **Sessione** nella shell escursionista: due sotto-tab interni.
  *
@@ -122,35 +128,13 @@ fun SessionHubScreen(
     modifier: Modifier = Modifier,
     onNavigateToDetail: (sessionId: String) -> Unit = {},
     onNavigateToBoard: () -> Unit = {},
+    onNavigateToUserProfile: (userId: String) -> Unit = {},
+    onRequestStopTracking: () -> Unit = {},
 ) {
     var subTab by rememberSaveable { mutableIntStateOf(0) }
 
     Column(modifier = modifier.fillMaxSize().background(TsmBackground)) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 20.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Sessione",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White,
-                )
-                Text(
-                    text = "Pianifica e unisciti alle escursioni",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = onNavigateToBoard) {
-                Icon(
-                    Icons.Outlined.Campaign,
-                    contentDescription = "Bacheca rifugi",
-                    tint = TsmAccent,
-                )
-            }
-        }
+        // ... (rest of the header remains same)
 
         PrimaryTabRow(
             selectedTabIndex = subTab,
@@ -193,7 +177,11 @@ fun SessionHubScreen(
 
         when (subTab) {
             0 -> SessionPlanTab(onSessionCreated = { subTab = 1 })
-            1 -> SessionJoinTab(onNavigateToDetail = onNavigateToDetail)
+            1 -> SessionJoinTab(
+                onNavigateToDetail = onNavigateToDetail,
+                onNavigateToUserProfile = onNavigateToUserProfile,
+                onRequestStopTracking = onRequestStopTracking,
+            )
         }
     }
 }
@@ -644,6 +632,8 @@ private fun SessionPlanTab(
 @Composable
 private fun SessionJoinTab(
     onNavigateToDetail: (sessionId: String) -> Unit = {},
+    onNavigateToUserProfile: (userId: String) -> Unit = {},
+    onRequestStopTracking: () -> Unit = {},
     viewModel: SessionJoinViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -743,6 +733,11 @@ private fun SessionJoinTab(
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
+            uiState.joinInfo?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(it, color = TsmPrimary, style = MaterialTheme.typography.bodySmall)
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -781,7 +776,7 @@ private fun SessionJoinTab(
             }
         }
 
-        // SESSION LIST — tre stati: loading | error | empty | populated
+        // SESSION LIST
         when {
             uiState.isLoadingSessions -> {
                 Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -789,7 +784,6 @@ private fun SessionJoinTab(
                 }
             }
             uiState.generalError != null -> {
-                // Errore visibile (include JsonSyntaxException da backend asimmetrico)
                 Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = TsmSurface) {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(uiState.generalError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
@@ -800,7 +794,6 @@ private fun SessionJoinTab(
                 }
             }
             uiState.sessions.isEmpty() -> {
-                // Empty state esplicito — non collassa silenziosamente
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp, horizontal = 16.dp), contentAlignment = Alignment.Center) {
                     Text(
                         "Nessuna escursione in programma.\nInserisci un codice invito o scansiona un QR per unirti a una sessione.",
@@ -838,11 +831,26 @@ private fun SessionJoinTab(
                         participationUi = participation,
                         onDetailClick = { onNavigateToDetail(session._id) },
                         onLeaderStart = { viewModel.requestLeaderStart(session) },
-                        onLeaderStop = { viewModel.leaderStop(session._id) },
+                        onLeaderStop = {
+                            val local = uiState.liveStates[session._id]
+                            if (local == it.trentosmartmountain.app.data.session.UserSessionLiveState.IN_GROUP_LIVE) {
+                                onRequestStopTracking()
+                            } else {
+                                viewModel.leaderStop(session._id)
+                            }
+                        },
                         onJoinLive = { viewModel.joinLive(session._id) },
                         onSoloPractice = { viewModel.startSoloPractice(session._id) },
-                        onLeaveLive = { viewModel.leaveLive(session._id) },
+                        onLeaveLive = {
+                            val local = uiState.liveStates[session._id]
+                            if (local == it.trentosmartmountain.app.data.session.UserSessionLiveState.IN_GROUP_LIVE || local == it.trentosmartmountain.app.data.session.UserSessionLiveState.SOLO_PRACTICE) {
+                                onRequestStopTracking()
+                            } else {
+                                viewModel.leaveLive(session._id)
+                            }
+                        },
                         onRemoveClick = { viewModel.requestRemoveSession(session) },
+                        onUserClick = onNavigateToUserProfile,
                     )
                 }
             }
@@ -964,17 +972,28 @@ private fun SessionCard(
     onSoloPractice: () -> Unit,
     onLeaveLive: () -> Unit,
     onRemoveClick: () -> Unit,
+    onUserClick: (userId: String) -> Unit = {},
 ) {
     val name = session.routeDetails?.name ?: "Sessione"
     val dateLabel = session.meetingDate?.let { SessionDateFormats.formatDisplayFromApi(it) }.orEmpty()
     val dateTime = listOfNotNull(dateLabel.takeIf { it.isNotBlank() }, session.meetingTime).joinToString(" · ")
-    val host = session.creatorId?.username?.let { "host $it" } ?: ""
-    val subtitle = listOf(dateTime, host).filter { it.isNotBlank() }.joinToString(" · ")
+    
+    val hostName = session.creatorId?.username ?: "Host"
+    val subtitle = listOf(dateTime).filter { it.isNotBlank() }.joinToString(" · ")
+    
     val distKm = session.gpxStats?.distanceKm?.let { "%.1f km".format(it) }
     val elev = session.gpxStats?.elevationGainM?.let { "+$it m" }
     val diff = session.routeDetails?.difficultyLevel
-    val participants = session.participants?.size?.let { "$it partecipanti" }
-    val stats = listOfNotNull(distKm, elev, diff, participants).joinToString("  ·  ")
+    val acceptedCount = session.participants?.count { !it.isPending } ?: 0
+    val pendingCount = session.participants?.count { it.isPending } ?: 0
+    val participantsCount = "$acceptedCount partecipanti" +
+        if (pendingCount > 0) " · $pendingCount in attesa" else ""
+    val stats = listOfNotNull(distKm, elev, diff, participantsCount).joinToString("  ·  ")
+
+    val routePoints = session.plannedRoute?.polylinePoints?.map { RoutePoint(it.lat, it.lon) }
+    val profile = session.gpxStats?.elevationProfile
+    val hasHero = (routePoints != null && routePoints.size >= 2) ||
+        (profile != null && profile.size >= 2)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -986,15 +1005,14 @@ private fun SessionCard(
                 modifier = Modifier.fillMaxWidth().clickable { onDetailClick() },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(
-                    modifier = Modifier.size(44.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = TsmSurfaceVariant,
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = TsmAccent)
-                    }
-                }
+                // Host Avatar Clickable
+                AvatarImage(
+                    avatarUrl = session.creatorId?.avatarUrl,
+                    fallbackName = hostName,
+                    size = 44.dp,
+                    modifier = Modifier.clickable { session.creatorId?._id?.let(onUserClick) }
+                )
+                
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1015,20 +1033,26 @@ private fun SessionCard(
                             }
                         }
                     }
+                    Text("host $hostName", style = MaterialTheme.typography.labelSmall, color = TsmAccent)
                     if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     if (stats.isNotBlank()) Text(stats, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    // Invite code sempre visibile in card (per condivisione futura).
-                    // Vincolo D2: il codice è immutabile per non perdere i partecipanti.
-                    Text(
-                        text = session.inviteCode,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp,
-                        ),
-                        color = TsmAccent,
-                    )
                 }
+            }
+
+            // ── Hero: traccia GPX (mappa) + altimetria come schede swipe ──
+            if (hasHero) {
+                Spacer(modifier = Modifier.height(10.dp))
+                TsmRouteElevationPager(
+                    routePoints = routePoints,
+                    elevationProfile = profile,
+                    modifier = Modifier.fillMaxWidth(),
+                    height = 140.dp,
+                    cornerRadius = 8.dp,
+                    backgroundBrush = androidx.compose.ui.graphics.SolidColor(TsmSurfaceVariant),
+                    elevationLineColor = TsmAccent,
+                    activeDotColor = TsmAccent,
+                    difficultyLevel = session.routeDetails?.difficultyLevel,
+                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))

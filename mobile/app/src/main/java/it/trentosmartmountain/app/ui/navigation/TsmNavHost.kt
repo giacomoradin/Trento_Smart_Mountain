@@ -102,6 +102,13 @@ fun TsmNavHost() {
     var pendingPostDetail by rememberSaveable(stateSaver = gsonSaver<FeedItem>()) {
         mutableStateOf<FeedItem?>(null)
     }
+    // Holder per il composer storie (come pendingPostDetail): l'origine setta gli
+    // args (tipo + ref + overlay) e naviga a STORY_COMPOSER.
+    var pendingStoryDraft by rememberSaveable(
+        stateSaver = gsonSaver<it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs>(),
+    ) {
+        mutableStateOf<it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs?>(null)
+    }
 
     fun navigateToMainAfterLogin() {
         val token = application.tokenStorage.getToken()
@@ -214,8 +221,8 @@ fun TsmNavHost() {
                 onNavigateToUserProfile = { userId ->
                     navController.navigate(Routes.userProfileRoute(userId))
                 },
-                onNavigateToStoryViewer = { refId, kind ->
-                    navController.navigate(Routes.storyViewerRoute(refId, kind))
+                onNavigateToStoryViewer = { authorId ->
+                    navController.navigate(Routes.storyViewerRoute(authorId))
                 },
                 onNavigateToUserSearch = { navController.navigate(Routes.USER_SEARCH) },
                 onNavigateToLeaderboard = { navController.navigate(Routes.LEADERBOARD) },
@@ -268,6 +275,11 @@ fun TsmNavHost() {
                 sessionId = sessionId,
                 currentUserId = currentUserId,
                 onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onShareStory = { args ->
+                    pendingStoryDraft = args
+                    navController.navigate(Routes.STORY_COMPOSER)
+                },
                 onAvviaConfirmed = { _ ->
                     // Pop a HikerMainScreen: il VM ha già chiamato SessionStartCoordinator.requestStart,
                     // HikerMainScreen.collect → switch tab Registra, RegistraVM.autoStartFromSession.
@@ -290,6 +302,11 @@ fun TsmNavHost() {
                 activityId = activityId,
                 sessionId = sessionId,
                 onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onShareStory = { args ->
+                    pendingStoryDraft = args
+                    navController.navigate(Routes.STORY_COMPOSER)
+                },
             )
         }
 
@@ -500,6 +517,7 @@ fun TsmNavHost() {
             it.trentosmartmountain.app.ui.screens.home.UserProfileScreen(
                 userId = userId,
                 onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
                 onOpenFollowList = { uid, type ->
                     val typeArg =
                         if (type == FollowListType.FOLLOWING) "following" else "followers"
@@ -568,35 +586,34 @@ fun TsmNavHost() {
             )
         }
 
-        // ── Story viewer full-screen (5s timer, Instagram-like) ──────────
+        // ── Story viewer full-screen (Instagram-like, storie reali per autore) ──
         composable(
             route = Routes.STORY_VIEWER,
-            arguments = listOf(
-                navArgument("refId") { type = NavType.StringType },
-                navArgument("kind") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = "activity"
-                },
-            ),
+            arguments = listOf(navArgument("userId") { type = NavType.StringType }),
         ) { backStackEntry ->
-            val refId = backStackEntry.arguments?.getString("refId").orEmpty()
-            val kind = backStackEntry.arguments?.getString("kind") ?: "activity"
+            val storyUserId = backStackEntry.arguments?.getString("userId").orEmpty()
             it.trentosmartmountain.app.ui.screens.home.StoryViewerScreen(
-                refId = refId,
-                kind = kind,
+                userId = storyUserId,
                 onClose = { navController.popBackStack() },
-                onOpenFullActivity = { rid, k ->
-                    // Story → Activity Detail. Per kind="session" non c'è una
-                    // ActivityDetailScreen dedicata per il viewer, ma quella
-                    // attuale gestisce entrambi i casi (sessionId opzionale).
-                    if (k == "session") {
-                        navController.navigate(Routes.sessionDetailRoute(rid))
-                    } else {
-                        navController.navigate(Routes.activityDetailRoute(rid, null))
-                    }
-                },
+                onOpenSession = { sid -> navController.navigate(Routes.sessionDetailRoute(sid)) },
             )
+        }
+
+        // ── Composer storie (foto/video + overlay) ───────────────────────
+        composable(Routes.STORY_COMPOSER) { _ ->
+            val draft = pendingStoryDraft
+            if (draft != null) {
+                it.trentosmartmountain.app.ui.screens.home.StoryComposerScreen(
+                    args = draft,
+                    onClose = { navController.popBackStack() },
+                    onPublished = {
+                        pendingStoryDraft = null
+                        navController.popBackStack()
+                    },
+                )
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
         }
 
         // ── Onboarding v2 (3 step skippable) ─────────────────────────────────

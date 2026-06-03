@@ -95,11 +95,8 @@ fun LoginScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(TsmBackground),
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        it.trentosmartmountain.app.ui.components.TsmAuroraBackground(modifier = Modifier.fillMaxSize())
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -110,7 +107,7 @@ fun LoginScreen(
         ) {
             Spacer(modifier = Modifier.height(48.dp))
 
-            TsmMountainLogo(iconSize = 56.dp)
+            TsmMountainLogo(iconSize = 72.dp)
 
             Spacer(modifier = Modifier.height(12.dp))
 

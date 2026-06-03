@@ -105,6 +105,39 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
         return SessionParticipationResolver.resolve(session, isCreator, local)
     }
 
+    // ── Gestione partecipanti (Fase A) ──────────────────────────────────────
+    // approve/reject: capogruppo o partecipante accettato. remove: solo capogruppo.
+    // Il backend impone l'autorizzazione; la UI mostra solo le azioni consentite.
+    private fun participantAction(
+        failMsg: String,
+        call: suspend (String) -> retrofit2.Response<SessionResponse>,
+        targetUserId: String,
+    ) {
+        val sessionId = _uiState.value.session?._id ?: return
+        viewModelScope.launch {
+            runCatching { call(sessionId) }
+                .onSuccess { resp ->
+                    if (resp.isSuccessful && resp.body() != null) {
+                        _uiState.update {
+                            it.copy(session = resp.body(), liveUiEpoch = it.liveUiEpoch + 1)
+                        }
+                    } else {
+                        _uiState.update { it.copy(error = failMsg) }
+                    }
+                }
+                .onFailure { _uiState.update { it.copy(error = "Errore di rete. Riprova.") } }
+        }
+    }
+
+    fun approveParticipant(targetUserId: String) =
+        participantAction("Impossibile approvare la richiesta.", { api.approveParticipant(it, targetUserId) }, targetUserId)
+
+    fun rejectParticipant(targetUserId: String) =
+        participantAction("Impossibile rifiutare la richiesta.", { api.rejectParticipant(it, targetUserId) }, targetUserId)
+
+    fun removeParticipant(targetUserId: String) =
+        participantAction("Impossibile rimuovere il partecipante.", { api.removeParticipant(it, targetUserId) }, targetUserId)
+
     fun loadSession(sessionId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }

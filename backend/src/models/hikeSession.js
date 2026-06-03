@@ -269,14 +269,25 @@ const hikSessionSchema = new Schema({
     uppercase: true,
   },
 
-  // Lista partecipanti che hanno accettato l'invito
+  // Lista partecipanti (richieste + accettati)
   participants: [
     {
       userId: { type: Schema.Types.ObjectId, ref: "User", required: true }, // riferimento al modello User
       role: { type: String, enum: ["hiker", "groupLeader"], default: "hiker" }, // ruolo del partecipante
-      joinedAt: { type: Date, default: Date.now }, // timestamp di quando ha accettato l'invito
+      // Stato di approvazione: chi entra con codice invito parte "pending" e
+      // diventa "accepted" quando capogruppo o un partecipante già accettato lo
+      // approva. Default "accepted" per retrocompatibilità coi documenti pre-esistenti.
+      status: { type: String, enum: ["pending", "accepted"], default: "accepted" },
+      // Chi ha approvato la richiesta (capogruppo o partecipante accettato).
+      // Null per il creator (auto-accettato).
+      approvedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+      joinedAt: { type: Date, default: Date.now }, // timestamp di quando ha inviato la richiesta
     },
   ],
+
+  // Utenti rimossi DEFINITIVAMENTE dal capogruppo: non possono più ri-unirsi a
+  // QUESTA sessione (ban locale alla sessione).
+  removedUserIds: [{ type: Schema.Types.ObjectId, ref: "User" }],
 
   // Stato della sessione
   status: {

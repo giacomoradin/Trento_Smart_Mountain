@@ -8,6 +8,15 @@ import { evaluateAllBadges } from "./badgeService.js";
 import { isSessionParticipant, isSessionGroupLeader } from "./emergencyService.js";
 import crypto from "crypto";
 
+// Populate condiviso per le risposte sessione: creator + partecipanti + chi ha
+// approvato ciascun partecipante (per mostrare "accettato da X" nel client).
+// Centralizzato così tutte le route restituiscono la stessa shape al client Kotlin.
+const SESSION_POPULATE = [
+  { path: "creatorId", select: "username email personalInfo.avatarUrl" },
+  { path: "participants.userId", select: "username email personalInfo.avatarUrl" },
+  { path: "participants.approvedBy", select: "username" },
+];
+
 // Genera codice invito nel formato "TSM-XXXX" (4 hex uppercase)
 function generateInviteCode() {
   return "TSM-" + crypto.randomBytes(2).toString("hex").toUpperCase(); // es. "TSM-7A4F"
@@ -24,8 +33,11 @@ const MAX_INVITE_CODE_ATTEMPTS = 20;
 // in una sola alla volta (vincolo OCL D2 §4: una sola sessione live per user).
 async function checkUserAlreadyInActiveSession(userId) {
   const conflict = await HikeSession.findOne({
-    "participants.userId": userId,
     status: "ACTIVE",
+    // Solo i partecipanti ACCETTATI bloccano: una richiesta ancora "pending" non
+    // costituisce partecipazione effettiva. ($ne pending include i doc legacy
+    // senza campo status, trattati come accepted.)
+    participants: { $elemMatch: { userId, status: { $ne: "pending" } } },
   });
 
   if (conflict) {
@@ -58,7 +70,9 @@ export async function createSession(creatorId, routeDetails, sessionMeta = {}) {
     creatorId,
     routeDetails,
     inviteCode,
-    participants: [{ userId: creatorId, role: "groupLeader" }],
+    participants: [
+      { userId: creatorId, role: "groupLeader", status: "accepted" },
+    ],
     status: "PLANNED",
     ...sessionMeta,
   });
@@ -95,14 +109,24 @@ export async function joinSession(userId, inviteCode) {
     throw new Error("SESSION_NOT_JOINABLE");
   }
 
+  // Ban locale: chi è stato rimosso definitivamente dal capogruppo non può rientrare.
+  const banned = (session.removedUserIds || []).some(
+    (id) => id.toString() === userId.toString(),
+  );
+  if (banned) {
+    throw new Error("PARTICIPANT_BANNED");
+  }
+
   const alreadyIn = session.participants.some(
-    (p) => p.userId.toString() === userId.toString(),
+    (p) => (p.userId?._id || p.userId).toString() === userId.toString(),
   );
   if (alreadyIn) {
     throw new Error("ALREADY_IN_SESSION");
   }
 
-  session.participants.push({ userId });
+  // L'ingresso crea una RICHIESTA in attesa: capogruppo o un partecipante già
+  // accettato dovrà approvarla prima che l'utente diventi membro effettivo.
+  session.participants.push({ userId, status: "pending" });
   await session.save();
 
   await User.findByIdAndUpdate(userId, {
@@ -115,15 +139,92 @@ export async function joinSession(userId, inviteCode) {
     },
   });
 
-  // Populate simmetrico (come getSessionById) per evitare che il client Kotlin
-  // riceva ObjectId raw nei campi ref → potenziale Gson IllegalStateException.
-  return session.populate([
-    { path: "creatorId", select: "username email personalInfo.avatarUrl" },
-    {
-      path: "participants.userId",
-      select: "username email personalInfo.avatarUrl",
-    },
-  ]);
+  return session.populate(SESSION_POPULATE);
+}
+
+/** True se l'utente è un membro ACCETTATO della sessione (incluso il capogruppo). */
+function isAcceptedMember(session, userId) {
+  return (session.participants || []).some(
+    (p) =>
+      (p.userId?._id || p.userId).toString() === userId.toString() &&
+      p.status !== "pending",
+  );
+}
+
+/**
+ * Approva una richiesta di partecipazione in attesa.
+ * Autorizzazione: capogruppo OPPURE un partecipante già accettato (basta 1).
+ * Traccia chi ha approvato in `approvedBy` ("accettato da X").
+ */
+export async function approveParticipant(sessionId, callerId, targetUserId) {
+  const session = await HikeSession.findById(sessionId);
+  if (!session) throw new Error("SESSION_NOT_FOUND");
+  if (!isAcceptedMember(session, callerId)) throw new Error("FORBIDDEN_NOT_MEMBER");
+  const target = session.participants.find(
+    (p) => (p.userId?._id || p.userId).toString() === targetUserId.toString(),
+  );
+  if (!target) throw new Error("PARTICIPANT_NOT_FOUND");
+  if (target.status !== "pending") throw new Error("PARTICIPANT_NOT_PENDING");
+  target.status = "accepted";
+  target.approvedBy = callerId;
+  await session.save();
+  return session.populate(SESSION_POPULATE);
+}
+
+/**
+ * Rifiuta una richiesta in attesa (la rimuove). Non è un ban: l'utente potrà
+ * eventualmente ri-richiedere. Autorizzazione come approve.
+ */
+export async function rejectParticipant(sessionId, callerId, targetUserId) {
+  const session = await HikeSession.findById(sessionId);
+  if (!session) throw new Error("SESSION_NOT_FOUND");
+  if (!isAcceptedMember(session, callerId)) throw new Error("FORBIDDEN_NOT_MEMBER");
+  const target = session.participants.find(
+    (p) => (p.userId?._id || p.userId).toString() === targetUserId.toString(),
+  );
+  if (!target) throw new Error("PARTICIPANT_NOT_FOUND");
+  if (target.status !== "pending") throw new Error("PARTICIPANT_NOT_PENDING");
+  session.participants = session.participants.filter(
+    (p) => (p.userId?._id || p.userId).toString() !== targetUserId.toString(),
+  );
+  await session.save();
+  await User.findByIdAndUpdate(targetUserId, {
+    $pull: { sessionRoles: { groupId: session._id } },
+  });
+  return session.populate(SESSION_POPULATE);
+}
+
+/**
+ * Rimuove DEFINITIVAMENTE un partecipante (accepted o pending) e lo banna da
+ * QUESTA sessione (non potrà più ri-unirsi). Riservato al solo capogruppo.
+ * Il creator non è rimovibile.
+ */
+export async function removeParticipant(sessionId, leaderId, targetUserId) {
+  const session = await HikeSession.findById(sessionId);
+  if (!session) throw new Error("SESSION_NOT_FOUND");
+  if (!isSessionGroupLeader(session, leaderId)) throw new Error("FORBIDDEN_NOT_LEADER");
+  if (session.creatorId.toString() === targetUserId.toString()) {
+    throw new Error("CANNOT_REMOVE_CREATOR");
+  }
+  const wasIn = session.participants.some(
+    (p) => (p.userId?._id || p.userId).toString() === targetUserId.toString(),
+  );
+  if (!wasIn) throw new Error("PARTICIPANT_NOT_FOUND");
+  session.participants = session.participants.filter(
+    (p) => (p.userId?._id || p.userId).toString() !== targetUserId.toString(),
+  );
+  if (
+    !(session.removedUserIds || []).some(
+      (id) => id.toString() === targetUserId.toString(),
+    )
+  ) {
+    session.removedUserIds.push(targetUserId);
+  }
+  await session.save();
+  await User.findByIdAndUpdate(targetUserId, {
+    $pull: { sessionRoles: { groupId: session._id } },
+  });
+  return session.populate(SESSION_POPULATE);
 }
 
 /**
@@ -292,9 +393,9 @@ export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {
   assertInSession(sessionDoc, userId);
   const viewerIsLeader = isSessionGroupLeader(sessionDoc, userId);
 
-  const participantFields = viewerIsLeader
-    ? "username personalInfo.avatarUrl personalInfo.sex"
-    : "username personalInfo.avatarUrl";
+  // Il sesso è visibile a TUTTI i membri della sessione (resta comunque privato
+  // verso l'esterno: solo chi è nel gruppo riceve questo payload live). Fase 0.
+  const participantFields = "username personalInfo.avatarUrl personalInfo.sex";
 
   const session = await HikeSession.findById(sessionId)
     .populate("participants.userId", participantFields)
@@ -330,7 +431,7 @@ export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {
       lastName,
       avatarUrl: u?.personalInfo?.avatarUrl,
       role,
-      ...(viewerIsLeader && u?.personalInfo?.sex ? { sex: u.personalInfo.sex } : {}),
+      ...(u?.personalInfo?.sex ? { sex: u.personalInfo.sex } : {}),
     };
   };
 
@@ -470,9 +571,7 @@ export async function getSessionById(sessionId) {
      #swagger.tags = ['Sessions']
      #swagger.description = 'Recupera i dettagli completi di una sessione, inclusi i dati di partecipanti e creatore.'
   */
-  return HikeSession.findById(sessionId)
-    .populate("creatorId", "username email personalInfo.avatarUrl")
-    .populate("participants.userId", "username email personalInfo.avatarUrl");
+  return HikeSession.findById(sessionId).populate(SESSION_POPULATE);
 }
 
 // Recupera tutte le sessioni di un utente (come creator o partecipante)
@@ -480,8 +579,7 @@ export async function getSessionsByUser(userId) {
   return HikeSession.find({
     $or: [{ creatorId: userId }, { "participants.userId": userId }],
   })
-    .populate("creatorId", "username email personalInfo.avatarUrl")
-    .populate("participants.userId", "username email personalInfo.avatarUrl")
+    .populate(SESSION_POPULATE)
     .sort({ meetingDate: 1 });
 }
 
@@ -523,16 +621,10 @@ export async function updateSessionDetails(sessionId, userId, updates) {
     session.minExperienceLevel = updates.minExperienceLevel;
   // inviteCode is never updated
   await session.save();
-  // Popola entrambi i campi ref in modo simmetrico a getSessionById/getSessionsByUser.
+  // Popola i ref in modo simmetrico a getSessionById/getSessionsByUser.
   // Senza populate("participants.userId"), la risposta contiene ObjectId raw (string)
   // invece dell'oggetto User → Gson crash: "Expected BEGIN_OBJECT but was STRING".
-  return session.populate([
-    { path: "creatorId", select: "username email personalInfo.avatarUrl" },
-    {
-      path: "participants.userId",
-      select: "username email personalInfo.avatarUrl",
-    },
-  ]);
+  return session.populate(SESSION_POPULATE);
 }
 
 /**

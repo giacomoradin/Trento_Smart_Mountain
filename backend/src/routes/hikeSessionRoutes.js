@@ -21,6 +21,7 @@ import {
   liveLocationsQuerySchema,
   liveTrackingSuspendSchema,
   liveTrackingResumeSchema,
+  participantParamsSchema,
 } from "../middleware/validationMiddleware.js";
 
 import {
@@ -38,6 +39,9 @@ import {
   getLiveLocations,
   suspendLiveTracking,
   resumeLiveTracking,
+  approveParticipant,
+  rejectParticipant,
+  removeParticipant,
 } from "../services/hikeSessionService.js";
 import { listSessionEmergencies } from "../services/emergencyService.js";
 import {
@@ -671,6 +675,77 @@ router.post(
   async (req, res, next) => {
     try {
       const session = await leaveSession(req.user.userId, req.params.id);
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── Gestione partecipanti: approvazione / rifiuto / rimozione ───────────────
+
+// POST /api/v1/sessions/:id/participants/:userId/approve — accetta una richiesta
+// pending. Autorizzato: capogruppo OPPURE un partecipante già accettato.
+router.post(
+  "/:id/participants/:userId/approve",
+  validate(participantParamsSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Approva una richiesta di partecipazione in attesa. Autorizzato al capogruppo o a un partecipante già accettato.'
+    */
+    try {
+      const session = await approveParticipant(
+        req.params.id,
+        req.user.userId,
+        req.params.userId,
+      );
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/v1/sessions/:id/participants/:userId/reject — rifiuta una richiesta
+// pending (non è un ban). Autorizzato come approve.
+router.post(
+  "/:id/participants/:userId/reject",
+  validate(participantParamsSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Rifiuta (rimuove) una richiesta di partecipazione in attesa. Autorizzato al capogruppo o a un partecipante già accettato.'
+    */
+    try {
+      const session = await rejectParticipant(
+        req.params.id,
+        req.user.userId,
+        req.params.userId,
+      );
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// DELETE /api/v1/sessions/:id/participants/:userId — rimuove definitivamente un
+// partecipante e lo banna da questa sessione. Solo capogruppo.
+router.delete(
+  "/:id/participants/:userId",
+  validate(participantParamsSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Rimuove definitivamente un partecipante (ban locale alla sessione). Riservato al capogruppo.'
+    */
+    try {
+      const session = await removeParticipant(
+        req.params.id,
+        req.user.userId,
+        req.params.userId,
+      );
       res.status(200).json(session);
     } catch (err) {
       next(err);

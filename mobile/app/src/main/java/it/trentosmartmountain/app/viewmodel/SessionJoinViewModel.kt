@@ -34,6 +34,8 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
         val isLoadingSessions: Boolean = false,
         val isJoining: Boolean = false,
         val joinError: String? = null,
+        /** Messaggio informativo dopo un join riuscito (richiesta in attesa di approvazione). */
+        val joinInfo: String? = null,
         val generalError: String? = null,
         val removeConfirm: RemovalRequest? = null,
         val isRemoving: Boolean = false,
@@ -104,7 +106,7 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
             cleaned.startsWith("TSM") -> cleaned.substring(3).take(4)
             else -> cleaned.take(4)
         }
-        _uiState.update { it.copy(joinCode = "TSM-$trailing", joinError = null) }
+        _uiState.update { it.copy(joinCode = "TSM-$trailing", joinError = null, joinInfo = null) }
     }
 
     fun onJoinSession() {
@@ -118,7 +120,13 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 val response = TsmApiClient.service().joinSession(JoinSessionRequest(code))
                 if (response.isSuccessful) {
-                    _uiState.update { it.copy(isJoining = false, joinCode = "TSM-") }
+                    _uiState.update {
+                        it.copy(
+                            isJoining = false,
+                            joinCode = "TSM-",
+                            joinInfo = "Richiesta inviata: in attesa di approvazione del capogruppo.",
+                        )
+                    }
                     loadSessions()
                 } else {
                     val error = when (response.code()) {

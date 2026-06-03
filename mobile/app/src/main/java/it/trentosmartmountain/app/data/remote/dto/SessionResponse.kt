@@ -101,9 +101,16 @@ data class SessionUserPersonalInfo(
     val avatarUrl: String? = null,
 )
 
-/** Partecipante a una sessione con ruolo e timestamp di join. */
+/** Partecipante a una sessione con ruolo, stato di approvazione e timestamp. */
 data class SessionParticipant(
     val userId: SessionUserInfo?,
     val role: String?,
     val joinedAt: String?,
-)
+    /** "pending" (richiesta in attesa) | "accepted". Null sui doc legacy → trattato come accepted. */
+    val status: String? = null,
+    /** Chi ha approvato la richiesta (capogruppo o partecipante accettato). */
+    val approvedBy: SessionUserInfo? = null,
+) {
+    /** Helper: il partecipante è in attesa di approvazione? */
+    val isPending: Boolean get() = status == "pending"
+}

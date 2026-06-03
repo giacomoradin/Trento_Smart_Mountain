@@ -25,6 +25,43 @@ Funzionalità aggiunte dopo lo Sprint 2:
 
 > _Polish residuo (non bloccante): estrazione stringhe i18n delle schermate nuove, unificazione design-token su `TsmColors`, skeleton loaders._
 
+### 🐛 Fix UI/UX mobile — giugno 2026 (sessione fix)
+
+Correzioni mirate (incluse regressioni **non ancora notate dall'utente**):
+
+- **Build mobile ripristinata**: `:app:compileDebugKotlin` non compilava più per regressioni pre-esistenti — import mancanti in `FeedCard.kt` (`fillMaxSize`/`clip`/`CircleShape`), riferimento errato `FeedUser.userId` (→ `_id`) e mismatch di tipo `List<Any>` vs `List<RoutePoint>` in `SessionHubScreen`. Risolte.
+- **Traccia GPX + altimetria come due schede swipe** — nuovo componente unico `ui/components/TsmRouteElevationPager.kt`: 1ª pagina = traccia su **mappa** OpenTopoMap con **inizio = cerchio verde** e **fine = bandiera a scacchi** (via `TsmRouteMapPreview`), 2ª pagina (swipe a destra) = **profilo altimetrico** (`ElevationSparkline`). Adottato in **feed, dettaglio social, dettaglio attività e Unisciti (lista + dettaglio sessione)**: elimina l'incoerenza per cui alcune attività pianificate mostravano solo l'altimetria e altre solo la traccia, e rimuove le copie divergenti/bacate del pager.
+- **Avatar utenti coerenti + tap → profilo social ovunque**: i partecipanti del **Dettaglio Attività** (prima iniziali statiche, non cliccabili) e del **Dettaglio Sessione**, e gli **autori dei commenti** (`CommentsBottomSheet`), ora usano `AvatarImage` (foto profilo) e al tap aprono il profilo social. `onUserClick` propagato fino a `SessionDetailScreen`, `ActivityDetailScreen`, `UserProfileScreen` e alle destinazioni in `TsmNavHost`. Le liste social (ricerca, follower/seguiti, classifica, notifiche, feed, hub sessioni) erano già conformi. _Fuori scope_: gli sheet di tracking live (`LiveParticipantSheet`/`GroupRosterMenu`) restano "schede" del partecipante sulla mappa, non navigano al profilo social.
+- **Arresto sessione da "Unisciti" con salvataggio**: arrestando una sessione **mentre il tracking è attivo**, ora compare lo stesso dialog "Salva attività" del tasto **Termina** in Registra (Salva / Scarta / Annulla) e l'escursione viene **salvata**; prima l'attività veniva **persa** (`detachFromLiveTracking`). Implementazione: il `SessionStopCoordinator`, se c'è un tracking in corso, instrada verso `requestStopTracking()` (anziché lo stacco silenzioso); `HikerMainScreen` osserva `showStopConfirm` e porta l'utente sulla tab Registra dove vive il dialog; `SessionDetailScreen` torna alla shell allo stop così il dialog è visibile.
+
+> Backend / API / DB **invariati** (nessuna modifica a endpoint o schema): `api_reference.md` e `database_schema.md` restano allineati.
+
+### 🚀 Stories reali + Approvazione partecipanti + Sesso visibile — giugno 2026
+
+> Build mobile **`compileDebugKotlin` green**; backend **238/238 test verdi (17 suite)**.
+
+Epic a fasi (0→A→B→C→D):
+
+**Fase 0 — Sesso partecipanti**: `getLiveLocations` invia `personalInfo.sex` a **tutti i membri** (non solo capogruppo); mostrato in `LiveParticipantSheet` e `GroupRosterMenu`.
+
+**Fase A — Join sessione con approvazione/rimozione**
+- `participants[]` esteso con `status` (`pending`/`accepted`, default accepted per retrocompat) + `approvedBy`; nuovo `removedUserIds[]` (ban locale alla sessione).
+- `joinSession` ora crea una **richiesta pending** (+ check ban). Nuovi endpoint: `POST /sessions/:id/participants/:userId/approve` e `/reject` (capogruppo **o** un partecipante già accettato), `DELETE /sessions/:id/participants/:userId` (rimozione definitiva, **solo capogruppo**).
+- Mobile: `ParticipantsCard` dinamica (accettati + sezione **In attesa** con accetta/rifiuta, "accettato da X", rimuovi per il capogruppo); join → feedback "richiesta inviata". +7 test backend.
+
+**Fase B — Sistema Stories reale (sostituisce la derivazione dai post)**
+- Nuovo model `Story` (TTL 24h via index): `type` (`planned_session`/`activity`), `sessionId`/`activityId`, `inviteCode` snapshot, `caption`, `media[]` (Base64 foto/video capped), `overlay` (titolo/distanza/dislivello/tempo/traccia), `viewers[]`.
+- Endpoint `/api/v1/stories`: `POST`, `GET /user/:userId`, `POST /:id/view`, `DELETE /:id` (auth + rate limit + Joi con cap dimensione media). `getSocialRowForUser` ora deriva l'anello "story" dalle Story reali (+ `hasUnviewedStory`). +8 test backend.
+
+**Fase C — Stories mobile**
+- `StoryViewerScreen` riscritto: carica le storie reali dell'autore (`/stories/user/:id`), progress segmentata + auto-advance, **media reali** (foto da Base64, video breve da cache file + `VideoView`), overlay tracciamento, bottone **"Unisciti"** per le storie `planned_session`, `markViewed` per segmento.
+- `StoryComposerScreen` + VM: picker foto/video (PhotoPicker, niente permessi), encoding Base64 (immagine compressa via `AvatarUtils`, video con cap), pubblicazione. Entry point **"Condividi come storia"** in `ActivityDetailScreen` (post-hike) e `SessionDetailScreen` (pre-hike).
+- AvatarRow / Home / Nav ricablati: le storie si aprono **per autore** (`STORY_VIEWER = story_viewer/{userId}`); nuovo `STORY_COMPOSER` con holder `pendingStoryDraft`.
+
+**Fase D — Media/permessi**: scelta gallery PhotoPicker → **nessun permesso** runtime aggiuntivo necessario; cap media coerenti client/server (immagine ≤ ~1.5MB, video ≤ ~3.5MB, sotto il body limit 5mb).
+
+> Media decisi con l'utente: foto + **video breve capped** in Base64 (no object storage nello stack). Doc API/DB aggiornati in `api_reference.md` e `database_schema.md`.
+
 ---
 
 > Snapshot dell'architettura, codebase e implementazione corrente. Aggiornato al **26 maggio 2026 (sessione serale)** — Sprint 2 con feature **Foto profilo utente** completata (privacy gate fix, componente Compose `AvatarImage` riusabile, EXIF rotation, foto visibile in ProfileScreen / ProfileViewScreen / partecipanti sessioni), oltre alle tre sessioni precedenti dello stesso giorno (notturna: discriminator persistence + anti-cheat; pomeridiana: refresh token rotation + WAL Room v5). Build mobile **`compileDebugKotlin` green**, backend **88/89 test verdi** (1 test fragile pre-esistente su `BREVO_API_KEY`).

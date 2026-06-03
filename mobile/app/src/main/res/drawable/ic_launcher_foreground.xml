@@ -1,10 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Foreground icona adattiva: sole arancione + picchi low-poly, centrati nella
+     safe zone (108vp, contenuto entro ~[20,88]). Sfondo Tech Navy nel layer
+     background dell'adaptive-icon. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
   android:width="108dp"
   android:height="108dp"
   android:viewportWidth="108"
   android:viewportHeight="108">
+
+  <!-- Sole (Athletic Orange) -->
   <path
-    android:fillColor="@color/tsm_primary"
-    android:pathData="M54,28 L78,72 L30,72 Z" />
+    android:fillColor="@color/tsm_orange"
+    android:pathData="M54,44 m-15,0 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 z" />
+
+  <!-- Picco sinistro -->
+  <path android:fillColor="@color/tsm_teal" android:pathData="M26,82 L44,55 L62,82 Z" />
+  <!-- Picco destro -->
+  <path android:fillColor="@color/tsm_teal" android:pathData="M56,82 L70,57 L84,82 Z" />
+  <!-- Picco centrale (faccia destra, scura) -->
+  <path android:fillColor="@color/tsm_teal_dark" android:pathData="M40,82 L56,32 L74,82 Z" />
+  <!-- Picco centrale (faccia sinistra, illuminata) -->
+  <path android:fillColor="@color/tsm_teal_light" android:pathData="M56,32 L40,82 L56,82 Z" />
+  <!-- Neve di vetta (cream) -->
+  <path android:fillColor="@color/tsm_cream" android:pathData="M56,32 L50,46 L62,46 Z" />
 </vector>

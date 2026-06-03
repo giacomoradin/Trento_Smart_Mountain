@@ -214,9 +214,14 @@ users.username_1                      // unique
     {
       userId: ObjectId,               // ref User, required
       role: String,                   // enum ["hiker", "groupLeader"], default "hiker"
+      status: String,                 // enum ["pending","accepted"], default "accepted" (giugno 2026)
+      approvedBy: ObjectId,           // ref User — chi ha approvato il pending (null per il creator)
       joinedAt: Date,                 // default Date.now
     }
   ],
+
+  // Ban locale alla sessione: utenti rimossi definitivamente dal capogruppo (giugno 2026)
+  removedUserIds: [ObjectId],         // ref User — non possono più ri-unirsi
 
   status: String,                     // enum ["PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"], default "PLANNED"
 
@@ -385,6 +390,54 @@ activities.startPoint_2dsphere; // sparse, per query geografiche future
 - **Idempotency**: niente check di duplicate sul backend. Il mobile genera un UUID locale, il backend assegna `_id` Mongo proprio; il client traccia `remoteId` per cross-device delete.
 - **Lifecycle**: niente status. Una attività esiste o non esiste (DELETE hard).
 - **Integrazione con feed Social** (Sprint 2 piano): aggiungerà `sharedAt: Date?` + `likes[]` + denormalizzato `commentsCount` — vedi `docs/sprint2_social.md`.
+
+---
+
+### 1.5 Collezione `stories` (giugno 2026)
+
+**Modello**: `backend/src/models/story.js` · **Collection MongoDB**: `stories`
+
+> Storie effimere (Instagram-like) con **TTL 24h** (rimozione automatica via index `expiresAt`). Sostituiscono la vecchia derivazione "story = post condiviso <24h". Media foto/video in **Base64** (no object storage nello stack); cap di dimensione imposti da Joi + service.
+
+#### Schema
+
+```javascript
+{
+  _id: ObjectId,
+  authorId: ObjectId,                 // ref User, required, indexed
+  type: String,                       // enum ["planned_session", "activity"]
+  sessionId: ObjectId,                // ref HikeSession (planned_session / activity da sessione)
+  activityId: ObjectId,               // ref Activity (activity libera)
+  inviteCode: String,                 // snapshot per il bottone "Unisciti" (solo planned_session)
+  caption: String,                    // max 200
+  media: [                            // foto/video Base64 capped (immagine ≤ ~1.5MB, video ≤ ~3.8MB)
+    { kind: String,                   //   enum ["image","video"]
+      dataUri: String,                //   "data:image/jpeg;base64,..." | "data:video/mp4;base64,..."
+      durationSec: Number }           //   solo video (≤ 10)
+  ],
+  overlay: {                          // snapshot tracciamento per l'overlay sul media
+    title, activityType, difficultyLevel,
+    distanceMeters, elevationGainM, movingSeconds,
+    routePolyline: [{ lat, lon }]     //   traccia campionata (≤ 500 punti)
+  },
+  viewers: [{ userId: ObjectId, viewedAt: Date }],
+  createdAt: Date,
+  expiresAt: Date                     // createdAt + 24h
+}
+```
+
+#### Indici
+
+```javascript
+stories.expiresAt_1;          // TTL { expireAfterSeconds: 0 } → rimozione automatica
+stories.authorId_1_createdAt_-1; // "storie non scadute di un autore, più recenti prima"
+```
+
+#### Note operative
+
+- **Visibilità**: `getStoriesByAuthor` applica il gate (`self` → ok; `public` → ok; `friends` → solo follower; `private` → vuoto).
+- **Autorizzazione ref**: si può creare una storia solo per una sessione di cui si è membri accettati o per una propria Activity (`STORY_FORBIDDEN_REF` altrimenti).
+- **Avatar Row**: `getSocialRowForUser` deriva `status: "story"` + `hasUnviewedStory` dalle Story reali non scadute.
 
 ---
 

@@ -91,6 +91,8 @@ fun UserProfileScreen(
     userId: String,
     onBack: () -> Unit,
     onCommentClick: (itemId: String, kind: String) -> Unit = { _, _ -> },
+    /** Tap su avatar di un partecipante/commentatore → profilo social. */
+    onUserClick: (userId: String) -> Unit = {},
     /** Tap sui contatori FOLLOWER/SEGUITI → lista navigabile del grafo sociale. */
     onOpenFollowList: (userId: String, type: FollowListType) -> Unit = { _, _ -> },
     onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
@@ -144,6 +146,7 @@ fun UserProfileScreen(
                     commentsTarget = CommentsTarget(id, kind)
                     onCommentClick(id, kind)
                 },
+                onUserClick = onUserClick,
                 onOpenFollowList = onOpenFollowList,
                 onOpenDetail = onOpenDetail,
                 contentPadding = padding,
@@ -154,6 +157,7 @@ fun UserProfileScreen(
     CommentsBottomSheet(
         target = commentsTarget,
         onDismiss = { commentsTarget = null },
+        onUserClick = onUserClick,
         // Aggiorna solo il contatore del post commentato: niente reload di
         // profilo+stats+bacheca (che perdeva lo scroll della bacheca).
         onCountChanged = viewModel::setCommentCount,
@@ -167,6 +171,7 @@ private fun ProfileContent(
     onLoadMore: () -> Unit,
     onLikeToggle: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
     onCommentClick: (String, String) -> Unit,
+    onUserClick: (userId: String) -> Unit = {},
     onOpenFollowList: (userId: String, type: FollowListType) -> Unit,
     onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
     contentPadding: PaddingValues,
@@ -221,6 +226,7 @@ private fun ProfileContent(
                         item = item,
                         onLikeToggle = { onLikeToggle(item) },
                         onCommentClick = { onCommentClick(item.id, item.kind) },
+                        onUserClick = onUserClick,
                         onOpenDetail = { onOpenDetail(item) },
                     )
                 }

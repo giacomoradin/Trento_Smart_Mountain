@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Activity from "../models/activity.js";
 import HikeSession from "../models/hikeSession.js";
 import Hiker from "../models/hiker.js";
+import Story from "../models/story.js";
 import { getFollowingIds, isFollowing } from "./followService.js";
 import { createNotification } from "./notificationService.js";
 import { downsamplePolyline } from "../utils/geoPolyline.js";
@@ -678,15 +679,13 @@ export async function getSocialRowForUser(viewerId) {
   );
   if (followingIds.length === 0) return { items: [] };
 
-  const since24h = new Date(Date.now() - STORY_WINDOW_MS);
   const since7d = new Date(Date.now() - 7 * STORY_WINDOW_MS);
 
   // 5 query parallele per minimizzare la latenza totale.
   const [
     hikers,            // anagrafica + weeklyGoals
     liveSessions,      // ACTIVE sessions
-    storyActivities,   // shared in last 24h
-    storySessions,
+    stories,           // storie reali non scadute (TTL 24h)
     weekActivities,    // completed in last 7 days (per progress)
     weekSessions,
   ] = await Promise.all([
@@ -702,19 +701,12 @@ export async function getSocialRowForUser(viewerId) {
     })
       .select("_id creatorId participants")
       .lean(),
-    Activity.find({
-      userId: { $in: followingIds },
-      sharedAt: { $gte: since24h },
+    Story.find({
+      authorId: { $in: followingIds },
+      expiresAt: { $gt: new Date() },
     })
-      .select("_id userId sharedAt")
-      .sort({ sharedAt: -1 })
-      .lean(),
-    HikeSession.find({
-      creatorId: { $in: followingIds },
-      sharedAt: { $gte: since24h },
-    })
-      .select("_id creatorId sharedAt")
-      .sort({ sharedAt: -1 })
+      .select("authorId viewers createdAt")
+      .sort({ createdAt: -1 })
       .lean(),
     Activity.find({
       userId: { $in: followingIds },
@@ -752,25 +744,19 @@ export async function getSocialRowForUser(viewerId) {
   // ── 2. Mappa story refs per userId (più recente vince) ──
   // Iteriamo le activities + sessions già ordinate sharedAt desc così la
   // prima vista per ciascun userId è la più recente (anti N+1 per Date max).
+  // Un autore ha "story" se possiede ≥1 Story non scaduta. `hasUnviewed` è true
+  // se almeno una delle sue storie non è stata vista dal viewer → anello pieno.
   const storyByUser = new Map();
-  for (const a of storyActivities) {
-    const uid = String(a.userId);
-    if (!storyByUser.has(uid)) {
-      storyByUser.set(uid, {
-        id: String(a._id),
-        kind: "activity",
-        sharedAt: a.sharedAt,
-      });
-    }
-  }
-  for (const s of storySessions) {
-    const uid = String(s.creatorId);
-    if (!storyByUser.has(uid)) {
-      storyByUser.set(uid, {
-        id: String(s._id),
-        kind: "session",
-        sharedAt: s.sharedAt,
-      });
+  for (const st of stories) {
+    const uid = String(st.authorId);
+    const viewed = (st.viewers || []).some(
+      (v) => String(v.userId) === String(viewerId),
+    );
+    const cur = storyByUser.get(uid);
+    if (!cur) {
+      storyByUser.set(uid, { hasUnviewed: !viewed });
+    } else if (!viewed) {
+      cur.hasUnviewed = true;
     }
   }
 
@@ -824,7 +810,7 @@ export async function getSocialRowForUser(viewerId) {
       return {
         user: userPayload,
         status: "story",
-        storyActivityRef: storyByUser.get(uid),
+        hasUnviewedStory: storyByUser.get(uid).hasUnviewed,
       };
     }
     const goals = h.weeklyGoals;

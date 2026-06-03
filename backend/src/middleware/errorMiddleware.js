@@ -70,6 +70,41 @@ const BUSINESS_ERROR_MAP = {
     status: 403,
     message: "Solo gli account rifugio possono pubblicare in bacheca.",
   },
+  // 403/404/409 — gestione partecipanti sessione (approvazione/rimozione)
+  FORBIDDEN_NOT_LEADER: {
+    status: 403,
+    message: "Solo il Capogruppo può eseguire questa operazione.",
+  },
+  FORBIDDEN_NOT_MEMBER: {
+    status: 403,
+    message: "Devi essere un partecipante accettato per gestire le richieste.",
+  },
+  PARTICIPANT_NOT_FOUND: {
+    status: 404,
+    message: "Partecipante non trovato nella sessione.",
+  },
+  PARTICIPANT_NOT_PENDING: {
+    status: 409,
+    message: "La richiesta non è più in attesa di approvazione.",
+  },
+  PARTICIPANT_BANNED: {
+    status: 409,
+    message: "Sei stato rimosso da questa sessione e non puoi più unirti.",
+  },
+  CANNOT_REMOVE_CREATOR: {
+    status: 400,
+    message: "Non puoi rimuovere il Capogruppo dalla sessione.",
+  },
+  // Stories
+  STORY_NOT_FOUND: { status: 404, message: "Storia non trovata o scaduta." },
+  STORY_MEDIA_TOO_LARGE: {
+    status: 413,
+    message: "Media troppo grande. Usa una foto più leggera o un video più breve.",
+  },
+  STORY_FORBIDDEN_REF: {
+    status: 403,
+    message: "Non puoi creare una storia per questa attività o sessione.",
+  },
   // 400 — input semanticamente invalido
   SELF_FOLLOW: { status: 400, message: "Non puoi seguire te stesso." },
   // 404 — risorsa non trovata

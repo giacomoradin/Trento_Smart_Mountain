@@ -114,6 +114,9 @@ fun TsmMapView(
         setMultiTouchControls(true)
         zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
         isTilesScaledToDpi = true
+        // De-zoom (pinch-out) sempre consentito.
+        minZoomLevel = 3.0
+        maxZoomLevel = 19.0
         controller.setZoom(13.0)
         // Centro provvisorio (Trento) — verrà sostituito appena il primo fix GPS
         // arriva da [LaunchedEffect autoCenterOnFirstFix] sotto. Lo lasciamo come

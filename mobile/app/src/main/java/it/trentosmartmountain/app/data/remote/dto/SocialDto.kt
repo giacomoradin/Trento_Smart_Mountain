@@ -166,6 +166,10 @@ data class NotificationItem(
     @SerializedName("actor") val actor: FeedUser?,
     @SerializedName("targetKind") val targetKind: String? = null,
     @SerializedName("targetId") val targetId: String? = null,
+    /** Testo precomputato dal server (promemoria/allerte rifugi). Le social lo derivano client-side. */
+    @SerializedName("message") val message: String? = null,
+    /** false per le notifiche dinamiche (promemoria/allerte): nessun swipe-delete. */
+    @SerializedName("deletable") val deletable: Boolean = true,
     @SerializedName("read") val read: Boolean = false,
     @SerializedName("createdAt") val createdAt: String? = null,
 )

@@ -130,6 +130,10 @@ const BUSINESS_ERROR_MAP = {
       "Hai una sessione attualmente in corso. Concludila prima di crearne / unirti a un'altra.",
   },
   ALREADY_IN_SESSION: { status: 409, message: "Sei già in questa sessione." },
+  JOIN_REQUEST_PENDING: {
+    status: 409,
+    message: "Richiesta già inviata: attendi la conferma del Capogruppo.",
+  },
   SESSION_NOT_JOINABLE: {
     status: 409,
     message: "La sessione non è più aperta.",

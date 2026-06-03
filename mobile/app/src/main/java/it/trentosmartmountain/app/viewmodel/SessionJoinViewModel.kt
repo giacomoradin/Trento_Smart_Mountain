@@ -62,9 +62,28 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
         return SessionParticipationResolver.resolve(session, isCreator, local)
     }
 
-    fun loadSessions() {
+    /** Estrae il campo `message` dal corpo d'errore JSON del backend (se presente). */
+    private fun serverMessage(response: retrofit2.Response<*>): String? = try {
+        response.errorBody()?.string()?.let { raw ->
+            org.json.JSONObject(raw).optString("message").ifBlank { null }
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * @param preserveJoinInfo se false azzera il banner "richiesta inviata"
+     *   (usato dal pull-to-refresh: la scritta deve sparire all'aggiornamento).
+     */
+    fun loadSessions(preserveJoinInfo: Boolean = true) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingSessions = true, generalError = null) }
+            _uiState.update {
+                it.copy(
+                    isLoadingSessions = true,
+                    generalError = null,
+                    joinInfo = if (preserveJoinInfo) it.joinInfo else null,
+                )
+            }
             try {
                 val response = TsmApiClient.service().getMySessions()
                 if (response.isSuccessful) {
@@ -129,7 +148,9 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
                     }
                     loadSessions()
                 } else {
-                    val error = when (response.code()) {
+                    // Preferisci il messaggio specifico del backend (es. "Sei stato
+                    // rimosso da questa sessione…", "Richiesta già inviata…").
+                    val error = serverMessage(response) ?: when (response.code()) {
                         404 -> "Codice non trovato."
                         409 -> "Sei già in questa sessione o in un'altra attiva."
                         else -> "Errore server (${response.code()})."

@@ -94,6 +94,8 @@ import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.remote.dto.SessionParticipant
 import it.trentosmartmountain.app.data.remote.dto.RoutePoint
 import it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs
+import it.trentosmartmountain.app.ui.components.TsmShareStoryButton
+import it.trentosmartmountain.app.util.downsampleByIndex
 import it.trentosmartmountain.app.data.remote.dto.StoryOverlay
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.SessionParticipationActions
@@ -193,6 +195,34 @@ fun SessionDetailScreen(
     var showEditDatePicker by remember { mutableStateOf(false) }
     var showEditTimePicker by remember { mutableStateOf(false) }
     var showDifficultyMenu by remember { mutableStateOf(false) }
+    // Conferma rimozione DEFINITIVA di un partecipante (solo capogruppo): (userId, nome).
+    var removeConfirmUser by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    removeConfirmUser?.let { (uid, name) ->
+        AlertDialog(
+            onDismissRequest = { removeConfirmUser = null },
+            containerColor = TsmSurface,
+            title = { Text("Rimuovere $name?", color = Color.White) },
+            text = {
+                Text(
+                    "$name verrà rimosso definitivamente dalla sessione e non potrà più unirsi.",
+                    color = Color.Gray,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.removeParticipant(uid)
+                        removeConfirmUser = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
+                ) { Text("Rimuovi") }
+            },
+            dismissButton = {
+                TextButton(onClick = { removeConfirmUser = null }) { Text("Annulla", color = Color.Gray) }
+            },
+        )
+    }
 
     LaunchedEffect(uiState.editMode) {
         if (!uiState.editMode) {
@@ -351,7 +381,7 @@ fun SessionDetailScreen(
 
             // Condividi la pianificazione come STORIA (pre-hike) col link "Unisciti".
             if (session.status == "PLANNED") {
-                Button(
+                TsmShareStoryButton(
                     onClick = {
                         onShareStory(
                             StoryComposerArgs(
@@ -362,20 +392,16 @@ fun SessionDetailScreen(
                                     difficultyLevel = session.routeDetails?.difficultyLevel,
                                     distanceMeters = session.gpxStats?.distanceKm?.let { it * 1000.0 },
                                     elevationGainM = session.gpxStats?.elevationGainM,
-                                    routePolyline = session.plannedRoute?.polylinePoints?.map { RoutePoint(it.lat, it.lon) },
+                                    // Cap a 300 punti: l'overlay backend accetta max 500.
+                                    // Percorsi GPX lunghi davano 422 "Dati non validi".
+                                    routePolyline = session.plannedRoute?.polylinePoints
+                                        ?.map { RoutePoint(it.lat, it.lon) }
+                                        ?.let { downsampleByIndex(it, 300) },
                                 ),
                             ),
                         )
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = TsmAccent),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Text(
-                        "CONDIVIDI COME STORIA",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    )
-                }
+                )
             }
 
             DetailCard {
@@ -393,6 +419,7 @@ fun SessionDetailScreen(
                     elevationLineColor = TsmAccent,
                     activeDotColor = TsmAccent,
                     difficultyLevel = session.routeDetails?.difficultyLevel,
+                    expandable = true,
                     emptyContent = {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
@@ -487,7 +514,13 @@ fun SessionDetailScreen(
                 onUserClick = onUserClick,
                 onApprove = { viewModel.approveParticipant(it) },
                 onReject = { viewModel.rejectParticipant(it) },
-                onRemove = { viewModel.removeParticipant(it) },
+                onRemove = { uid ->
+                    // Mostra conferma prima della rimozione definitiva (ban).
+                    val name = session.participants.orEmpty()
+                        .firstOrNull { it.userId?._id == uid }
+                        ?.userId?.username ?: "il partecipante"
+                    removeConfirmUser = uid to name
+                },
             )
 
             val participation = remember(uiState.session, uiState.liveUiEpoch, currentUserId) {

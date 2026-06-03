@@ -714,7 +714,9 @@ private fun SessionJoinTab(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.loadSessions()
+            // preserveJoinInfo=false: tornando sulla pagina il banner "richiesta
+            // inviata" sparisce (lo stato reale è il pending sulla card sessione).
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.loadSessions(preserveJoinInfo = false)
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -826,7 +828,7 @@ private fun SessionJoinTab(
                 Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = TsmSurface) {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(uiState.generalError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                        TextButton(onClick = viewModel::loadSessions) {
+                        TextButton(onClick = { viewModel.loadSessions(preserveJoinInfo = false) }) {
                             Text("Riprova", color = TsmAccent, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
                         }
                     }
@@ -852,7 +854,7 @@ private fun SessionJoinTab(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(uiState.sessions.size.toString(), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = TsmAccent)
                         IconButton(
-                            onClick = viewModel::loadSessions,
+                            onClick = { viewModel.loadSessions(preserveJoinInfo = false) },
                             enabled = !uiState.isLoadingSessions,
                         ) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "Aggiorna lista", tint = TsmAccent)

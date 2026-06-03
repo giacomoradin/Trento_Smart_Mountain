@@ -161,6 +161,7 @@ fun PostDetailScreen(
                 elevationLineColor = TsmColors.Cyan,
                 activeDotColor = TsmColors.Cyan,
                 difficultyLevel = post.difficultyLevel,
+                expandable = true,
             )
 
             // ── Titolo + caption ──

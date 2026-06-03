@@ -93,6 +93,28 @@ class NotificationsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /** Pull-to-refresh / tasto aggiorna. */
+    fun refresh() = load()
+
+    /**
+     * Elimina una notifica (ottimistico: la togliamo subito dalla lista). Le
+     * notifiche dinamiche (id con prefisso reminder:/alert:) non esistono lato
+     * server → rimozione solo locale.
+     */
+    fun delete(id: String) {
+        val isSynthetic = id.contains(":")
+        _state.update { it.copy(items = it.items.filterNot { n -> n._id == id }) }
+        if (!isSynthetic) {
+            viewModelScope.launch { runCatching { api.deleteNotification(id) } }
+        }
+    }
+
+    /** Elimina TUTTE le notifiche (svuota la vista e cancella lato server). */
+    fun deleteAll() {
+        _state.update { it.copy(items = emptyList(), hasMore = false) }
+        viewModelScope.launch { runCatching { api.deleteAllNotifications() } }
+    }
+
     private companion object {
         const val PAGE_SIZE = 20
     }

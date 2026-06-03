@@ -41,6 +41,8 @@ import {
   getNotifications,
   getUnreadCount,
   markAllRead,
+  deleteNotification,
+  deleteAllNotifications,
 } from "../services/notificationService.js";
 
 const router = express.Router();
@@ -173,6 +175,26 @@ router.get("/me/notifications/unread-count", async (req, res, next) => {
 router.post("/me/notifications/read", async (req, res, next) => {
   try {
     const result = await markAllRead(req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/v1/users/me/notifications — elimina TUTTE le notifiche. */
+router.delete("/me/notifications", async (req, res, next) => {
+  try {
+    const result = await deleteAllNotifications(req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/v1/users/me/notifications/:nid — elimina una singola notifica. */
+router.delete("/me/notifications/:nid", async (req, res, next) => {
+  try {
+    const result = await deleteNotification(req.user.userId, req.params.nid);
     res.status(200).json(result);
   } catch (err) {
     next(err);

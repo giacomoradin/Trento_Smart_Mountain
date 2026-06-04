@@ -145,18 +145,22 @@ fun StoryEditorControlsBar(
             }
 
             // ── Percorso (mappa/traccia) ────────────────────────────────────
-            if (hasCustomBackground && hasRoute) {
+            // Disponibile SEMPRE che ci sia una traccia (con o senza foto/video):
+            // l'utente può importare la polyline da sola o mappa+polyline, poi
+            // spostarla/ingrandirla/cambiarne colore. `hasCustomBackground` qui
+            // riceve hasMediaBackground (foto O video) → serve solo per la label.
+            if (hasRoute) {
                 item {
                     Box {
                         EditorTile(
                             icon = Icons.Filled.Route,
                             label = when (routeOverlayMode) {
-                                RouteOverlayMode.NONE -> "Percorso"
+                                RouteOverlayMode.NONE -> if (hasCustomBackground) "Percorso" else "Mappa"
                                 RouteOverlayMode.TRACE -> "Traccia"
                                 RouteOverlayMode.MAP_WIDGET -> "Mappa"
                             },
                             accent = TsmColors.Primary,
-                            highlighted = routeOverlayMode != RouteOverlayMode.NONE,
+                            highlighted = !hasCustomBackground || routeOverlayMode != RouteOverlayMode.NONE,
                             onClick = { routeOpen = true },
                         )
                         DropdownMenu(
@@ -164,17 +168,29 @@ fun StoryEditorControlsBar(
                             onDismissRequest = { routeOpen = false },
                             modifier = Modifier.background(TsmColors.CardElevated),
                         ) {
+                            // Mappa a tutto schermo: solo senza media di sfondo
+                            // (la mappa fa da sfondo). Mode NONE.
+                            if (!hasCustomBackground) {
+                                DropdownMenuItem(
+                                    leadingIcon = { Icon(Icons.Outlined.Map, null, tint = TsmColors.Cyan) },
+                                    text = { Text("Mappa a tutto schermo", color = Color.White) },
+                                    onClick = { routeOpen = false; onRemoveRouteOverlay() },
+                                )
+                            }
                             DropdownMenuItem(
                                 leadingIcon = { Icon(Icons.Outlined.Timeline, null, tint = TsmColors.Cyan) },
-                                text = { Text("Traccia GPX", color = Color.White) },
+                                text = { Text("Solo traccia (polyline)", color = Color.White) },
                                 onClick = { routeOpen = false; onAddTraceOverlay() },
                             )
                             DropdownMenuItem(
                                 leadingIcon = { Icon(Icons.Outlined.Map, null, tint = TsmColors.Cyan) },
-                                text = { Text("Widget mappa", color = Color.White) },
+                                text = { Text("Mappa + traccia (widget)", color = Color.White) },
                                 onClick = { routeOpen = false; onAddMapWidget() },
                             )
-                            if (routeOverlayMode != RouteOverlayMode.NONE) {
+                            // "Rimuovi" ha senso solo con uno sfondo media (toglie
+                            // l'overlay lasciando la foto/video). Senza media il
+                            // percorso è sempre presente (è il contenuto della storia).
+                            if (hasCustomBackground && routeOverlayMode != RouteOverlayMode.NONE) {
                                 DropdownMenuItem(
                                     text = { Text("Rimuovi percorso", color = TsmColors.Danger) },
                                     onClick = { routeOpen = false; onRemoveRouteOverlay() },

@@ -147,7 +147,10 @@ fun StoryEditorCanvas(
                             Text("Video", color = TsmColors.TextSecondary)
                         }
                     }
-                    !hasCustomBackground && hasRoute && mediaKind != "video" -> {
+                    // Mappa a tutto schermo (scena) come SFONDO: solo senza media e
+                    // quando l'utente non ha scelto un overlay esplicito (NONE).
+                    !hasCustomBackground && hasRoute && mediaKind != "video" &&
+                        routeOverlayMode == RouteOverlayMode.NONE -> {
                         val overscale = StoryMapSceneOverscale
                         val sceneSize =
                             Modifier.size(
@@ -191,10 +194,10 @@ fun StoryEditorCanvas(
                         .fillMaxSize()
                         .zIndex(Z_ROUTE_STICKERS),
             ) {
-                // hasMediaBackground (foto O video): gli overlay traccia/mappa-widget
-                // si sovrappongono al media. Prima era gated a hasCustomBackground
-                // (solo foto) → sul video la mappa non era aggiungibile (#5).
-                if (hasMediaBackground && hasRoute) {
+                // Overlay traccia / widget-mappa: disponibili SEMPRE che ci sia una
+                // traccia (foto, video o nessuno sfondo). Senza sfondo si sovrappongono
+                // allo sfondo scuro; con map_scene NONE è lo sfondo a fare da mappa.
+                if (hasRoute) {
                     when (routeOverlayMode) {
                         RouteOverlayMode.TRACE -> {
                             key(StoryStickerKind.TRACE) {

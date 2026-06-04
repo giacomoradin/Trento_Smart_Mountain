@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -63,6 +64,8 @@ fun StoryEditorControlsBar(
     textColor: Color,
     showTextSticker: Boolean,
     textEditMode: Boolean,
+    textFont: StoryFont = StoryFont.CLASSIC,
+    onCycleFont: () -> Unit = {},
     onImportGallery: () -> Unit,
     onImportPhoto: () -> Unit,
     onImportVideo: () -> Unit,
@@ -194,6 +197,19 @@ fun StoryEditorControlsBar(
                     },
                     onLongClick = if (showTextSticker) onRemoveText else null,
                 )
+            }
+
+            // ── Font (ciclo rapido) — solo quando c'è un testo ──────────────
+            if (showTextSticker || selectedSticker == StoryStickerKind.TEXT) {
+                item {
+                    EditorTile(
+                        icon = Icons.Filled.FontDownload,
+                        label = textFont.label,
+                        accent = TsmColors.Cyan,
+                        highlighted = textFont != StoryFont.CLASSIC,
+                        onClick = onCycleFont,
+                    )
+                }
             }
 
             // ── Colore (chip dinamico in base allo sticker selezionato) ────

@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.rotate
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -192,6 +194,22 @@ private fun StatusRing(
         ).value
     } else 1f
 
+    // Rotazione lenta del gradiente conico per le storie NON viste (effetto IG):
+    // l'anello "gira" finché non è stato aperto. Solo in questo stato per non
+    // sprecare animazioni.
+    val storyRingAngle = if (status == ResolvedRingStatus.STORY && storyUnviewed) {
+        val t = rememberInfiniteTransition(label = "story-ring")
+        t.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 4200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "story-angle",
+        ).value
+    } else 0f
+
     Canvas(modifier = Modifier.size(64.dp)) {
         // Glow "athletic" dietro l'anello per LIVE e storie non viste.
         if (status == ResolvedRingStatus.LIVE || (status == ResolvedRingStatus.STORY && storyUnviewed)) {
@@ -220,15 +238,36 @@ private fun StatusRing(
                 size = drawSize,
                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
             )
-            ResolvedRingStatus.STORY -> drawArc(
-                color = if (storyUnviewed) StoryCyan else StoryCyan.copy(alpha = 0.35f),
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = topLeft,
-                size = drawSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-            )
+            ResolvedRingStatus.STORY -> {
+                if (storyUnviewed) {
+                    // Anello a gradiente conico rotante (cyan → arancio → oro → cyan).
+                    rotate(degrees = storyRingAngle, pivot = center) {
+                        drawArc(
+                            brush = Brush.sweepGradient(
+                                colors = listOf(StoryCyan, TsmColors.Primary, TsmColors.Gold, StoryCyan),
+                                center = center,
+                            ),
+                            startAngle = -90f,
+                            sweepAngle = 360f,
+                            useCenter = false,
+                            topLeft = topLeft,
+                            size = drawSize,
+                            style = Stroke(width = strokeWidth + 0.5f, cap = StrokeCap.Round),
+                        )
+                    }
+                } else {
+                    // Storia già vista: anello tenue statico.
+                    drawArc(
+                        color = StoryCyan.copy(alpha = 0.35f),
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = drawSize,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+                    )
+                }
+            }
             ResolvedRingStatus.GOAL -> {
                 // Track grigio + arco verde proporzionale
                 drawArc(

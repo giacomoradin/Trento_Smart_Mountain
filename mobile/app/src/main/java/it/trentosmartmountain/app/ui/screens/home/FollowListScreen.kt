@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.home
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -74,8 +75,13 @@ fun FollowListScreen(
         if (type == FollowListType.FOLLOWERS) R.string.followers_title else R.string.following_title,
     )
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+        modifier = Modifier.fillMaxSize(),
+        particleCount = 12,
+    )
     Scaffold(
-        containerColor = DarkSurface,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -87,7 +93,7 @@ fun FollowListScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
     ) { padding ->
@@ -140,6 +146,7 @@ fun FollowListScreen(
                 }
             }
         }
+    }
     }
 }
 

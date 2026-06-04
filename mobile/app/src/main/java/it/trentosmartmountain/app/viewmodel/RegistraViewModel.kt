@@ -1279,10 +1279,14 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       val res = TsmApiClient.service().getSessionById(sessionId)
       if (res.isSuccessful && res.body() != null) {
         val session = res.body()!!
+        // Leader EFFETTIVO: il sostituto eletto via failover (effectiveLeaderId)
+        // ottiene i controlli live (roster, ricezione SOS), non solo chi ha il
+        // ruolo "groupLeader" nei partecipanti (= il creator originale).
         val isLeader =
-          session.participants?.any { p ->
-            p.userId?._id?.toString() == userId && p.role == "groupLeader"
-          } == true
+          session.effectiveLeaderId == userId ||
+            session.participants?.any { p ->
+              p.userId?._id?.toString() == userId && p.role == "groupLeader"
+            } == true
         _uiState.update { it.copy(isSessionGroupLeader = isLeader) }
       }
     }

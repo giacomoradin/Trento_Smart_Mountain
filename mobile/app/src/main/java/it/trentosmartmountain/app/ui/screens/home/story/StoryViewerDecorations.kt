@@ -93,6 +93,7 @@ fun StoryViewerDecorations(
                         text = text,
                         color = hexToColor(d.textColor, Color.White),
                         fontWeight = FontWeight.Bold,
+                        fontFamily = StoryFont.fromKey(d.textFont).composeFamily,
                         fontSize = 22.sp,
                         modifier =
                             Modifier

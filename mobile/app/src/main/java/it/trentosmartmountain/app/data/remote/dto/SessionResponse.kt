@@ -39,7 +39,19 @@ data class SessionResponse(
      * e controllo distanza dal percorso durante il live tracking.
      */
     val plannedRoute: PlannedRoute? = null,
-)
+    /**
+     * Leader EFFETTIVO corrente (failover): di norma == creatorId, ma può essere un
+     * partecipante se il creator si è disconnesso ed è scattata l'elezione. Null sui
+     * documenti vecchi → il client ricade su creatorId. Vedi [effectiveLeaderId].
+     */
+    val currentLeaderId: String? = null,
+    /** True quando la leadership è passata a un sostituto (failover attivo). */
+    val statoFailover: Boolean = false,
+) {
+    /** Id del leader effettivo: currentLeaderId se presente, altrimenti il creator. */
+    val effectiveLeaderId: String?
+        get() = currentLeaderId ?: creatorId?._id
+}
 
 /** Dettagli percorso inclusi nella sessione (nome, difficoltà, punti GeoJSON). */
 data class SessionRouteDetailsResponse(

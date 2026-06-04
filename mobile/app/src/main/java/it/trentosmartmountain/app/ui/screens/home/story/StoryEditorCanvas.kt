@@ -77,6 +77,7 @@ fun StoryEditorCanvas(
     floatingText: String,
     textTransform: StoryStickerTransform,
     textColor: Color,
+    textFont: StoryFont = StoryFont.CLASSIC,
     onTextTransformChange: (StoryStickerTransform) -> Unit,
     onEditorCanvasSize: (widthPx: Float, heightPx: Float) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
@@ -267,6 +268,7 @@ fun StoryEditorCanvas(
                         text = displayText,
                         color = textColor,
                         fontWeight = FontWeight.Bold,
+                        fontFamily = textFont.composeFamily,
                         fontSize = 22.sp,
                         modifier =
                             Modifier

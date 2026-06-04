@@ -33,6 +33,7 @@ object StoryBitmapExporter {
         floatingText: String?,
         textTransform: StoryStickerTransform?,
         textColor: Color,
+        textFont: StoryFont = StoryFont.CLASSIC,
         mapSceneBitmap: Bitmap? = null,
         mapWidgetBitmap: Bitmap? = null,
         editorCanvasWidthPx: Float = width.toFloat(),
@@ -90,7 +91,7 @@ object StoryBitmapExporter {
 
         val text = floatingText?.trim().orEmpty()
         if (text.isNotBlank() && textT != null) {
-            drawTextSticker(canvas, width, height, text, textT, textColor)
+            drawTextSticker(canvas, width, height, text, textT, textColor, textFont)
         }
 
         val scaled = AvatarUtils.downscaleToBox(bitmap, max(width, height))
@@ -295,12 +296,13 @@ object StoryBitmapExporter {
         text: String,
         transform: StoryStickerTransform,
         textColor: Color,
+        textFont: StoryFont,
     ) {
         val paint =
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = textColor.toArgb()
                 textSize = 52f * transform.scale.coerceIn(0.5f, 2f)
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                typeface = textFont.typeface()
             }
         val bounds = RectF()
         val textWidth = paint.measureText(text)

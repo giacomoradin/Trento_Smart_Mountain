@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -83,7 +85,13 @@ fun FormazioneScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+        modifier = Modifier.fillMaxSize(),
+        particleCount = 14,
+    )
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("Formazione", color = Color.White, fontWeight = FontWeight.Bold) },
@@ -97,10 +105,9 @@ fun FormazioneScreen(
                         Icon(Icons.Filled.Refresh, contentDescription = "Aggiorna", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
-        containerColor = DarkSurface,
     ) { padding ->
         when {
             uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -111,7 +118,12 @@ fun FormazioneScreen(
             }
             uiState.categories.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("📚", style = MaterialTheme.typography.displayMedium)
+                    Icon(
+                        Icons.Filled.School,
+                        contentDescription = null,
+                        tint = AccentCyan.copy(alpha = 0.7f),
+                        modifier = Modifier.size(52.dp),
+                    )
                     Spacer(Modifier.height(12.dp))
                     Text(
                         "Nessuna categoria disponibile",
@@ -142,6 +154,7 @@ fun FormazioneScreen(
                 item { Spacer(Modifier.height(16.dp)) }
             }
         }
+    }
     }
 }
 

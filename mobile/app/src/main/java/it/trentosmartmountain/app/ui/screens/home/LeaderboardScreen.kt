@@ -1,5 +1,6 @@
 package it.trentosmartmountain.app.ui.screens.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Terrain
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -68,8 +70,13 @@ fun LeaderboardScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+        it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+            modifier = Modifier.matchParentSize(),
+            particleCount = 14,
+        )
     Scaffold(
-        containerColor = DarkSurface,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -87,7 +94,7 @@ fun LeaderboardScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
     ) { padding ->
@@ -109,7 +116,12 @@ fun LeaderboardScreen(
                 }
                 state.items.isEmpty() -> Centered {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🏔️", style = MaterialTheme.typography.displaySmall)
+                        Icon(
+                            androidx.compose.material.icons.Icons.Outlined.Terrain,
+                            contentDescription = null,
+                            tint = AccentCyan.copy(alpha = 0.7f),
+                            modifier = Modifier.size(48.dp),
+                        )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             stringResource(R.string.leaderboard_empty),
@@ -138,6 +150,7 @@ fun LeaderboardScreen(
                 }
             }
         }
+    }
     }
 }
 
@@ -173,11 +186,47 @@ private fun LeaderboardRow(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Rank: medaglia per i primi 3, numero per gli altri.
-            Box(modifier = Modifier.width(32.dp), contentAlignment = Alignment.Center) {
-                val medal = when (rank) { 1 -> "🥇"; 2 -> "🥈"; 3 -> "🥉"; else -> null }
-                if (medal != null) {
-                    Text(medal, style = MaterialTheme.typography.titleMedium)
+            // Rank: medaglia "materica" per i primi 3 (cerchio metallico + glow),
+            // numero semplice per gli altri.
+            Box(modifier = Modifier.width(36.dp), contentAlignment = Alignment.Center) {
+                val medalColor = when (rank) {
+                    1 -> Color(0xFFFFC729) // oro
+                    2 -> Color(0xFFC0C8D4) // argento
+                    3 -> Color(0xFFCD7F32) // bronzo
+                    else -> null
+                }
+                if (medalColor != null) {
+                    Box(contentAlignment = Alignment.Center) {
+                        // Glow soft dietro la medaglia.
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.radialGradient(
+                                        listOf(medalColor.copy(alpha = 0.45f), Color.Transparent),
+                                    ),
+                                    androidx.compose.foundation.shape.CircleShape,
+                                ),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        listOf(medalColor, medalColor.copy(alpha = 0.65f)),
+                                    ),
+                                    androidx.compose.foundation.shape.CircleShape,
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "$rank",
+                                color = Color(0xFF0B0B0B),
+                                fontWeight = FontWeight.Black,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                    }
                 } else {
                     Text("$rank", color = TextSecondary, fontWeight = FontWeight.Bold)
                 }
@@ -199,20 +248,23 @@ private fun LeaderboardRow(
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
-            Text(
-                metricValue(entry, metric),
+            // Valore metrica con count-up animato.
+            val (targetVal, fmt) = when (metric) {
+                LeaderboardMetric.KM -> entry.km.toFloat() to { v: Float ->
+                    if (v >= 100) "%.0f km".format(v) else "%.1f km".format(v)
+                }
+                LeaderboardMetric.ELEVATION -> entry.elevM.toFloat() to { v: Float -> "%.0f m".format(v) }
+                LeaderboardMetric.POINTS -> entry.points.toFloat() to { v: Float -> "%.0f pt".format(v) }
+            }
+            it.trentosmartmountain.app.ui.components.TsmAnimatedCounter(
+                target = targetVal,
+                format = fmt,
                 color = AccentCyan,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleMedium,
             )
         }
     }
-}
-
-private fun metricValue(entry: LeaderboardEntry, metric: LeaderboardMetric): String = when (metric) {
-    LeaderboardMetric.KM -> if (entry.km >= 100) "%.0f km".format(entry.km) else "%.1f km".format(entry.km)
-    LeaderboardMetric.ELEVATION -> "${entry.elevM} m"
-    LeaderboardMetric.POINTS -> "${entry.points} pt"
 }
 
 @Composable

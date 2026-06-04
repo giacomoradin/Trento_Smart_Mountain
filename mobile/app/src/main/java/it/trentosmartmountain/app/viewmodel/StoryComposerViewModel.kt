@@ -52,6 +52,8 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
         val routeColor: Color = Color(0xFF4DD0E1),
         val textTransform: StoryStickerTransform = StoryStickerTransform(),
         val textColor: Color = Color.White,
+        val textFont: it.trentosmartmountain.app.ui.screens.home.story.StoryFont =
+            it.trentosmartmountain.app.ui.screens.home.story.StoryFont.CLASSIC,
         val floatingText: String = "",
         val showTextSticker: Boolean = false,
         val textEditMode: Boolean = false,
@@ -114,6 +116,11 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
 
     fun onTextTransformChange(t: StoryStickerTransform) {
         _state.update { it.copy(textTransform = t) }
+    }
+
+    /** Cicla al font successivo per il testo della storia. */
+    fun cycleTextFont() {
+        _state.update { it.copy(textFont = it.textFont.next()) }
     }
 
     fun onRouteColorChange(color: Color) {
@@ -340,6 +347,7 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
                                         },
                                     textTransform = if (s.showTextSticker) s.textTransform else null,
                                     textColor = s.textColor,
+                                    textFont = s.textFont,
                                     mapSceneBitmap = mapSceneBmp,
                                     mapWidgetBitmap = mapWidgetBmp,
                                     editorCanvasWidthPx = editorCanvasWidthPx,
@@ -418,6 +426,7 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
             floatingText = if (hasText) s.floatingText else null,
             textColor = if (hasText) s.textColor.toHexRgb() else null,
             textTransform = if (hasText) s.textTransform.toDto() else null,
+            textFont = if (hasText) s.textFont.key else null,
         )
     }
 

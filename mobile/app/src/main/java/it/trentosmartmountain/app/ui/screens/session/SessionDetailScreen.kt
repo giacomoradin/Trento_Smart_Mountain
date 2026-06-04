@@ -274,8 +274,15 @@ fun SessionDetailScreen(
     val isCreator = session?.creatorId?._id == currentUserId || currentUserId.isBlank()
     val isToday = SessionDateFormats.isTodayApi(session?.meetingDate)
 
+    // Sfondo aurora animato dietro tutta la scheda sessione (materiali premium,
+    // coerente con Feed/Profilo). Lo Scaffold è trasparente così l'aurora traspare.
+    Box(modifier = Modifier.fillMaxSize().background(TsmBackground)) {
+        it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+            modifier = Modifier.matchParentSize(),
+            particleCount = 16,
+        )
     Scaffold(
-        containerColor = TsmBackground,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -331,7 +338,7 @@ fun SessionDetailScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = TsmBackground),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
     ) { innerPadding ->
@@ -566,9 +573,49 @@ fun SessionDetailScreen(
                 )
             }
 
+            // "Chiudi sessione" (capogruppo, modello Ibrido): forza COMPLETED per
+            // tutti anche se qualche partecipante non ha ancora concluso. Visibile
+            // solo al capogruppo quando la sessione è ACTIVE e ci sono altri membri.
+            if (isCreator && session.status == "ACTIVE" && (session.participants?.size ?: 0) > 1) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(
+                    onClick = { viewModel.requestCloseSession() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = TsmSos, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Chiudi sessione per tutti", color = TsmSos, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
             }
         }
+    }
+
+    if (uiState.showCloseSessionConfirm) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCloseSession,
+            containerColor = TsmSurface,
+            title = { Text("Chiudere la sessione?", color = Color.White) },
+            text = {
+                Text(
+                    "La sessione verrà conclusa per TUTTI i partecipanti, anche per chi " +
+                        "non ha ancora terminato il proprio tracciato. L'operazione è irreversibile.",
+                    color = Color.Gray,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.closeSessionForAll() },
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
+                ) { Text("Chiudi per tutti") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissCloseSession) { Text("Annulla", color = Color.Gray) }
+            },
+        )
+    }
     }
 }
 

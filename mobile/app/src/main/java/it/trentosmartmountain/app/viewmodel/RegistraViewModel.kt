@@ -125,6 +125,21 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
      * appena il tracking parte o l'utente chiude il dialog.
      */
     val gpsDisabledWarning: Boolean = false,
+    /**
+     * true quando un avvio (FAB REC o auto-start da sessione) è stato bloccato
+     * perché esiste già un tracking in corso (RECORDING/PAUSED) che verrebbe
+     * sovrascritto. La UI mostra un avviso: termina prima l'attività in corso.
+     */
+    val startBlockedByActiveTracking: Boolean = false,
+    /**
+     * Non-null quando l'utente prova ad AVVIARE una nuova sessione mentre c'è
+     * già un'attività in corso. La UI mostra un dialog a 3 scelte:
+     *   - Salva l'attività in corso e avvia la nuova sessione
+     *   - Scarta l'attività in corso e avvia la nuova
+     *   - Annulla (resta sull'attività in corso)
+     * Contiene il sessionId della sessione "in attesa di avvio".
+     */
+    val pendingStartSessionId: String? = null,
     /** SOS: fase UI (conferma, countdown, attivo, coda offline). */
     val sosPhase: SosPhase = SosPhase.IDLE,
     val sosCountdownSeconds: Int = 0,
@@ -230,10 +245,15 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     // a HikerMainScreen (che a sua volta switcha la tab) in modo indipendente.
     viewModelScope.launch {
       SessionStartCoordinator.pendingSessionStart.collect { sessionId ->
-        if (_uiState.value.trackingStatus == TrackingStatus.IDLE) {
-          autoStartFromSession(sessionId)
-        } else {
-          _uiState.update { it.copy(activeSessionId = sessionId) }
+        when {
+          _uiState.value.trackingStatus == TrackingStatus.IDLE ->
+            autoStartFromSession(sessionId)
+          // Sto già tracciando QUESTA stessa sessione: nessun cambiamento.
+          _uiState.value.activeSessionId == sessionId -> Unit
+          // Sto tracciando un'ALTRA attività/sessione: NON sovrascrivo (era il bug
+          // che faceva perdere l'attività in corso). Chiedo all'utente cosa fare.
+          else ->
+            _uiState.update { it.copy(pendingStartSessionId = sessionId) }
         }
       }
     }
@@ -363,6 +383,36 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
     _uiState.update { it.copy(gpsDisabledWarning = false) }
   }
 
+  /** Chiude l'avviso "hai già un'attività in corso". */
+  fun dismissStartBlockedWarning() {
+    _uiState.update { it.copy(startBlockedByActiveTracking = false) }
+  }
+
+  // ── Switch sessione con attività in corso (dialog a 3 scelte) ───────────────
+
+  /** Salva l'attività in corso e poi avvia la sessione in attesa. */
+  fun confirmSaveAndStartPendingSession() {
+    val next = _uiState.value.pendingStartSessionId ?: return
+    _uiState.update { it.copy(pendingStartSessionId = null) }
+    // confirmStopTracking resetta lo state a IDLE in modo sincrono (il salvataggio
+    // avviene in coroutine in background) → possiamo avviare subito la nuova.
+    confirmStopTracking(force = true)
+    autoStartFromSession(next)
+  }
+
+  /** Scarta l'attività in corso e avvia la sessione in attesa. */
+  fun confirmDiscardAndStartPendingSession() {
+    val next = _uiState.value.pendingStartSessionId ?: return
+    _uiState.update { it.copy(pendingStartSessionId = null) }
+    discardTracking()
+    autoStartFromSession(next)
+  }
+
+  /** Annulla: resta sull'attività in corso, non avvia la nuova sessione. */
+  fun cancelPendingStartSession() {
+    _uiState.update { it.copy(pendingStartSessionId = null) }
+  }
+
   /**
    * Avvia il tracking collegato a una sessione esistente:
    *   1. Marca lo stato locale con l'activeSessionId
@@ -374,6 +424,22 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
    * dal lato Compose; quando arriverà il grant, il tracking partirà.
    */
   private fun autoStartFromSession(sessionId: String) {
+    // Anti-overwrite: se sto già registrando un'attività LIBERA (nessun
+    // activeSessionId) o un'ALTRA sessione, non clobberare lo stato — avviso
+    // l'utente di terminare prima. Evita di perdere il tracking in corso entrando
+    // in una sessione.
+    val cur = _uiState.value
+    if (cur.trackingStatus != TrackingStatus.IDLE &&
+      cur.activeSessionId != null &&
+      cur.activeSessionId != sessionId
+    ) {
+      _uiState.update { it.copy(startBlockedByActiveTracking = true) }
+      return
+    }
+    if (cur.trackingStatus != TrackingStatus.IDLE && cur.activeSessionId == null) {
+      _uiState.update { it.copy(startBlockedByActiveTracking = true) }
+      return
+    }
     _uiState.update { it.copy(activeSessionId = sessionId) }
     viewModelScope.launch {
       refreshSessionRole(sessionId)
@@ -409,6 +475,15 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
 
   fun startTracking() {
     if (!_uiState.value.hasLocationPermission) return
+    // GUARD anti-overwrite: se c'è già un tracking in corso (RECORDING o PAUSED),
+    // NON ripartire — ripartire azzererebbe distanza/tempo/punti dell'attività in
+    // essere, perdendola. La UI mostra un avviso (startBlockedByActiveTracking).
+    // Questo copre sia il FAB REC sia l'auto-start quando si entra in una sessione
+    // mentre si sta già registrando un'attività libera.
+    if (_uiState.value.trackingStatus != TrackingStatus.IDLE) {
+      _uiState.update { it.copy(startBlockedByActiveTracking = true) }
+      return
+    }
     // GPS hardware acceso? Se no, non avviamo: la UI mostra il dialog di warning.
     if (!isGpsHardwareEnabled()) {
       _uiState.update { it.copy(gpsDisabledWarning = true) }

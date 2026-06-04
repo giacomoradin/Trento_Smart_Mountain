@@ -203,6 +203,10 @@ interface TsmApiService {
   @DELETE("api/v1/sessions/{id}")
   suspend fun deleteSession(@Path("id") id: String): Response<ApiMessageBody>
 
+  /** Nasconde una sessione COMPLETED dalla lista "Le mie attività" (hide per-utente). */
+  @DELETE("api/v1/sessions/{id}/from-activities")
+  suspend fun hideSessionFromActivities(@Path("id") id: String): Response<ApiMessageBody>
+
   @PATCH("api/v1/sessions/{id}")
   suspend fun updateSession(@Path("id") id: String, @Body body: UpdateSessionRequest): Response<ApiMessageBody>
 
@@ -217,6 +221,10 @@ interface TsmApiService {
     @Path("id") id: String,
     @Body body: CompleteSessionRequest,
   ): Response<ApiMessageBody>
+
+  /** Chiusura forzata della sessione (COMPLETED per tutti). Solo capogruppo. */
+  @POST("api/v1/sessions/{id}/close")
+  suspend fun closeSession(@Path("id") id: String): Response<ApiMessageBody>
 
   // Gestione partecipanti (Fase A): approva/rifiuta richieste pending, rimuovi+banna.
   @POST("api/v1/sessions/{id}/participants/{userId}/approve")

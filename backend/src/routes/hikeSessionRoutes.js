@@ -34,6 +34,7 @@ import {
   joinSession,
   leaveSession,
   completeSession,
+  forceCompleteSession,
   getActivityStats,
   postLiveLocation,
   getLiveLocations,
@@ -651,6 +652,25 @@ router.patch(
         req.user.userId,
         req.body?.actualStats,
       );
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/v1/sessions/:id/close — chiusura forzata dal capogruppo ("Chiudi
+// sessione"): porta a COMPLETED per tutti, anche con partecipanti non conclusi.
+router.post(
+  "/:id/close",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Chiude forzatamente la sessione (COMPLETED per tutti). Riservata al capogruppo.'
+    */
+    try {
+      const session = await forceCompleteSession(req.params.id, req.user.userId);
       res.status(200).json(session);
     } catch (err) {
       next(err);

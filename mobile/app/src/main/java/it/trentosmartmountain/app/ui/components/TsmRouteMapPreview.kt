@@ -56,8 +56,15 @@ fun TsmRouteMapPreview(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Sanitizza: coordinate NaN/Inf o fuori range fanno crashare OSMdroid nel
+    // calcolo del bounding box / proiezione (schermata bianca). Le filtriamo via.
     val geoPoints = remember(points) {
-        points.map { GeoPoint(it.lat, it.lon) }
+        points
+            .filter {
+                it.lat.isFinite() && it.lon.isFinite() &&
+                    it.lat in -90.0..90.0 && it.lon in -180.0..180.0
+            }
+            .map { GeoPoint(it.lat, it.lon) }
     }
 
     // Animazione della fase delle chevron (frecce direzionali stile Komoot):

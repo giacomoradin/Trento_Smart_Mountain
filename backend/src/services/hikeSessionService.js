@@ -81,6 +81,8 @@ export async function createSession(creatorId, routeDetails, sessionMeta = {}) {
 
   const session = new HikeSession({
     creatorId,
+    // Leader effettivo iniziale = creator (potrà cambiare con il failover).
+    currentLeaderId: creatorId,
     routeDetails,
     inviteCode,
     participants: [
@@ -728,39 +730,79 @@ export async function updateSessionDetails(sessionId, userId, updates) {
 }
 
 /**
- * Marca la sessione come COMPLETED e persiste le metriche reali registrate dal client.
+ * Conclude la partecipazione INDIVIDUALE di un utente (modello "Ibrido").
  *
- * Accetta il payload opzionale `actualStats` (movingSeconds, totalSeconds, distanceMeters,
- * elevationGainM, finalPoints, estimatedCalories, currentAltitudeM). Se assente, la
- * sessione viene completata con la sola transizione di stato (fallback CAI sul client).
+ * Comportamento:
+ *  - Registra che `userId` ha finito (finishedParticipants) e accredita i suoi crediti.
+ *  - Persiste `actualStats` come stat "ufficiali" della sessione solo se mancanti o
+ *    se a chiamare è il leader (un partecipante non sovrascrive le stat del leader).
+ *  - La sessione passa a COMPLETED solo se TUTTI i membri accettati hanno finito
+ *    (caso tipico: sessione in solitaria → il creator finisce → chiusa subito),
+ *    OPPURE se `forceCloseAll` (il capogruppo preme "Chiudi sessione").
+ *  - Altrimenti la sessione resta ACTIVE per gli altri membri ancora in cammino.
  *
- * Autorizzato sia per il creator che per i partecipanti — un utente che si è unito
- * con codice invito deve poter chiudere il proprio tracking anche se il creator è offline.
+ * Autorizzato a creator e partecipanti accettati: ognuno chiude il proprio tracking
+ * in autonomia, anche se il leader è offline.
  */
-export async function completeSession(sessionId, userId, actualStats = null) {
+export async function completeSession(
+  sessionId,
+  userId,
+  actualStats = null,
+  { forceCloseAll = false } = {},
+) {
   const session = await HikeSession.findById(sessionId);
   if (!session) throw new Error("SESSION_NOT_FOUND");
 
   const isCreator = session.creatorId.toString() === userId.toString();
   const isParticipant = session.participants.some(
-    (p) => p.userId.toString() === userId.toString(),
+    (p) => (p.userId?._id || p.userId).toString() === userId.toString(),
   );
   if (!isCreator && !isParticipant)
     throw new Error("ONLY_CREATOR_CAN_COMPLETE_SESSION");
 
-  session.status = "COMPLETED";
-  session.endTime = new Date();
+  const isLeader = isSessionGroupLeader(session, userId);
 
+  // 1. Registra la conclusione individuale (idempotente).
+  if (
+    !(session.finishedParticipants || []).some(
+      (id) => id.toString() === userId.toString(),
+    )
+  ) {
+    session.finishedParticipants.push(userId);
+  }
+
+  // 2. actualStats "ufficiali": le scrive il leader; un partecipante le scrive
+  //    solo se ancora assenti (così le stat della sessione non vengono sovrascritte
+  //    dall'ultimo che si ferma).
   if (actualStats && typeof actualStats === "object") {
-    session.actualStats = {
-      movingSeconds: actualStats.movingSeconds,
-      totalSeconds: actualStats.totalSeconds,
-      distanceMeters: actualStats.distanceMeters,
-      elevationGainM: actualStats.elevationGainM,
-      finalPoints: actualStats.finalPoints,
-      estimatedCalories: actualStats.estimatedCalories,
-      currentAltitudeM: actualStats.currentAltitudeM,
-    };
+    const canStoreStats =
+      isLeader || session.actualStats?.distanceMeters == null;
+    if (canStoreStats) {
+      session.actualStats = {
+        movingSeconds: actualStats.movingSeconds,
+        totalSeconds: actualStats.totalSeconds,
+        distanceMeters: actualStats.distanceMeters,
+        elevationGainM: actualStats.elevationGainM,
+        finalPoints: actualStats.finalPoints,
+        estimatedCalories: actualStats.estimatedCalories,
+        currentAltitudeM: actualStats.currentAltitudeM,
+      };
+    }
+  }
+
+  // 3. Decisione di chiusura: tutti gli accettati hanno finito? oppure force?
+  const acceptedIds = (session.participants || [])
+    .filter((p) => p.status !== "pending")
+    .map((p) => (p.userId?._id || p.userId).toString());
+  const finishedSet = new Set(
+    (session.finishedParticipants || []).map((id) => id.toString()),
+  );
+  const allFinished =
+    acceptedIds.length > 0 && acceptedIds.every((id) => finishedSet.has(id));
+
+  if (forceCloseAll || allFinished) {
+    session.status = "COMPLETED";
+    session.endTime = session.endTime || new Date();
   }
 
   await session.save();
@@ -814,6 +856,23 @@ export async function completeSession(sessionId, userId, actualStats = null) {
     console.error("[hikeSessionService] badge eval fallita:", err.message);
   });
 
+  return session;
+}
+
+/**
+ * Chiusura forzata della sessione da parte del capogruppo ("Chiudi sessione"):
+ * porta a COMPLETED per tutti, anche se qualche partecipante non ha ancora
+ * concluso. Riservata al leader effettivo corrente (currentLeaderId o creator).
+ */
+export async function forceCompleteSession(sessionId, leaderId) {
+  const session = await HikeSession.findById(sessionId);
+  if (!session) throw new Error("SESSION_NOT_FOUND");
+  if (!isSessionGroupLeader(session, leaderId)) {
+    throw new Error("FORBIDDEN_NOT_LEADER");
+  }
+  session.status = "COMPLETED";
+  session.endTime = session.endTime || new Date();
+  await session.save();
   return session;
 }
 

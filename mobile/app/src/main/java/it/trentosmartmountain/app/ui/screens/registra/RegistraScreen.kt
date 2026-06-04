@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.DirectionsRun
+import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -523,6 +526,31 @@ fun RegistraScreen(
     )
   }
 
+  if (uiState.startBlockedByActiveTracking) {
+    AlertDialog(
+      onDismissRequest = viewModel::dismissStartBlockedWarning,
+      title = { Text("Attività in corso") },
+      text = {
+        Text(
+          "Hai già un'attività in registrazione. Mettila in pausa e premi STOP " +
+            "per salvarla prima di iniziarne una nuova: così non perdi i dati raccolti.",
+        )
+      },
+      confirmButton = {
+        Button(onClick = viewModel::dismissStartBlockedWarning) { Text("Ho capito") }
+      },
+    )
+  }
+
+  // Switch sessione mentre un'attività è in corso: dialog premium con scelta esplicita.
+  if (uiState.pendingStartSessionId != null) {
+    SwitchSessionDialog(
+      onSaveAndStart = viewModel::confirmSaveAndStartPendingSession,
+      onDiscardAndStart = viewModel::confirmDiscardAndStartPendingSession,
+      onCancel = viewModel::cancelPendingStartSession,
+    )
+  }
+
   if (uiState.showGroupRosterMenu) {
     GroupRosterMenu(
       activeParticipants = uiState.liveLocations,
@@ -691,5 +719,99 @@ private fun SaveKpiCell(
       style = MaterialTheme.typography.labelSmall,
       color = Color.Gray,
     )
+  }
+}
+
+
+/**
+ * Dialog premium per lo switch sessione mentre un'attivita e' in corso.
+ * Card glass con icona, titolo, sottotitolo e tre azioni gerarchizzate:
+ *  - Salva e avvia (primaria, verde)
+ *  - Scarta e avvia (distruttiva, rossa, outline)
+ *  - Annulla (neutra, testo)
+ */
+@Composable
+private fun SwitchSessionDialog(
+  onSaveAndStart: () -> Unit,
+  onDiscardAndStart: () -> Unit,
+  onCancel: () -> Unit,
+) {
+  androidx.compose.ui.window.Dialog(onDismissRequest = onCancel) {
+    Surface(
+      shape = RoundedCornerShape(24.dp),
+      color = androidx.compose.ui.graphics.Color.Transparent,
+      modifier = Modifier.fillMaxWidth(),
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .background(
+            androidx.compose.ui.graphics.Brush.verticalGradient(
+              listOf(
+                it.trentosmartmountain.app.ui.theme.TsmColors.CardElevated,
+                it.trentosmartmountain.app.ui.theme.TsmColors.Card,
+              ),
+            ),
+          )
+          .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        Box(
+          modifier = Modifier
+            .size(56.dp)
+            .background(
+              it.trentosmartmountain.app.ui.theme.TsmColors.Primary.copy(alpha = 0.16f),
+              RoundedCornerShape(16.dp),
+            ),
+          contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+            androidx.compose.material.icons.Icons.Outlined.DirectionsRun,
+            contentDescription = null,
+            tint = it.trentosmartmountain.app.ui.theme.TsmColors.Primary,
+            modifier = Modifier.size(30.dp),
+          )
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(
+          "Hai un'attivita in corso",
+          style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+          color = androidx.compose.ui.graphics.Color.White,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+          "Stai registrando un'altra attivita. Cosa vuoi fare prima di avviare la nuova sessione?",
+          style = MaterialTheme.typography.bodyMedium,
+          color = it.trentosmartmountain.app.ui.theme.TsmColors.TextSecondary,
+          textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Spacer(Modifier.height(20.dp))
+        Button(
+          onClick = onSaveAndStart,
+          modifier = Modifier.fillMaxWidth().height(50.dp),
+          colors = ButtonDefaults.buttonColors(containerColor = it.trentosmartmountain.app.ui.theme.TsmColors.Primary),
+          shape = RoundedCornerShape(14.dp),
+        ) {
+          Icon(androidx.compose.material.icons.Icons.Outlined.Save, null, modifier = Modifier.size(18.dp), tint = androidx.compose.ui.graphics.Color.White)
+          Spacer(Modifier.size(8.dp))
+          Text("Salva e avvia", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(10.dp))
+        androidx.compose.material3.OutlinedButton(
+          onClick = onDiscardAndStart,
+          modifier = Modifier.fillMaxWidth().height(50.dp),
+          border = androidx.compose.foundation.BorderStroke(1.dp, it.trentosmartmountain.app.ui.theme.TsmColors.Danger.copy(alpha = 0.7f)),
+          shape = RoundedCornerShape(14.dp),
+        ) {
+          Icon(androidx.compose.material.icons.Icons.Outlined.DeleteOutline, null, modifier = Modifier.size(18.dp), tint = it.trentosmartmountain.app.ui.theme.TsmColors.Danger)
+          Spacer(Modifier.size(8.dp))
+          Text("Scarta e avvia", color = it.trentosmartmountain.app.ui.theme.TsmColors.Danger, fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.height(4.dp))
+        TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+          Text("Annulla", color = it.trentosmartmountain.app.ui.theme.TsmColors.TextSecondary)
+        }
+      }
+    }
   }
 }

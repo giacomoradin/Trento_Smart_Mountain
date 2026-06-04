@@ -57,8 +57,18 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
         val textEditMode: Boolean = false,
         val selectedSticker: StoryStickerKind? = StoryStickerKind.MAP_SCENE,
     ) {
+        /** True solo per FOTO: usato per l'export JPEG (background appiattito). */
         val hasCustomBackground: Boolean
             get() = mediaKind == "image" && !mediaDataUri.isNullOrBlank()
+
+        /**
+         * True per FOTO **o** VIDEO: il media fa da "sfondo" e gli overlay (traccia /
+         * widget mappa) ci vanno SOPRA come sticker. Per il video non possiamo
+         * appiattire in JPEG, ma possiamo comunque sovrapporre gli overlay via
+         * editorDecor (renderizzati dal viewer sopra al video).
+         */
+        val hasMediaBackground: Boolean
+            get() = !mediaDataUri.isNullOrBlank() && (mediaKind == "image" || mediaKind == "video")
     }
 
     private val _state = MutableStateFlow(UiState())
@@ -215,23 +225,33 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
                 }.getOrNull()
             }
             if (result == null) {
+                val isVideoMime = mime.startsWith("video")
                 _state.update {
                     it.copy(
                         isEncoding = false,
-                        error = "Media non valido o troppo grande (video ≤ ~3.5MB).",
+                        error = if (isVideoMime) {
+                            "Video troppo pesante. Registralo dalla fotocamera (max 10s, " +
+                                "bassa risoluzione) o scegline uno più corto/leggero."
+                        } else {
+                            "Immagine non valida. Riprova con un'altra foto."
+                        },
                     )
                 }
             } else {
                 val isImage = result.first == "image"
+                val isVideo = result.first == "video"
                 _state.update {
                     it.copy(
                         isEncoding = false,
                         mediaKind = result.first,
                         mediaDataUri = result.second,
-                        routeOverlayMode = if (isImage) RouteOverlayMode.NONE else it.routeOverlayMode,
+                        // Foto e video partono SENZA overlay forzato: prima il video
+                        // ereditava map_scene → la storia mostrava sempre la mappa sopra
+                        // il video (#6). Ora l'utente aggiunge mappa/traccia se vuole (#5).
+                        routeOverlayMode = if (isImage || isVideo) RouteOverlayMode.NONE else it.routeOverlayMode,
                         selectedSticker =
                             when {
-                                isImage -> null
+                                isImage || isVideo -> null
                                 it.routePoints.size >= 2 -> StoryStickerKind.MAP_SCENE
                                 else -> null
                             },
@@ -376,7 +396,9 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
 
         val overlayKind =
             when {
-                !s.hasCustomBackground && hasRoute -> "map_scene"
+                // Nessun media di sfondo (né foto né video) + route → scena mappa piena.
+                !s.hasMediaBackground && hasRoute -> "map_scene"
+                // Con media di sfondo (foto O video) rispettiamo la scelta dell'utente.
                 s.routeOverlayMode == RouteOverlayMode.TRACE -> "trace"
                 s.routeOverlayMode == RouteOverlayMode.MAP_WIDGET -> "map_widget"
                 else -> null
@@ -408,7 +430,11 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
         )
 
     companion object {
-        const val VIDEO_MAX_BYTES = 3_500_000
+        // Cap RAW bytes del video: in base64 diventa ~1.37×, e deve restare sotto
+        // il cap backend STORY_MEDIA_MAX_CHARS = 3_800_000 chars.
+        //   2_700_000 raw × 1.37 ≈ 3_700_000 base64 < 3_800_000 ✓
+        // Prima era 3_500_000 → 4_670_000 base64 > cap backend = 413/422 al publish.
+        const val VIDEO_MAX_BYTES = 2_700_000
 
         // Lato massimo del media importato (prima dell'export con overlay).
         // Bump 1080 → 1440: con display moderni (1080p+) il 1080 mostrava

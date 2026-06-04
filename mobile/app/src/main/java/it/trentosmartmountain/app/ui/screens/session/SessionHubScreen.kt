@@ -307,6 +307,11 @@ private fun SessionPlanTab(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(TsmBackground)) {
+        it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+            modifier = Modifier.matchParentSize(),
+            particleCount = 14,
+        )
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -665,6 +670,7 @@ private fun SessionPlanTab(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+    }
     }
 }
 
@@ -1153,12 +1159,30 @@ private fun SessionCard(
 
 @Composable
 private fun SectionCard(content: @Composable () -> Unit) {
+    // Materiale "glass": gradiente sottile + bordo morbido + ombra, coerente con
+    // il resto dell'app (Feed/Profilo/Sessione). Sostituisce il flat TsmSurface.
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = TsmSurface,
+        shape = RoundedCornerShape(18.dp),
+        color = androidx.compose.ui.graphics.Color.Transparent,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            androidx.compose.ui.graphics.Color.White.copy(alpha = 0.06f),
+        ),
+        shadowElevation = 6.dp,
     ) {
-        Column(modifier = Modifier.padding(16.dp)) { content() }
+        Column(
+            modifier = Modifier
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            it.trentosmartmountain.app.ui.theme.TsmColors.CardElevated,
+                            it.trentosmartmountain.app.ui.theme.TsmColors.Card,
+                        ),
+                    ),
+                )
+                .padding(16.dp),
+        ) { content() }
     }
 }
 

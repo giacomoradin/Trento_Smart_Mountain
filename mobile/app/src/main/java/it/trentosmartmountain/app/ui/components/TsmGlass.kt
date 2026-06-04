@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -93,6 +94,43 @@ fun TsmAccentRule(
                 ),
             ),
     )
+}
+
+/**
+ * **Shimmer sweep**: una banda di luce diagonale che attraversa periodicamente
+ * il contenuto (effetto "premio brillante"). Da applicare a badge/CTA dorati o a
+ * elementi che meritano enfasi. Disegnato SOPRA il contenuto via [drawWithContent],
+ * non altera il layout. Loop infinito morbido con pausa tra i passaggi.
+ */
+@Composable
+fun Modifier.tsmShimmer(
+    highlight: Color = Color.White,
+    durationMillis: Int = 2600,
+): Modifier {
+    val transition = rememberInfiniteTransition(label = "shimmer-sweep")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = durationMillis, easing = TsmMotion.EaseInOut),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "shimmer-x",
+    )
+    return this.drawWithContent {
+        drawContent()
+        val bandW = size.width * 0.4f
+        // La banda parte fuori a sinistra e scorre oltre il bordo destro; sosta
+        // implicita perché solo l'ultimo ~60% del ciclo è "in vista".
+        val startX = -bandW + (size.width + bandW) * progress
+        drawRect(
+            brush = Brush.horizontalGradient(
+                colors = listOf(Color.Transparent, highlight.copy(alpha = 0.45f), Color.Transparent),
+                startX = startX,
+                endX = startX + bandW,
+            ),
+        )
+    }
 }
 
 /**

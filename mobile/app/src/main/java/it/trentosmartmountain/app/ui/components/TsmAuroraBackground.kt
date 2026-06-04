@@ -94,11 +94,18 @@ fun TsmAuroraBackground(
         blob(glowCool, w * (0.82f + 0.06f * cos(t * 0.8f)), h * (0.30f + 0.06f * sin(t * 1.1f)), w * 0.55f, 0.22f)
 
         // Particelle che salgono con twinkle (più presenti ma sempre eteree).
-        particles.forEach { p ->
+        // ~25% tintate (cyan/oro) → effetto "braci magiche" che dà più vita allo
+        // sfondo senza appesantire (il resto resta bianco etereo).
+        particles.forEachIndexed { i, p ->
             val y = (((p.baseY - phase * p.speed) % 1f) + 1f) % 1f
             val tw = 0.4f + 0.6f * (0.5f + 0.5f * sin((phase * p.speed * 6f + p.twinkle) * 2f * PI.toFloat()))
+            val tint = when (i % 8) {
+                0 -> glowCool   // cyan
+                4 -> glowWarm   // arancio caldo
+                else -> Color.White
+            }
             drawCircle(
-                color = Color.White.copy(alpha = 0.16f * tw),
+                color = tint.copy(alpha = 0.18f * tw),
                 radius = p.radius.dp.toPx(),
                 center = Offset(p.x * w, y * h),
             )

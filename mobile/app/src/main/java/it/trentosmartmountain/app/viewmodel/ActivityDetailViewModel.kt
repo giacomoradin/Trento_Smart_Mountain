@@ -171,14 +171,34 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
     fun deleteActivity(onDeleted: () -> Unit) {
         val id = _uiState.value.activityId
         viewModelScope.launch {
-            val entity = dao.getById(id)
-            if (entity?.sessionId == null && entity?.remoteId != null) {
-                runCatching { TsmApiClient.service().deleteActivity(entity.remoteId) }
+            // Tutto in try/catch: un'eccezione non gestita nel coroutine (DB, rete)
+            // crasherebbe l'app lasciando una schermata bianca. In ogni caso navighiamo
+            // indietro nel finally, così l'utente non resta bloccato.
+            try {
+                val entity = runCatching { dao.getById(id) }.getOrNull()
+                when {
+                    entity?.sessionId != null -> {
+                        // Sessione di gruppo: NON cancellabile sul backend (appartiene
+                        // anche agli altri). Chiediamo al server di nasconderla dalla
+                        // NOSTRA lista (hiddenForUsers) così non riappare dopo re-login.
+                        runCatching {
+                            TsmApiClient.service().hideSessionFromActivities(entity.sessionId)
+                        }
+                    }
+                    entity?.remoteId != null -> {
+                        // Attività libera: cancellazione reale sul backend.
+                        runCatching { TsmApiClient.service().deleteActivity(entity.remoteId) }
+                    }
+                }
+                // Tombstone locale: nasconde la riga senza eliminarla (evita re-import
+                // immediato dal sync prima del prossimo fetch dal server).
+                runCatching { dao.markHidden(id) }
+                entity?.sessionId?.let { sid -> runCatching { dao.markHiddenBySessionId(sid) } }
+            } catch (e: Exception) {
+                // best-effort: log silenzioso, navighiamo comunque indietro.
+            } finally {
+                onDeleted()
             }
-            // Tombstone: nasconde la riga senza eliminarla (evita re-import dal sync).
-            dao.markHidden(id)
-            entity?.sessionId?.let { dao.markHiddenBySessionId(it) }
-            onDeleted()
         }
     }
 

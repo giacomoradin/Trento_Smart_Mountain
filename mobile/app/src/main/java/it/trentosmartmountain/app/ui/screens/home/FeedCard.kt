@@ -284,7 +284,9 @@ fun FeedCard(
                 elevationProfile = profile,
                 distanceKm = (item.distanceMeters ?: 0.0) / 1000.0,
                 modifier = Modifier.fillMaxWidth(),
-                height = 176.dp,
+                // 200dp: lascia spazio ad header "PROFILO ALTIMETRICO" + assi distanza
+                // + footer MIN/MAX quote, ora mostrati anche nel feed.
+                height = 200.dp,
                 backgroundBrush = Brush.verticalGradient(listOf(HeroTop, HeroBottom)),
                 elevationLineColor = AccentCyan,
                 activeDotColor = AccentCyan,

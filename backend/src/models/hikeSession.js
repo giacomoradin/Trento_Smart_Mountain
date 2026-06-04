@@ -302,9 +302,22 @@ const hikSessionSchema = new Schema({
     default: "PLANNED",
   },
 
+  // ── Modello "Ibrido" di completamento ──────────────────────────────────────
+  // Ogni membro termina il PROPRIO tracking individualmente (registrato qui).
+  // La sessione passa a COMPLETED quando TUTTI i membri accettati hanno finito,
+  // oppure quando il capogruppo forza la chiusura (forceCompleteSession).
+  // Per le sessioni in solitaria (solo il creator accettato) basta che il creator
+  // finisca → la sessione si chiude pulita senza restare bloccata.
+  finishedParticipants: [{ type: Schema.Types.ObjectId, ref: "User" }],
+
   // Failover leadership
+  // Leader EFFETTIVO corrente: di norma è il creator, ma può passare a un
+  // partecipante se il creator si disconnette (elezione). Quando il creator
+  // rientra, la leadership gli viene restituita. Default = creator (impostato
+  // alla creazione).
+  currentLeaderId: { type: Schema.Types.ObjectId, ref: "User", default: null },
   statoFailover: { type: Boolean, default: false }, //  true se il groupLeader è inattivo e la leadership è passata a un altro partecipante
-  lastHeartbeat: { type: Date, default: Date.now }, // timestamp dell'ultimo segnale di vita ricevuto dal groupLeader
+  lastHeartbeat: { type: Date, default: Date.now }, // timestamp dell'ultimo segnale di vita ricevuto dal leader EFFETTIVO corrente
 
   startTime: { type: Date },
   endTime: { type: Date },

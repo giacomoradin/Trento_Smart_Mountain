@@ -251,9 +251,7 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                     _state.value = _state.value.copy(shareSuccess = "Pubblicato sul feed.")
                     refresh()
                 } else {
-                    _state.value = _state.value.copy(
-                        shareError = "Impossibile pubblicare (${resp.code()}).",
-                    )
+                    _state.value = _state.value.copy(shareError = shareErrorMessage(resp.code()))
                 }
             }.onFailure {
                 _state.value = _state.value.copy(shareError = it.message ?: "Errore di rete.")
@@ -272,14 +270,23 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                     _state.value = _state.value.copy(shareSuccess = "Pubblicato sul feed.")
                     refresh()
                 } else {
-                    _state.value = _state.value.copy(
-                        shareError = "Impossibile pubblicare (${resp.code()}).",
-                    )
+                    _state.value = _state.value.copy(shareError = shareErrorMessage(resp.code(), isSession = true))
                 }
             }.onFailure {
                 _state.value = _state.value.copy(shareError = it.message ?: "Errore di rete.")
             }
         }
+    }
+
+    /** Mappa lo status HTTP dello share su un messaggio leggibile e azionabile. */
+    private fun shareErrorMessage(code: Int, isSession: Boolean = false): String = when (code) {
+        403 -> if (isSession) {
+            "Solo il capogruppo può condividere la sessione del gruppo."
+        } else {
+            "Non hai i permessi per condividere questa attività."
+        }
+        404 -> "Attività non più disponibile sul server: prova ad aggiornare la lista."
+        else -> "Impossibile pubblicare (errore $code)."
     }
 
     /**

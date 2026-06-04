@@ -904,10 +904,12 @@ export async function getPostsByUser(authorId, viewerId, { page = 1, limit = 20 
     }
   }
 
-  // Se viewer != autore, mostriamo solo i post condivisi (sharedAt != null).
-  // Se viewer == autore, mostriamo anche i privati così l'utente può
-  // "vedere la propria timeline completa" e decidere cosa pubblicare.
-  const sharedFilter = isSelf ? {} : { sharedAt: { $ne: null } };
+  // Il profilo social è la **bacheca dei post PUBBLICATI**: mostriamo SOLO i post
+  // con `sharedAt != null`, anche al proprietario. Così "Rimuovi dal feed"
+  // (unshare → sharedAt=null) li fa sparire definitivamente dal profilo, come
+  // atteso dall'utente. La cronologia completa delle attività (anche non
+  // condivise) vive nella tab "Le mie attività" (Room/Activity), non qui.
+  const sharedFilter = { sharedAt: { $ne: null } };
 
   // Stessa paginazione a lookahead di getFeedForUser: skip+limit+1 doc per
   // sorgente → hasMore esatto e payload ridotto rispetto al cap fisso.

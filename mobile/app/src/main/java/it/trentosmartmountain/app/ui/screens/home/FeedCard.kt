@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.sp
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
 import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
+import it.trentosmartmountain.app.ui.components.tsmShimmer
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.util.RelativeTime
 import java.util.Locale
@@ -437,7 +438,12 @@ private fun KindChip(kind: String) {
 
 @Composable
 private fun PointsBadge(points: Int) {
-    Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFFFC107).copy(alpha = 0.16f)) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFFFFC107).copy(alpha = 0.16f),
+        // Shimmer dorato che attraversa il badge: enfatizza il "premio" punti.
+        modifier = Modifier.tsmShimmer(highlight = Color(0xFFFFD700)),
+    ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,

@@ -12,8 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,10 +25,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,6 +63,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -97,6 +105,30 @@ fun BoardScreen(
     val context = LocalContext.current
     var showCompose by remember { mutableStateOf(false) }
     var editPost by remember { mutableStateOf<BoardPost?>(null) }
+    var showClearAll by remember { mutableStateOf(false) }
+
+    if (showClearAll) {
+        AlertDialog(
+            onDismissRequest = { showClearAll = false },
+            containerColor = TsmColors.CardElevated,
+            title = { Text("Pulire la bacheca?", color = Color.White) },
+            text = {
+                Text(
+                    "Gli avvisi verranno rimossi solo dalla TUA vista (restano per gli altri).",
+                    color = TextSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.dismissAllForUser()
+                    showClearAll = false
+                }) { Text("Pulisci", color = TsmColors.Danger, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAll = false }) { Text("Annulla", color = TextSecondary) }
+            },
+        )
+    }
 
     LaunchedEffect(manage) { viewModel.load(manage) }
     LaunchedEffect(state.message) {
@@ -138,12 +170,38 @@ fun BoardScreen(
                 }
             }
         },
+        bottomBar = {
+            // Consultazione utente: "Elimina tutte" (rimozione locale dalla propria vista).
+            if (!manage && state.items.isNotEmpty()) {
+                Surface(color = DarkSurface) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.navigationBars),
+                    ) {
+                        TextButton(
+                            onClick = { showClearAll = true },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = null, tint = TsmColors.Danger, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Elimina tutte", color = TsmColors.Danger, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        },
     ) { padding ->
         when {
             state.isLoading && state.items.isEmpty() -> ListSkeleton(modifier = Modifier.padding(padding))
             state.items.isEmpty() -> Centered(padding) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("📋", style = MaterialTheme.typography.displaySmall)
+                    Icon(
+                        Icons.Filled.Campaign,
+                        contentDescription = null,
+                        tint = Cyan.copy(alpha = 0.7f),
+                        modifier = Modifier.size(48.dp),
+                    )
                     Spacer(Modifier.height(8.dp))
                     Text(
                         stringResource(if (manage) R.string.board_empty_manage else R.string.board_empty_user),
@@ -161,12 +219,55 @@ fun BoardScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(state.items, key = { it._id }) { post ->
-                    BoardPostCard(
-                        post = post,
-                        canManage = manage,
-                        onEdit = { editPost = post },
-                        onDelete = { viewModel.delete(post._id) },
-                    )
+                    if (manage) {
+                        // Lato rifugista: card con edit/elimina (delete server-side).
+                        BoardPostCard(
+                            post = post,
+                            canManage = true,
+                            onEdit = { editPost = post },
+                            onDelete = { viewModel.delete(post._id) },
+                        )
+                    } else {
+                        // Lato utente: swipe-sinistra → rimuove l'avviso dalla propria
+                        // vista (hide locale, come le notifiche).
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = { value ->
+                                if (value == SwipeToDismissBoxValue.EndToStart) {
+                                    viewModel.dismissForUser(post._id)
+                                    true
+                                } else {
+                                    false
+                                }
+                            },
+                        )
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            enableDismissFromStartToEnd = false,
+                            backgroundContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(TsmColors.Danger),
+                                    contentAlignment = Alignment.CenterEnd,
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = "Elimina",
+                                        tint = Color.White,
+                                        modifier = Modifier.padding(end = 20.dp),
+                                    )
+                                }
+                            },
+                        ) {
+                            BoardPostCard(
+                                post = post,
+                                canManage = false,
+                                onEdit = {},
+                                onDelete = {},
+                            )
+                        }
+                    }
                 }
             }
         }

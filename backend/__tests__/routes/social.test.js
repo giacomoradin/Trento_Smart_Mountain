@@ -935,23 +935,46 @@ describe("Social Routes", () => {
   // ──────────────────────────────────────────────────────────────────
 
   describe("GET /api/v1/users/:id/posts", () => {
-    test("self can see all own posts (shared + unshared)", async () => {
+    test("self profile shows ONLY published (shared) posts — unshared sparisce", async () => {
       const me = await createTestHiker({
         username: "diary40",
         email: "diary40@test.com",
       });
       const sharedAct = await createTestActivity(me.user._id);
-      const privateAct = await createTestActivity(me.user._id);
+      // privateAct resta NON condivisa → non deve comparire sul profilo social
+      await createTestActivity(me.user._id);
       await request(app)
         .post(`/api/v1/activities/${sharedAct._id}/share`)
         .set("Authorization", `Bearer ${me.token}`)
         .send({ caption: "Pubblica" });
-      // privateAct resta non condivisa
       const res = await request(app)
         .get(`/api/v1/users/${me.user._id}/posts`)
         .set("Authorization", `Bearer ${me.token}`);
       expect(res.status).toBe(200);
-      expect(res.body.items).toHaveLength(2);
+      // Solo il post condiviso (il profilo è la bacheca dei pubblicati).
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.items[0].id).toBe(String(sharedAct._id));
+    });
+
+    test("post rimosso dal feed (unshare) sparisce dal profilo del proprietario", async () => {
+      const me = await createTestHiker({
+        username: "diary41",
+        email: "diary41@test.com",
+      });
+      const act = await createTestActivity(me.user._id);
+      await request(app)
+        .post(`/api/v1/activities/${act._id}/share`)
+        .set("Authorization", `Bearer ${me.token}`)
+        .send({ caption: "Pubblica" });
+      // Unshare → "Rimuovi dal feed"
+      await request(app)
+        .delete(`/api/v1/activities/${act._id}/share`)
+        .set("Authorization", `Bearer ${me.token}`);
+      const res = await request(app)
+        .get(`/api/v1/users/${me.user._id}/posts`)
+        .set("Authorization", `Bearer ${me.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items).toHaveLength(0);
     });
 
     test("other viewer sees only shared posts of target user", async () => {

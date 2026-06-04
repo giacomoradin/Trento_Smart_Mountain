@@ -348,6 +348,9 @@ export const createStorySchema = Joi.object({
       floatingText: Joi.string().trim().max(80).allow("", null).optional(),
       textColor: hexColorField.optional(),
       textTransform: storyStickerTransformSchema.optional(),
+      textFont: Joi.string()
+        .valid("classic", "elegant", "mono", "handwritten")
+        .optional(),
     }).optional(),
   }).optional(),
 })

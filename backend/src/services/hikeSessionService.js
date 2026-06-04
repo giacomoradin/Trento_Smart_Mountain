@@ -33,6 +33,83 @@ function generateInviteCode() {
 // quasi saturo o c'è un bug nel generatore — meglio fail-fast che loopare per sempre.
 const MAX_INVITE_CODE_ATTEMPTS = 20;
 
+// ── Failover leadership ───────────────────────────────────────────────────
+// Soglia oltre la quale il leader effettivo è considerato "inattivo" (nessun
+// heartbeat = nessun upload di posizione live). 90s tollera drop di rete
+// transitori senza far ballare la leadership ad ogni micro-disconnessione.
+const LEADER_STALE_MS = 90 * 1000;
+// Una posizione live è "fresca" (utente presente) se aggiornata negli ultimi 35s.
+const LIVE_FRESH_MS = 35 * 1000;
+
+/** Id del leader EFFETTIVO corrente (currentLeaderId, fallback creator). */
+function effectiveLeaderId(session) {
+  return (session.currentLeaderId || session.creatorId).toString();
+}
+
+/**
+ * Heartbeat + reclaim, chiamato quando un membro invia la posizione live.
+ *  - Se a inviare è il CREATOR originale ed è in corso un failover → reclaim:
+ *    la leadership torna a lui.
+ *  - Se a inviare è il leader effettivo corrente → aggiorna lastHeartbeat.
+ * Mutazione in-place; restituisce true se qualcosa è cambiato (da persistere).
+ */
+function applyLeaderHeartbeatAndReclaim(session, userId) {
+  const uid = userId.toString();
+  let changed = false;
+  if (uid === session.creatorId.toString() && session.statoFailover) {
+    session.currentLeaderId = session.creatorId;
+    session.statoFailover = false;
+    session.lastHeartbeat = new Date();
+    changed = true;
+  } else if (uid === effectiveLeaderId(session)) {
+    session.lastHeartbeat = new Date();
+    changed = true;
+  }
+  return changed;
+}
+
+/**
+ * Elezione automatica: se la sessione è ACTIVE e il leader effettivo è inattivo
+ * (heartbeat scaduto), promuove a leader il partecipante ACCETTATO più anziano
+ * (joinedAt più vecchio) ancora "live" (posizione recente), escluso il leader
+ * stale. Mutazione in-place; restituisce l'id del nuovo leader se eletto, altrimenti null.
+ */
+function electNewLeaderIfStale(session) {
+  if (session.status !== "ACTIVE") return null;
+  const now = Date.now();
+  const heartbeat = session.lastHeartbeat ? new Date(session.lastHeartbeat).getTime() : 0;
+  if (now - heartbeat < LEADER_STALE_MS) return null;
+
+  const staleLeader = effectiveLeaderId(session);
+  const freshCutoff = now - LIVE_FRESH_MS;
+  const liveIds = new Set(
+    (session.liveLocations || [])
+      .filter((l) => l.updatedAt && new Date(l.updatedAt).getTime() >= freshCutoff)
+      .map((l) => l.userId.toString()),
+  );
+
+  const candidates = (session.participants || [])
+    .filter((p) => {
+      const pid = (p.userId?._id || p.userId).toString();
+      return (
+        p.status !== "pending" &&
+        pid !== staleLeader &&
+        liveIds.has(pid)
+      );
+    })
+    .sort((a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime());
+
+  if (candidates.length === 0) return null;
+
+  const elected = (candidates[0].userId?._id || candidates[0].userId);
+  session.currentLeaderId = elected;
+  session.statoFailover = true;
+  // Reset heartbeat al momento dell'elezione: il nuovo leader avrà la sua
+  // finestra prima di un eventuale ulteriore failover.
+  session.lastHeartbeat = new Date();
+  return elected.toString();
+}
+
 // Blocca solo se l'utente è in una sessione ATTIVA (tracciamento in corso).
 // Più sessioni PLANNED in parallelo sono consentite: l'utente può pianificare
 // più escursioni future e accettare diversi inviti, ma può essere attivo
@@ -425,6 +502,23 @@ export async function postLiveLocation(sessionId, userId, payload) {
     });
   }
 
+  // Heartbeat / reclaim della leadership (failover): l'upload di posizione del
+  // leader effettivo è il suo "segnale di vita"; il rientro del creator durante
+  // un failover gli ridà il ruolo. Update mirato per non interferire col $set
+  // della posizione (documento `session` ancora pre-update qui).
+  if (applyLeaderHeartbeatAndReclaim(session, userId)) {
+    await HikeSession.updateOne(
+      { _id: sessionId },
+      {
+        $set: {
+          currentLeaderId: session.currentLeaderId,
+          statoFailover: session.statoFailover,
+          lastHeartbeat: session.lastHeartbeat,
+        },
+      },
+    );
+  }
+
   return { message: "Live location aggiornata." };
 }
 
@@ -435,6 +529,35 @@ export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {
   const sessionDoc = await HikeSession.findById(sessionId);
   if (!sessionDoc) throw new Error("SESSION_NOT_FOUND");
   assertInSession(sessionDoc, userId);
+
+  // Failover: ogni fetch è un'occasione per rilevare un leader inattivo ed
+  // eleggere un sostituto (il partecipante accettato più anziano ancora live).
+  // Persistiamo solo se è avvenuta un'elezione, e notifichiamo il nuovo leader.
+  const previousLeaderId = effectiveLeaderId(sessionDoc);
+  const electedId = electNewLeaderIfStale(sessionDoc);
+  if (electedId) {
+    await HikeSession.updateOne(
+      { _id: sessionId },
+      {
+        $set: {
+          currentLeaderId: sessionDoc.currentLeaderId,
+          statoFailover: true,
+          lastHeartbeat: sessionDoc.lastHeartbeat,
+        },
+      },
+    );
+    // Notifica al neo-capogruppo (best-effort). Actor = leader precedente (≠
+    // recipient, così la notifica non viene scartata dall'anti-self-notify).
+    createNotification({
+      recipientId: electedId,
+      actorId: previousLeaderId,
+      type: "join_accepted",
+      targetKind: "session",
+      targetId: sessionDoc._id,
+      message: "Sei diventato capogruppo: il leader precedente è offline.",
+    }).catch(() => {});
+  }
+
   const viewerIsLeader = isSessionGroupLeader(sessionDoc, userId);
 
   const participantFields =

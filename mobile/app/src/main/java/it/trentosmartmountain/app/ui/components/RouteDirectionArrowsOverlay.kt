@@ -58,10 +58,21 @@ class RouteDirectionArrowsOverlay(
     }
 
     override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+        // Tutto il draw è in try/catch: un'eccezione qui (projection non pronta,
+        // lista mutata durante il disegno, ecc.) altrimenti propagherebbe nel
+        // render-loop di OSMdroid e crasherebbe lo schermo (schermata bianca).
+        try {
+            drawArrows(canvas, mapView, shadow)
+        } catch (_: Throwable) {
+            // best-effort: niente frecce questo frame, la mappa resta integra.
+        }
+    }
+
+    private fun drawArrows(canvas: Canvas, mapView: MapView, shadow: Boolean) {
         if (shadow) return
         val pts = pointsProvider()
         if (pts.size < 2) return
-        val proj = mapView.projection
+        val proj = mapView.projection ?: return
         // Converte tutti i punti in pixel-screen una volta sola, poi misuriamo
         // la lunghezza cumulata per spaziare i chevron in modo isotropo.
         val sp = pts.map { p ->

@@ -62,6 +62,16 @@ class SessionCommandRepository(context: Context) {
   }
 
   /**
+   * Chiusura forzata della sessione (modello Ibrido, "Chiudi sessione"): porta a
+   * COMPLETED per tutti, anche con partecipanti non ancora conclusi. Solo capogruppo.
+   * @return true se il server ha confermato la chiusura.
+   */
+  suspend fun forceCloseSession(sessionId: String): Boolean =
+    runCatching {
+      TsmApiClient.service().closeSession(sessionId).isSuccessful
+    }.getOrDefault(false)
+
+  /**
    * Completa una sessione di gruppo o crea un'attività libera, a seconda
    * della presenza di [sessionId]. In entrambi i casi, se l'upload fallisce
    * accoda al [SyncManager] per retry con backoff.

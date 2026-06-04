@@ -136,8 +136,10 @@ fun TsmRouteElevationPager(
                             distanceKm = distanceKm,
                             minAltM = derivedMin,
                             maxAltM = derivedMax,
-                            // Assi solo nel dettaglio (altezza hero ≥ 200dp); nel feed evita layout stretto.
-                            showAxisLabels = distanceKm != null && distanceKm > 0 && height >= 200.dp,
+                            // Mostra header + assi distanza + MIN/MAX quote ogni volta che
+                            // abbiamo la distanza: anche nel feed (prima era gated a ≥200dp,
+                            // così la card compatta non mostrava assi né unità).
+                            showAxisLabels = distanceKm != null && distanceKm > 0 && height >= 150.dp,
                         )
                     }
                 }

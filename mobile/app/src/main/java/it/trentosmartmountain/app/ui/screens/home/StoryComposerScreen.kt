@@ -83,7 +83,11 @@ fun StoryComposerScreen(
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         if (ok) pendingCaptureUri?.let { viewModel.onMediaPicked(context.contentResolver, it) }
     }
-    val captureVideo = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { ok ->
+    // Cattura video a BASSA risoluzione con limite di durata e di DIMENSIONE
+    // hardware: la fotocamera interrompe la registrazione al raggiungimento del
+    // size-limit, così il file resta sotto il cap del backend (evita l'errore
+    // "media troppo grande" anche su clip di pochi secondi ad alto bitrate).
+    val captureVideo = rememberLauncherForActivityResult(remember { LowResCaptureVideo() }) { ok ->
         if (ok) pendingCaptureUri?.let { viewModel.onMediaPicked(context.contentResolver, it) }
     }
     fun launchCapture(isVideo: Boolean) {
@@ -149,6 +153,7 @@ fun StoryComposerScreen(
             StoryEditorCanvas(
                 routePoints = state.routePoints,
                 hasCustomBackground = state.hasCustomBackground,
+                hasMediaBackground = state.hasMediaBackground,
                 mediaKind = state.mediaKind,
                 mediaDataUri = state.mediaDataUri,
                 isEncoding = state.isEncoding,
@@ -178,7 +183,9 @@ fun StoryComposerScreen(
             Spacer(Modifier.height(8.dp))
 
             StoryEditorControlsBar(
-                hasCustomBackground = state.hasCustomBackground,
+                // Per le opzioni mappa/traccia conta che ci sia un media di sfondo
+                // (foto O video): così anche sul video si può aggiungere la mappa (#5).
+                hasCustomBackground = state.hasMediaBackground,
                 hasRoute = hasRoute,
                 routeOverlayMode = state.routeOverlayMode,
                 selectedSticker = state.selectedSticker,
@@ -269,6 +276,24 @@ fun StoryComposerScreen(
                 }
             }
             Spacer(Modifier.height(10.dp))
+        }
+    }
+}
+
+/**
+ * Contratto di cattura video a bassa risoluzione con limiti di durata (10s) e di
+ * DIMENSIONE file (~2.4MB): MediaStore.EXTRA_SIZE_LIMIT fa interrompere la
+ * registrazione alla fotocamera quando il file raggiunge il limite, così il clip
+ * resta sotto il cap del backend (storie ≤ ~3.8MB base64). I flag sono best-effort
+ * (alcune camera app li ignorano), ma sulle camera stock evitano l'errore
+ * "media troppo grande" sui video brevi ad alto bitrate.
+ */
+private class LowResCaptureVideo : ActivityResultContracts.CaptureVideo() {
+    override fun createIntent(context: android.content.Context, input: android.net.Uri): android.content.Intent {
+        return super.createIntent(context, input).apply {
+            putExtra(android.provider.MediaStore.EXTRA_VIDEO_QUALITY, 0) // low quality
+            putExtra(android.provider.MediaStore.EXTRA_DURATION_LIMIT, 10) // secondi
+            putExtra(android.provider.MediaStore.EXTRA_SIZE_LIMIT, 2_400_000L) // ~2.4MB
         }
     }
 }

@@ -1,9 +1,6 @@
 package it.trentosmartmountain.app.ui.screens.home.story
 
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import kotlin.math.cos
-import kotlin.math.sin
 
 /** Trasformazione sticker: offset px dal centro del canvas di edit. */
 data class StoryStickerTransform(
@@ -31,8 +28,13 @@ enum class StoryStickerKind {
     TEXT,
 }
 
-/** Rotazione pinch: fattore < 1 riduce la sensibilità rispetto al gesto nativo. */
-const val StoryRotationGestureFactor = 0.22f
+/**
+ * Rotazione pinch: rapporto tra rotazione delle dita e rotazione dello sticker.
+ * 1.0 = 1:1 naturale (Instagram-like): ruoti le dita di 30° → lo sticker ruota di
+ * 30°. Prima era 0.22 (super smorzato) → la rotazione sembrava "lenta e
+ * complicata" perché serviva un'enorme torsione per poco effetto.
+ */
+const val StoryRotationGestureFactor = 1.0f
 
 /** Palette rapida per traccia e testo. */
 val StoryStickerColors: List<Color> =
@@ -44,35 +46,6 @@ val StoryStickerColors: List<Color> =
         Color(0xFFFFD54F),
         Color(0xFFFF9800),
     )
-
-/**
- * Applica pan/zoom/rotazione attorno al punto focale del gesto (coordinate canvas, origine al centro).
- */
-fun StoryStickerTransform.applyGesture(
-    pan: Offset,
-    zoom: Float,
-    rotationRad: Float,
-    pivotInCanvas: Offset,
-): StoryStickerTransform {
-    val rotation = rotationRad * StoryRotationGestureFactor
-    val center = Offset(offsetX, offsetY)
-    val fromPivot = center - pivotInCanvas
-    val cosR = cos(rotation)
-    val sinR = sin(rotation)
-    val rotated =
-        Offset(
-            x = fromPivot.x * cosR - fromPivot.y * sinR,
-            y = fromPivot.x * sinR + fromPivot.y * cosR,
-        )
-    val scaled = rotated * zoom
-    val newCenter = pivotInCanvas + scaled + pan
-    return copy(
-        offsetX = newCenter.x,
-        offsetY = newCenter.y,
-        scale = (scale * zoom).coerceIn(0.15f, 5f),
-        rotationDeg = rotationDeg + Math.toDegrees(rotation.toDouble()).toFloat(),
-    )
-}
 
 fun Color.toHexRgb(): String {
     val r = (red * 255).toInt().coerceIn(0, 255)

@@ -57,6 +57,8 @@ private const val Z_TEXT = 3f
 fun StoryEditorCanvas(
     routePoints: List<RoutePoint>,
     hasCustomBackground: Boolean,
+    /** True per foto O video: gli overlay (traccia/mappa) si sovrappongono al media. */
+    hasMediaBackground: Boolean = hasCustomBackground,
     mediaKind: String?,
     mediaDataUri: String?,
     isEncoding: Boolean,
@@ -188,7 +190,10 @@ fun StoryEditorCanvas(
                         .fillMaxSize()
                         .zIndex(Z_ROUTE_STICKERS),
             ) {
-                if (hasCustomBackground && hasRoute) {
+                // hasMediaBackground (foto O video): gli overlay traccia/mappa-widget
+                // si sovrappongono al media. Prima era gated a hasCustomBackground
+                // (solo foto) → sul video la mappa non era aggiungibile (#5).
+                if (hasMediaBackground && hasRoute) {
                     when (routeOverlayMode) {
                         RouteOverlayMode.TRACE -> {
                             key(StoryStickerKind.TRACE) {

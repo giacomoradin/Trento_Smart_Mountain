@@ -7,6 +7,7 @@ import it.trentosmartmountain.app.data.checklist.ChecklistMapper
 import it.trentosmartmountain.app.data.checklist.ChecklistPersonalStore
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.session.SessionLiveController
+import it.trentosmartmountain.app.repository.SessionCommandRepository
 import it.trentosmartmountain.app.data.session.SessionParticipationResolver
 import it.trentosmartmountain.app.data.session.SessionParticipationUi
 import it.trentosmartmountain.app.data.session.UserSessionLiveState
@@ -78,6 +79,8 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
         val checklistMeteoLocationName: String? = null,
         val newItemText: String = "",
         val showAvviaConfirm: Boolean = false,
+        /** Dialog di conferma "Chiudi sessione" (force-close del capogruppo). */
+        val showCloseSessionConfirm: Boolean = false,
         val error: String? = null,
         // Edit fields (populated when entering edit mode)
         val editName: String = "",
@@ -596,6 +599,22 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
         bumpLiveUi()
         onNavigate()
     }
+
+    /**
+     * "Chiudi sessione" (capogruppo, modello Ibrido): forza COMPLETED per tutti,
+     * anche se qualche partecipante non ha ancora concluso. Ricarica il dettaglio.
+     */
+    fun closeSessionForAll() {
+        val sessionId = _uiState.value.session?._id ?: return
+        viewModelScope.launch {
+            val ok = SessionCommandRepository(getApplication()).forceCloseSession(sessionId)
+            if (ok) reloadSessionQuiet(sessionId)
+            _uiState.update { it.copy(showCloseSessionConfirm = false) }
+        }
+    }
+
+    fun requestCloseSession() = _uiState.update { it.copy(showCloseSessionConfirm = true) }
+    fun dismissCloseSession() = _uiState.update { it.copy(showCloseSessionConfirm = false) }
 
     private fun bumpLiveUi() {
         _uiState.update { it.copy(liveUiEpoch = it.liveUiEpoch + 1) }

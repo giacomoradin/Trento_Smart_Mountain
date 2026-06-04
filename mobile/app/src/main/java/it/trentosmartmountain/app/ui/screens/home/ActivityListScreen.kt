@@ -322,13 +322,23 @@ fun ActivityListScreen(
         }
     }
 
-    // Dialog "Pubblica sul feed" per un'attività libera sincronizzata.
+    // Dialog "Pubblica sul feed".
     shareTarget?.let { target ->
         ShareActivityDialog(
             activityName = target.name,
             onDismiss = { shareTarget = null },
             onShare = { caption ->
-                target.remoteId?.let { socialVm.shareActivity(it, caption) }
+                // Routing share corretto (fix 404):
+                //  - attività di SESSIONE (sessionId != null) → /sessions/:id/share
+                //    (il remoteId qui è il sessionId, NON un Activity id → /activities
+                //     darebbe 404). Solo il creator può: il server risponde 403 agli
+                //     altri e il VM mostra un messaggio chiaro.
+                //  - attività LIBERA → /activities/:id/share col remoteId reale.
+                if (target.sessionId != null) {
+                    socialVm.shareSession(target.sessionId, caption)
+                } else {
+                    target.remoteId?.let { socialVm.shareActivity(it, caption) }
+                }
                 shareTarget = null
             },
         )

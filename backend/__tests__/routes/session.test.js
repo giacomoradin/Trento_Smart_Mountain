@@ -474,6 +474,108 @@ describe("HikeSession Routes", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════
+  // Completamento "Ibrido" — per-utente + auto-close + force-close leader
+  // ══════════════════════════════════════════════════════════════════
+
+  describe("Hybrid completion model", () => {
+    async function fetchSession(token, sessionId) {
+      const res = await request(app)
+        .get(`/api/v1/sessions/${sessionId}`)
+        .set("Authorization", `Bearer ${token}`);
+      return res.body;
+    }
+
+    test("solo session: creator completes → COMPLETED immediately", async () => {
+      const { token } = await createTestHiker({
+        username: "soloc",
+        email: "soloc@test.com",
+      });
+      const created = await createSessionAs(token);
+      const res = await request(app)
+        .patch(`/api/v1/sessions/${created.body._id}/complete`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ actualStats: { movingSeconds: 3600, totalSeconds: 3600, distanceMeters: 8000, elevationGainM: 600 } });
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("COMPLETED");
+    });
+
+    test("group: leader finish keeps ACTIVE; last participant finish → COMPLETED", async () => {
+      const { token: creatorToken } = await createTestHiker({
+        username: "grpc",
+        email: "grpc@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+      const sessionId = created.body._id;
+      const { user: joiner, token: joinerToken } = await createTestHiker({
+        username: "grpj",
+        email: "grpj@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+      await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${joiner._id}/approve`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+
+      // Leader finisce: la sessione resta ACTIVE (il joiner non ha finito).
+      const r1 = await request(app)
+        .patch(`/api/v1/sessions/${sessionId}/complete`)
+        .set("Authorization", `Bearer ${creatorToken}`)
+        .send({ actualStats: { movingSeconds: 3600, totalSeconds: 3600, distanceMeters: 8000, elevationGainM: 600 } });
+      expect(r1.status).toBe(200);
+      expect(r1.body.status).not.toBe("COMPLETED");
+
+      // Joiner finisce: ora tutti gli accettati hanno finito → COMPLETED.
+      const r2 = await request(app)
+        .patch(`/api/v1/sessions/${sessionId}/complete`)
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ actualStats: { movingSeconds: 3000, totalSeconds: 3000, distanceMeters: 7000, elevationGainM: 500 } });
+      expect(r2.status).toBe(200);
+      expect(r2.body.status).toBe("COMPLETED");
+    });
+
+    test("leader force-close (POST /close) → COMPLETED even with stragglers", async () => {
+      const { token: creatorToken } = await createTestHiker({
+        username: "fcc",
+        email: "fcc@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+      const sessionId = created.body._id;
+      const { token: joinerToken } = await createTestHiker({
+        username: "fcj",
+        email: "fcj@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+
+      const res = await request(app)
+        .post(`/api/v1/sessions/${sessionId}/close`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("COMPLETED");
+    });
+
+    test("non-leader cannot force-close (403)", async () => {
+      const { token: creatorToken } = await createTestHiker({
+        username: "fcc2",
+        email: "fcc2@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+      const { token: otherToken } = await createTestHiker({
+        username: "fco2",
+        email: "fco2@test.com",
+      });
+      const res = await request(app)
+        .post(`/api/v1/sessions/${created.body._id}/close`)
+        .set("Authorization", `Bearer ${otherToken}`);
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
   // DELETE /api/v1/sessions/:id — Solo creator
   // ══════════════════════════════════════════════════════════════════
 

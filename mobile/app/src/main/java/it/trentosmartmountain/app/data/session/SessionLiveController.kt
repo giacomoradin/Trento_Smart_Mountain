@@ -31,8 +31,13 @@ class SessionLiveController(context: Context) {
 
     fun leaderStop(scope: CoroutineScope, sessionId: String) {
         SessionLiveStateStore.setState(appContext, sessionId, UserSessionLiveState.NOT_IN_LIVE)
+        // NB: NON riportiamo più la sessione a PLANNED qui. Prima `markSessionPlanned`
+        // (ACTIVE→PLANNED) correva contro `completeSession` (→COMPLETED) innescato dallo
+        // stop del tracking, lasciando la sessione in uno stato incoerente — la causa
+        // del "non riesco a terminare la sessione in solitaria". Ora lo stop passa per
+        // un'unica strada: requestStop → confirmStopTracking → completeSession, che con
+        // il modello Ibrido chiude pulito (solo o ultimo membro → COMPLETED).
         SessionStopCoordinator.requestStop(sessionId)
-        scope.launch { commands.markSessionPlanned(sessionId) }
     }
 
     fun joinLive(sessionId: String) {

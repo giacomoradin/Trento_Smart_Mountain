@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.dp
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.ui.theme.TsmAccent
-import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 
@@ -127,7 +126,3 @@ internal fun GlassFab(
     }
   }
 }
-
-// Riferimento esplicito al colore di palette per ricordarne l'uso anche in
-// debug build (lint flag se non importato).
-private val _registraTintRef: Color = TsmColors.Cyan

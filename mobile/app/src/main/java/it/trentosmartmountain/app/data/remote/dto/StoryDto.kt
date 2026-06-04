@@ -57,6 +57,8 @@ data class StoryEditorDecor(
     @SerializedName("floatingText") val floatingText: String? = null,
     @SerializedName("textColor") val textColor: String? = null,
     @SerializedName("textTransform") val textTransform: StoryStickerTransformDto? = null,
+    /** Font del testo: classic | elegant | mono | handwritten (vedi StoryFont). */
+    @SerializedName("textFont") val textFont: String? = null,
 )
 
 /** Snapshot dei dati di tracciamento da disegnare in overlay sul media. */

@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -109,30 +110,43 @@ fun HikerMainScreen(
 
   Scaffold(
     bottomBar = {
-      NavigationBar {
+      NavigationBar(
+        containerColor = it.trentosmartmountain.app.ui.theme.TsmColors.Card,
+      ) {
+        val navColors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+          selectedIconColor = it.trentosmartmountain.app.ui.theme.TsmColors.Primary,
+          selectedTextColor = it.trentosmartmountain.app.ui.theme.TsmColors.Primary,
+          indicatorColor = it.trentosmartmountain.app.ui.theme.TsmColors.Primary.copy(alpha = 0.16f),
+          unselectedIconColor = it.trentosmartmountain.app.ui.theme.TsmColors.TextTertiary,
+          unselectedTextColor = it.trentosmartmountain.app.ui.theme.TsmColors.TextTertiary,
+        )
         NavigationBarItem(
           selected = selectedTab == HikerTab.Home,
           onClick = { selectedTab = HikerTab.Home },
-          icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+          icon = { BounceTabIcon(selectedTab == HikerTab.Home, Icons.Filled.Home) },
           label = { Text(stringResource(R.string.main_tab_home)) },
+          colors = navColors,
         )
         NavigationBarItem(
           selected = selectedTab == HikerTab.Session,
           onClick = { selectedTab = HikerTab.Session },
-          icon = { Icon(Icons.Filled.Terrain, contentDescription = null) },
+          icon = { BounceTabIcon(selectedTab == HikerTab.Session, Icons.Filled.Terrain) },
           label = { Text(stringResource(R.string.main_tab_session)) },
+          colors = navColors,
         )
         NavigationBarItem(
           selected = selectedTab == HikerTab.Registra,
           onClick = { selectedTab = HikerTab.Registra },
-          icon = { Icon(Icons.Filled.FiberManualRecord, contentDescription = null) },
+          icon = { BounceTabIcon(selectedTab == HikerTab.Registra, Icons.Filled.FiberManualRecord) },
           label = { Text(stringResource(R.string.main_tab_registra)) },
+          colors = navColors,
         )
         NavigationBarItem(
           selected = selectedTab == HikerTab.Profile,
           onClick = { selectedTab = HikerTab.Profile },
-          icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+          icon = { BounceTabIcon(selectedTab == HikerTab.Profile, Icons.Filled.Person) },
           label = { Text(stringResource(R.string.main_tab_profile)) },
+          colors = navColors,
         )
       }
     },
@@ -179,4 +193,29 @@ fun HikerMainScreen(
       )
     }
   }
+}
+
+
+/**
+ * Icona della bottom-bar con micro-bounce alla selezione (Fase polish 5): la
+ * tab attiva ingrandisce leggermente con uno spring, dando feedback tattile.
+ */
+@androidx.compose.runtime.Composable
+private fun BounceTabIcon(
+  selected: Boolean,
+  icon: androidx.compose.ui.graphics.vector.ImageVector,
+) {
+  val scale by androidx.compose.animation.core.animateFloatAsState(
+    targetValue = if (selected) 1.18f else 1f,
+    animationSpec = androidx.compose.animation.core.spring(
+      dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+      stiffness = androidx.compose.animation.core.Spring.StiffnessMedium,
+    ),
+    label = "tab-bounce",
+  )
+  androidx.compose.material3.Icon(
+    imageVector = icon,
+    contentDescription = null,
+    modifier = androidx.compose.ui.Modifier.scale(scale),
+  )
 }

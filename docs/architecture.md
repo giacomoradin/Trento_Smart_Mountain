@@ -588,4 +588,29 @@ In `HikeEstimation.kt`:
 
 ---
 
+## ADR — Media storage: inline Base64 → object storage (piano)
+
+**Stato attuale**: foto/video di storie e avatar sono salvati **inline come data-URI
+Base64** dentro i documenti Mongo (`Story.media[].dataUri`, `Hiker.personalInfo.avatarUrl`).
+Sicurezza già in atto: cap per-media (Joi `STORY_MEDIA_MAX_CHARS` ~3.8MB), cap totale
+per storia (`storyService.STORY_TOTAL_MEDIA_MAX_CHARS` ~4.5MB → `STORY_MEDIA_TOO_LARGE`),
+body-limit globale 5MB. A scala universitaria è stabile (doc ≪ limite Mongo 16MB).
+
+**Limite**: non scala (documenti pesanti, banda sprecata a ogni fetch, niente CDN/cache).
+
+**Migrazione consigliata** (quando disponibile un bucket S3/Cloudinary/R2):
+1. Servizio `mediaStorageService` con `upload(buffer, mime) → { url }` e `delete(url)`,
+   interfaccia astratta → implementazione sostituibile.
+2. `createStory` / `prepareAvatar`: caricano il binario sul bucket e salvano nel doc
+   **solo l'URL**. Retro-compat: il client legge `url ?? dataUri`.
+3. Mobile: `StoryMedia` / `AvatarImage` caricano da URL con cache disco; fallback al
+   `dataUri` per i documenti vecchi.
+4. Cleanup: alla scadenza TTL (24h) un hook elimina anche l'oggetto sul bucket
+   (o lifecycle policy lato bucket).
+5. Env: `MEDIA_BUCKET` + credenziali; URL firmati temporanei per i media privati.
+
+Effort: ~1 giornata backend + ~mezza mobile. Campo `url` additivo (non-breaking).
+
+---
+
 *Architettura documento — Sprint 1 chiuso 17/05/2026. Aggiornare ad ogni nuovo ADR o pattern adottato dal team.*

@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <style name="Theme.TrentoSmartMountain" parent="android:Theme.Material.Light.NoActionBar" />
+  <!--
+    Tema dell'app. Parent dark (non più Light) + windowBackground brandizzato:
+    elimina la "schermata bianca" all'avvio prima che Jetpack Compose carichi,
+    mostrando il gradiente montano + logo (vedi @drawable/splash_background).
+    Lo status/navigation bar sono trasparenti (edge-to-edge gestito in Compose).
+  -->
+  <style name="Theme.TrentoSmartMountain" parent="android:Theme.Material.NoActionBar">
+    <item name="android:windowBackground">@drawable/splash_background</item>
+    <item name="android:statusBarColor">@android:color/transparent</item>
+    <item name="android:navigationBarColor">@android:color/transparent</item>
+    <item name="android:windowLightStatusBar">false</item>
+  </style>
 </resources>

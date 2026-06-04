@@ -107,6 +107,20 @@ function assertEnvironment() {
 
 assertEnvironment();
 
+// ── Stabilità: handler globali di processo ──────────────────────────────────
+// Un rejection/eccezione non gestita altrimenti può lasciare il processo in uno
+// stato incoerente (o, su Node recenti, terminarlo). Logghiamo sempre con stack
+// per la diagnosi; su uncaughtException usciamo in modo controllato così il
+// process manager (Render/PM2) riavvia pulito invece di restare "zombie".
+process.on("unhandledRejection", (reason) => {
+  console.error("[process] UNHANDLED REJECTION:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[process] UNCAUGHT EXCEPTION:", err);
+  // Spegnimento controllato: chiudiamo la connessione DB poi usciamo.
+  mongoose.connection.close(false).finally(() => process.exit(1));
+});
+
 const PORT = process.env.PORT || 3000;
 const MONGO_URI =
   process.env.MONGO_URI || "mongodb://localhost:27017/trento_smart_mountain";
@@ -117,7 +131,28 @@ mongoose
     console.log("Connected to MongoDB");
     await seedLocations();
     await autoSeedQuizzes();
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    const server = app.listen(PORT, () =>
+      console.log(`Server running on port ${PORT}`),
+    );
+
+    // ── Graceful shutdown ────────────────────────────────────────────────
+    // Render (e la maggior parte dei PaaS) invia SIGTERM ad ogni deploy/restart.
+    // Senza handler il processo viene ucciso a metà: richieste in volo troncate e
+    // connessione Mongo non chiusa. Qui smettiamo di accettare nuove connessioni,
+    // lasciamo finire quelle in corso, poi chiudiamo il DB ed usciamo pulito.
+    const shutdown = (signal) => {
+      console.log(`[process] ${signal} ricevuto — shutdown controllato...`);
+      server.close(() => {
+        mongoose.connection.close(false).finally(() => {
+          console.log("[process] shutdown completato.");
+          process.exit(0);
+        });
+      });
+      // Failsafe: se qualcosa resta appeso, forziamo l'uscita dopo 10s.
+      setTimeout(() => process.exit(1), 10_000).unref();
+    };
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
   })
   .catch((error) => {
     console.error("MongoDB connection error:", error);

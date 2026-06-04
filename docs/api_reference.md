@@ -93,6 +93,23 @@ Errori: `403 FORBIDDEN_NOT_MEMBER`/`FORBIDDEN_NOT_LEADER`, `404 PARTICIPANT_NOT_
 
 > Avatar Row: `getSocialRowForUser` espone `status: "story"` + `hasUnviewedStory` quando l'autore ha ≥1 Story non scaduta; il viewer mobile si apre **per autore**.
 
+### Sessione — completamento "Ibrido" + failover (chiusura Sprint 2)
+> Ridisegno della logica capogruppo/partecipanti.
+
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| PATCH | `/api/v1/sessions/:id/complete` | Conclusione **individuale** del chiamante (`finishedParticipants[]` + crediti per-utente). La sessione passa a `COMPLETED` solo quando **tutti gli accettati** hanno finito (es. sessione in solitaria → chiusura immediata). |
+| POST | `/api/v1/sessions/:id/close` | **Chiusura forzata** per tutti (`COMPLETED`), anche con partecipanti non conclusi. Solo capogruppo/leader effettivo (`403 FORBIDDEN_NOT_LEADER`). |
+| DELETE | `/api/v1/sessions/:id/from-activities` | Nasconde una sessione COMPLETED dalla lista "Le mie attività" del chiamante (`hiddenForUsers[]`, hide per-utente; il documento resta per gli altri). `403 NOT_IN_SESSION` se non membro. |
+
+**Failover capogruppo** (nessun nuovo endpoint, logica lato `getLiveLocations`/`postLiveLocation`):
+- L'upload di posizione del **leader effettivo** aggiorna `lastHeartbeat` (heartbeat).
+- Se il leader è inattivo **>90s** e la sessione è `ACTIVE`, al successivo fetch di live-locations viene eletto leader il **partecipante accettato più anziano** ancora live (posizione <35s) → `currentLeaderId`, `statoFailover=true` + notifica al neo-capogruppo.
+- Se il **creator originale** rientra (riprende a inviare posizione) → **reclaim** automatico (`statoFailover=false`).
+- `isSessionGroupLeader` riconosce sia il `currentLeaderId` (sostituto) sia il `creatorId`.
+
+> Story `overlay.editorDecor.textFont` (`classic`/`elegant`/`mono`/`handwritten`): font del testo sticker scelto nell'editor, riprodotto identico nel viewer e nell'export bitmap.
+
 ---
 
 ## 1. Convenzioni generali

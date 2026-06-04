@@ -1,5 +1,68 @@
 # Trento Smart Mountain — Stato del progetto
 
+## 🎨 Polish grafico + hardening stabilità — giugno 2026 (consegna)
+
+> Mobile **build pulita SUCCESSFUL**; backend **248/248 test verdi** (17 suite).
+
+**Design system (riusabile)**: `TsmGradients` (preset Brush + `altitudeTint`),
+`TsmMotion` (durate/easing/spring), `TsmDimens` (spacing + corner radius),
+`TsmGlass` esteso (`TsmPulseGlow`, `TsmGlassChip`, `TsmGradientButton`),
+`TsmAnimatedCounter` (count-up).
+
+**Splash brandizzato**: eliminato il bianco all'avvio — `windowBackground` a
+gradiente montano + logo (`splash_background.xml`), tema dark; `TsmBootScreen`
+con reveal animato (logo + orizzonte montano disegnato via Canvas).
+
+**Schermate**: aurora/glass portati a parità su Formazione, Notifiche,
+Follower/Seguiti, Ricerca utenti, Classifica (oltre a Feed/Profilo/Sessione già
+fatti). Anello storie a **gradiente conico rotante**; **comet** luminosa lungo la
+traccia GPX; medaglie classifica "materiche" (oro/argento/bronzo + glow) con
+count-up; emoji placeholder → icone vettoriali; bottom nav con micro-bounce +
+colori palette.
+
+**Hardening stabilità**:
+- Backend: handler globali `unhandledRejection` / `uncaughtException` (log + shutdown
+  controllato → riavvio pulito del process manager).
+- Mobile: crash logger globale `Thread.setDefaultUncaughtExceptionHandler` (tag
+  `TSM-CRASH`) — rende diagnosticabili i crash che prima davano "schermata bianca"
+  senza traccia in Logcat. Audit `.first()`/`!!` nei path UI: già guardati.
+- Overlay mappa (frecce/comet) in `try/catch` + sanitize coordinate NaN/Inf.
+
+> _Polish opzionale futuro (non bloccante)_: scrub+tooltip interattivo
+> sull'altimetria, transizioni shared-element in navigazione, pull-to-refresh
+> custom col logo, set completo di icone custom mountain-tech, particellari
+> contestuali (neve/scintille) e sfondi reattivi al meteo. Fondamenta già pronte
+> (`TsmGradients`/`TsmMotion`/`TsmGlass`) per applicarli rapidamente.
+
+---
+
+## ✅ Chiusura Sprint 2 — giugno 2026
+
+> Build mobile **`compileDebugKotlin` BUILD SUCCESSFUL**; backend **248/248 test verdi** (17 suite).
+
+Ultimo round di fix/feature + consolidamento prima della chiusura:
+
+**Sessioni — ridisegno logica capogruppo/partecipanti**
+- **Completamento "Ibrido"**: ogni membro conclude il proprio tracking (`finishedParticipants[]` + crediti per-utente); la sessione passa a `COMPLETED` quando **tutti gli accettati** hanno finito → **sessione in solitaria** finalmente terminabile (rimossa la race `markSessionPlanned`↔`completeSession`).
+- **"Chiudi sessione per tutti"** (`POST /sessions/:id/close`): force-close del capogruppo.
+- **Failover capogruppo**: heartbeat sul live-location; se il leader è inattivo >90s → **elezione automatica** del partecipante accettato più anziano ancora live; **reclaim** automatico al rientro del creator. `currentLeaderId` + `statoFailover`.
+- **Elimina attività di sessione** propagato al server (`hiddenForUsers[]` via `DELETE /sessions/:id/from-activities`) → non riappaiono dopo logout/login.
+
+**Feed / Attività**
+- Profilo altimetrico **ricco** (gradiente per quota, marker max, assi + MIN/MAX) usato **anche nel feed** (prima ricadeva sul chart piatto). Share routing corretto (no più 404 su attività di sessione).
+- **Frecce direzionali animate** (stile Komoot) sulla polyline GPX, adattive allo zoom.
+
+**Storie**
+- Editor: **drag/pinch/rotate** di traccia e sticker risolti (gesture canonica), rotazione 1:1, toolbar premium, **scelta font** (Classico/Elegante/Mono/Corsivo), mappa aggiungibile **anche su video**.
+- Qualità immagini upload aumentata; cattura video low-res con size-limit.
+
+**Robustezza / UI**
+- Guard anti-overwrite tracking + dialog Salva/Scarta/Annulla; insets nav-bar; sfondo aurora su Sessione/Pianifica; overlay mappa hardening (try/catch + sanitize coordinate NaN).
+
+> ⚠️ **Deploy**: le modifiche backend (completamento Ibrido, `/close`, `/from-activities`, failover, story `textFont`) vivono sul branch `UI` e richiedono deploy per essere attive.
+
+---
+
 ## ⏱️ Aggiornamento Sprint 3 — giugno 2026
 
 > Build mobile **`compileDebugKotlin` green**; backend **220/220 test verdi** (15 suite).

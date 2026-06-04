@@ -574,9 +574,11 @@ fun SessionDetailScreen(
             }
 
             // "Chiudi sessione" (capogruppo, modello Ibrido): forza COMPLETED per
-            // tutti anche se qualche partecipante non ha ancora concluso. Visibile
-            // solo al capogruppo quando la sessione è ACTIVE e ci sono altri membri.
-            if (isCreator && session.status == "ACTIVE" && (session.participants?.size ?: 0) > 1) {
+            // tutti anche se qualche partecipante non ha ancora concluso. Visibile al
+            // leader EFFETTIVO (creator o sostituto eletto via failover) quando la
+            // sessione è ACTIVE e ci sono altri membri.
+            val isEffectiveLeader = isCreator || session.effectiveLeaderId == currentUserId
+            if (isEffectiveLeader && session.status == "ACTIVE" && (session.participants?.size ?: 0) > 1) {
                 Spacer(modifier = Modifier.height(8.dp))
                 TextButton(
                     onClick = { viewModel.requestCloseSession() },

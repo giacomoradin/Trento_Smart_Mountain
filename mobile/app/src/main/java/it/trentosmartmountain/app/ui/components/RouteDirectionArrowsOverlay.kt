@@ -56,6 +56,15 @@ class RouteDirectionArrowsOverlay(
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
+    // "Comet": punto luminoso che corre lungo la traccia (alone + nucleo).
+    private val cometGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(120, 79, 195, 247) // cyan tenue
+    }
+    private val cometCore = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(255, 235, 250, 255)
+    }
 
     override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
         // Tutto il draw è in try/catch: un'eccezione qui (projection non pronta,
@@ -117,6 +126,22 @@ class RouteDirectionArrowsOverlay(
             ).toFloat()
             drawChevron(canvas, cx, cy, ang)
             d += gap
+        }
+
+        // Comet: un punto luminoso che percorre l'intera traccia start→end una
+        // volta per ciclo d'animazione, dando un senso di "moto" sul percorso.
+        val cometD = (phase * total).coerceIn(0f, total)
+        var ci = 1
+        while (ci < cum.size && cum[ci] < cometD) ci++
+        if (ci < cum.size) {
+            val a = sp[ci - 1]
+            val b = sp[ci]
+            val segLen = (cum[ci] - cum[ci - 1]).coerceAtLeast(1f)
+            val t = ((cometD - cum[ci - 1]) / segLen).coerceIn(0f, 1f)
+            val x = a.x + (b.x - a.x) * t
+            val y = a.y + (b.y - a.y) * t
+            canvas.drawCircle(x, y, chevronSizePx * 1.1f, cometGlow)
+            canvas.drawCircle(x, y, chevronSizePx * 0.45f, cometCore)
         }
     }
 

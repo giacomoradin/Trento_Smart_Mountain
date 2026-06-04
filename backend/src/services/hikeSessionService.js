@@ -532,30 +532,36 @@ export async function getLiveLocations(sessionId, userId, { maxAgeSec = 30 } = {
 
   // Failover: ogni fetch è un'occasione per rilevare un leader inattivo ed
   // eleggere un sostituto (il partecipante accettato più anziano ancora live).
-  // Persistiamo solo se è avvenuta un'elezione, e notifichiamo il nuovo leader.
+  // Tutti i membri pollano ogni ~5s: per evitare che N poll concorrenti eleggano
+  // (potenzialmente più volte) usiamo una **compare-and-swap** sul leader corrente
+  // → solo la PRIMA transizione vince; le altre matchano 0 doc e non riscrivono.
   const previousLeaderId = effectiveLeaderId(sessionDoc);
+  const prevLeaderRaw = sessionDoc.currentLeaderId ?? null; // valore atteso per il CAS
   const electedId = electNewLeaderIfStale(sessionDoc);
   if (electedId) {
-    await HikeSession.updateOne(
-      { _id: sessionId },
-      {
-        $set: {
-          currentLeaderId: sessionDoc.currentLeaderId,
-          statoFailover: true,
-          lastHeartbeat: sessionDoc.lastHeartbeat,
-        },
+    const casFilter =
+      prevLeaderRaw === null
+        ? { _id: sessionId, currentLeaderId: { $in: [null, undefined] } }
+        : { _id: sessionId, currentLeaderId: prevLeaderRaw };
+    const result = await HikeSession.updateOne(casFilter, {
+      $set: {
+        currentLeaderId: sessionDoc.currentLeaderId,
+        statoFailover: true,
+        lastHeartbeat: sessionDoc.lastHeartbeat,
       },
-    );
-    // Notifica al neo-capogruppo (best-effort). Actor = leader precedente (≠
-    // recipient, così la notifica non viene scartata dall'anti-self-notify).
-    createNotification({
-      recipientId: electedId,
-      actorId: previousLeaderId,
-      type: "join_accepted",
-      targetKind: "session",
-      targetId: sessionDoc._id,
-      message: "Sei diventato capogruppo: il leader precedente è offline.",
-    }).catch(() => {});
+    });
+    // Notifichiamo SOLO se il CAS ha effettivamente applicato l'elezione (1 doc
+    // modificato): evita notifiche duplicate dai poll concorrenti perdenti.
+    if (result.modifiedCount === 1) {
+      createNotification({
+        recipientId: electedId,
+        actorId: previousLeaderId,
+        type: "join_accepted",
+        targetKind: "session",
+        targetId: sessionDoc._id,
+        message: "Sei diventato capogruppo: il leader precedente è offline.",
+      }).catch(() => {});
+    }
   }
 
   const viewerIsLeader = isSessionGroupLeader(sessionDoc, userId);

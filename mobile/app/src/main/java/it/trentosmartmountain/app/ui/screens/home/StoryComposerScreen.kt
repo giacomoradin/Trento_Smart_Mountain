@@ -172,6 +172,7 @@ fun StoryComposerScreen(
                 floatingText = state.floatingText,
                 textTransform = state.textTransform,
                 textColor = state.textColor,
+                textFont = state.textFont,
                 onTextTransformChange = viewModel::onTextTransformChange,
                 onEditorCanvasSize = { w, h ->
                     editorCanvasWidthPx = w
@@ -193,6 +194,8 @@ fun StoryComposerScreen(
                 textColor = state.textColor,
                 showTextSticker = state.showTextSticker,
                 textEditMode = state.textEditMode,
+                textFont = state.textFont,
+                onCycleFont = viewModel::cycleTextFont,
                 onImportGallery = {
                     picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                 },

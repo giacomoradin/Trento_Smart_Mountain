@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import swaggerUI from "swagger-ui-express";
 import { readFileSync } from "fs";
 
@@ -106,6 +107,20 @@ app.use(globalLimiter);
 
 // Limite scritture (POST/PATCH/DELETE) per utente — più stretto del read rate
 app.use(writeLimiter);
+
+// Health-check (no auth, no rate limit specifico): usato dal monitor del PaaS
+// (Render) per riavvii intelligenti e probe di liveness/readiness. Riporta lo
+// stato della connessione Mongo (1 = connected) e l'uptime del processo.
+app.get(["/health", "/api/v1/health"], (req, res) => {
+  const dbState = mongoose.connection.readyState; // 0=disconnected,1=connected,2=connecting,3=disconnecting
+  const healthy = dbState === 1;
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? "ok" : "degraded",
+    db: ["disconnected", "connected", "connecting", "disconnecting"][dbState] ?? "unknown",
+    uptimeSec: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Swagger UI pubblico per l'esplorazione delle API
 if (swaggerDocument) {

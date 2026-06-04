@@ -8,6 +8,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import it.trentosmartmountain.app.data.local.TokenStorage
 import it.trentosmartmountain.app.data.nfc.NfcTagBus
 import it.trentosmartmountain.app.data.nfc.NfcUtils
@@ -30,7 +33,6 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
-1
     // Gestione deep link al cold start: l'app viene aperta dal link nell'email.
     // Salviamo il JWT in TokenStorage PRIMA di comporre il NavHost così
     // AuthSession.startDestinationFor() trova già il token e parte dalla shell.
@@ -42,7 +44,21 @@ class MainActivity : ComponentActivity() {
 
     setContent {
       TsmTheme {
-        TsmNavHost()
+        // Boot screen brandizzato sopra il NavHost: si raccorda al window
+        // background (gradiente + logo) e fa il reveal animato, poi sfuma.
+        var showBoot by androidx.compose.runtime.saveable.rememberSaveable {
+          androidx.compose.runtime.mutableStateOf(true)
+        }
+        androidx.compose.foundation.layout.Box(
+          modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+        ) {
+          TsmNavHost()
+          if (showBoot) {
+            it.trentosmartmountain.app.ui.screens.TsmBootScreen(
+              onFinished = { showBoot = false },
+            )
+          }
+        }
       }
     }
   }

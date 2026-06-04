@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Warning
@@ -136,8 +137,13 @@ fun NotificationsScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+        modifier = Modifier.fillMaxSize(),
+        particleCount = 12,
+    )
     Scaffold(
-        containerColor = DarkSurface,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.notifications_title), color = Color.White, fontWeight = FontWeight.Bold) },
@@ -146,7 +152,7 @@ fun NotificationsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
         bottomBar = {
@@ -195,7 +201,12 @@ fun NotificationsScreen(
                 state.isLoading && state.items.isEmpty() -> ListSkeleton()
                 state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🔔", style = MaterialTheme.typography.displaySmall)
+                        Icon(
+                            Icons.Filled.Notifications,
+                            contentDescription = null,
+                            tint = AccentCyan.copy(alpha = 0.7f),
+                            modifier = Modifier.size(48.dp),
+                        )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             stringResource(R.string.notifications_empty),
@@ -260,6 +271,7 @@ fun NotificationsScreen(
                 }
             }
         }
+    }
     }
 }
 

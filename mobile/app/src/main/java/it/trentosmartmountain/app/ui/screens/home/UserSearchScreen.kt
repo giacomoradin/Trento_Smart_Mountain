@@ -3,6 +3,7 @@ package it.trentosmartmountain.app.ui.screens.home
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -86,8 +87,13 @@ fun UserSearchScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+        modifier = Modifier.fillMaxSize(),
+        particleCount = 12,
+    )
     Scaffold(
-        containerColor = DarkSurface,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.search_title), color = Color.White, fontWeight = FontWeight.Bold) },
@@ -96,7 +102,7 @@ fun UserSearchScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
     ) { padding ->
@@ -151,6 +157,7 @@ fun UserSearchScreen(
                 }
             }
         }
+    }
     }
 }
 

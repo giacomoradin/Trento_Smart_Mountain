@@ -11,7 +11,7 @@
 
 | Collection | Modello | Scopo |
 |---|---|---|
-| `notifications` | `notification.js` | Notifiche social: `recipientId`, `actorId`, `type` (follow/like/comment), `targetKind`, `targetId`, `read`, `createdAt`. |
+| `notifications` | `notification.js` | Notifiche: `recipientId`, `actorId`, `type` (follow/like/comment/**join_request/join_accepted/removed**), `targetKind`, `targetId`, `message` (testo precalcolato, es. cambio leadership), `read`, `createdAt`. Promemoria attività ≤24h e allerte rifugisti sono **sintetiche** (non persistite). |
 | `edgenodes` | `edgeNode.js` | Nodi BLE-mesh rifugio: `refugeId`, `code`, `name`, `signalPct`, `online`, `lastSeenAt`. |
 | `refugesensorreadings` | `refugeSensorReading.js` | Letture sensori (temp/umidità/vento/pressione + trend), time-series per rifugio. |
 | `refugepassages` | `refugePassage.js` | Passaggi escursionisti (mesh/nfc) + social credit. |
@@ -223,11 +223,17 @@ users.username_1                      // unique
   // Ban locale alla sessione: utenti rimossi definitivamente dal capogruppo (giugno 2026)
   removedUserIds: [ObjectId],         // ref User — non possono più ri-unirsi
 
+  // Completamento "Ibrido" (chiusura Sprint 2): conclusione per-utente.
+  finishedParticipants: [ObjectId],   // ref User — chi ha concluso il proprio tracking
+  // Hide per-utente dalla lista "Le mie attività" (delete locale propagato).
+  hiddenForUsers: [ObjectId],         // ref User — esclusi da getSessionsByUser
+
   status: String,                     // enum ["PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"], default "PLANNED"
 
-  // Failover leadership (D2 §3.2.3) — Sprint 3+
-  statoFailover: Boolean,             // default false
-  lastHeartbeat: Date,                // default Date.now
+  // Failover leadership (D2 §3.2.3) — implementato chiusura Sprint 2
+  currentLeaderId: ObjectId,          // ref User — leader EFFETTIVO corrente (default creator)
+  statoFailover: Boolean,             // default false — true quando la leadership è passata a un sostituto
+  lastHeartbeat: Date,                // default Date.now — ultimo "segnale di vita" del leader effettivo
 
   startTime: Date,                    // popolato quando status = ACTIVE
   endTime: Date,                      // popolato quando status = COMPLETED
@@ -418,7 +424,13 @@ activities.startPoint_2dsphere; // sparse, per query geografiche future
   overlay: {                          // snapshot tracciamento per l'overlay sul media
     title, activityType, difficultyLevel,
     distanceMeters, elevationGainM, movingSeconds,
-    routePolyline: [{ lat, lon }]     //   traccia campionata (≤ 500 punti)
+    routePolyline: [{ lat, lon }],    //   traccia campionata (≤ 500 punti)
+    editorDecor: {                    //   decorazioni dell'editor riprodotte dal viewer
+      routeOverlayKind,               //     "trace" | "map_widget" | "map_scene"
+      routeColor, routeTransform, mapWidgetTransform,
+      floatingText, textColor, textTransform,
+      textFont                        //     "classic" | "elegant" | "mono" | "handwritten" (chiusura Sprint 2)
+    }
   },
   viewers: [{ userId: ObjectId, viewedAt: Date }],
   createdAt: Date,

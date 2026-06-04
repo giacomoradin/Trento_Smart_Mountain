@@ -22,6 +22,7 @@ export async function createNotification({
   type,
   targetKind = null,
   targetId = null,
+  message = null,
 }) {
   if (!recipientId || !actorId) return null;
   if (String(recipientId) === String(actorId)) return null;
@@ -32,6 +33,7 @@ export async function createNotification({
       type,
       targetKind,
       targetId,
+      message,
     });
   } catch (err) {
     // Non deve mai propagare: la notifica è accessoria all'azione.

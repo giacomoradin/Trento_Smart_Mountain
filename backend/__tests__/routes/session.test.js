@@ -1001,4 +1001,112 @@ describe("HikeSession Routes", () => {
       expect(resResume.status).toBe(200);
     });
   });
+
+  // ══════════════════════════════════════════════════════════════════
+  // Failover leadership — elezione automatica + reclaim del creator
+  // ══════════════════════════════════════════════════════════════════
+
+  describe("Leader failover", () => {
+    test("leader inattivo → elezione del partecipante; rientro creator → reclaim", async () => {
+      const { token: creatorToken, user: creator } = await createTestHiker({
+        username: "fo_leader",
+        email: "fo_leader@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+      const sessionId = created.body._id;
+
+      const { token: joinerToken, user: joiner } = await createTestHiker({
+        username: "fo_joiner",
+        email: "fo_joiner@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+      // Il partecipante deve essere ACCETTATO per poter essere eletto.
+      await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${joiner._id}/approve`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+
+      await activateSession(sessionId, creatorToken);
+
+      // Simula: leader inattivo (heartbeat vecchio) + partecipante "live" (posizione fresca).
+      const now = new Date();
+      await HikeSession.findByIdAndUpdate(sessionId, {
+        $set: {
+          lastHeartbeat: new Date(now.getTime() - 5 * 60 * 1000),
+          liveLocations: [
+            {
+              userId: joiner._id,
+              lat: 46.07,
+              lon: 11.12,
+              trackingStatus: "MOVING",
+              updatedAt: now,
+            },
+          ],
+        },
+      });
+
+      // Il fetch live-locations del partecipante innesca l'elezione.
+      const fetchRes = await request(app)
+        .get(`/api/v1/sessions/${sessionId}/live-locations?maxAgeSec=120`)
+        .set("Authorization", `Bearer ${joinerToken}`);
+      expect(fetchRes.status).toBe(200);
+
+      const afterElection = await HikeSession.findById(sessionId);
+      expect(afterElection.currentLeaderId.toString()).toBe(joiner._id.toString());
+      expect(afterElection.statoFailover).toBe(true);
+
+      // Il creator rientra (invia posizione) → reclaim della leadership.
+      const reclaimRes = await request(app)
+        .post(`/api/v1/sessions/${sessionId}/live-location`)
+        .set("Authorization", `Bearer ${creatorToken}`)
+        .send({ lat: 46.07, lon: 11.12 });
+      expect(reclaimRes.status).toBe(200);
+
+      const afterReclaim = await HikeSession.findById(sessionId);
+      expect(afterReclaim.currentLeaderId.toString()).toBe(creator._id.toString());
+      expect(afterReclaim.statoFailover).toBe(false);
+    });
+
+    test("nessuna elezione se il leader è attivo (heartbeat recente)", async () => {
+      const { token: creatorToken, user: creator } = await createTestHiker({
+        username: "fo_leader2",
+        email: "fo_leader2@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+      const sessionId = created.body._id;
+      const { token: joinerToken, user: joiner } = await createTestHiker({
+        username: "fo_joiner2",
+        email: "fo_joiner2@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+      await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${joiner._id}/approve`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+      await activateSession(sessionId, creatorToken);
+
+      // Heartbeat recente del leader → niente failover.
+      const now = new Date();
+      await HikeSession.findByIdAndUpdate(sessionId, {
+        $set: {
+          lastHeartbeat: now,
+          liveLocations: [
+            { userId: joiner._id, lat: 46, lon: 11, trackingStatus: "MOVING", updatedAt: now },
+          ],
+        },
+      });
+
+      await request(app)
+        .get(`/api/v1/sessions/${sessionId}/live-locations?maxAgeSec=120`)
+        .set("Authorization", `Bearer ${joinerToken}`);
+
+      const after = await HikeSession.findById(sessionId);
+      expect(after.statoFailover).toBe(false);
+      expect(after.currentLeaderId.toString()).toBe(creator._id.toString());
+    });
+  });
 });

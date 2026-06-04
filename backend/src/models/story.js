@@ -63,6 +63,12 @@ const storyOverlaySchema = new Schema(
         scale: { type: Number, default: 1 },
         rotationDeg: { type: Number, default: 0 },
       },
+      // Font del testo scelto nell'editor (vedi StoryFont lato mobile).
+      textFont: {
+        type: String,
+        enum: ["classic", "elegant", "mono", "handwritten"],
+        default: null,
+      },
     },
   },
   { _id: false },

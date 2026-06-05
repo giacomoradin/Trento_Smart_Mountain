@@ -52,26 +52,34 @@ object StoryBitmapExporter {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val usableMapScene =
+        // Mappa a tutto schermo (scena) come SFONDO: solo senza media e quando
+        // l'utente NON ha scelto un overlay esplicito (routeOverlayMode == NONE).
+        val wantsMapScene =
             !hasCustomBackground &&
-                routePoints.size >= 2 &&
-                StoryMapSnapshotter.isUsableSnapshot(mapSceneBitmap)
+                routeOverlayMode == RouteOverlayMode.NONE &&
+                routePoints.size >= 2
+        val usableMapScene =
+            wantsMapScene && StoryMapSnapshotter.isUsableSnapshot(mapSceneBitmap)
 
         when {
             usableMapScene -> {
                 drawBackground(canvas, width, height, null)
                 drawBitmapLayer(canvas, width, height, mapSceneBitmap!!, mapT)
             }
-            !hasCustomBackground && routePoints.size >= 2 -> {
+            wantsMapScene -> {
                 drawMapSceneFallback(canvas, width, height, routePoints, mapT, routeColor)
             }
             else -> {
+                // Sfondo: foto/video data-uri se presente, altrimenti gradiente scuro.
                 drawBackground(canvas, width, height, backgroundDataUri)
+                // Overlay traccia / widget-mappa — disponibili anche SENZA media di
+                // sfondo (si sovrappongono allo sfondo scuro). Rispettano la scelta
+                // esplicita dell'utente (routeOverlayMode).
                 if (routePoints.size >= 2) {
-                    when {
-                        hasCustomBackground && routeOverlayMode == RouteOverlayMode.TRACE ->
+                    when (routeOverlayMode) {
+                        RouteOverlayMode.TRACE ->
                             drawRouteSticker(canvas, width, height, routePoints, routeT, routeColor)
-                        hasCustomBackground && routeOverlayMode == RouteOverlayMode.MAP_WIDGET -> {
+                        RouteOverlayMode.MAP_WIDGET -> {
                             val widgetBmp =
                                 mapWidgetBitmap?.takeIf { StoryMapSnapshotter.isUsableSnapshot(it) }
                             if (widgetBmp != null) {
@@ -84,6 +92,7 @@ object StoryBitmapExporter {
                                 )
                             }
                         }
+                        RouteOverlayMode.NONE -> Unit
                     }
                 }
             }

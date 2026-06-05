@@ -207,7 +207,15 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
         _state.update {
             it.copy(
                 routeOverlayMode = RouteOverlayMode.NONE,
-                selectedSticker = null,
+                // Senza media, NONE = mappa a tutto schermo: la selezioniamo subito
+                // così colore/sposta/ingrandisci sono disponibili. Con media, NONE =
+                // nessun overlay → nessuno sticker selezionato.
+                selectedSticker =
+                    if (!it.hasMediaBackground && it.routePoints.size >= 2) {
+                        StoryStickerKind.MAP_SCENE
+                    } else {
+                        null
+                    },
             )
         }
     }
@@ -292,8 +300,12 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
                     listOf(StoryMedia(kind = "video", dataUri = s.mediaDataUri))
                 } else {
                     val lineArgb = s.routeColor.toArgb()
+                    // Mappa a tutto schermo: solo senza media + mode NONE (default).
                     val mapSceneBmp =
-                        if (!s.hasCustomBackground && s.routePoints.size >= 2) {
+                        if (!s.hasCustomBackground &&
+                            s.routeOverlayMode == RouteOverlayMode.NONE &&
+                            s.routePoints.size >= 2
+                        ) {
                             withContext(Dispatchers.Main) {
                                 StoryMapSnapshotter.captureScene(
                                     hostActivity = hostActivity,
@@ -307,9 +319,10 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
                         } else {
                             null
                         }
+                    // Widget mappa: ogni volta che l'utente sceglie MAP_WIDGET, con o
+                    // senza media di sfondo.
                     val mapWidgetBmp =
-                        if (s.hasCustomBackground &&
-                            s.routeOverlayMode == RouteOverlayMode.MAP_WIDGET &&
+                        if (s.routeOverlayMode == RouteOverlayMode.MAP_WIDGET &&
                             s.routePoints.size >= 2
                         ) {
                             withContext(Dispatchers.Main) {
@@ -404,11 +417,11 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
 
         val overlayKind =
             when {
-                // Nessun media di sfondo (né foto né video) + route → scena mappa piena.
-                !s.hasMediaBackground && hasRoute -> "map_scene"
-                // Con media di sfondo (foto O video) rispettiamo la scelta dell'utente.
+                // Scelta ESPLICITA dell'utente (vale sempre, con o senza media).
                 s.routeOverlayMode == RouteOverlayMode.TRACE -> "trace"
                 s.routeOverlayMode == RouteOverlayMode.MAP_WIDGET -> "map_widget"
+                // NONE senza media di sfondo → mappa a tutto schermo (scena).
+                !s.hasMediaBackground && hasRoute -> "map_scene"
                 else -> null
             }
 

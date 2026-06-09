@@ -558,6 +558,45 @@ describe("HikeSession Routes", () => {
       expect(res.body.status).toBe("COMPLETED");
     });
 
+    test("force-close auto-finalizza i membri ancora live (ADR-001, no ghost)", async () => {
+      const { token: creatorToken } = await createTestHiker({
+        username: "afc",
+        email: "afc@test.com",
+      });
+      const created = await createSessionAs(creatorToken);
+      const sessionId = created.body._id;
+      const { token: joinerToken, user: joiner } = await createTestHiker({
+        username: "afj",
+        email: "afj@test.com",
+      });
+      await request(app)
+        .post("/api/v1/sessions/join")
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ inviteCode: created.body.inviteCode });
+      await request(app)
+        .post(`/api/v1/sessions/${sessionId}/participants/${joiner._id}/approve`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+      await activateSession(sessionId, creatorToken);
+      // Il joiner è "live" (invia posizione) ma NON conclude → ghost.
+      await request(app)
+        .post(`/api/v1/sessions/${sessionId}/live-location`)
+        .set("Authorization", `Bearer ${joinerToken}`)
+        .send({ lat: 46.07, lon: 11.12 });
+
+      // Il leader chiude: COMPLETED + il ghost viene auto-finalizzato.
+      const res = await request(app)
+        .post(`/api/v1/sessions/${sessionId}/close`)
+        .set("Authorization", `Bearer ${creatorToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("COMPLETED");
+
+      const after = await HikeSession.findById(sessionId);
+      const joinerP = after.participants.find(
+        (p) => p.userId.toString() === joiner._id.toString(),
+      );
+      expect(joinerP.participationState).toBe("finished");
+    });
+
     test("non-leader cannot force-close (403)", async () => {
       const { token: creatorToken } = await createTestHiker({
         username: "fcc2",

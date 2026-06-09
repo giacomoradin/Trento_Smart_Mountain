@@ -117,6 +117,7 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
                 val timeline = buildTimeline(
                     distanceKm = distKm,
                     movingSeconds = movingSec,
+                    totalSeconds = totalSec,
                     startMs = local?.startTimeMs ?: 0L,
                     elevationGainM = elevM,
                 )
@@ -217,6 +218,7 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
     private fun buildTimeline(
         distanceKm: Double,
         movingSeconds: Long,
+        totalSeconds: Long,
         startMs: Long,
         elevationGainM: Int,
     ): List<TimelineEvent> {
@@ -250,13 +252,27 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
             km += 5.0
         }
 
+        // Auto-pause (se presenti)
+        if (totalSeconds > movingSeconds) {
+            val pauseSeconds = totalSeconds - movingSeconds
+            // Inseriamo l'evento pausa appena prima dell'arrivo. 
+            // Distanza leggermente inferiore all'arrivo per l'ordinamento.
+            events.add(TimelineEvent(
+                type = TimelineEventType.AUTOPAUSE,
+                label = "Pause (Auto/Manuali)",
+                timeLabel = null, // Nessun orario specifico per pause aggregate
+                subtitle = "Durata totale: ${HikeEstimation.formatHours(pauseSeconds / 3600.0)}",
+                distanceKm = distanceKm - 0.001,
+            ))
+        }
+
         // Arrivo
-        val endMs = start + movingSeconds * 1000
+        val endMs = start + totalSeconds * 1000
         events.add(TimelineEvent(
             type = TimelineEventType.ARRIVAL,
             label = "Arrivo",
             timeLabel = fmt.format(Date(endMs)),
-            subtitle = "Totale ${HikeEstimation.formatHours(movingSeconds / 3600.0)} · ${String.format("%.1f", distanceKm)} km",
+            subtitle = "Totale ${HikeEstimation.formatHours(totalSeconds / 3600.0)} · ${String.format("%.1f", distanceKm)} km",
             distanceKm = distanceKm,
         ))
 

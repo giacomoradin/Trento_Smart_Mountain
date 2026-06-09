@@ -282,6 +282,15 @@ const hikSessionSchema = new Schema({
       // Null per il creator (auto-accettato).
       approvedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
       joinedAt: { type: Date, default: Date.now }, // timestamp di quando ha inviato la richiesta
+      // Ciclo di vita della PARTECIPAZIONE del singolo (ADR-001), ortogonale a
+      // `status` (che è l'approvazione di iscrizione). idle = accettato ma non in
+      // cammino; live = sta tracciando; finished = ha concluso la propria attività;
+      // left = ha abbandonato. Indipendente dallo stato della sessione: non lo blocca.
+      participationState: {
+        type: String,
+        enum: ["idle", "live", "finished", "left"],
+        default: "idle",
+      },
     },
   ],
 
@@ -302,13 +311,12 @@ const hikSessionSchema = new Schema({
     default: "PLANNED",
   },
 
-  // ── Modello "Ibrido" di completamento ──────────────────────────────────────
-  // Ogni membro termina il PROPRIO tracking individualmente (registrato qui).
-  // La sessione passa a COMPLETED quando TUTTI i membri accettati hanno finito,
-  // oppure quando il capogruppo forza la chiusura (forceCompleteSession).
-  // Per le sessioni in solitaria (solo il creator accettato) basta che il creator
-  // finisca → la sessione si chiude pulita senza restare bloccata.
-  finishedParticipants: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  // ── Modello di completamento (ADR-001) ─────────────────────────────────────
+  // Il ciclo di vita del SINGOLO è in participants[].participationState
+  // (idle/live/finished/left), ortogonale allo `status` della sessione. La
+  // sessione passa a COMPLETED quando il capogruppo chiude (forceCompleteSession,
+  // con auto-finalize dei membri live) o quando TUTTI gli accettati sono
+  // finished/left (caso solitaria: il creator finisce → chiusa). Niente più ghost.
 
   // Failover leadership
   // Leader EFFETTIVO corrente: di norma è il creator, ma può passare a un

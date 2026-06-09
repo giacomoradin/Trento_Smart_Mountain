@@ -1,7 +1,6 @@
 package it.trentosmartmountain.app.viewmodel
 
 import android.app.Application
-import android.util.Patterns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
@@ -78,10 +77,12 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     val password = _uiState.value.password
 
     // Errori di validazione locale: nessuna chiamata di rete se i campi non sono accettabili.
+    // Il campo accetta ORA email O username: non imponiamo più il formato email.
+    // Il backend risolve l'utente per email o username (401 se non esiste).
     val emailError =
       when {
-        email.isEmpty() -> "Inserisci l’email"
-        !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> "Email non valida"
+        email.isEmpty() -> "Inserisci email o username"
+        email.trim().length < 3 -> "Inserisci un'email o uno username valido"
         else -> null
       }
 

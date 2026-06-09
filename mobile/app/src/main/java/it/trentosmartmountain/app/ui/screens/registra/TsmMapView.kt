@@ -113,7 +113,7 @@ fun TsmMapView(
         setTileSource(openTopoMapTileSource())
         setMultiTouchControls(true)
         zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-        isTilesScaledToDpi = true
+        isTilesScaledToDpi = false
         // De-zoom (pinch-out) sempre consentito.
         minZoomLevel = 3.0
         maxZoomLevel = 19.0

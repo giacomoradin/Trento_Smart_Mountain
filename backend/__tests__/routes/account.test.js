@@ -237,13 +237,15 @@ describe("Account Routes", () => {
       expect(await bcrypt.compare(password, updated.passwordHash)).toBe(false);
     });
 
-    test("password attuale errata → 401 (e l'hash NON cambia)", async () => {
+    test("password attuale errata → 403 (e l'hash NON cambia)", async () => {
+      // 403 (non 401): "password errata" è distinta da "token scaduto/invalid"
+      // (401) → il mobile non confonde il re-auth con una sessione scaduta (bug D).
       const { token, user, password } = await createTestHiker({ email: "cp2@test.com", username: "cp2" });
       const res = await request(app)
         .post("/api/v1/users/change-password")
         .set("Authorization", `Bearer ${token}`)
         .send({ oldPassword: "Sbagliata123!", newPassword: "NuovaPassword456!" });
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
       const updated = await User.findById(user._id).select("passwordHash").lean();
       expect(await bcrypt.compare(password, updated.passwordHash)).toBe(true);
     });
@@ -259,13 +261,13 @@ describe("Account Routes", () => {
   });
 
   describe("DELETE /me — eliminazione account", () => {
-    test("password errata → 401, account NON eliminato", async () => {
+    test("password errata → 403, account NON eliminato", async () => {
       const { token, user } = await createTestHiker({ email: "del1@test.com", username: "del1" });
       const res = await request(app)
         .delete("/api/v1/users/me")
         .set("Authorization", `Bearer ${token}`)
         .send({ password: "Sbagliata123!" });
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(403);
       expect(await User.findById(user._id)).not.toBeNull();
     });
 

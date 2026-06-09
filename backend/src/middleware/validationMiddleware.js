@@ -48,8 +48,12 @@ const objectIdField = Joi.string()
   .pattern(/^[0-9a-fA-F]{24}$/)
   .message("ID non valido");
 
+// Login: il campo `email` accetta ORA sia un'email sia uno username (login con
+// l'uno o l'altro). Quindi NON imponiamo più il formato email: stringa generica
+// (3-254 char). Il service risolve l'utente per email O username. Backward-compat:
+// il client continua a inviare il campo `email`.
 export const loginSchema = Joi.object({
-  email: emailField.required(),
+  email: Joi.string().trim().min(3).max(254).required(),
   password: passwordField.required(),
 });
 

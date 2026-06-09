@@ -104,7 +104,7 @@ object StoryMapSnapshotter {
                             layoutParams =
                                 FrameLayout.LayoutParams(width, height)
                             setTileSource(openTopoMapTileSource())
-                            isTilesScaledToDpi = true
+                            isTilesScaledToDpi = false
                             minZoomLevel = 3.0
                             maxZoomLevel = 19.0
                             setMultiTouchControls(false)

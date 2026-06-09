@@ -35,7 +35,13 @@ export const verifyEmail = async (req, res) => {
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    // Il campo `email` può contenere un'email OPPURE uno username (login con
+    // entrambi). Risolviamo per email (case-insensitive, salvata lowercase) o per
+    // username (match esatto). $or → un solo round-trip.
+    const identifier = (email || "").trim();
+    const user = await User.findOne({
+      $or: [{ email: identifier.toLowerCase() }, { username: identifier }],
+    });
     if (!user)
       return res.status(401).json({ message: "Credenziali non valide." });
 

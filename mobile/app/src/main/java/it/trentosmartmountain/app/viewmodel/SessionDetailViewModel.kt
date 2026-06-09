@@ -570,9 +570,17 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
 
     fun leaderStop() {
         val sessionId = _uiState.value.session?._id ?: return
+        // 1) Ferma/salva il tracking del leader (dialog Salva/Scarta via coordinator,
+        //    se sta tracciando su questo device).
         liveController.leaderStop(viewModelScope, sessionId)
-        bumpLiveUi()
-        reloadSessionQuiet(sessionId)
+        // 2) ADR-001: "Arresta" del capogruppo CHIUDE la sessione per TUTTI (force).
+        //    Vale sempre, anche se un partecipante è ancora live/non concluso (niente
+        //    più ghost che bloccano). Non dipende dall'activeSessionId del tab Registra.
+        viewModelScope.launch {
+            SessionCommandRepository(getApplication()).forceCloseSession(sessionId)
+            bumpLiveUi()
+            reloadSessionQuiet(sessionId)
+        }
     }
 
     fun joinLive(onNavigate: () -> Unit) {

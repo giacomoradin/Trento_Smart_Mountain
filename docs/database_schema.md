@@ -214,23 +214,23 @@ users.username_1                      // unique
     {
       userId: ObjectId,               // ref User, required
       role: String,                   // enum ["hiker", "groupLeader"], default "hiker"
-      status: String,                 // enum ["pending","accepted"], default "accepted" (giugno 2026)
+      status: String,                 // enum ["pending","accepted"], default "accepted" — APPROVAZIONE iscrizione
       approvedBy: ObjectId,           // ref User — chi ha approvato il pending (null per il creator)
       joinedAt: Date,                 // default Date.now
+      // ADR-001: ciclo di vita della PARTECIPAZIONE del singolo, ORTOGONALE a `status`.
+      participationState: String,     // enum ["idle","live","finished","left"], default "idle"
     }
   ],
 
   // Ban locale alla sessione: utenti rimossi definitivamente dal capogruppo (giugno 2026)
   removedUserIds: [ObjectId],         // ref User — non possono più ri-unirsi
 
-  // Completamento "Ibrido" (chiusura Sprint 2): conclusione per-utente.
-  finishedParticipants: [ObjectId],   // ref User — chi ha concluso il proprio tracking
   // Hide per-utente dalla lista "Le mie attività" (delete locale propagato).
   hiddenForUsers: [ObjectId],         // ref User — esclusi da getSessionsByUser
 
   status: String,                     // enum ["PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"], default "PLANNED"
 
-  // Failover leadership (D2 §3.2.3) — implementato chiusura Sprint 2
+  // Failover leadership (D2 §3.2.3, ADR-001)
   currentLeaderId: ObjectId,          // ref User — leader EFFETTIVO corrente (default creator)
   statoFailover: Boolean,             // default false — true quando la leadership è passata a un sostituto
   lastHeartbeat: Date,                // default Date.now — ultimo "segnale di vita" del leader effettivo

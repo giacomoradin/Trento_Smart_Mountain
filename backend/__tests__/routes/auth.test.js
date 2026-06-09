@@ -170,6 +170,21 @@ describe("Authentication Routes", () => {
       expect(response.body).not.toHaveProperty("passwordHash");
     });
 
+    test("should login with username instead of email", async () => {
+      const { password } = await createTestHiker({
+        username: "byusername",
+        email: "byusername@example.com",
+      });
+
+      const response = await request(app).post("/auth/login").send({
+        email: "byusername", // nel campo email passiamo lo USERNAME
+        password,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty("token");
+    });
+
     test("should fail with incorrect password", async () => {
       // Crea utente
       await createTestHiker({

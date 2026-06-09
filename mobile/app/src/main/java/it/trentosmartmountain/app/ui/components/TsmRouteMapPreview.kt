@@ -86,7 +86,7 @@ fun TsmRouteMapPreview(
     val mapView = remember(interactive, storySceneMode) {
         MapView(context).apply {
             setTileSource(openTopoMapTileSource())
-            isTilesScaledToDpi = true
+            isTilesScaledToDpi = false
             minZoomLevel = 3.0
             maxZoomLevel = 19.0
             if (interactive) {

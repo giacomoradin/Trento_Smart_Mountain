@@ -122,7 +122,17 @@ data class SessionParticipant(
     val status: String? = null,
     /** Chi ha approvato la richiesta (capogruppo o partecipante accettato). */
     val approvedBy: SessionUserInfo? = null,
+    /**
+     * Ciclo di vita della PARTECIPAZIONE (ADR-001): idle|live|finished|left.
+     * Ortogonale a [status] (approvazione). Fonte autoritativa per riconciliare lo
+     * stato live locale (es. dopo che il capogruppo ha chiuso, finished → niente ghost).
+     */
+    val participationState: String? = null,
 ) {
     /** Helper: il partecipante è in attesa di approvazione? */
     val isPending: Boolean get() = status == "pending"
+
+    /** Helper: la partecipazione è conclusa o abbandonata? */
+    val isFinishedParticipation: Boolean
+        get() = participationState == "finished" || participationState == "left"
 }

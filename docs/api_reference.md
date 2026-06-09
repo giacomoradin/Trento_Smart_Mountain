@@ -98,8 +98,8 @@ Errori: `403 FORBIDDEN_NOT_MEMBER`/`FORBIDDEN_NOT_LEADER`, `404 PARTICIPANT_NOT_
 
 | Metodo | Endpoint | Descrizione |
 |---|---|---|
-| PATCH | `/api/v1/sessions/:id/complete` | Conclusione **individuale** del chiamante (`finishedParticipants[]` + crediti per-utente). La sessione passa a `COMPLETED` solo quando **tutti gli accettati** hanno finito (es. sessione in solitaria → chiusura immediata). |
-| POST | `/api/v1/sessions/:id/close` | **Chiusura forzata** per tutti (`COMPLETED`), anche con partecipanti non conclusi. Solo capogruppo/leader effettivo (`403 FORBIDDEN_NOT_LEADER`). |
+| PATCH | `/api/v1/sessions/:id/complete` | Conclusione **individuale** del chiamante (ADR-001: `participants[].participationState = "finished"` + crediti per-utente). La sessione passa a `COMPLETED` solo quando **tutti gli accettati** sono `finished`/`left` (es. sessione in solitaria → chiusura immediata). |
+| POST | `/api/v1/sessions/:id/close` | **Chiusura del capogruppo** (`COMPLETED` per tutti) con **auto-finalize** dei membri ancora `live` (niente sessioni "ghost"). Solo capogruppo/leader effettivo (`403 FORBIDDEN_NOT_LEADER`). È ciò che invoca "Arresta" del leader. |
 | DELETE | `/api/v1/sessions/:id/from-activities` | Nasconde una sessione COMPLETED dalla lista "Le mie attività" del chiamante (`hiddenForUsers[]`, hide per-utente; il documento resta per gli altri). `403 NOT_IN_SESSION` se non membro. |
 
 **Failover capogruppo** (nessun nuovo endpoint, logica lato `getLiveLocations`/`postLiveLocation`):
@@ -160,15 +160,16 @@ oppure
 
 ### `POST /auth/login`
 
-Login utente.
+Login utente. Il campo `email` accetta **email O username** (lookup `$or` lato server):
+il login funziona con entrambi. La validazione non impone più il formato email.
 
 | Campo            | Tipo | Note                                       |
 | ---------------- | ---- | ------------------------------------------ |
 | **Auth**         | —    | Pubblico                                   |
-| **Body**         | JSON | `{ email, password }`                      |
-| **Response 200** | JSON | `{ token, userId, role, username, email }` |
-| **Response 401** | JSON | `{ error: "Credenziali non valide" }`      |
-| **Response 403** | JSON | `{ error: "Email non verificata" }`        |
+| **Body**         | JSON | `{ email, password }` — `email` = email **o** username |
+| **Response 200** | JSON | `{ token, accessToken, refreshToken, refreshExpiresAt }` |
+| **Response 401** | JSON | `{ message: "Credenziali non valide." }`   |
+| **Response 403** | JSON | `{ message: "Accesso negato. ... verifica SMTP ..." }` |
 
 #### Esempio request
 
@@ -177,7 +178,7 @@ POST /auth/login
 Content-Type: application/json
 
 {
-  "email": "mario.rossi@example.com",
+  "email": "mariorossi",   // email OPPURE username
   "password": "password123"
 }
 ```

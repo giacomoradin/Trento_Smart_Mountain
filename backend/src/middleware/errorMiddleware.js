@@ -13,10 +13,10 @@
  */
 const BUSINESS_ERROR_MAP = {
   // 401 — credenziali
-  WRONG_PASSWORD: { status: 401, message: "Password errata." },
-  WRONG_OLD_PASSWORD: { status: 401, message: "Password attuale errata." },
   INVALID_CREDENTIALS: { status: 401, message: "Credenziali non valide." },
   // 403 — autorizzazione
+  WRONG_PASSWORD: { status: 403, message: "Password errata." },
+  WRONG_OLD_PASSWORD: { status: 403, message: "Password attuale errata." },
   FORBIDDEN: { status: 403, message: "Non autorizzato." },
   NOT_IN_SESSION: { status: 403, message: "Non fai parte di questa sessione." },
   ONLY_CREATOR: { status: 403, message: "Solo il Capogruppo può eseguire questa operazione." },

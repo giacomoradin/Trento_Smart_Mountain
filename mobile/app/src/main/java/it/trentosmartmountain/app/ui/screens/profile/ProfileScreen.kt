@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -115,7 +116,40 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val profileV2State by profileV2ViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val nfcAvailable = NfcAdapter.getDefaultAdapter(context) != null
+    val nfcAdapter = remember { NfcAdapter.getDefaultAdapter(context) }
+    val nfcAvailable = nfcAdapter != null
+    
+    // Stato reattivo dell'NFC (aggiornato tramite BroadcastReceiver e OnResume)
+    var nfcEnabled by remember { mutableStateOf(nfcAvailable && nfcAdapter?.isEnabled == true) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    DisposableEffect(context, nfcAvailable, lifecycleOwner) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
+                if (intent?.action == NfcAdapter.ACTION_ADAPTER_STATE_CHANGED) {
+                    nfcEnabled = nfcAdapter?.isEnabled == true
+                }
+            }
+        }
+        if (nfcAvailable) {
+            context.registerReceiver(receiver, android.content.IntentFilter(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED))
+        }
+
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                nfcEnabled = nfcAvailable && nfcAdapter?.isEnabled == true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            if (nfcAvailable) {
+                runCatching { context.unregisterReceiver(receiver) }
+            }
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val coroutineScope = rememberCoroutineScope()
     var showRemoveAvatarDialog by remember { mutableStateOf(false) }
 

@@ -45,7 +45,15 @@ object SessionLiveStateStore {
         }
         sessions.forEach { session ->
             val local = getState(context, session._id)
-            if (session.status == "PLANNED" && local in LIVE_STATES) {
+            // Riconciliazione ADR-001: lo stato live LOCALE è solo un intento, la
+            // verità è lato server. Lo azzeriamo quando essere "live" non ha più
+            // senso: sessione PLANNED (non avviata) o COMPLETED (chiusa dal leader).
+            // Così, dopo che il capogruppo ha chiuso, nessun membro resta "live"
+            // localmente al re-fetch (niente sessione ghost).
+            val shouldClear =
+                local in LIVE_STATES &&
+                    (session.status == "PLANNED" || session.status == "COMPLETED")
+            if (shouldClear) {
                 editor.putString(session._id, UserSessionLiveState.NOT_IN_LIVE.name)
             }
         }

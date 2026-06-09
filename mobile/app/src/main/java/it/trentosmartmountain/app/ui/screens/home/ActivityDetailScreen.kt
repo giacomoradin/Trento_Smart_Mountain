@@ -122,6 +122,15 @@ fun ActivityDetailScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showShareDialog by remember { mutableStateOf(false) }
 
+    val currentUserId = remember {
+        runCatching {
+            it.trentosmartmountain.app.data.local.TokenStorage
+                .getInstance(context)
+                .getToken()
+                ?.let { tok -> it.trentosmartmountain.app.data.remote.JwtDecoder.userIdFrom(tok) }
+        }.getOrNull()
+    }
+
     LaunchedEffect(activityId) { viewModel.load(activityId, sessionId) }
 
     if (showShareDialog) {
@@ -129,14 +138,6 @@ fun ActivityDetailScreen(
         // può condividere la SESSIONE come post di gruppo. I partecipanti non-
         // creator hanno la PROPRIA Activity sincronizzata (entity.remoteId) e
         // condividono quella — è la loro versione personale dell'uscita.
-        val currentUserId = remember {
-            runCatching {
-                it.trentosmartmountain.app.data.local.TokenStorage
-                    .getInstance(context)
-                    .getToken()
-                    ?.let { tok -> it.trentosmartmountain.app.data.remote.JwtDecoder.userIdFrom(tok) }
-            }.getOrNull()
-        }
         val isCreator = uiState.session?.creatorId?._id == currentUserId
         ShareActivityDialog(
             activityName = uiState.name,
@@ -464,6 +465,7 @@ fun ActivityDetailScreen(
                         participants.forEach { p ->
                             val name = p.userId?.username ?: "Utente"
                             val isOrganizer = p.role == "groupLeader"
+                            val isMe = p.userId?._id == currentUserId
                             val pid = p.userId?._id
                             Row(
                                 modifier = Modifier
@@ -479,7 +481,7 @@ fun ActivityDetailScreen(
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(if (isOrganizer) "Tu" else name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                                    Text(if (isMe) "Tu" else name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
                                     Text(if (isOrganizer) "Organizzatore" else "Partecipante", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                 }
                                 Icon(Icons.Filled.CheckCircle, null, tint = TsmPrimary, modifier = Modifier.size(20.dp))

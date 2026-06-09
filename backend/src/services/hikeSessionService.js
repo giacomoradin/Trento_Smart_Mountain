@@ -93,6 +93,10 @@ function electNewLeaderIfStale(session) {
       const pid = (p.userId?._id || p.userId).toString();
       return (
         p.status !== "pending" &&
+        // ADR-001: non eleggere chi ha già concluso o abbandonato — non sarebbe
+        // un leader utile e potrebbe non concludere mai (ghost).
+        p.participationState !== "finished" &&
+        p.participationState !== "left" &&
         pid !== staleLeader &&
         liveIds.has(pid)
       );
@@ -519,6 +523,14 @@ export async function postLiveLocation(sessionId, userId, payload) {
     );
   }
 
+  // ADR-001: chi invia la posizione è "live". Aggiorna il participationState del
+  // poster (solo se idle/live → non riattiva un finished/left per un ping tardivo).
+  await HikeSession.updateOne(
+    { _id: sessionId },
+    { $set: { "participants.$[p].participationState": "live" } },
+    { arrayFilters: [{ "p.userId": uid, "p.participationState": { $in: ["idle", "live"] } }] },
+  );
+
   return { message: "Live location aggiornata." };
 }
 
@@ -859,15 +871,15 @@ export async function updateSessionDetails(sessionId, userId, updates) {
 }
 
 /**
- * Conclude la partecipazione INDIVIDUALE di un utente (modello "Ibrido").
+ * Conclude la partecipazione INDIVIDUALE di un utente (ADR-001).
  *
  * Comportamento:
- *  - Registra che `userId` ha finito (finishedParticipants) e accredita i suoi crediti.
+ *  - Imposta `participationState=finished` per il chiamante e accredita i suoi crediti.
  *  - Persiste `actualStats` come stat "ufficiali" della sessione solo se mancanti o
  *    se a chiamare è il leader (un partecipante non sovrascrive le stat del leader).
- *  - La sessione passa a COMPLETED solo se TUTTI i membri accettati hanno finito
- *    (caso tipico: sessione in solitaria → il creator finisce → chiusa subito),
- *    OPPURE se `forceCloseAll` (il capogruppo preme "Chiudi sessione").
+ *  - La sessione passa a COMPLETED solo se TUTTI i membri accettati sono
+ *    finished/left (caso tipico: sessione in solitaria → il creator finisce →
+ *    chiusa subito), OPPURE se `forceCloseAll` (il capogruppo chiude per tutti).
  *  - Altrimenti la sessione resta ACTIVE per gli altri membri ancora in cammino.
  *
  * Autorizzato a creator e partecipanti accettati: ognuno chiude il proprio tracking
@@ -891,14 +903,12 @@ export async function completeSession(
 
   const isLeader = isSessionGroupLeader(session, userId);
 
-  // 1. Registra la conclusione individuale (idempotente).
-  if (
-    !(session.finishedParticipants || []).some(
-      (id) => id.toString() === userId.toString(),
-    )
-  ) {
-    session.finishedParticipants.push(userId);
-  }
+  // 1. ADR-001: la conclusione del SINGOLO aggiorna solo la SUA partecipazione
+  //    (participationState=finished), non lo stato della sessione (chiuso dal leader).
+  const me = (session.participants || []).find(
+    (p) => (p.userId?._id || p.userId).toString() === userId.toString(),
+  );
+  if (me && me.participationState !== "left") me.participationState = "finished";
 
   // 2. actualStats "ufficiali": le scrive il leader; un partecipante le scrive
   //    solo se ancora assenti (così le stat della sessione non vengono sovrascritte
@@ -919,15 +929,19 @@ export async function completeSession(
     }
   }
 
-  // 3. Decisione di chiusura: tutti gli accettati hanno finito? oppure force?
-  const acceptedIds = (session.participants || [])
-    .filter((p) => p.status !== "pending")
-    .map((p) => (p.userId?._id || p.userId).toString());
-  const finishedSet = new Set(
-    (session.finishedParticipants || []).map((id) => id.toString()),
+  // 3. Decisione di chiusura (ADR-001): `participationState` è la fonte
+  //    autoritativa. La sessione si chiude da sola solo quando OGNI membro
+  //    accettato è `finished` o `left` (caso solitaria → il creator finisce →
+  //    chiusa). Negli altri casi la chiude il leader (forceCloseAll). I `left`
+  //    non bloccano.
+  const acceptedParticipants = (session.participants || []).filter(
+    (p) => p.status !== "pending",
   );
   const allFinished =
-    acceptedIds.length > 0 && acceptedIds.every((id) => finishedSet.has(id));
+    acceptedParticipants.length > 0 &&
+    acceptedParticipants.every(
+      (p) => p.participationState === "finished" || p.participationState === "left",
+    );
 
   if (forceCloseAll || allFinished) {
     session.status = "COMPLETED";
@@ -999,6 +1013,18 @@ export async function forceCompleteSession(sessionId, leaderId) {
   if (!isSessionGroupLeader(session, leaderId)) {
     throw new Error("FORBIDDEN_NOT_LEADER");
   }
+
+  // ADR-001: chiudere la sessione è un'azione del LEADER e vale SEMPRE, anche se
+  // qualche partecipante è ancora "live"/non-concluso (niente più ghost che
+  // bloccano). Auto-finalize: ogni membro accettato non ancora finished/left
+  // viene marcato `finished` (la sua eventuale traccia è già stata salvata dal
+  // suo client; qui chiudiamo la partecipazione così non resta appesa).
+  (session.participants || []).forEach((p) => {
+    if (p.status !== "pending" && p.participationState !== "left") {
+      p.participationState = "finished";
+    }
+  });
+
   session.status = "COMPLETED";
   session.endTime = session.endTime || new Date();
   await session.save();
@@ -1032,7 +1058,14 @@ export async function updateSessionStatus(sessionId, creatorId, newStatus) {
   }
 
   session.status = newStatus;
-  if (newStatus === "ACTIVE") session.startTime = new Date();
+  if (newStatus === "ACTIVE") {
+    session.startTime = new Date();
+    // ADR-001: avviare = il leader entra "live".
+    const leader = (session.participants || []).find(
+      (p) => (p.userId?._id || p.userId).toString() === creatorId.toString(),
+    );
+    if (leader) leader.participationState = "live";
+  }
   if (newStatus === "COMPLETED") session.endTime = new Date();
 
   await session.save();

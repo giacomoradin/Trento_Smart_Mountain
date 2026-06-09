@@ -124,7 +124,7 @@ class AccountEditViewModel(application: Application) : AndroidViewModel(applicat
                 if (resp.isSuccessful) {
                     _state.value = _state.value.copy(isLoading = false, passwordVerified = true)
                 } else {
-                    val msg = if (resp.code() == 401) "Password errata." else "Errore (${resp.code()})."
+                    val msg = if (resp.code() == 403) "Password errata." else "Errore (${resp.code()})."
                     _state.value = _state.value.copy(isLoading = false, error = msg)
                 }
             }.onFailure {
@@ -146,7 +146,7 @@ class AccountEditViewModel(application: Application) : AndroidViewModel(applicat
                 if (resp.isSuccessful) {
                     _state.value = _state.value.copy(isLoading = false, success = "Password aggiornata.")
                 } else {
-                    val msg = if (resp.code() == 401) "Password attuale errata." else "Errore (${resp.code()})."
+                    val msg = if (resp.code() == 403) "Password attuale errata." else "Errore (${resp.code()})."
                     _state.value = _state.value.copy(isLoading = false, error = msg)
                 }
             }.onFailure {
@@ -164,7 +164,7 @@ class AccountEditViewModel(application: Application) : AndroidViewModel(applicat
                 if (resp.isSuccessful) {
                     _state.value = _state.value.copy(isLoading = false, accountDeleted = true)
                 } else {
-                    val msg = if (resp.code() == 401) "Password errata." else "Errore (${resp.code()})."
+                    val msg = if (resp.code() == 403) "Password errata." else "Errore (${resp.code()})."
                     _state.value = _state.value.copy(isLoading = false, error = msg)
                 }
             }.onFailure {

@@ -133,8 +133,24 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             // F12: reset PreferencesHolder al logout così l'utente successivo
             // (es. login dopo switch account) non eredita le unità altrui.
             it.trentosmartmountain.app.data.preferences.PreferencesHolder.clear()
+            // Pulizia cache app + store locali al logout: stato live di sessione,
+            // avvisi bacheca nascosti e file temporanei (media storie/cattura, ecc.)
+            // stantii hanno causato bug dopo il re-login → li azzeriamo.
+            clearAppCacheAndLocalStores()
             _uiState.value = ProfileUiState()
             onDone()
+        }
+    }
+
+    /** Best-effort: svuota cacheDir + SharedPreferences degli store locali. */
+    private fun clearAppCacheAndLocalStores() {
+        runCatching { app.cacheDir?.listFiles()?.forEach { it.deleteRecursively() } }
+        // Store su SharedPreferences (per nome → non serve l'API del singolo store).
+        listOf("tsm_session_live_state", "tsm_board_dismissed").forEach { prefs ->
+            runCatching {
+                app.getSharedPreferences(prefs, android.content.Context.MODE_PRIVATE)
+                    .edit().clear().apply()
+            }
         }
     }
 

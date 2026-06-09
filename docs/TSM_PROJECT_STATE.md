@@ -1,5 +1,45 @@
 # Trento Smart Mountain — Stato del progetto
 
+## 🚚 Consegna — giugno 2026 (ridisegno sessioni ADR-001 + auth + polish finale)
+
+> Backend **253/253 test verdi** (18 suite); mobile **`compileDebugKotlin` BUILD SUCCESSFUL**.
+
+**Sessioni — ridisegno ciclo di vita (ADR-001, vedi `docs/ADR-session-lifecycle.md`)**
+Separati i due cicli di vita prima sovrapposti su un unico `status`:
+- **Lifecycle sessione** (`PLANNED→ACTIVE→COMPLETED`) controllato dal **leader**.
+- **Partecipazione del singolo** → `participants[].participationState`
+  (`idle/live/finished/left`), **ortogonale** e non bloccante.
+- **"Arresta" del capogruppo CHIUDE sempre per tutti** (`/close` con **auto-finalize**
+  dei membri ancora live) → risolve il bug "non riesco a terminare la sessione" /
+  sessioni **ghost** tenute aperte da un partecipante che non concludeva.
+- `completeSession` = conclusione **individuale** (non forza lo stato globale);
+  auto-complete solo quando **tutti** gli accettati sono `finished/left`.
+- **Failover** esclude i membri `finished/left` (no elezione di un ghost); il creator
+  conserva sempre il diritto di chiudere.
+- Mobile: `SessionLiveStateStore.reconcileWithSessions` azzera lo stato live locale
+  anche su `COMPLETED` → eliminata l'ultima desync della doppia macchina a stati.
+- Rimosso `finishedParticipants[]` (assorbito da `participationState`).
+
+**Auth — login con email O username**: `POST /auth/login` (campo `email` = email o
+username, lookup `$or`); validazione client/server rilassata.
+
+**Logout pulisce la cache**: `ProfileViewModel.logout` ora svuota `cacheDir` + gli
+store `SharedPreferences` (`tsm_session_live_state`, `tsm_board_dismissed`) → niente
+stato stantio dopo il re-login (causa di bug segnalati).
+
+**Bug-D re-auth password**: `WRONG_PASSWORD`/`WRONG_OLD_PASSWORD` → **403** (distinto
+dal 401 "token scaduto") così il mobile non confonde "password errata" con sessione
+scaduta. Test allineati.
+
+**Polish/ottimizzazione finale**: rimosso dead code (`finishedParticipants`, import
+`Patterns` inutilizzato), commenti/doc allineati (`database_schema.md`,
+`api_reference.md`, ADR).
+
+> ⚠️ **Deploy**: tutte le modifiche backend (ADR-001 sessioni, login email/username)
+> vivono sul branch `UI` e richiedono **deploy** + **rebuild APK** per essere attive.
+
+---
+
 ## 🎨 Polish grafico + hardening stabilità — giugno 2026 (consegna)
 
 > Mobile **build pulita SUCCESSFUL**; backend **248/248 test verdi** (17 suite).

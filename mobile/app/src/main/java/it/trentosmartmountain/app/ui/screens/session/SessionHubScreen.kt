@@ -896,10 +896,15 @@ private fun SessionJoinTab(
                         onLeaderStart = { viewModel.requestLeaderStart(session) },
                         onLeaderStop = {
                             val local = uiState.liveStates[session._id]
+                            // Stessa semantica del dettaglio sessione (ADR-001): leaderStop
+                            // ferma il tracking via coordinator E force-chiude la sessione
+                            // per tutti i partecipanti. Prima il ramo live bypassava il
+                            // force-close → la sessione restava ACTIVE per gli altri.
+                            viewModel.leaderStop(session._id)
                             if (local == it.trentosmartmountain.app.data.session.UserSessionLiveState.IN_GROUP_LIVE) {
+                                // Porta l'utente sul tab Registra dove compare il dialog
+                                // "Salva attività" per il proprio tracciato.
                                 onRequestStopTracking()
-                            } else {
-                                viewModel.leaderStop(session._id)
                             }
                         },
                         onJoinLive = { viewModel.joinLive(session._id) },

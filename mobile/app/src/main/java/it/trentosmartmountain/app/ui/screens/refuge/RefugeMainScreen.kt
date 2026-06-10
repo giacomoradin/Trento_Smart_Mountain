@@ -74,6 +74,7 @@ private val TextDim = TsmColors.TextDim
 @Composable
 fun RefugeMainScreen(
   onNavigateToProfile: () -> Unit = {},
+  onNavigateToWaste: () -> Unit = {},
   modifier: Modifier = Modifier,
   dashboardViewModel: RefugeDashboardViewModel = viewModel(
     factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
@@ -125,10 +126,42 @@ fun RefugeMainScreen(
           EdgeNodesSection(d.edgeNodes, d.edgeNodesOnline, d.edgeNodesTotal)
           Spacer(Modifier.height(20.dp))
           PassagesSection(d.passages.totalCreditsToday, d.passages.items)
+          Spacer(Modifier.height(20.dp))
+          WasteEntryCard(onClick = onNavigateToWaste)
         }
       }
 
       Spacer(Modifier.height(24.dp))
+    }
+  }
+}
+
+// ── Entry point Rifiuti & Logistica (ADR-002) ───────────────────────────────
+
+@Composable
+private fun WasteEntryCard(onClick: () -> Unit) {
+  Surface(
+    onClick = onClick,
+    color = CardBg,
+    shape = RoundedCornerShape(14.dp),
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+      Column(Modifier.weight(1f)) {
+        Text(
+          "Rifiuti & Logistica",
+          color = Color.White,
+          fontWeight = FontWeight.Bold,
+          style = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+          "Simula il bilancio stagionale e confronta i costi di evacuazione (elicottero, teleferica, drone).",
+          color = TextSecondary,
+          style = MaterialTheme.typography.bodySmall,
+        )
+      }
+      Spacer(Modifier.width(12.dp))
+      Text("→", color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Bold)
     }
   }
 }

@@ -71,6 +71,12 @@ fun WasteSimulatorScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Box(Modifier.fillMaxSize().background(Bg)) {
+        // Stessa profondità "telemetria" della dashboard rifugio.
+        it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+            modifier = Modifier.fillMaxSize(),
+            baseColor = Bg,
+            particleCount = 12,
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()

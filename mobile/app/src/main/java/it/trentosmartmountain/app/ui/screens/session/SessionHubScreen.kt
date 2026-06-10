@@ -713,6 +713,43 @@ private fun SessionJoinTab(
         )
     }
 
+    // Dialog conferma "Arresta" del capogruppo (ADR-001: chiude per TUTTI i
+    // partecipanti, irreversibile — mai da singolo tap).
+    uiState.arrestaConfirmSessionId?.let { confirmId ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissLeaderStop,
+            containerColor = TsmSurface,
+            title = { Text("Arrestare la sessione?", color = Color.White) },
+            text = {
+                Text(
+                    "La sessione verrà conclusa per TUTTI i partecipanti, anche per chi " +
+                        "non ha ancora terminato il proprio tracciato. L'operazione è irreversibile.",
+                    color = Color.Gray,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val wasLive = uiState.liveStates[confirmId] ==
+                            it.trentosmartmountain.app.data.session.UserSessionLiveState.IN_GROUP_LIVE
+                        viewModel.confirmLeaderStop()
+                        if (wasLive) {
+                            // Porta l'utente sul tab Registra dove compare il dialog
+                            // "Salva attività" per il proprio tracciato.
+                            onRequestStopTracking()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
+                ) { Text("Arresta per tutti") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissLeaderStop) {
+                    Text("Annulla", color = Color.Gray)
+                }
+            },
+        )
+    }
+
     // Refresh ogni volta che l'utente entra in UNISCITI (es. ritorno da SessionDetail
     // dopo aver creato/joinato/eliminato una sessione → la lista deve riflettere lo state attuale).
     LaunchedEffect(Unit) { viewModel.loadSessions() }
@@ -895,17 +932,9 @@ private fun SessionJoinTab(
                         onDetailClick = { onNavigateToDetail(session._id) },
                         onLeaderStart = { viewModel.requestLeaderStart(session) },
                         onLeaderStop = {
-                            val local = uiState.liveStates[session._id]
-                            // Stessa semantica del dettaglio sessione (ADR-001): leaderStop
-                            // ferma il tracking via coordinator E force-chiude la sessione
-                            // per tutti i partecipanti. Prima il ramo live bypassava il
-                            // force-close → la sessione restava ACTIVE per gli altri.
-                            viewModel.leaderStop(session._id)
-                            if (local == it.trentosmartmountain.app.data.session.UserSessionLiveState.IN_GROUP_LIVE) {
-                                // Porta l'utente sul tab Registra dove compare il dialog
-                                // "Salva attività" per il proprio tracciato.
-                                onRequestStopTracking()
-                            }
+                            // ADR-001: "Arresta" del capogruppo chiude la sessione per
+                            // TUTTI → conferma esplicita prima dell'azione distruttiva.
+                            viewModel.requestLeaderStop(session._id)
                         },
                         onJoinLive = { viewModel.joinLive(session._id) },
                         onSoloPractice = { viewModel.startSoloPractice(session._id) },

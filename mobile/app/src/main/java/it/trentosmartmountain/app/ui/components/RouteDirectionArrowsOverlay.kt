@@ -77,9 +77,30 @@ class RouteDirectionArrowsOverlay(
         }
     }
 
+    // Cache del ricampionamento: le tracce GPX reali superano i 2.000 punti e
+    // proiettarli TUTTI a ogni draw (60 fps durante pinch/pan) rendeva lo zoom
+    // scattoso. Per spaziare chevron in pixel bastano ~200 punti: il campione
+    // viene ricalcolato solo quando cambia l'istanza della lista sorgente.
+    private var sampleSource: List<GeoPoint>? = null
+    private var sampled: List<GeoPoint> = emptyList()
+
+    private fun sampledPoints(): List<GeoPoint> {
+        val src = pointsProvider()
+        if (src !== sampleSource) {
+            sampleSource = src
+            sampled = if (src.size <= MAX_DRAW_POINTS) {
+                src
+            } else {
+                val step = (src.size - 1).toFloat() / (MAX_DRAW_POINTS - 1)
+                List(MAX_DRAW_POINTS) { i -> src[(i * step).toInt().coerceAtMost(src.size - 1)] }
+            }
+        }
+        return sampled
+    }
+
     private fun drawArrows(canvas: Canvas, mapView: MapView, shadow: Boolean) {
         if (shadow) return
-        val pts = pointsProvider()
+        val pts = sampledPoints()
         if (pts.size < 2) return
         val proj = mapView.projection ?: return
         // Converte tutti i punti in pixel-screen una volta sola, poi misuriamo
@@ -166,5 +187,10 @@ class RouteDirectionArrowsOverlay(
         }
         canvas.drawPath(path, strokePaint)
         canvas.drawPath(path, fillPaint)
+    }
+
+    private companion object {
+        /** Punti massimi proiettati per draw: oltre, la traccia viene ricampionata. */
+        const val MAX_DRAW_POINTS = 200
     }
 }

@@ -31,8 +31,13 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
 
-/** Step di quantizzazione della fase frecce: limita gli invalidate della MapView a ~7,5 Hz. */
-private const val ARROWS_PHASE_STEPS = 18
+/**
+ * Step di quantizzazione della fase frecce: 72 step su ciclo 2,4 s = ~30 Hz di
+ * invalidate. Fluido alla vista (la traslazione è ~1,5 px/frame) ma dimezza i
+ * redraw rispetto ai 60 Hz del tween puro. NB: 18 step (~7,5 Hz) erano visibilmente
+ * scattosi — non scendere sotto i ~25 Hz.
+ */
+private const val ARROWS_PHASE_STEPS = 72
 
 /**
  * Anteprima statica (senza interazione) di un percorso su mappa OSMdroid.

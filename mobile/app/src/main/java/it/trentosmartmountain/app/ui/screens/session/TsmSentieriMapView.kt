@@ -121,10 +121,10 @@ fun TsmSentieriMapView(
     )
     // Holder mutabile letto dal callback overlay (OSMdroid Overlay.draw() gira
     // fuori da Compose, quindi una semplice cella di un FloatArray ci basta).
-    // Fase quantizzata a 18 step/ciclo: il tween cambia a ogni frame (~60 Hz) e
-    // ogni cambio invaliderebbe l'intera MapView; quantizzata scende a ~6,5 Hz
-    // (ciclo 2,8 s) con scorrimento visivamente identico — taglio ~89% dei redraw.
-    val quantizedPhase = (arrowsPhaseAnim * 18).toInt() / 18f
+    // Fase quantizzata a 84 step su ciclo 2,8 s = ~30 Hz di invalidate: fluido
+    // alla vista, metà dei redraw del tween puro. NB: meno di ~25 Hz risulta
+    // visibilmente scattoso.
+    val quantizedPhase = (arrowsPhaseAnim * 84).toInt() / 84f
     val phaseHolder = remember { floatArrayOf(0f) }
     phaseHolder[0] = quantizedPhase
     val directionArrows = remember(mapView) {

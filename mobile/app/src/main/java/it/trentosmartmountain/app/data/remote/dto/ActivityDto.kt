@@ -31,4 +31,5 @@ data class ActivityResponse(
     val completedAt: String?,
     val actualStats: ActualStatsResponse?,
     val elevationProfile: List<Double>?,
+    val routePolyline: List<RoutePoint>? = null,
 )

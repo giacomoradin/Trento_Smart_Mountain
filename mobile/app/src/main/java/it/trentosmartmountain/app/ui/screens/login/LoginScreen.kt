@@ -95,11 +95,8 @@ fun LoginScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(TsmBackground),
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        it.trentosmartmountain.app.ui.components.TsmAuroraBackground(modifier = Modifier.fillMaxSize())
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -110,7 +107,7 @@ fun LoginScreen(
         ) {
             Spacer(modifier = Modifier.height(48.dp))
 
-            TsmMountainLogo(iconSize = 56.dp)
+            TsmMountainLogo(iconSize = 72.dp)
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -123,7 +120,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "EMAIL",
+                text = "EMAIL O USERNAME",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -133,7 +130,7 @@ fun LoginScreen(
                 value = uiState.email,
                 onValueChange = viewModel::onEmailChange,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("mario.rossi@email.com", color = Color.Gray) },
+                placeholder = { Text("mario.rossi@email.com  ·  oppure  mariorossi", color = Color.Gray) },
                 singleLine = true,
                 enabled = !uiState.isLoading,
                 isError = uiState.emailError != null,

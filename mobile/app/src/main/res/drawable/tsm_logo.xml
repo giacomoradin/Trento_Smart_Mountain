@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logo in-app (stesso asset Figma / docs/TSM_logo.jpeg) -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/tsm_logo_photo"
+    android:gravity="center" />

@@ -170,6 +170,39 @@ describe("Authentication Routes", () => {
       expect(response.body).not.toHaveProperty("passwordHash");
     });
 
+    test("should login with username instead of email", async () => {
+      const { password } = await createTestHiker({
+        username: "byusername",
+        email: "byusername@example.com",
+      });
+
+      const response = await request(app).post("/auth/login").send({
+        email: "byusername", // nel campo email passiamo lo USERNAME
+        password,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty("token");
+    });
+
+    test("username login is case-insensitive (refuge-style usernames)", async () => {
+      // Gli account rifugio hanno spesso username con maiuscole e spazi
+      // ("Rifugio Vajolet"): il login deve riuscire anche digitandolo con
+      // casing diverso (collation strength 2 sul lookup).
+      const { password } = await createTestHiker({
+        username: "Rifugio Vajolet Test",
+        email: "vajolet-login@example.com",
+      });
+
+      const response = await request(app).post("/auth/login").send({
+        email: "rifugio vajolet test",
+        password,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty("token");
+    });
+
     test("should fail with incorrect password", async () => {
       // Crea utente
       await createTestHiker({

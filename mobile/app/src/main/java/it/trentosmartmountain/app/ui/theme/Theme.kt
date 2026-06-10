@@ -8,22 +8,22 @@ import androidx.compose.ui.graphics.Color
 private val DarkColors = darkColorScheme(
     primary            = TsmPrimary,
     onPrimary          = Color.White,
-    primaryContainer   = Color(0xFF1A3A15),
-    onPrimaryContainer = Color(0xFFB8F0A8),
+    primaryContainer   = TsmTechNavy,
+    onPrimaryContainer = TsmAccent,
     secondary          = TsmAccent,
     onSecondary        = Color(0xFF001F2A),
     surface            = TsmSurface,
     onSurface          = TsmOnSurface,
     surfaceVariant     = TsmSurfaceVariant,
-    onSurfaceVariant   = Color(0xFFAAAAAA),
+    onSurfaceVariant   = Color(0xFF94A3B8), // Slate 400 per metadati ad alta leggibilità
     background         = TsmBackground,
     onBackground       = Color.White,
-    outline            = Color(0xFF3A3A3A),
-    error              = Color(0xFFCF6679),
+    outline            = TsmBorder,
+    error              = TsmSos,
     onError            = Color.White,
 )
 
-/** Tema Material 3 scuro dell'app; applicato da [it.trentosmartmountain.app.MainActivity]. */
+/** Theme entry-point per l'architettura mobile TSM. */
 @Composable
 fun TsmTheme(content: @Composable () -> Unit) {
     MaterialTheme(

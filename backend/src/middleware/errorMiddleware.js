@@ -13,10 +13,10 @@
  */
 const BUSINESS_ERROR_MAP = {
   // 401 — credenziali
-  WRONG_PASSWORD: { status: 401, message: "Password errata." },
-  WRONG_OLD_PASSWORD: { status: 401, message: "Password attuale errata." },
   INVALID_CREDENTIALS: { status: 401, message: "Credenziali non valide." },
   // 403 — autorizzazione
+  WRONG_PASSWORD: { status: 403, message: "Password errata." },
+  WRONG_OLD_PASSWORD: { status: 403, message: "Password attuale errata." },
   FORBIDDEN: { status: 403, message: "Non autorizzato." },
   NOT_IN_SESSION: { status: 403, message: "Non fai parte di questa sessione." },
   ONLY_CREATOR: { status: 403, message: "Solo il Capogruppo può eseguire questa operazione." },
@@ -66,6 +66,45 @@ const BUSINESS_ERROR_MAP = {
     status: 403,
     message: "Puoi cancellare solo i tuoi commenti.",
   },
+  BOARD_FORBIDDEN_ROLE: {
+    status: 403,
+    message: "Solo gli account rifugio possono pubblicare in bacheca.",
+  },
+  // 403/404/409 — gestione partecipanti sessione (approvazione/rimozione)
+  FORBIDDEN_NOT_LEADER: {
+    status: 403,
+    message: "Solo il Capogruppo può eseguire questa operazione.",
+  },
+  FORBIDDEN_NOT_MEMBER: {
+    status: 403,
+    message: "Devi essere un partecipante accettato per gestire le richieste.",
+  },
+  PARTICIPANT_NOT_FOUND: {
+    status: 404,
+    message: "Partecipante non trovato nella sessione.",
+  },
+  PARTICIPANT_NOT_PENDING: {
+    status: 409,
+    message: "La richiesta non è più in attesa di approvazione.",
+  },
+  PARTICIPANT_BANNED: {
+    status: 409,
+    message: "Sei stato rimosso da questa sessione e non puoi più unirti.",
+  },
+  CANNOT_REMOVE_CREATOR: {
+    status: 400,
+    message: "Non puoi rimuovere il Capogruppo dalla sessione.",
+  },
+  // Stories
+  STORY_NOT_FOUND: { status: 404, message: "Storia non trovata o scaduta." },
+  STORY_MEDIA_TOO_LARGE: {
+    status: 413,
+    message: "Media troppo grande. Usa una foto più leggera o un video più breve.",
+  },
+  STORY_FORBIDDEN_REF: {
+    status: 403,
+    message: "Non puoi creare una storia per questa attività o sessione.",
+  },
   // 400 — input semanticamente invalido
   SELF_FOLLOW: { status: 400, message: "Non puoi seguire te stesso." },
   // 404 — risorsa non trovata
@@ -78,17 +117,26 @@ const BUSINESS_ERROR_MAP = {
   TOTEM_NOT_FOUND: { status: 404, message: "Totem non trovato." },
   CHALLENGE_NOT_FOUND: { status: 404, message: "Sfida non trovata." },
   COMMENT_NOT_FOUND: { status: 404, message: "Commento non trovato." },
+  POST_NOT_FOUND: { status: 404, message: "Post non trovato." },
   // 400
   COMMENT_EMPTY: { status: 400, message: "Il commento non può essere vuoto." },
+  POST_EMPTY: { status: 400, message: "Titolo e testo sono obbligatori." },
   // 409 — conflitti
   EMAIL_TAKEN: { status: 409, message: "Email già in uso." },
   USERNAME_TAKEN: { status: 409, message: "Username già in uso." },
   USER_ALREADY_IN_SESSION: {
     status: 409,
+    // Aggiornato dopo che `createSession` non vincola più: il messaggio ora
+    // copre solo il caso "non puoi unirti / avviare il tracking perché stai
+    // già camminando in un altro gruppo".
     message:
-      "Hai una sessione attualmente in corso. Concludila prima di crearne / unirti a un'altra.",
+      "Hai già una sessione in corso. Concludi quella prima di unirti o avviarne un'altra.",
   },
   ALREADY_IN_SESSION: { status: 409, message: "Sei già in questa sessione." },
+  JOIN_REQUEST_PENDING: {
+    status: 409,
+    message: "Richiesta già inviata: attendi la conferma del Capogruppo.",
+  },
   SESSION_NOT_JOINABLE: {
     status: 409,
     message: "La sessione non è più aperta.",

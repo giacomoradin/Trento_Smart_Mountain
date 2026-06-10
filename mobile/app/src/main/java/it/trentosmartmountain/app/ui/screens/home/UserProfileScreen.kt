@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.home
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,21 +46,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.theme.TsmColors
+import it.trentosmartmountain.app.viewmodel.FollowListType
 import it.trentosmartmountain.app.viewmodel.UserProfileViewModel
 
-private val DarkSurface = Color(0xFF1C1C1E)
-private val CardBackground = Color(0xFF2C2C2E)
-private val AccentCyan = Color(0xFF4DD0E1)
-private val AccentGreen = Color(0xFF4CAF50)
-private val TextSecondary = Color(0xFF8E8E93)
+private val DarkSurface = TsmColors.FeedBackground
+private val CardBackground = TsmColors.CardElevated
+private val AccentCyan = TsmColors.Cyan
+private val AccentGreen = TsmColors.Online
+private val TextSecondary = TsmColors.TextSecondary
 private val ChipBlue = Color(0xFF1A3A5C)
 
 /**
@@ -84,6 +91,11 @@ fun UserProfileScreen(
     userId: String,
     onBack: () -> Unit,
     onCommentClick: (itemId: String, kind: String) -> Unit = { _, _ -> },
+    /** Tap su avatar di un partecipante/commentatore → profilo social. */
+    onUserClick: (userId: String) -> Unit = {},
+    /** Tap sui contatori FOLLOWER/SEGUITI → lista navigabile del grafo sociale. */
+    onOpenFollowList: (userId: String, type: FollowListType) -> Unit = { _, _ -> },
+    onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     viewModel: UserProfileViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -134,6 +146,10 @@ fun UserProfileScreen(
                     commentsTarget = CommentsTarget(id, kind)
                     onCommentClick(id, kind)
                 },
+                onUserClick = onUserClick,
+                onOpenFollowList = onOpenFollowList,
+                onOpenDetail = onOpenDetail,
+                onDeletePost = viewModel::removePost,
                 contentPadding = padding,
             )
         }
@@ -142,6 +158,7 @@ fun UserProfileScreen(
     CommentsBottomSheet(
         target = commentsTarget,
         onDismiss = { commentsTarget = null },
+        onUserClick = onUserClick,
         // Aggiorna solo il contatore del post commentato: niente reload di
         // profilo+stats+bacheca (che perdeva lo scroll della bacheca).
         onCountChanged = viewModel::setCommentCount,
@@ -155,6 +172,10 @@ private fun ProfileContent(
     onLoadMore: () -> Unit,
     onLikeToggle: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
     onCommentClick: (String, String) -> Unit,
+    onUserClick: (userId: String) -> Unit = {},
+    onOpenFollowList: (userId: String, type: FollowListType) -> Unit,
+    onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
+    onDeletePost: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     contentPadding: PaddingValues,
 ) {
     val listState = rememberLazyListState()
@@ -180,25 +201,43 @@ private fun ProfileContent(
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item(key = "header") { ProfileHeader(state = state, onToggleFollow = onToggleFollow) }
-        item(key = "section-title") {
-            Text(
-                text = "POST · ${state.posts.size}",
-                color = TextSecondary,
-                style = MaterialTheme.typography.labelSmall,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+        item(key = "header") {
+            ProfileHeader(
+                state = state,
+                onToggleFollow = onToggleFollow,
+                onOpenFollowList = onOpenFollowList,
             )
         }
-        if (state.posts.isEmpty() && !state.isLoading) {
-            item(key = "empty") { EmptyPostsBlock(isSelf = state.isSelf) }
+        if (state.user?.restricted == true) {
+            item(key = "locked") { LockedProfileBlock(visibility = state.user?.visibility) }
         } else {
-            items(items = state.posts, key = { "${it.kind}-${it.id}" }) { item ->
-                FeedCard(
-                    item = item,
-                    onLikeToggle = { onLikeToggle(item) },
-                    onCommentClick = { onCommentClick(item.id, item.kind) },
+            item(key = "section-title") {
+                Text(
+                    text = "POST · ${state.posts.size}",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(top = 8.dp, start = 4.dp),
                 )
+            }
+            if (state.posts.isEmpty() && !state.isLoading) {
+                item(key = "empty") { EmptyPostsBlock(isSelf = state.isSelf) }
+            } else {
+                items(items = state.posts, key = { "${it.kind}-${it.id}" }) { item ->
+                    FeedCard(
+                        item = item,
+                        onLikeToggle = { onLikeToggle(item) },
+                        onCommentClick = { onCommentClick(item.id, item.kind) },
+                        onUserClick = onUserClick,
+                        onOpenDetail = { onOpenDetail(item) },
+                        currentUserId = if (state.isSelf) state.user?._id else null,
+                        onDeletePost = if (state.isSelf) {
+                            { onDeletePost(item) }
+                        } else {
+                            null
+                        },
+                    )
+                }
             }
         }
         if (state.isLoadingMore) {
@@ -222,6 +261,7 @@ private fun ProfileContent(
 private fun ProfileHeader(
     state: it.trentosmartmountain.app.viewmodel.UserProfileState,
     onToggleFollow: () -> Unit,
+    onOpenFollowList: (userId: String, type: FollowListType) -> Unit,
 ) {
     val user = state.user ?: return
     val stats = state.stats
@@ -260,6 +300,21 @@ private fun ProfileHeader(
                     )
                 }
             }
+            // Reciprocità: "Ti segue" se il target segue il viewer.
+            if (!state.isSelf && state.stats?.followsViewer == true) {
+                Spacer(Modifier.height(4.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = TextSecondary.copy(alpha = 0.18f),
+                ) {
+                    Text(
+                        stringResource(R.string.profile_follows_you),
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
             Spacer(Modifier.height(16.dp))
 
             // Stat row: post + followers + following
@@ -268,10 +323,36 @@ private fun ProfileHeader(
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 StatBlock(label = "POST", value = "${state.posts.size}")
-                StatBlock(label = "FOLLOWER", value = "${stats?.followers ?: 0}")
-                StatBlock(label = "SEGUITI", value = "${stats?.following ?: 0}")
+                StatBlock(
+                    label = "FOLLOWER",
+                    value = "${stats?.followers ?: 0}",
+                    onClick = { onOpenFollowList(state.targetUserId, FollowListType.FOLLOWERS) },
+                )
+                StatBlock(
+                    label = "SEGUITI",
+                    value = "${stats?.following ?: 0}",
+                    onClick = { onOpenFollowList(state.targetUserId, FollowListType.FOLLOWING) },
+                )
                 user.socialCredits?.let { credits ->
                     StatBlock(label = "CREDITI", value = "%,d".format(credits))
+                }
+            }
+
+            // ── Riepilogo escursionistico (km/dislivello/uscite/punti) ──
+            // Nascosto sui profili limitati (privacy): non esporre i totali.
+            if (state.user?.restricted != true) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = TextSecondary.copy(alpha = 0.15f))
+                Spacer(Modifier.height(14.dp))
+                val hs = state.hikingStats
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    HikingMetric(value = "${hs?.totalActivities ?: 0}", label = "USCITE", color = Color.White)
+                    HikingMetric(value = formatKmTotal(hs?.totalDistanceKm ?: 0.0), label = "KM", color = AccentCyan)
+                    HikingMetric(value = "${hs?.totalElevationGainM ?: 0}", label = "DISLIVELLO m", color = Color(0xFFFF9800))
+                    HikingMetric(value = "${hs?.totalPoints ?: 0}", label = "PUNTI", color = AccentGreen)
                 }
             }
 
@@ -288,9 +369,42 @@ private fun ProfileHeader(
     }
 }
 
+/** Cella di una metrica escursionistica (valore colorato + etichetta). */
 @Composable
-private fun StatBlock(label: String, value: String) {
+private fun HikingMetric(value: String, label: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            value,
+            color = color,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            label,
+            color = TextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            letterSpacing = 0.5.sp,
+        )
+    }
+}
+
+/** Km totali: interi sopra 100 (es. "123"), un decimale sotto (es. "42.5"). */
+private fun formatKmTotal(km: Double): String =
+    if (km >= 100) "%.0f".format(km) else "%.1f".format(km)
+
+@Composable
+private fun StatBlock(label: String, value: String, onClick: (() -> Unit)? = null) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = if (onClick != null) {
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onClick() }
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        } else {
+            Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+        },
+    ) {
         Text(
             value,
             color = Color.White,
@@ -350,6 +464,31 @@ private fun FollowButton(
                 Spacer(Modifier.width(6.dp))
                 Text("SEGUI", fontWeight = FontWeight.Bold, color = DarkSurface)
             }
+        }
+    }
+}
+
+@Composable
+private fun LockedProfileBlock(visibility: String?) {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("🔒", style = MaterialTheme.typography.displayMedium)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(if (visibility == "private") R.string.profile_private_title else R.string.profile_friends_title),
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(if (visibility == "private") R.string.profile_private_msg else R.string.profile_friends_msg),
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 }

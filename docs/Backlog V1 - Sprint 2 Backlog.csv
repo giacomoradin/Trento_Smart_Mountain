@@ -1,0 +1,236 @@
+,,,,,Estimated Effort Remaining,,,,,,,,,,,,,,,,,,
+ID,Product Backlog Item,Sprint Task,Volunteer,Initial Estimate of Effort,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,STATUS
+48,"Come sistema, voglio che l’applicazione garantisca la protezione dei dati, il controllo degli accessi e la prevenzione di utilizzi non autorizzati, in modo da ridurre i rischi di sicurezza, assicurare l’integrità delle informazioni e rispettare i requisiti normativi.",1. Limitazione della frequenza delle richieste su endpoint pubblici (basato su IP e utente),Giacomo,3,3,2,,,,,,,,,,,,,,,,,DONE
+,,2. Convalida e sanificazione di tutti gli input utente,Giacomo,3,3,2,,,,,,,,,,,,,,,,,DONE
+,,"3. Gestione sicura delle API (rimozione delle chiavi hard-coded, rotazione delle chiavi JWT, seguire le best practices OWASP senza intaccare le funzionalità esistenti",Giacomo,3,3,2,1,,,,,,,,,,,,,,,,DONE
+,,4. Testing,Giacomo,2,2,2,1,,,,,,,,,,,,,,,,DONE
+,,5. Documetazione,Giacomo,1,1,1,1,,,,,,,,,,,,,,,,DONE
+,,6. Deploy,Giacomo,1,1,1,1,,,,,,,,,,,,,,,,DONE
+47,Come utente voglio poter selezionare il punto di arrivo e di partenza in modo tale da visualizzare i sentieri percorribili,1. UI pianificazione sessione da sentieri su mappa da database.,Federico,3,3,3,3,3,3,2,2,1,1,,,,,,,,,,DONE
+,,"3. Modello sentiero e metodi CRUD necessari
+ solo (get, e get{id})",Marco,2,2,2,2,2,2,2,1,1,,,,,,,,,,,DONE
+,,3. Modello Punto di partenza/arrivo e metodi CRUD,Marco,3,3,3,3,3,3,2,2,1,,,,,,,,,,,DONE
+,,4. Logica associazione Punto meta/partenza e sentieri relativi,Marco,3,3,3,3,3,3,3,2,2,1,,,,,,,,,,DONE
+,,5. Endpoint/query sentieri percorribili tra due punti GeoJSON.,Marco,4,4,4,4,4,4,4,3,2,1,,,,,,,,,,DONE
+,,6. Preview percorso su mappa in tab Pianifica.,Federico,3,3,3,3,3,3,3,3,3,2,1,,,,,,,,,DONE
+,,7. Testing,Marco,1,1,1,1,1,1,1,1,1,1,1,,,,,,,,,DONE
+,,8. Documentazione,Marco,1,1,1,1,1,1,1,1,1,1,1,,,,,,,,,DONE
+,,9. Deploy,Federico,1,1,1,1,1,1,1,1,1,1,1,,,,,,,,,DONE
+7,"Come escursionista voglio ricevere una checklist dell'equipaggiamento necessaria basata sull'itinerario e sulle condizioni meteo (durante i giorni precedenti alla partenza), cosi da prepararmi adeguatamente",1. Integrazione API meteo TINIA/meteo.report con persistenza MongoDB.,Marco,0,,,,,,,,,,,,,,,,,,,DONE
+,,2. Modello Location GeoJSON e endpoint forecast 3h/24h.,Marco,0,,,,,,,,,,,,,,,,,,,DONE
+,,3. Integrazione meteo reale in SessionDetailScreen.,Giacomo,0,,,,,,,,,,,,,,,,,,,DONE
+,,4. Sviluppo UI checklist con drag-and-drop e spunta.,Giacomo,0,,,,,,,,,,,,,,,,,,,DONE
+,,5. Sviluppo algoritmo di mappatura meteo/altitudine -> equipaggiamento.,Marco,4,4,4,4,4,4,3,2,,,,,,,,,,,,DONE
+,,6. Testing API,Marco,1,1,1,1,1,1,1,1,1,1,,,,,,,,,,DONE
+,,7. Documentazione,Marco,1,1,1,1,1,1,1,1,1,1,,,,,,,,,,DONE
+,,8. Deploy,Federico,1,1,1,1,1,1,1,1,1,1,,,,,,,,,,DONE
+12,"Come escursionista, voglio poter consultare una mappa offline con la mia posizione e una bussola cosi da orientarmi anche senza copertura internet",1. Integrazione OSMDroid per rendering mappa e marker utente.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,2. UserLocationTracker e indicatore segnale GPS.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,3. Centratura mappa e lifecycle TsmMapView.,Federico,1,1,,,,,,,,,,,,,,,,,,DONE
+,,4. Lettura SensorManager Accelerometro,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,6. Download e cache Map Tiles OSM offline.,Federico,4,2,,,,,,,,,,,,,,,,,,DONE
+,,7. Testing,Federico,1,1,1,,,,,,,,,,,,,,,,,DONE
+,,8. Documentazione,Federico,1,1,1,,,,,,,,,,,,,,,,,DONE
+,,9. Deploy,Federico,1,1,1,,,,,,,,,,,,,,,,,DONE
+10,"voglio che la mia posizione GPS venga tracciata automaticamente in background durante l'escursione, cosi da garantire la mia sicurezza e quella del gruppo",1. Integrazione FusedLocationProviderClient.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,2. HikeTrackingEngine e visualizzazione traccia su mappa.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,3. Sviluppo logica di caching locale offline (Room/SQLite telemetria).,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,4. Worker periodico per invio batch coordinate al server.,Marco,3,1,,,,,,,,,,,,,,,,,,DONE
+,,5. Testing,Federico,1,1,,,,,,,,,,,,,,,,,,DONE
+,,6. Documentazione,Giacomo,1,1,,,,,,,,,,,,,,,,,,DONE
+,,7. Deploy,Federico,1,1,,,,,,,,,,,,,,,,,,DONE
+13,"escursionista, voglio che il tracciamento GPS si riduca automaticamente quando sono fermo, cosi da risparmiare la batteria del dispositivo",1. StationaryDetector e logica auto-pause.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,2. UI notifiche e metriche durante auto-pausa.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,3. Integrazione Activity Recognition API.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,4. Testing,Federico,1,1,,,,,,,,,,,,,,,,,,DONE
+,,5. Documentazione,Giacomo,1,1,,,,,,,,,,,,,,,,,,DONE
+,,6. Deploy,Federico,1,1,,,,,,,,,,,,,,,,,,DONE
+42,Come sistema voglio mantenere attivo tracciamento GPS tramite Foreground Services cosi da evitare che Android interrompa i processi (Doze Mode),1. Implementazione Android Foreground Service con notifica persistente.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,2. Richiesta permessi a runtime (Location).,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,3. Configurazione WakeLock e ottimizzazione Doze Mode.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,4. Test del ciclo di vita del servizio in background.,Federico,3,3,1,,,,,,,,,,,,,,,,,DONE
+,,5. Documentazione,Federico,1,1,1,,,,,,,,,,,,,,,,,DONE
+,,6. Deploy,Federico,1,1,1,,,,,,,,,,,,,,,,,DONE
+11,Come escursionista in difficoltà voglio poter inviare un segnale SOS con le mie coordinate GPS cosi da ricevere soccorso il prima possibile.,1. UI pulsante SOS (dialog conferma in RegistraScreen).,Giacomo,0,,,,,,,,,,,,,,,,,,,DONE
+,,2. Beacon BLE TSM + POST HTTPS,Federico,3,3,3,3,3,3,2,,,,,,,,,,,,,DONE
+,,3. Endpoint POST /api/v1/emergencies backend.,Federico,2,2,2,2,2,2,,,,,,,,,,,,,,DONE
+,,4. Dialog attivazione Bluetooth / invio senza beacon,Federico,2,2,2,2,2,2,2,,,,,,,,,,,,,DONE
+,,5. Gestione accodamento invio in assenza di rete.,Federico,1,1,1,1,1,1,1,,,,,,,,,,,,,DONE
+,,6. Testing,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,7. Documentazione,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,8. Deploy,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+2,"Come utente già autenticato, voglio poter accedere all'app anche senza connessione internet, cosi da usare le funzionalità anche in montagna.",1. Caching stato autenticazione e token validi in EncryptedSharedPreferences.,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,2. Ripristino sessione JWT all'avvio app (AuthSession).,Federico,0,,,,,,,,,,,,,,,,,,,DONE
+,,3. Interceptor HTTP e gestione errori offline.,Federico,1,2,2,2,2,,,,,,,,,,,,,,,DONE
+,,4. Cache profilo utente con Room.,Federico,1,2,2,2,2,,,,,,,,,,,,,,,DONE
+,,5. Gestione state-machine dell'app offline/online.,Giacomo,2,2,2,2,2,,,,,,,,,,,,,,,DONE
+,,6. Testing,Giacomo,1,1,1,1,1,,,,,,,,,,,,,,,DONE
+,,7. Documentazione,Federico,1,1,1,1,1,,,,,,,,,,,,,,,DONE
+,,8. Deploy,Federico,1,1,1,1,1,,,,,,,,,,,,,,,DONE
+34,Come sistema voglio che le query vengano elaborate velocemente così da garantire un'esperienza utente fluida,1. Creazione indici spaziali MongoDB (sessions/locations).,Marco,0,,,,,,,,,,,,,,,,,,,DONE
+,,2. Ottimizzazione query delle coordinate.,Marco,4,4,4,4,4,4,4,3,2,,,,,,,,,,,DONE
+,,3. Local hosting KML sentieri e utilites,Marco,1,1,1,1,1,1,1,1,2,,,,,,,,,,,DONE
+,,4. Load testing e profiling DB.,Giacomo,3,3,3,3,3,3,3,3,3,2,2,1,1,,,,,,,DONE
+,,5. Testing,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,6. Documentazione,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,7. Deploy,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+22,"Come Capogruppo, voglio ricevere i segnali SOS dei partecipanti e poterli validare tramite la mia dashboard, così da attivare i soccorsi solo in caso di reale necessità.","1. Modello Emergency con stati: ACTIVE, SHARED_WITH_GROUP, DISMISSED, CANCELLED_BY_SENDER",Federico,2,2,2,2,2,2,1,,,,,,,,,,,,,DONE
+,,2. Endpoint GET/PATCH /api/v1/sessions/:id/emergencies.,Federico,3,3,3,3,3,3,2,,,,,,,,,,,,,DONE
+,,"3. UI Registra: icona SOS, lista, dettaglio, annulla/condividi con gli altri utenti della sessione.",Federico,3,3,3,3,3,3,2,1,,,,,,,,,,,,DONE
+,,4. Notifica capogruppo nuovo SOS (polling 8s).,Federico,2,2,2,2,2,2,1,,,,,,,,,,,,,DONE
+,,5. Testing,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,6. Documentazione,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,7. Deploy,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+20,"Come Capogruppo, voglio poter visualizzare la posizione GPS di tutti i partecipanti in tempo reale sulla mappa, così da monitorare la coesione del gruppo. Il tutto deve avere un'interfaccia pulita e intuitiva.",1. Endpoint GET /api/v1/sessions/:id/positions (ultime coordinate).,Federico,2,2,2,2,2,2,2,1,,,,,,,,,,,,DONE
+,,2. Integrazione Socket.io server + client Android.,Marco,4,3,3,3,3,3,3,2,,,,,,,,,,,,DONE
+,,3. Overlay marker partecipanti su mappa Registra.,Marco,3,3,3,3,3,3,3,2,,,,,,,,,,,,DONE
+,,5. Throttle refresh per risparmio batteria.,Federico,2,2,2,2,2,2,2,2,,,,,,,,,,,,DONE
+,,6. Testing,Federico,1,1,1,1,1,1,1,1,1,,,,,,,,,,,DONE
+,,7. Documentazione,Federico,1,1,1,1,1,1,1,1,1,,,,,,,,,,,DONE
+,,8. Deploy,Federico,1,1,1,1,1,1,1,1,1,1,,,,,,,,,,DONE
+21,"Come Capogruppo, voglio poter ricevere un allarme dai componenti del gruppo(online e beacon BLE) cosi da gestire le emergenze e coordinare la risposta.",1. Notifica locale SOS con Poll 8s,Federico,2,2,2,2,2,2,1,,,,,,,,,,,,,DONE
+,,2. Invio payload SOS con coordinate.,Federico,2,2,2,2,2,2,1,,,,,,,,,,,,,DONE
+,,"3. BLE beacon advertising post-SOS (identificativo utente/sessione, stile AirTag).",Federico,4,4,4,4,4,4,2,,,,,,,,,,,,,DONE
+,,4. Scanner BLE capogruppo per localizzazione prossimità utente SOS.,Federico,3,3,3,3,3,3,3,2,,,,,,,,,,,,DONE
+,,5. UI capogruppo: allerta emergenza + indicazione distanza stimata (RSSI).,Federico,2,2,2,2,2,2,2,1,,,,,,,,,,,,DONE
+,,6. Condivisione con gruppo dell'emergenza da parte del capogruppo,Federico,2,2,2,2,2,2,2,1,,,,,,,,,,,,DONE
+,,7. Revoca condivisione con gruppo,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,8. No scanner se beaconActive==false,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,9. Testing,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,10. Documentazione,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,11. Deploy,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+14,"Come escursionista, voglio vedere la posizione degli altri membri del gruppo sulla mappa, così da sapere dove si trovano rispetto a me, con un'implementazione efficiente ed efficace anche a livello energetico.",1. API posizioni membri gruppo (riuso telemetria batch).,Marco,2,2,2,2,2,2,2,2,2,,,,,,,,,,,DONE
+,,2. Marker multipli + refresh efficiente su OSMdroid.,Federico,3,3,3,3,3,3,3,3,3,,,,,,,,,,,DONE
+,,3. Interval adattivo GPS/rete per risparmio energetico.,Federico,2,2,2,2,2,2,2,2,2,,,,,,,,,,,DONE
+,,4. Testing,Federico,1,1,1,1,1,1,1,1,1,,,,,,,,,,,DONE
+,,5. Documentazione,Federico,1,1,1,1,1,1,1,1,1,,,,,,,,,,,DONE
+,,6. Deploy,Federico,1,1,1,1,1,1,1,1,1,,,,,,,,,,,DONE
+37,"Come sistema, voglio sincronizzare gli eventi di gamification accumulati offline tramite Event Sourcing in batch, così da garantire la consistenza del saldo Crediti Sociali.",1. Collection user_event_store (Event Sourcing).,Giacomo,3,3,3,3,3,3,3,3,3,3,2,2,1,,,,,,,DONE
+,,2. POST /api/v1/users/:id/gamification/sync batch idempotente.,Giacomo,3,3,3,3,3,3,3,3,3,3,3,2,1,,,,,,,DONE
+,,3. Coda offline Room eventi gamification.,Giacomo,3,3,3,3,3,3,3,3,3,3,3,2,1,,,,,,,DONE
+,,4. WorkManager sync al ripristino rete.,Giacomo,2,2,2,2,2,2,2,2,2,2,2,2,2,,,,,,,DONE
+,,5. Testing,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,6. Documentazione,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,7. Deploy,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+26,"Come escursionista che ha premuto SOS per errore, voglio poter annullare il segnale prima che venga inoltrato, così da evitare l'attivazione inutile dei soccorsi.",1. Countdown prima dell'invio (15 secondi).,Federico,1,1,1,1,1,1,,,,,,,,,,,,,,DONE
+,,2. PATCH /api/v1/emergencies/:id status CANCELLED.,Federico,2,2,2,2,2,2,1,,,,,,,,,,,,,DONE
+,,4. Testing,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,5. Documentazione,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,6. Deploy,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+38,"Come sistema, voglio garantire che ogni evento di gamification sia processato una sola volta, così da prevenire il double-spending dei Crediti Sociali.
+ Idempotenza",1. Campo idempotencyKey UUID su ogni evento.,Giacomo,2,2,2,2,2,2,2,2,2,2,2,1,1,,,,,,,DONE
+,,"2. Unique index MongoDB (userId, idempotencyKey).",Giacomo,2,2,2,2,2,2,2,2,2,2,2,1,1,,,,,,,DONE
+,,3. Handler reject duplicate / double-spending.,Giacomo,2,2,2,2,2,2,2,2,2,2,2,1,1,,,,,,,DONE
+,,4. Testing,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,5. Documentazione,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,6. Deploy,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+17,"Come escursionista, voglio ricevere notifiche di allerta meteo o pericoli nel percorso, così da prendere decisioni informate sulla mia sicurezza.",1. Regole alert (soglie meteo + pericoli percorso).,Giacomo,3,3,3,3,3,3,3,3,3,3,3,2,1,1,1,1,1,1,1,IN PROGRESS
+,Mockup,2. Notifiche in-app / push escursionista.,Giacomo,3,3,3,3,3,3,3,3,3,3,3,2,1,1,1,1,1,1,1,IN PROGRESS
+,,3. API per alert meteo,Giacomo,2,2,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,TO DO
+,,4. Testing,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,TO DO
+,,5. Documentazione,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,TO DO
+,,6. Deploy,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,TO DO
+27,"Come Gestore Rifugio, voglio poter inviare notifiche push di allerta pericolo agli escursionisti nella zona, così da informarli tempestivamente di situazioni pericolose.",1. Modello DangerAlert + geofence zona rifugio.,Giacomo,3,3,3,3,3,3,3,3,3,3,3,2,1,1,1,1,1,1,1,TO DO
+,Mockup,2. Endpoint invio alert + integrazione FCM.,Giacomo,4,4,4,4,4,4,4,4,4,4,3,3,2,2,2,2,2,2,2,TO DO
+,Mockup,3. UI dashboard rifugio invio allerta pericolo.,Giacomo,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,IN PROGRESS
+,Mockup,4. Testing,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,TO DO
+,Mockup,5. Documentazione,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,TO DO
+,Mockup,6. Deploy,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,TO DO
+16,"Come escursionista, voglio poter consultare i dati di navigazione (quota, velocità, distanza percorsa) durante l'escursione, così da monitorare il mio progresso.",1. UI metriche quota/velocità/distanza in RegistraScreen.,Federico,2,2,2,2,2,2,1,,,,,,,,,,,,,DONE
+,,2. Calcolo altitudine (GPS).,Federico,2,2,2,2,2,2,1,,,,,,,,,,,,,DONE
+,,3. Persistenza snapshot metriche in Room.,Federico,2,2,2,2,2,2,2,2,,,,,,,,,,,,DONE
+,,4. Testing,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,5. Documentazione,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,6. Deploy,Federico,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+45,"Come escursionista, voglio vedere la difficoltà tecnica e il dislivello di una attività, così da valutare se è adatto alle mie capacità in modo chiaro sull'interfaccia grafica in app",1. Badge difficoltà/dislivello su card sessione/attività.,Giacomo,2,2,2,2,2,2,2,1,,,,,,,,,,,,DONE
+,,2. Modello Sentier.js Backend e operazioni CRUD,Marco,2,2,2,2,2,2,1,,,,,,,,,,,,,DONE
+,,3. Parsing da KML,Marco,2,2,2,2,2,2,1,,,,,,,,,,,,,DONE
+,,"Filtraggio backend sentieri per difficoltà, durata, dislivello",Marco,1,1,1,1,1,1,1,1,,,,,,,,,,,,DONE
+,,2. Sezione metriche in SessionDetail e Pianifica.,Giacomo,2,2,2,2,2,2,1,1,,,,,,,,,,,,DONE
+,,3. Mapping difficultyLevel / elevationGain da GPX stats.,Giacomo,2,2,2,2,2,2,2,2,1,1,,,,,,,,,,DONE
+,,4. Testing,Giacomo,1,1,1,1,1,1,1,1,1,1,,,,,,,,,,DONE
+,,5. Documentazione,Giacomo,1,1,1,1,1,1,1,1,1,,,,,,,,,,,DONE
+,,6. Deploy,Giacomo,1,1,1,1,1,1,1,1,1,1,,,,,,,,,,DONE
+46,"Come escursionista, voglio poter abbandonare una sessione di gruppo , così da gestire autonomamente la mia partecipazione.",1. Pulsante Abbandona sessione in SessionDetail.,Giacomo,2,1,,,,,,,,,,,,,,,,,,DONE
+,,2. Dialog conferma + refresh lista Le mie sessioni.,Giacomo,1,1,,,,,,,,,,,,,,,,,,DONE
+,,3. Edge case creator vs partecipante (CREATOR_CANNOT_LEAVE).,Giacomo,2,1,,,,,,,,,,,,,,,,,,DONE
+,,4. Testing,Giacomo,1,1,,,,,,,,,,,,,,,,,,DONE
+,,5. Documentazione,Giacomo,1,1,,,,,,,,,,,,,,,,,,DONE
+,,6. Deploy,Giacomo,1,1,,,,,,,,,,,,,,,,,,DONE
+41,"Come sistema, voglio essere compatibile con dispositivi Android 9.0 o superiori, così da coprire la maggior parte del parco dispositivi degli utenti.",1. Verifica minSdk 28 e audit dipendenze.,Giacomo,2,2,2,2,2,2,2,2,2,2,2,2,1,,,,,,,DONE
+,,2. Test matrix API (emulatori/dispositivi).,Giacomo,3,3,3,3,3,3,3,3,3,3,3,2,1,,,,,,,DONE
+,,3. Fix deprecations critiche API legacy.,Giacomo,2,2,2,2,2,2,2,2,2,2,2,2,1,,,,,,,DONE
+,,4. Testing,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,5. Documentazione,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,6. Deploy,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+30,"Come Gestore Rifugio, voglio poter visualizzare il conteggio delle persone presenti nel rifugio tramite sensori ottici, così da gestire la capacità in modo efficiente.",1. Integrazione MQTT telemetria sensori ottici.,Giacomo,4,4,4,4,4,4,4,4,4,2,1,1,1,1,1,1,1,1,1,IN PROGRESS
+,Mockup,2. Endpoint occupazione rifugio in tempo reale.,Giacomo,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,IN PROGRESS
+,Mockup,3. Dashboard rifugio widget conteggio presenze.,Giacomo,2,2,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,IN PROGRESS
+,Mockup,4. Testing,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,IN PROGRESS
+,Mockup,5. Documentazione,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,IN PROGRESS
+,Mockup,6. Deploy,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,IN PROGRESS
+49,"Come utente, voglio una schermata Profilo completa (dati personali, esperienza, obiettivi, livello e crediti sociali, foto), così da gestire la mia identità in app e vedere la mia progressione.",1. Schema backend personalInfo/experience/preferences/goals + PATCH /users/me/* + anti-cheat,Giacomo,4,4,3,2,1,,,,,,,,,,,,,,,DONE
+,,2. Onboarding profilo 3 step (skippable) + profileCompletedAt,Giacomo,3,3,3,2,1,,,,,,,,,,,,,,,DONE
+,,"3. ProfileScreen + ProfileV2ViewModel (sezioni, banner, navigazione edit)",Giacomo,4,4,4,4,4,4,3,1,,,,,,,,,,,,DONE
+,,4. Avatar upload Base64 + AvatarImage + privacy gate in sessioni,Giacomo,3,3,3,3,3,3,3,2,1,,,,,,,,,,,DONE
+,,5. ProfileViewScreen read-only + indicatori anti-cheat,Giacomo,2,2,2,2,2,2,2,2,1,,,,,,,,,,,DONE
+,,6. UserProfileScreen + follow-stats + navigazione da social,Giacomo,3,3,3,3,3,3,3,3,2,1,,,,,,,,,,DONE
+,,7. GET /users/me/credits + card livello in Profilo,Giacomo,2,2,2,2,2,2,2,2,2,1,,,,,,,,,,DONE
+,,8. Testing profilo + persistenza account,Giacomo,1,1,1,1,1,1,1,1,1,1,,,,,,,,,,DONE
+,,9. Documentazione sprint2_profilo_formazione.md,Giacomo,1,1,1,1,1,1,1,1,1,1,1,,,,,,,,,DONE
+,,10. Deploy / smoke Render + build mobile,Federico,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,,DONE
+50,"Come utente, voglio feed sociale, interazioni (follow, like, commenti), stories 24h e editor visivo, così da seguire la community e condividere le escursioni.",1. Modelli follow/comment/likes/sharedAt + socialService backend,Giacomo,4,4,4,4,4,4,4,4,3,1,,,,,,,,,,DONE
+,,"2. Endpoint feed, follow, like, commenti + test Jest social",Giacomo,4,4,4,4,4,4,4,4,4,3,1,,,,,,,,,DONE
+,,3. SocialFeedViewModel + tab Social + FeedCard + PostDetail,Giacomo,4,4,4,4,4,4,4,4,4,3,2,2,1,,,,,,,DONE
+,,4. Social row avatar (anello live/story/goal) + viewed_stories Room,Giacomo,3,3,3,3,3,3,3,3,2,1,,,,,,,,,,DONE
+,,5. Ricerca utenti + follow + notifiche (badge campanella),Giacomo,3,3,3,3,3,3,3,3,3,3,3,2,1,,,,,,,DONE
+,,6. Backend story schema + route CRUD + markViewed + validazione overlay,Federico,4,4,4,4,4,4,4,4,4,4,4,3,2,,,,,,,DONE
+,,7. StoryViewer + StoryComposer + snapshot mappa OSM,Federico,4,4,4,4,4,4,4,4,4,4,4,3,2,,,,,,,DONE
+,,"8. Campi editor story (overlay polyline, testo, map box overlay)",Federico,3,3,3,3,3,3,3,3,3,3,3,3,1,,,,,,,DONE
+,,9. Fix batch storie/join/mappe + delete post + pull-to-refresh Unisciti,Giacomo,3,3,3,3,3,3,3,3,3,3,3,3,1,,,,,,,DONE
+,,10. Polyline feed + sync Attività/Social,Giacomo,2,2,2,2,2,2,2,2,2,2,1,,,,,,,,,DONE
+,,11. Testing feed + stories + permessi,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,12. Documentazione sprint2_social.md + API story,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,13. Deploy,Federico,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+52,"Come utente, voglio il modulo Formazione con quiz a risposta multipla, crediti al primo superamento e checkpoint NFC (mockup), così da imparare e progredire nei livelli.",1. Modelli QuizCategory/Quiz/QuizAttempt + seed quizzes.json,Giacomo,4,4,4,4,4,4,4,3,1,,,,,,,,,,,DONE
+,,2. quizService submit + quizRoutes (no leak risposte su GET),Giacomo,4,4,4,4,4,4,4,3,1,,,,,,,,,,,DONE
+,,3. Accredito crediti + CreditTransaction source quiz,Giacomo,3,3,3,3,3,3,3,3,2,,,,,,,,,,,DONE
+,,4. FormazioneScreen + FormazioneViewModel,Giacomo,3,3,3,3,3,3,3,3,3,1,,,,,,,,,,DONE
+,,5. QuizScreen + feedback per domanda + risultato,Giacomo,4,4,4,4,4,4,4,4,4,3,2,2,1,,,,,,,DONE
+,,6. Auto-seed quiz al boot server,Giacomo,1,1,1,1,1,1,1,1,1,,,,,,,,,,,DONE
+,,7. Test Jest quiz + idempotenza superamento,Marco,2,2,2,2,2,2,2,2,2,2,2,1,1,,,,,,,DONE
+,,8. [Mockup] Modello Totem + nfcService + endpoint scan,Giacomo,4,4,4,4,4,4,4,4,4,4,4,3,1,,,,,,,DONE
+,,9. [Mockup] NfcScanScreen + hardware check + feedback UX,Giacomo,3,3,3,3,3,3,3,3,3,3,3,3,2,,,,,,,DONE
+,,10. [Mockup] Statistiche NFC in Profilo (nfcStats),Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,11. Testing mobile quiz + documentazione seed,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,12. Deploy,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+54,"Come utente, voglio verificare la password prima di modificare dati sensibili dell'account e poterla cambiare in sicurezza, così da proteggere le mie informazioni.",1. Backend verifyPassword + changePassword + Joi (accountRoutes),Giacomo,3,3,3,3,3,3,3,2,1,,,,,,,,,,,DONE
+,,2. AccountEditViewModel + gate passwordVerified,Giacomo,2,2,2,2,2,2,2,1,1,,,,,,,,,,,DONE
+,,3. AccountEditScreen hub + navigazione sotto-schermate,Giacomo,2,2,2,2,2,2,2,2,1,1,,,,,,,,,,DONE
+,,4. Edit PersonalInfo / Experience / Preferences / Goals,Giacomo,4,4,4,4,4,4,4,4,4,3,2,2,1,,,,,,,DONE
+,,5. Flusso cambio password (schermata dedicata),Giacomo,2,2,2,2,2,2,2,2,2,2,2,1,1,,,,,,,DONE
+,,6. DeleteAccountScreen + conferma password (GDPR),Giacomo,2,2,2,2,2,2,2,2,2,2,2,1,1,,,,,,,DONE
+,,7. PATCH email con re-verifica (se previsto),Giacomo,2,2,2,2,2,2,2,2,2,2,2,2,2,,,,,,,DONE
+,,8. Testing account + password errata,Marco,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,9. Documentazione SECURITY / account,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,10. Deploy,Federico,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+55,"Come utente, voglio un'interfaccia coerente (palette, tipografia, icone) in tutta l'app, così da avere un'esperienza professionale e leggibile.",1. Nuova palette + Theme.kt Material 3,Giacomo,4,4,4,4,4,4,4,4,4,4,4,3,1,,,,,,,DONE
+,,2. Logo e asset launcher / icona app,Giacomo,2,2,2,2,2,2,2,2,2,2,2,2,1,,,,,,,DONE
+,,"3. Rifinitura Social + Home (card, effetti)",Giacomo,3,3,3,3,3,3,3,3,3,3,3,2,1,,,,,,,DONE
+,,4. Skeleton UI + Refuge Dashboard polish,Giacomo,2,2,2,2,2,2,2,2,2,2,2,2,1,,,,,,,DONE
+,,5. Allineamento sessione/registra/checklist al theme,Federico,3,3,3,3,3,3,3,3,3,3,3,2,1,,,,,,,DONE
+,,6. Dettagli icona e fix visivi minori,Federico,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,7. Testing regressione visiva smoke,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,8. Deploy,Federico,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+56,"Come sistema, voglio correggere i bug emersi in Sprint 1 e durante Sprint 2, così da garantire stabilità in demo e su Render.",1. Merge conflict Render + fix deploy backend,Giacomo,3,3,2,1,,,,,,,,,,,,,,,,DONE
+,,2. Bug hunt security / validation / ownership (22/05),Giacomo,4,4,4,3,1,,,,,,,,,,,,,,,DONE
+,,3. Fix weather auth + Jest setup route (Marco),Marco,3,3,3,3,2,1,,,,,,,,,,,,,,DONE
+,,4. Test integrazione checklist/sentieri/admin,Marco,2,2,2,2,2,2,2,2,2,2,2,1,,,,,,,,DONE
+,,5. Swagger / email / path normalize,Giacomo,2,2,1,,,,,,,,,,,,,,,,,DONE
+,,6. Dialog attività corta + Registra dialog 3 opzioni,Giacomo,2,2,2,2,1,,,,,,,,,,,,,,,DONE
+,,7. AVVIA tab switch + date format + merge sentieri,Federico,3,3,3,3,3,3,2,2,1,,,,,,,,,,,DONE
+,,8. Polyline visibility + activity/social/checklist fixes,Federico,4,4,4,4,4,4,4,4,4,3,2,2,1,,,,,,,DONE
+,,9. Minor bugs join/storie/icona (03-04/06),Giacomo,2,2,2,2,2,2,2,2,2,2,2,2,1,,,,,,,DONE
+,,10. Testing regressione + documentazione TSM_PROJECT_STATE,Giacomo,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,11. Deploy,Federico,1,1,1,1,1,1,1,1,1,1,1,1,1,,,,,,,DONE
+,,,TOTALE :,409,404,380,363,352,338,314,276,222,175,145,117,83,20,20,20,20,20,20,

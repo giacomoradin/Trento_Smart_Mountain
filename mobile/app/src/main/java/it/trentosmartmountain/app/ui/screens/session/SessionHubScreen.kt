@@ -29,9 +29,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FileUpload
-import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -50,6 +51,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
@@ -106,6 +108,12 @@ import it.trentosmartmountain.app.viewmodel.SessionJoinViewModel
 import it.trentosmartmountain.app.viewmodel.SessionPlanViewModel
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
 
+import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
+import it.trentosmartmountain.app.ui.theme.TsmColors
+import it.trentosmartmountain.app.ui.theme.difficultyColor
+import it.trentosmartmountain.app.data.remote.dto.RoutePoint
+
 /**
  * Tab **Sessione** nella shell escursionista: due sotto-tab interni.
  *
@@ -119,23 +127,14 @@ import it.trentosmartmountain.app.ui.util.SessionDateFormats
 fun SessionHubScreen(
     modifier: Modifier = Modifier,
     onNavigateToDetail: (sessionId: String) -> Unit = {},
+    onNavigateToBoard: () -> Unit = {},
+    onNavigateToUserProfile: (userId: String) -> Unit = {},
+    onRequestStopTracking: () -> Unit = {},
 ) {
     var subTab by rememberSaveable { mutableIntStateOf(0) }
 
     Column(modifier = modifier.fillMaxSize().background(TsmBackground)) {
-        // Header
-        Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp)) {
-            Text(
-                text = "Sessione",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-            )
-            Text(
-                text = "Pianifica e unisciti alle escursioni",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        // ... (rest of the header remains same)
 
         PrimaryTabRow(
             selectedTabIndex = subTab,
@@ -178,7 +177,11 @@ fun SessionHubScreen(
 
         when (subTab) {
             0 -> SessionPlanTab(onSessionCreated = { subTab = 1 })
-            1 -> SessionJoinTab(onNavigateToDetail = onNavigateToDetail)
+            1 -> SessionJoinTab(
+                onNavigateToDetail = onNavigateToDetail,
+                onNavigateToUserProfile = onNavigateToUserProfile,
+                onRequestStopTracking = onRequestStopTracking,
+            )
         }
     }
 }
@@ -198,6 +201,8 @@ private fun SessionPlanTab(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var showDifficultyMenu by remember { mutableStateOf(false) }
+    var showGpxPreviewDialog by remember { mutableStateOf(false) }
+    var showRoutePickerDialog by remember { mutableStateOf(false) }
 
     val gpxLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
@@ -227,8 +232,33 @@ private fun SessionPlanTab(
         )
     }
 
+    if (showGpxPreviewDialog) {
+        uiState.gpxData?.let { gpx ->
+            GpxPreviewDialog(gpx = gpx, onDismiss = { showGpxPreviewDialog = false })
+        } ?: run { showGpxPreviewDialog = false }
+    }
+
+    if (showRoutePickerDialog) {
+        SessionRoutePickerDialog(
+            onConfirm = { sentiero ->
+                viewModel.onSentieroSelected(sentiero)
+                showRoutePickerDialog = false
+            },
+            onDismiss = { showRoutePickerDialog = false },
+        )
+    }
+
     if (showDatePicker) {
-        val dateState = rememberDatePickerState()
+        val initialDateMillis =
+            remember(uiState.meetingDate) {
+                SessionDateFormats.toApiOrNull(uiState.meetingDate)
+                    ?.let { SessionDateFormats.apiDateToMillis(it) }
+                    ?: SessionDateFormats.apiDateToMillis(SessionDateFormats.tomorrowApi())
+            }
+        val dateState =
+            rememberDatePickerState(
+                initialSelectedDateMillis = initialDateMillis,
+            )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -246,7 +276,16 @@ private fun SessionPlanTab(
     }
 
     if (showTimePicker) {
-        val timeState = rememberTimePickerState(initialHour = 6, initialMinute = 30)
+        val (initialHour, initialMinute) =
+            remember(uiState.meetingTime) {
+                SessionDateFormats.parseMeetingTime(uiState.meetingTime)
+                    ?: SessionDateFormats.parseMeetingTime(SessionDateFormats.DEFAULT_MEETING_TIME)!!
+            }
+        val timeState =
+            rememberTimePickerState(
+                initialHour = initialHour,
+                initialMinute = initialMinute,
+            )
         Dialog(onDismissRequest = { showTimePicker = false }) {
             Surface(color = TsmSurface, shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -268,6 +307,11 @@ private fun SessionPlanTab(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(TsmBackground)) {
+        it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+            modifier = Modifier.matchParentSize(),
+            particleCount = 14,
+        )
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -352,6 +396,77 @@ private fun SessionPlanTab(
                         Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color.Gray)
                     }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { showGpxPreviewDialog = true },
+                    enabled = gpx.trackLatLon.isNotEmpty(),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, TsmAccent),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                ) {
+                    Icon(Icons.Outlined.Map, contentDescription = null, tint = TsmAccent, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Visualizza nella mappa",
+                        color = TsmAccent,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    )
+                }
+            }
+
+            // Separatore "oppure" + scelta da database (alternativa al GPX).
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HorizontalDivider(modifier = Modifier.weight(1f), color = TsmBorder)
+                Text(
+                    "  oppure  ",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                )
+                HorizontalDivider(modifier = Modifier.weight(1f), color = TsmBorder)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = { showRoutePickerDialog = true },
+                border = androidx.compose.foundation.BorderStroke(1.dp, TsmBorder),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            ) {
+                Icon(Icons.Outlined.Map, contentDescription = null, tint = TsmAccent, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Scegli tra i percorsi suggeriti",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+
+            uiState.selectedSentiero?.let { sentiero ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(TsmBackground, RoundedCornerShape(6.dp))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = TsmPrimary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            sentiero.denominazione?.takeIf { it.isNotBlank() } ?: sentiero.codice,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White,
+                        )
+                        val dist = sentiero.lunghezzaPlanimetrica?.let { "%.1f km".format(it / 1000.0) }
+                        val info = listOfNotNull(sentiero.codice, sentiero.difficolta, dist).joinToString(" · ")
+                        Text(info, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                    IconButton(onClick = viewModel::onRemoveSentiero) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color.Gray)
+                    }
+                }
             }
         }
 
@@ -375,33 +490,54 @@ private fun SessionPlanTab(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
                     SessionFieldLabel(stringResource(R.string.session_date_label))
-                    OutlinedTextField(
-                        value = meetingDateDisplay,
-                        onValueChange = {},
-                        modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true },
-                        placeholder = { Text(SessionDateFormats.formatDisplayFromApi("2026-05-26"), color = Color.Gray) },
-                        singleLine = true,
-                        readOnly = true,
-                        enabled = false,
-                        leadingIcon = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null, tint = TsmAccent) },
-                        colors = sessionFieldColors(),
-                        shape = RoundedCornerShape(8.dp),
-                    )
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { showDatePicker = true },
+                    ) {
+                        OutlinedTextField(
+                            value = meetingDateDisplay,
+                            onValueChange = {},
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(
+                                    SessionDateFormats.formatDisplayFromApi(SessionDateFormats.tomorrowApi()),
+                                    color = Color.Gray,
+                                )
+                            },
+                            singleLine = true,
+                            readOnly = true,
+                            enabled = false,
+                            leadingIcon = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null, tint = TsmAccent) },
+                            colors = sessionFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                    }
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     SessionFieldLabel(stringResource(R.string.session_time_label))
-                    OutlinedTextField(
-                        value = uiState.meetingTime,
-                        onValueChange = {},
-                        modifier = Modifier.fillMaxWidth().clickable { showTimePicker = true },
-                        placeholder = { Text("06:30", color = Color.Gray) },
-                        singleLine = true,
-                        readOnly = true,
-                        enabled = false,
-                        leadingIcon = { Icon(Icons.Outlined.Schedule, contentDescription = null, tint = TsmAccent) },
-                        colors = sessionFieldColors(),
-                        shape = RoundedCornerShape(8.dp),
-                    )
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { showTimePicker = true },
+                    ) {
+                        OutlinedTextField(
+                            value = uiState.meetingTime,
+                            onValueChange = {},
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(SessionDateFormats.DEFAULT_MEETING_TIME, color = Color.Gray)
+                            },
+                            singleLine = true,
+                            readOnly = true,
+                            enabled = false,
+                            leadingIcon = { Icon(Icons.Outlined.Schedule, contentDescription = null, tint = TsmAccent) },
+                            colors = sessionFieldColors(),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                    }
                 }
             }
 
@@ -535,11 +671,15 @@ private fun SessionPlanTab(
 
         Spacer(modifier = Modifier.height(24.dp))
     }
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SessionJoinTab(
     onNavigateToDetail: (sessionId: String) -> Unit = {},
+    onNavigateToUserProfile: (userId: String) -> Unit = {},
+    onRequestStopTracking: () -> Unit = {},
     viewModel: SessionJoinViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -573,6 +713,43 @@ private fun SessionJoinTab(
         )
     }
 
+    // Dialog conferma "Arresta" del capogruppo (ADR-001: chiude per TUTTI i
+    // partecipanti, irreversibile — mai da singolo tap).
+    uiState.arrestaConfirmSessionId?.let { confirmId ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissLeaderStop,
+            containerColor = TsmSurface,
+            title = { Text("Arrestare la sessione?", color = Color.White) },
+            text = {
+                Text(
+                    "La sessione verrà conclusa per TUTTI i partecipanti, anche per chi " +
+                        "non ha ancora terminato il proprio tracciato. L'operazione è irreversibile.",
+                    color = Color.Gray,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val wasLive = uiState.liveStates[confirmId] ==
+                            it.trentosmartmountain.app.data.session.UserSessionLiveState.IN_GROUP_LIVE
+                        viewModel.confirmLeaderStop()
+                        if (wasLive) {
+                            // Porta l'utente sul tab Registra dove compare il dialog
+                            // "Salva attività" per il proprio tracciato.
+                            onRequestStopTracking()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
+                ) { Text("Arresta per tutti") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissLeaderStop) {
+                    Text("Annulla", color = Color.Gray)
+                }
+            },
+        )
+    }
+
     // Refresh ogni volta che l'utente entra in UNISCITI (es. ritorno da SessionDetail
     // dopo aver creato/joinato/eliminato una sessione → la lista deve riflettere lo state attuale).
     LaunchedEffect(Unit) { viewModel.loadSessions() }
@@ -581,7 +758,9 @@ private fun SessionJoinTab(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.loadSessions()
+            // preserveJoinInfo=false: tornando sulla pagina il banner "richiesta
+            // inviata" sparisce (lo stato reale è il pending sulla card sessione).
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.loadSessions(preserveJoinInfo = false)
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -621,10 +800,12 @@ private fun SessionJoinTab(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // CODE INPUT + JOIN
+        // CODE INPUT + JOIN (fisso in alto; il pull-to-refresh parte sotto)
         SectionCard {
             SectionLabel(stringResource(R.string.session_join_code_label))
             Spacer(modifier = Modifier.height(8.dp))
@@ -637,6 +818,11 @@ private fun SessionJoinTab(
             uiState.joinError?.let {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+
+            uiState.joinInfo?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(it, color = TsmPrimary, style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -677,26 +863,37 @@ private fun SessionJoinTab(
             }
         }
 
-        // SESSION LIST — tre stati: loading | error | empty | populated
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoadingSessions && uiState.sessions.isNotEmpty(),
+            onRefresh = { viewModel.loadSessions(preserveJoinInfo = false) },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+        // SESSION LIST
         when {
-            uiState.isLoadingSessions -> {
+            // Spinner centrale solo al caricamento automatico (tab aperta / lista ancora vuota).
+            // Con pull-to-refresh la lista resta visibile e usa solo l'indicatore del PullToRefreshBox.
+            uiState.isLoadingSessions && uiState.sessions.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = TsmAccent)
                 }
             }
-            uiState.generalError != null -> {
-                // Errore visibile (include JsonSyntaxException da backend asimmetrico)
+            uiState.generalError != null && uiState.sessions.isEmpty() -> {
                 Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = TsmSurface) {
                     Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(uiState.generalError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                        TextButton(onClick = viewModel::loadSessions) {
+                        TextButton(onClick = { viewModel.loadSessions(preserveJoinInfo = false) }) {
                             Text("Riprova", color = TsmAccent, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
                         }
                     }
                 }
             }
             uiState.sessions.isEmpty() -> {
-                // Empty state esplicito — non collassa silenziosamente
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp, horizontal = 16.dp), contentAlignment = Alignment.Center) {
                     Text(
                         "Nessuna escursione in programma.\nInserisci un codice invito o scansiona un QR per unirti a una sessione.",
@@ -712,16 +909,16 @@ private fun SessionJoinTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(stringResource(R.string.session_join_sessions_header), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp), color = Color.Gray)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(uiState.sessions.size.toString(), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = TsmAccent)
-                        IconButton(
-                            onClick = viewModel::loadSessions,
-                            enabled = !uiState.isLoadingSessions,
-                        ) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "Aggiorna lista", tint = TsmAccent)
-                        }
-                    }
+                    Text(
+                        stringResource(R.string.session_join_sessions_header),
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                        color = Color.Gray,
+                    )
+                    Text(
+                        uiState.sessions.size.toString(),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TsmAccent,
+                    )
                 }
                 uiState.sessions.forEach { session ->
                     val isToday = SessionDateFormats.isTodayApi(session.meetingDate)
@@ -734,17 +931,31 @@ private fun SessionJoinTab(
                         participationUi = participation,
                         onDetailClick = { onNavigateToDetail(session._id) },
                         onLeaderStart = { viewModel.requestLeaderStart(session) },
-                        onLeaderStop = { viewModel.leaderStop(session._id) },
+                        onLeaderStop = {
+                            // ADR-001: "Arresta" del capogruppo chiude la sessione per
+                            // TUTTI → conferma esplicita prima dell'azione distruttiva.
+                            viewModel.requestLeaderStop(session._id)
+                        },
                         onJoinLive = { viewModel.joinLive(session._id) },
                         onSoloPractice = { viewModel.startSoloPractice(session._id) },
-                        onLeaveLive = { viewModel.leaveLive(session._id) },
+                        onLeaveLive = {
+                            val local = uiState.liveStates[session._id]
+                            if (local == it.trentosmartmountain.app.data.session.UserSessionLiveState.IN_GROUP_LIVE || local == it.trentosmartmountain.app.data.session.UserSessionLiveState.SOLO_PRACTICE) {
+                                onRequestStopTracking()
+                            } else {
+                                viewModel.leaveLive(session._id)
+                            }
+                        },
                         onRemoveClick = { viewModel.requestRemoveSession(session) },
+                        onUserClick = onNavigateToUserProfile,
                     )
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
     }
 }
 
@@ -860,17 +1071,28 @@ private fun SessionCard(
     onSoloPractice: () -> Unit,
     onLeaveLive: () -> Unit,
     onRemoveClick: () -> Unit,
+    onUserClick: (userId: String) -> Unit = {},
 ) {
     val name = session.routeDetails?.name ?: "Sessione"
     val dateLabel = session.meetingDate?.let { SessionDateFormats.formatDisplayFromApi(it) }.orEmpty()
     val dateTime = listOfNotNull(dateLabel.takeIf { it.isNotBlank() }, session.meetingTime).joinToString(" · ")
-    val host = session.creatorId?.username?.let { "host $it" } ?: ""
-    val subtitle = listOf(dateTime, host).filter { it.isNotBlank() }.joinToString(" · ")
+    
+    val hostName = session.creatorId?.username ?: "Host"
+    val subtitle = listOf(dateTime).filter { it.isNotBlank() }.joinToString(" · ")
+    
     val distKm = session.gpxStats?.distanceKm?.let { "%.1f km".format(it) }
     val elev = session.gpxStats?.elevationGainM?.let { "+$it m" }
     val diff = session.routeDetails?.difficultyLevel
-    val participants = session.participants?.size?.let { "$it partecipanti" }
-    val stats = listOfNotNull(distKm, elev, diff, participants).joinToString("  ·  ")
+    val acceptedCount = session.participants?.count { !it.isPending } ?: 0
+    val pendingCount = session.participants?.count { it.isPending } ?: 0
+    val participantsCount = "$acceptedCount partecipanti" +
+        if (pendingCount > 0) " · $pendingCount in attesa" else ""
+    val stats = listOfNotNull(distKm, elev, diff, participantsCount).joinToString("  ·  ")
+
+    val routePoints = session.plannedRoute?.polylinePoints?.map { RoutePoint(it.lat, it.lon) }
+    val profile = session.gpxStats?.elevationProfile
+    val hasHero = (routePoints != null && routePoints.size >= 2) ||
+        (profile != null && profile.size >= 2)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -882,15 +1104,14 @@ private fun SessionCard(
                 modifier = Modifier.fillMaxWidth().clickable { onDetailClick() },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(
-                    modifier = Modifier.size(44.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = TsmSurfaceVariant,
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = TsmAccent)
-                    }
-                }
+                // Host Avatar Clickable
+                AvatarImage(
+                    avatarUrl = session.creatorId?.avatarUrl,
+                    fallbackName = hostName,
+                    size = 44.dp,
+                    modifier = Modifier.clickable { session.creatorId?._id?.let(onUserClick) }
+                )
+                
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -911,20 +1132,27 @@ private fun SessionCard(
                             }
                         }
                     }
+                    Text("host $hostName", style = MaterialTheme.typography.labelSmall, color = TsmAccent)
                     if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     if (stats.isNotBlank()) Text(stats, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    // Invite code sempre visibile in card (per condivisione futura).
-                    // Vincolo D2: il codice è immutabile per non perdere i partecipanti.
-                    Text(
-                        text = session.inviteCode,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp,
-                        ),
-                        color = TsmAccent,
-                    )
                 }
+            }
+
+            // ── Hero: traccia GPX (mappa) + altimetria come schede swipe ──
+            if (hasHero) {
+                Spacer(modifier = Modifier.height(10.dp))
+                TsmRouteElevationPager(
+                    routePoints = routePoints,
+                    elevationProfile = profile,
+                    modifier = Modifier.fillMaxWidth(),
+                    height = 140.dp,
+                    cornerRadius = 8.dp,
+                    backgroundBrush = androidx.compose.ui.graphics.SolidColor(TsmSurfaceVariant),
+                    elevationLineColor = TsmAccent,
+                    activeDotColor = TsmAccent,
+                    difficultyLevel = session.routeDetails?.difficultyLevel,
+                    expandable = false,
+                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -965,12 +1193,30 @@ private fun SessionCard(
 
 @Composable
 private fun SectionCard(content: @Composable () -> Unit) {
+    // Materiale "glass": gradiente sottile + bordo morbido + ombra, coerente con
+    // il resto dell'app (Feed/Profilo/Sessione). Sostituisce il flat TsmSurface.
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = TsmSurface,
+        shape = RoundedCornerShape(18.dp),
+        color = androidx.compose.ui.graphics.Color.Transparent,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            androidx.compose.ui.graphics.Color.White.copy(alpha = 0.06f),
+        ),
+        shadowElevation = 6.dp,
     ) {
-        Column(modifier = Modifier.padding(16.dp)) { content() }
+        Column(
+            modifier = Modifier
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            it.trentosmartmountain.app.ui.theme.TsmColors.CardElevated,
+                            it.trentosmartmountain.app.ui.theme.TsmColors.Card,
+                        ),
+                    ),
+                )
+                .padding(16.dp),
+        ) { content() }
     }
 }
 
@@ -1005,6 +1251,7 @@ private fun sessionFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = Color.White,
     unfocusedTextColor = Color.White,
     disabledTextColor = Color.White,
+    disabledPlaceholderColor = Color.Gray,
     cursorColor = TsmAccent,
 )
 

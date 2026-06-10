@@ -10,7 +10,12 @@ import it.trentosmartmountain.app.ui.util.ApiErrorMessages
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.data.remote.dto.GeoPoint
 import it.trentosmartmountain.app.data.remote.dto.GpxStats
+import it.trentosmartmountain.app.data.remote.dto.PlannedRoute
+import it.trentosmartmountain.app.data.remote.dto.PlannedRouteBbox
+import it.trentosmartmountain.app.data.remote.dto.PlannedRoutePoint
+import it.trentosmartmountain.app.data.remote.dto.SentieroDettaglioDto
 import it.trentosmartmountain.app.data.remote.dto.SessionRouteDetails
+import it.trentosmartmountain.app.data.sentieri.SentieroMappers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +48,11 @@ class SessionPlanViewModel : ViewModel() {
         val lastPoint: Pair<Double, Double>?,
         /** Profilo altimetrico campionato (max 50 punti) per il chart. */
         val elevationProfile: List<Double> = emptyList(),
+        /**
+         * Punti del tracciato (lat, lon) campionati (max 500) per disegnare la polyline
+         * nell'anteprima su mappa senza lag in Compose/OSMdroid.
+         */
+        val trackLatLon: List<Pair<Double, Double>> = emptyList(),
         /** Punti stimati con il modello CAI in fase di pianificazione. */
         val estimatedPoints: Int = 0,
         /**
@@ -61,6 +71,11 @@ class SessionPlanViewModel : ViewModel() {
         val difficultyLevel: String = "E",
         val gpxData: GpxParseResult? = null,
         val gpxParseError: String? = null,
+        /**
+         * Sentiero selezionato dal DB (modalità "Scegli percorso sulla mappa").
+         * Mutuamente esclusivo con [gpxData]: selezionare un sentiero azzera il GPX e viceversa.
+         */
+        val selectedSentiero: SentieroDettaglioDto? = null,
         val previewCode: String = generatePreviewCode(),
         val isLoading: Boolean = false,
         val generalError: String? = null,
@@ -78,6 +93,23 @@ class SessionPlanViewModel : ViewModel() {
     fun onMaxParticipantsChange(v: Int) = _uiState.update { it.copy(maxParticipants = v.coerceIn(1, 50)) }
     fun onDifficultyChange(v: String) = _uiState.update { it.copy(difficultyLevel = v) }
     fun onRemoveGpx() = _uiState.update { it.copy(gpxData = null, gpxParseError = null) }
+
+    /**
+     * Conferma di un sentiero scelto dal popup mappa. Imposta [UiState.selectedSentiero]
+     * e azzera il GPX (mutua esclusione). Se il nome sessione è vuoto, lo precompila.
+     */
+    fun onSentieroSelected(sentiero: SentieroDettaglioDto) = _uiState.update { state ->
+        val suggestedName = sentiero.denominazione?.takeIf { it.isNotBlank() } ?: sentiero.codice
+        state.copy(
+            selectedSentiero = sentiero,
+            gpxData = null,
+            gpxParseError = null,
+            difficultyLevel = SentieroMappers.normalizeDifficolta(sentiero.difficolta),
+            sessionName = if (state.sessionName.isBlank()) suggestedName else state.sessionName,
+        )
+    }
+
+    fun onRemoveSentiero() = _uiState.update { it.copy(selectedSentiero = null) }
     fun onToggleQrPreview() = _uiState.update { it.copy(showQrPreview = !it.showQrPreview) }
     fun resetAfterCreation() = _uiState.update { UiState(previewCode = generatePreviewCode()) }
 
@@ -93,6 +125,8 @@ class SessionPlanViewModel : ViewModel() {
                 _uiState.update { state ->
                     state.copy(
                         gpxData = result,
+                        // Mutua esclusione: importare un GPX azzera l'eventuale sentiero da DB.
+                        selectedSentiero = null,
                         sessionName = if (state.sessionName.isBlank())
                             fileName.removeSuffix(".gpx").replace("-", " ").replace("_", " ")
                         else state.sessionName,
@@ -120,31 +154,7 @@ class SessionPlanViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, generalError = null) }
             try {
-                val gpx = state.gpxData
-                val request = CreateSessionRequest(
-                    routeDetails = SessionRouteDetails(
-                        name = state.sessionName,
-                        difficultyLevel = state.difficultyLevel,
-                        elevationGain = gpx?.elevationGainM,
-                        startPoint = gpx?.firstPoint?.let { GeoPoint(coordinates = listOf(it.second, it.first)) },
-                        endPoint = gpx?.lastPoint?.let { GeoPoint(coordinates = listOf(it.second, it.first)) },
-                    ),
-                    meetingDate = meetingDateApi,
-                    meetingTime = state.meetingTime.ifBlank { null },
-                    maxParticipants = state.maxParticipants,
-                    minExperienceLevel = state.difficultyLevel,
-                    gpxFileName = gpx?.fileName,
-                    gpxStats = gpx?.let {
-                        GpxStats(
-                            distanceKm = it.distanceKm,
-                            elevationGainM = it.elevationGainM,
-                            trackPoints = it.trackPoints,
-                            elevationProfile = it.elevationProfile.ifEmpty { null },
-                            estimatedPoints = it.estimatedPoints.takeIf { p -> p > 0 },
-                            gpxDurationSec = it.gpxDurationSec,
-                        )
-                    },
-                )
+                val request = buildCreateSessionRequest(state, meetingDateApi)
                 val response = TsmApiClient.service().createSession(request)
                 if (response.isSuccessful) {
                     val code = response.body()?.inviteCode ?: state.previewCode
@@ -162,6 +172,87 @@ class SessionPlanViewModel : ViewModel() {
                 _uiState.update { it.copy(isLoading = false, generalError = e.message) }
             }
         }
+    }
+
+    /**
+     * Costruisce il body di creazione sessione dalle due modalità mutuamente esclusive:
+     *  - **DB sentiero** ([UiState.selectedSentiero] != null): mappa coordinate, difficoltà
+     *    normalizzata, sentieroCode e plannedRoute(source=SAT).
+     *  - **GPX** ([UiState.gpxData] != null): metriche GPX + plannedRoute(source=GPX).
+     *
+     * Coerenza coordinate: il request GeoJSON usa `[lon, lat]`.
+     */
+    private fun buildCreateSessionRequest(state: UiState, meetingDateApi: String?): CreateSessionRequest {
+        val sentiero = state.selectedSentiero
+        if (sentiero != null) {
+            val polyline = SentieroMappers.parsePercorsoToGeoPoints(sentiero.percorsoCoordinate, maxPoints = 1000)
+            val elevationGain = sentiero.quotaMassima?.let { max ->
+                sentiero.quotaMinima?.let { min -> (max - min).takeIf { it >= 0 } }
+            }
+            val distanceKm = sentiero.lunghezzaPlanimetrica?.let { it / 1000.0 }
+            return CreateSessionRequest(
+                routeDetails = SessionRouteDetails(
+                    name = state.sessionName,
+                    difficultyLevel = SentieroMappers.normalizeDifficolta(sentiero.difficolta),
+                    elevationGain = elevationGain,
+                    startPoint = sentiero.puntoInizio?.coordinate?.let { GeoPoint(coordinates = listOf(it.lon, it.lat)) },
+                    endPoint = sentiero.puntoFine?.coordinate?.let { GeoPoint(coordinates = listOf(it.lon, it.lat)) },
+                ),
+                meetingDate = meetingDateApi,
+                meetingTime = state.meetingTime.ifBlank { null },
+                maxParticipants = state.maxParticipants,
+                minExperienceLevel = SentieroMappers.normalizeDifficolta(sentiero.difficolta),
+                gpxStats = distanceKm?.let {
+                    GpxStats(distanceKm = it, elevationGainM = elevationGain ?: 0, trackPoints = polyline.size)
+                },
+                sentieroCode = sentiero.codice,
+                plannedRoute = polyline.takeIf { it.isNotEmpty() }?.let { pts ->
+                    PlannedRoute(
+                        source = "SAT",
+                        polylinePoints = pts.map { PlannedRoutePoint(it.latitude, it.longitude) },
+                        bbox = SentieroMappers.boundingBox(pts)?.let { (minLon, minLat, maxLon, maxLat) ->
+                            PlannedRouteBbox(minLat = minLat, minLon = minLon, maxLat = maxLat, maxLon = maxLon)
+                        },
+                    )
+                },
+            )
+        }
+
+        val gpx = state.gpxData
+        return CreateSessionRequest(
+            routeDetails = SessionRouteDetails(
+                name = state.sessionName,
+                difficultyLevel = state.difficultyLevel,
+                elevationGain = gpx?.elevationGainM,
+                startPoint = gpx?.firstPoint?.let { GeoPoint(coordinates = listOf(it.second, it.first)) },
+                endPoint = gpx?.lastPoint?.let { GeoPoint(coordinates = listOf(it.second, it.first)) },
+            ),
+            meetingDate = meetingDateApi,
+            meetingTime = state.meetingTime.ifBlank { null },
+            maxParticipants = state.maxParticipants,
+            minExperienceLevel = state.difficultyLevel,
+            gpxFileName = gpx?.fileName,
+            gpxStats = gpx?.let {
+                GpxStats(
+                    distanceKm = it.distanceKm,
+                    elevationGainM = it.elevationGainM,
+                    trackPoints = it.trackPoints,
+                    elevationProfile = it.elevationProfile.ifEmpty { null },
+                    estimatedPoints = it.estimatedPoints.takeIf { p -> p > 0 },
+                    gpxDurationSec = it.gpxDurationSec,
+                )
+            },
+            plannedRoute = gpx?.trackLatLon?.takeIf { it.isNotEmpty() }?.let { pts ->
+                PlannedRoute(
+                    source = "GPX",
+                    polylinePoints = pts.map { PlannedRoutePoint(it.first, it.second) },
+                    bbox = SentieroMappers.boundingBox(pts.map { org.osmdroid.util.GeoPoint(it.first, it.second) })
+                        ?.let { (minLon, minLat, maxLon, maxLat) ->
+                            PlannedRouteBbox(minLat = minLat, minLon = minLon, maxLat = maxLat, maxLon = maxLon)
+                        },
+                )
+            },
+        )
     }
 
     // ── GPX Parser ────────────────────────────────────────────────────────
@@ -258,6 +349,12 @@ class SessionPlanViewModel : ViewModel() {
         val estimated = it.trentosmartmountain.app.data.estimation.HikeEstimation
             .estimatedPoints(distanceKmRounded, elevationGainM)
 
+        // 6) Polyline campionata (max 500 punti) per l'anteprima su mappa.
+        val trackLatLon = SentieroMappers.downsample(
+            points.map { Pair(it.lat, it.lon) },
+            maxPoints = 500,
+        )
+
         return GpxParseResult(
             fileName = fileName,
             distanceKm = distanceKmRounded,
@@ -266,6 +363,7 @@ class SessionPlanViewModel : ViewModel() {
             firstPoint = points.first().let { Pair(it.lat, it.lon) },
             lastPoint = points.last().let { Pair(it.lat, it.lon) },
             elevationProfile = sampledProfile,
+            trackLatLon = trackLatLon,
             estimatedPoints = estimated,
             gpxDurationSec = gpxDurationSec,
         )

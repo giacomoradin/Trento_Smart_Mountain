@@ -117,6 +117,7 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
                 val timeline = buildTimeline(
                     distanceKm = distKm,
                     movingSeconds = movingSec,
+                    totalSeconds = totalSec,
                     startMs = local?.startTimeMs ?: 0L,
                     elevationGainM = elevM,
                 )
@@ -171,14 +172,34 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
     fun deleteActivity(onDeleted: () -> Unit) {
         val id = _uiState.value.activityId
         viewModelScope.launch {
-            val entity = dao.getById(id)
-            if (entity?.sessionId == null && entity?.remoteId != null) {
-                runCatching { TsmApiClient.service().deleteActivity(entity.remoteId) }
+            // Tutto in try/catch: un'eccezione non gestita nel coroutine (DB, rete)
+            // crasherebbe l'app lasciando una schermata bianca. In ogni caso navighiamo
+            // indietro nel finally, così l'utente non resta bloccato.
+            try {
+                val entity = runCatching { dao.getById(id) }.getOrNull()
+                when {
+                    entity?.sessionId != null -> {
+                        // Sessione di gruppo: NON cancellabile sul backend (appartiene
+                        // anche agli altri). Chiediamo al server di nasconderla dalla
+                        // NOSTRA lista (hiddenForUsers) così non riappare dopo re-login.
+                        runCatching {
+                            TsmApiClient.service().hideSessionFromActivities(entity.sessionId)
+                        }
+                    }
+                    entity?.remoteId != null -> {
+                        // Attività libera: cancellazione reale sul backend.
+                        runCatching { TsmApiClient.service().deleteActivity(entity.remoteId) }
+                    }
+                }
+                // Tombstone locale: nasconde la riga senza eliminarla (evita re-import
+                // immediato dal sync prima del prossimo fetch dal server).
+                runCatching { dao.markHidden(id) }
+                entity?.sessionId?.let { sid -> runCatching { dao.markHiddenBySessionId(sid) } }
+            } catch (e: Exception) {
+                // best-effort: log silenzioso, navighiamo comunque indietro.
+            } finally {
+                onDeleted()
             }
-            // Tombstone: nasconde la riga senza eliminarla (evita re-import dal sync).
-            dao.markHidden(id)
-            entity?.sessionId?.let { dao.markHiddenBySessionId(it) }
-            onDeleted()
         }
     }
 
@@ -197,6 +218,7 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
     private fun buildTimeline(
         distanceKm: Double,
         movingSeconds: Long,
+        totalSeconds: Long,
         startMs: Long,
         elevationGainM: Int,
     ): List<TimelineEvent> {
@@ -230,13 +252,27 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
             km += 5.0
         }
 
+        // Auto-pause (se presenti)
+        if (totalSeconds > movingSeconds) {
+            val pauseSeconds = totalSeconds - movingSeconds
+            // Inseriamo l'evento pausa appena prima dell'arrivo. 
+            // Distanza leggermente inferiore all'arrivo per l'ordinamento.
+            events.add(TimelineEvent(
+                type = TimelineEventType.AUTOPAUSE,
+                label = "Pause (Auto/Manuali)",
+                timeLabel = null, // Nessun orario specifico per pause aggregate
+                subtitle = "Durata totale: ${HikeEstimation.formatHours(pauseSeconds / 3600.0)}",
+                distanceKm = distanceKm - 0.001,
+            ))
+        }
+
         // Arrivo
-        val endMs = start + movingSeconds * 1000
+        val endMs = start + totalSeconds * 1000
         events.add(TimelineEvent(
             type = TimelineEventType.ARRIVAL,
             label = "Arrivo",
             timeLabel = fmt.format(Date(endMs)),
-            subtitle = "Totale ${HikeEstimation.formatHours(movingSeconds / 3600.0)} · ${String.format("%.1f", distanceKm)} km",
+            subtitle = "Totale ${HikeEstimation.formatHours(totalSeconds / 3600.0)} · ${String.format("%.1f", distanceKm)} km",
             distanceKm = distanceKm,
         ))
 

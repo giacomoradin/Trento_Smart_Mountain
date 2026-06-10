@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +17,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -24,9 +31,20 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -36,11 +54,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
+import it.trentosmartmountain.app.ui.components.tsmShimmer
 import it.trentosmartmountain.app.ui.theme.TsmColors
-import it.trentosmartmountain.app.ui.theme.difficultyColor
 import it.trentosmartmountain.app.ui.util.RelativeTime
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 // Colori della card derivati dalla palette centrale (vedi ui/theme/TsmPalette.kt).
 private val CardBackground = TsmColors.Card
@@ -58,16 +78,11 @@ private val Divider = TsmColors.Divider
  * Anatomia (dall'alto):
  *  1. **Header atleta**: avatar + nome + meta ("3 h fa · Trail") + chip kind.
  *  2. **Titolo** + caption opzionale.
- *  3. **Hero visivo**:
- *       - se l'item ha una `routePolyline` → *route signature* ([RouteTracePreview])
- *         con chip difficoltà in overlay;
- *       - altrimenti, se ha un `elevationProfile` → quello diventa l'hero;
- *       - altrimenti nessun hero (card compatta).
+ *  3. **Hero visivo (Swipeable)**:
+ *       - Pager tra **Mappa Tracciato** e **Profilo Altimetrico**.
  *  4. **Stat strip**: Distanza · Dislivello · Tempo · Passo (4 celle).
- *  5. **Banda altimetrica** sottile (solo se la route era già l'hero e c'è un
- *     profilo: evita di duplicare l'altimetria quando è già l'hero).
- *  6. **Partecipanti** (solo sessioni di gruppo).
- *  7. **Action bar**: like (ottimistico) + commenti + badge punti.
+ *  5. **Partecipanti** (solo sessioni di gruppo).
+ *  6. **Action bar**: like (ottimistico) + commenti + badge punti.
  *
  * La firma resta invariata rispetto alla versione precedente → nessun call site
  * da toccare (HomeSocialScreen, UserProfileScreen, dettagli).
@@ -78,21 +93,103 @@ fun FeedCard(
     onLikeToggle: () -> Unit,
     onCommentClick: () -> Unit = {},
     onUserClick: (userId: String) -> Unit = {},
+    onOpenDetail: () -> Unit = {},
+    /** Id utente loggato: se coincide con l'autore del post, mostra "Rimuovi dal feed". */
+    currentUserId: String? = null,
+    onDeletePost: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val route = item.routePolyline
-    val hasRoute = route != null && route.size >= 2
     val profile = item.elevationProfile
-    val hasProfile = profile != null && profile.size >= 2
     val haptic = LocalHapticFeedback.current
+    val isOwnPost = !currentUserId.isNullOrBlank() && item.user?._id == currentUserId
+    var showPostMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // "Pop" del cuore quando si AGGIUNGE il like (transizione false→true),
+    // non al primo render di un post già likato (evita pop durante lo scroll).
+    val likeScale = remember { Animatable(1f) }
+    var likedPrev by remember { mutableStateOf(item.likedByMe) }
+    LaunchedEffect(item.likedByMe) {
+        if (item.likedByMe && !likedPrev) {
+            likeScale.animateTo(1.35f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            likeScale.animateTo(1f)
+        }
+        likedPrev = item.likedByMe
+    }
+
+    // "Burst" del cuore sul doppio tap (stile Instagram): compare grande al centro
+    // e svanisce. Indipendente dal cuore della action-bar.
+    var likeBurst by remember { mutableStateOf(false) }
+    val burstScale = remember { Animatable(0f) }
+    val burstAlpha = remember { Animatable(0f) }
+    LaunchedEffect(likeBurst) {
+        if (likeBurst) {
+            burstAlpha.snapTo(0.95f)
+            burstScale.snapTo(0.3f)
+            burstScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            delay(350)
+            burstAlpha.animateTo(0f, tween(250))
+            burstScale.snapTo(0f)
+            likeBurst = false
+        }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Rimuovere dal feed?", color = TextPrimary) },
+            text = {
+                Text(
+                    "Il post non sarà più visibile nel feed. L'attività o la sessione restano sul tuo account.",
+                    color = TextSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDeletePost?.invoke()
+                    },
+                ) { Text("Rimuovi", color = AccentRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Annulla", color = TextSecondary)
+                }
+            },
+            containerColor = CardBackground,
+        )
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.07f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
     ) {
-        Column {
+      Box {
+        Column(
+            // Materiale glass: gradiente sottile dentro la card bordata.
+            // Gesti: tap singolo = apri dettaglio, doppio tap = like (+ burst cuore).
+            modifier = Modifier
+                .background(
+                    Brush.verticalGradient(listOf(TsmColors.CardElevated, TsmColors.Card)),
+                )
+                .pointerInput(item.id) {
+                    detectTapGestures(
+                        onTap = { onOpenDetail() },
+                        onDoubleTap = {
+                            if (!item.likedByMe) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onLikeToggle()
+                            }
+                            likeBurst = true
+                        },
+                    )
+                },
+        ) {
             // ── 1. Header atleta ──────────────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -128,7 +225,36 @@ fun FeedCard(
                         )
                     }
                 }
-                KindChip(kind = item.kind)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    KindChip(kind = item.kind)
+                    if (isOwnPost && onDeletePost != null) {
+                        Box {
+                            IconButton(onClick = { showPostMenu = true }) {
+                                Icon(
+                                    Icons.Filled.MoreVert,
+                                    contentDescription = "Opzioni post",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showPostMenu,
+                                onDismissRequest = { showPostMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Rimuovi dal feed", color = AccentRed) },
+                                    onClick = {
+                                        showPostMenu = false
+                                        showDeleteConfirm = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Outlined.Delete, null, tint = AccentRed)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -153,12 +279,21 @@ fun FeedCard(
 
             Spacer(Modifier.height(12.dp))
 
-            // ── 3. Hero visivo ────────────────────────────────────────────────
-            when {
-                hasRoute -> RouteHero(item = item, route = route!!)
-                hasProfile -> ProfileHero(profile = profile!!)
-                else -> Unit
-            }
+            // ── 3. Hero visivo: traccia GPX (mappa) + altimetria come schede swipe ──
+            TsmRouteElevationPager(
+                routePoints = route,
+                elevationProfile = profile,
+                distanceKm = (item.distanceMeters ?: 0.0) / 1000.0,
+                modifier = Modifier.fillMaxWidth(),
+                // 200dp: lascia spazio ad header "PROFILO ALTIMETRICO" + assi distanza
+                // + footer MIN/MAX quote, ora mostrati anche nel feed.
+                height = 200.dp,
+                backgroundBrush = Brush.verticalGradient(listOf(HeroTop, HeroBottom)),
+                elevationLineColor = AccentCyan,
+                activeDotColor = AccentCyan,
+                difficultyLevel = item.difficultyLevel,
+                expandable = false,
+            )
 
             // ── 4. Stat strip ─────────────────────────────────────────────────
             Row(
@@ -175,27 +310,6 @@ fun FeedCard(
                     formatPace(item.distanceMeters, item.movingSeconds),
                     Modifier.weight(1f),
                 )
-            }
-
-            // ── 5. Banda altimetrica (solo se la route era l'hero) ────────────
-            if (hasRoute && hasProfile) {
-                Column(modifier = Modifier.padding(horizontal = 14.dp)) {
-                    Text(
-                        "ALTIMETRIA",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.labelSmall,
-                        letterSpacing = 1.sp,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    ElevationSparkline(
-                        profile = profile!!,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp),
-                        lineColor = AccentCyan,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                }
             }
 
             // ── 6. Partecipanti (solo sessioni) ───────────────────────────────
@@ -218,6 +332,7 @@ fun FeedCard(
                                 avatarUrl = p.avatarUrl,
                                 fallbackName = p.username,
                                 size = 24.dp,
+                                modifier = Modifier.clickable(enabled = p._id.isNotBlank()) { onUserClick(p._id) }
                             )
                         }
                         if (participants.size > 4) {
@@ -260,6 +375,7 @@ fun FeedCard(
                         imageVector = if (item.likedByMe) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                         contentDescription = if (item.likedByMe) "Rimuovi like" else "Metti like",
                         tint = if (item.likedByMe) AccentRed else TextSecondary,
+                        modifier = Modifier.scale(likeScale.value),
                     )
                 }
                 Text(
@@ -287,58 +403,19 @@ fun FeedCard(
                 }
             }
         }
-    }
-}
-
-/** Hero con la route signature + chip difficoltà in overlay. */
-@Composable
-private fun RouteHero(item: FeedItem, route: List<it.trentosmartmountain.app.data.remote.dto.RoutePoint>) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(176.dp)
-            .background(Brush.verticalGradient(listOf(HeroTop, HeroBottom))),
-    ) {
-        RouteTracePreview(
-            points = route,
-            modifier = Modifier.fillMaxWidth().height(176.dp),
-            lineColor = AccentCyan,
-        )
-        item.difficultyLevel?.let { diff ->
-            DifficultyChip(
-                level = diff,
+        // Cuore "burst" del doppio tap: appare grande al centro della card e svanisce.
+        if (burstScale.value > 0.01f) {
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = burstAlpha.value),
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp),
+                    .align(Alignment.Center)
+                    .size(110.dp)
+                    .scale(burstScale.value),
             )
         }
-    }
-}
-
-/** Hero alternativo quando manca la route: il profilo altimetrico a tutta larghezza. */
-@Composable
-private fun ProfileHero(profile: List<Double>) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(132.dp)
-            .background(Brush.verticalGradient(listOf(HeroTop, HeroBottom))),
-    ) {
-        Text(
-            "ALTIMETRIA",
-            color = TextSecondary,
-            style = MaterialTheme.typography.labelSmall,
-            letterSpacing = 1.sp,
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
-        )
-        ElevationSparkline(
-            profile = profile,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(132.dp)
-                .padding(top = 24.dp),
-            lineColor = AccentCyan,
-        )
+      }
     }
 }
 
@@ -360,26 +437,13 @@ private fun KindChip(kind: String) {
 }
 
 @Composable
-private fun DifficultyChip(level: String, modifier: Modifier = Modifier) {
-    val color = difficultyColor(level)
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = color.copy(alpha = 0.9f),
-        modifier = modifier,
-    ) {
-        Text(
-            text = level,
-            color = Color.White,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-        )
-    }
-}
-
-@Composable
 private fun PointsBadge(points: Int) {
-    Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFFFC107).copy(alpha = 0.16f)) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFFFFC107).copy(alpha = 0.16f),
+        // Shimmer dorato che attraversa il badge: enfatizza il "premio" punti.
+        modifier = Modifier.tsmShimmer(highlight = Color(0xFFFFD700)),
+    ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,

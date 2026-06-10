@@ -18,6 +18,10 @@ object Routes {
   const val MAIN_HIKER = "main_hiker"
   /** Area principale account rifugio (metriche IoT, crediti ospiti). */
   const val MAIN_RIFUGIO = "main_rifugio"
+  /** Scheda profilo del rifugista (identità struttura + bacheca + logout). */
+  const val REFUGE_PROFILE = "refuge_profile"
+  /** Simulatore Rifiuti & Logistica del rifugio (ADR-002, MVP). */
+  const val REFUGE_WASTE = "refuge_waste"
   /** Recupero password via email. */
   const val FORGOT_PASSWORD = "forgot_password"
   /** Dettaglio sessione escursione (modale sul nav principale). */
@@ -39,6 +43,7 @@ object Routes {
   const val NFC_RESULT = "nfc_result"
 
   // ── Sprint 2: Account ────────────────────────────────────────────────────────
+  const val ACCOUNT_PASSWORD_GATE = "account_password_gate"
   const val ACCOUNT_EDIT = "account_edit"
   const val CHANGE_PASSWORD = "change_password"
   const val DELETE_ACCOUNT = "delete_account"
@@ -70,11 +75,36 @@ object Routes {
   const val USER_PROFILE = "user_profile/{userId}"
   fun userProfileRoute(userId: String) = "user_profile/${Uri.encode(userId)}"
 
+  // ── Social: ricerca/scoperta utenti ("aggiungi amici") ──────────────────────
+  const val USER_SEARCH = "user_search"
+
+  // ── Social: classifica settimanale ─────────────────────────────────────────
+  const val LEADERBOARD = "leaderboard"
+
+  // ── Social: centro notifiche ────────────────────────────────────────────────
+  const val NOTIFICATIONS = "notifications"
+
+  // ── Bacheca rifugi (manage=true lato rifugista, false consultazione utente) ──
+  const val BOARD = "board/{manage}"
+  fun boardRoute(manage: Boolean) = "board/$manage"
+
+  // ── Social: lista follower/seguiti di un utente ─────────────────────────────
+  // `type` = "followers" | "following" (vedi FollowListType).
+  const val FOLLOW_LIST = "follow_list/{userId}/{type}"
+  fun followListRoute(userId: String, type: String) =
+    "follow_list/${Uri.encode(userId)}/${Uri.encode(type)}"
+
   // ── Social: story viewer full-screen ────────────────────────────────────────
-  // refId = `_id` Activity/HikeSession, kind = "activity"|"session" (query arg).
-  const val STORY_VIEWER = "story_viewer/{refId}?kind={kind}"
-  fun storyViewerRoute(refId: String, kind: String): String =
-    "story_viewer/${Uri.encode(refId)}?kind=${Uri.encode(kind)}"
+  // userId = autore di cui riprodurre le storie reali (GET /stories/user/:id).
+  const val STORY_VIEWER = "story_viewer/{userId}"
+  fun storyViewerRoute(userId: String): String =
+    "story_viewer/${Uri.encode(userId)}"
+
+  /** Composer per creare una nuova storia (args passati via holder pendingStoryDraft). */
+  const val STORY_COMPOSER = "story_composer"
+
+  /** Dettaglio social di un post condiviso nel feed. */
+  const val POST_DETAIL = "post_detail"
 
   fun quizRoute(quizId: String) = "quiz/$quizId"
   fun quizFromCategoryRoute(slug: String) = "quiz_cat/${Uri.encode(slug)}"

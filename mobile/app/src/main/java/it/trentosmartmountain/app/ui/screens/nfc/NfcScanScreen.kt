@@ -117,7 +117,25 @@ fun NfcScanScreen(
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        // ON_RESUME da solo non basta: attivando NFC dalle quick settings (tendina)
+        // l'Activity non passa da onPause/onResume → lo stato restava stantio.
+        // Il broadcast ACTION_ADAPTER_STATE_CHANGED copre il cambio in tempo reale.
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: android.content.Context?, intent: Intent?) {
+                if (intent?.action == NfcAdapter.ACTION_ADAPTER_STATE_CHANGED) {
+                    nfcEnabled = nfcAdapter?.isEnabled == true
+                }
+            }
+        }
+        if (nfcAdapter != null) {
+            context.registerReceiver(receiver, IntentFilter(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED))
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            if (nfcAdapter != null) {
+                runCatching { context.unregisterReceiver(receiver) }
+            }
+        }
     }
 
     val locationPermLauncher = rememberLauncherForActivityResult(

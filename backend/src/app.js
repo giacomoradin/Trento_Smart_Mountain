@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import swaggerUI from "swagger-ui-express";
 import { readFileSync } from "fs";
 
@@ -19,6 +20,10 @@ import challengeRoutes from "./routes/challengeRoutes.js";
 import badgeRoutes from "./routes/badgeRoutes.js";
 import emergencyRoutes from "./routes/emergencyRoutes.js";
 import followRoutes from "./routes/followRoutes.js";
+import refugeIotRoutes from "./routes/refugeIotRoutes.js";
+import wasteRoutes from "./routes/wasteRoutes.js";
+import boardRoutes from "./routes/boardRoutes.js";
+import storyRoutes from "./routes/storyRoutes.js";
 import "./models/emergency.js";
 import "./models/follow.js";
 import "./models/comment.js";
@@ -104,6 +109,20 @@ app.use(globalLimiter);
 // Limite scritture (POST/PATCH/DELETE) per utente — più stretto del read rate
 app.use(writeLimiter);
 
+// Health-check (no auth, no rate limit specifico): usato dal monitor del PaaS
+// (Render) per riavvii intelligenti e probe di liveness/readiness. Riporta lo
+// stato della connessione Mongo (1 = connected) e l'uptime del processo.
+app.get(["/health", "/api/v1/health"], (req, res) => {
+  const dbState = mongoose.connection.readyState; // 0=disconnected,1=connected,2=connecting,3=disconnecting
+  const healthy = dbState === 1;
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? "ok" : "degraded",
+    db: ["disconnected", "connected", "connecting", "disconnecting"][dbState] ?? "unknown",
+    uptimeSec: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Swagger UI pubblico per l'esplorazione delle API
 if (swaggerDocument) {
   app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
@@ -126,6 +145,10 @@ app.use("/api/v1/users", accountRoutes);
 app.use("/api/v1/users", followRoutes);
 app.use("/api/v1/challenges", challengeRoutes);
 app.use("/api/v1/users/me", badgeRoutes);
+app.use("/api/v1/refuge/waste", wasteRoutes);
+app.use("/api/v1/refuge", refugeIotRoutes);
+app.use("/api/v1/board", boardRoutes);
+app.use("/api/v1/stories", storyRoutes);
 
 // ─── Compatibility shim: /users (deprecato, mantenuto per backward-compat) ───
 // Il refactor 2026-05 ha separato la collection in hikers/refuges/admins ma

@@ -2,8 +2,24 @@
 
 > Documentazione delle collezioni MongoDB e dello schema Room (locale Android).
 >
-> **Ultima revisione**: 24/05/2026 — Sprint 2 in corso (aggiunta collezione `activities`).
+> **Ultima revisione**: 01/06/2026 — Sprint 3 (Social completo, Dashboard IoT rifugio, Bacheca rifugi).
 > **Riferimenti**: `backend/src/models/`, `mobile/.../data/local/db/`, D2 §4.1.
+
+---
+
+## 0. Aggiornamento Sprint 3 — nuove collezioni (giugno 2026)
+
+| Collection | Modello | Scopo |
+|---|---|---|
+| `notifications` | `notification.js` | Notifiche: `recipientId`, `actorId`, `type` (follow/like/comment/**join_request/join_accepted/removed**), `targetKind`, `targetId`, `message` (testo precalcolato, es. cambio leadership), `read`, `createdAt`. Promemoria attività ≤24h e allerte rifugisti sono **sintetiche** (non persistite). |
+| `edgenodes` | `edgeNode.js` | Nodi BLE-mesh rifugio: `refugeId`, `code`, `name`, `signalPct`, `online`, `lastSeenAt`. |
+| `refugesensorreadings` | `refugeSensorReading.js` | Letture sensori (temp/umidità/vento/pressione + trend), time-series per rifugio. |
+| `refugepassages` | `refugePassage.js` | Passaggi escursionisti (mesh/nfc) + social credit. |
+| `refugeboardposts` | `refugeBoardPost.js` | Bacheca rifugi: `type` (info/avviso/pericolo), `title`, `body`, `validUntil`, `refugeName` (denorm). |
+
+> ⚠️ I dati IoT (`edgenodes`, `refugesensorreadings`, `refugepassages`) sono **mock generati lato server** (`refugeIotService.seedMockDashboard`) in attesa dell'ingest MQTT reale. Lo schema è definitivo.
+
+Esteso: `hiker.js` → `preferences.privacy.profileVisibility` (`public`/`friends`/`private`) ora **applicato** in `getHikerById` (gate profilo) + `socialService` (feed/bacheca). Room mobile: colonna `hidden` su `completed_activities` (tombstone eliminazioni).
 
 ---
 
@@ -198,15 +214,26 @@ users.username_1                      // unique
     {
       userId: ObjectId,               // ref User, required
       role: String,                   // enum ["hiker", "groupLeader"], default "hiker"
+      status: String,                 // enum ["pending","accepted"], default "accepted" — APPROVAZIONE iscrizione
+      approvedBy: ObjectId,           // ref User — chi ha approvato il pending (null per il creator)
       joinedAt: Date,                 // default Date.now
+      // ADR-001: ciclo di vita della PARTECIPAZIONE del singolo, ORTOGONALE a `status`.
+      participationState: String,     // enum ["idle","live","finished","left"], default "idle"
     }
   ],
 
+  // Ban locale alla sessione: utenti rimossi definitivamente dal capogruppo (giugno 2026)
+  removedUserIds: [ObjectId],         // ref User — non possono più ri-unirsi
+
+  // Hide per-utente dalla lista "Le mie attività" (delete locale propagato).
+  hiddenForUsers: [ObjectId],         // ref User — esclusi da getSessionsByUser
+
   status: String,                     // enum ["PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"], default "PLANNED"
 
-  // Failover leadership (D2 §3.2.3) — Sprint 3+
-  statoFailover: Boolean,             // default false
-  lastHeartbeat: Date,                // default Date.now
+  // Failover leadership (D2 §3.2.3, ADR-001)
+  currentLeaderId: ObjectId,          // ref User — leader EFFETTIVO corrente (default creator)
+  statoFailover: Boolean,             // default false — true quando la leadership è passata a un sostituto
+  lastHeartbeat: Date,                // default Date.now — ultimo "segnale di vita" del leader effettivo
 
   startTime: Date,                    // popolato quando status = ACTIVE
   endTime: Date,                      // popolato quando status = COMPLETED
@@ -372,6 +399,60 @@ activities.startPoint_2dsphere; // sparse, per query geografiche future
 
 ---
 
+### 1.5 Collezione `stories` (giugno 2026)
+
+**Modello**: `backend/src/models/story.js` · **Collection MongoDB**: `stories`
+
+> Storie effimere (Instagram-like) con **TTL 24h** (rimozione automatica via index `expiresAt`). Sostituiscono la vecchia derivazione "story = post condiviso <24h". Media foto/video in **Base64** (no object storage nello stack); cap di dimensione imposti da Joi + service.
+
+#### Schema
+
+```javascript
+{
+  _id: ObjectId,
+  authorId: ObjectId,                 // ref User, required, indexed
+  type: String,                       // enum ["planned_session", "activity"]
+  sessionId: ObjectId,                // ref HikeSession (planned_session / activity da sessione)
+  activityId: ObjectId,               // ref Activity (activity libera)
+  inviteCode: String,                 // snapshot per il bottone "Unisciti" (solo planned_session)
+  caption: String,                    // max 200
+  media: [                            // foto/video Base64 capped (immagine ≤ ~1.5MB, video ≤ ~3.8MB)
+    { kind: String,                   //   enum ["image","video"]
+      dataUri: String,                //   "data:image/jpeg;base64,..." | "data:video/mp4;base64,..."
+      durationSec: Number }           //   solo video (≤ 10)
+  ],
+  overlay: {                          // snapshot tracciamento per l'overlay sul media
+    title, activityType, difficultyLevel,
+    distanceMeters, elevationGainM, movingSeconds,
+    routePolyline: [{ lat, lon }],    //   traccia campionata (≤ 500 punti)
+    editorDecor: {                    //   decorazioni dell'editor riprodotte dal viewer
+      routeOverlayKind,               //     "trace" | "map_widget" | "map_scene"
+      routeColor, routeTransform, mapWidgetTransform,
+      floatingText, textColor, textTransform,
+      textFont                        //     "classic" | "elegant" | "mono" | "handwritten" (chiusura Sprint 2)
+    }
+  },
+  viewers: [{ userId: ObjectId, viewedAt: Date }],
+  createdAt: Date,
+  expiresAt: Date                     // createdAt + 24h
+}
+```
+
+#### Indici
+
+```javascript
+stories.expiresAt_1;          // TTL { expireAfterSeconds: 0 } → rimozione automatica
+stories.authorId_1_createdAt_-1; // "storie non scadute di un autore, più recenti prima"
+```
+
+#### Note operative
+
+- **Visibilità**: `getStoriesByAuthor` applica il gate (`self` → ok; `public` → ok; `friends` → solo follower; `private` → vuoto).
+- **Autorizzazione ref**: si può creare una storia solo per una sessione di cui si è membri accettati o per una propria Activity (`STORY_FORBIDDEN_REF` altrimenti).
+- **Avatar Row**: `getSocialRowForUser` deriva `status: "story"` + `hasUnviewedStory` dalle Story reali non scadute.
+
+---
+
 ## 2. Mobile — Room Database
 
 Database: `TsmDatabase` (file `tsm.db`), **versione 4** (bump Sprint 2: campi `retry_count`, `last_retry_at_ms`, `remote_id` aggiunti a `completed_activities` per il SyncManager con backoff incrementale).
@@ -422,6 +503,15 @@ Segnalazioni SOS legate a una `hikesessions` in stato `ACTIVE`. Il payload sensi
 ```javascript
 emergencies.sessionId_1_status_1_createdAt_ - 1; // lista SOS per sessione
 emergencies.idempotencyKey_1; // unique — idempotenza POST
+
+// TTL Indexes (Sprint 3)
+// Automatic cleanup di emergenze risolte dopo 3 giorni
+emergencies.index({ status: 1, dismissedAt: 1 }, { 
+  expireAfterSeconds: 259200, 
+  partialFilterExpression: { status: { $in: ["DISMISSED", "CANCELLED_BY_SENDER"] } } 
+});
+// Cleanup automatico di emergenze attive/non gestite dopo 7 giorni
+emergencies.index({ createdAt: 1 }, { expireAfterSeconds: 604800 });
 ```
 
 #### Note operative

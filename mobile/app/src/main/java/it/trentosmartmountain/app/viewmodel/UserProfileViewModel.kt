@@ -8,6 +8,7 @@ import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.FeedItem
 import it.trentosmartmountain.app.data.remote.dto.FollowStatsResponse
+import it.trentosmartmountain.app.data.remote.dto.HikingStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.PublicUserProfile
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -37,6 +38,8 @@ data class UserProfileState(
     val isSelf: Boolean = false,
     val user: PublicUserProfile? = null,
     val stats: FollowStatsResponse? = null,
+    /** Totali escursionistici ALL-TIME (km/dislivello/uscite/punti) per l'header. */
+    val hikingStats: HikingStatsResponse? = null,
     val posts: List<FeedItem> = emptyList(),
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
@@ -90,14 +93,17 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
             coroutineScope {
                 val userJob = async { runCatching { api.getPublicHiker(userId) } }
                 val statsJob = async { runCatching { api.getFollowStats(userId) } }
+                val hikingJob = async { runCatching { api.getUserHikingStats(userId) } }
                 val postsJob = async { runCatching { api.getUserPosts(userId, 1, 20) } }
                 val userResp = userJob.await().getOrNull()
                 val statsResp = statsJob.await().getOrNull()
+                val hikingResp = hikingJob.await().getOrNull()
                 val postsResp = postsJob.await().getOrNull()
                 _state.value = _state.value.copy(
                     isLoading = false,
                     user = userResp?.body()?.takeIf { userResp.isSuccessful },
                     stats = statsResp?.body()?.takeIf { statsResp.isSuccessful },
+                    hikingStats = hikingResp?.body()?.takeIf { hikingResp.isSuccessful },
                     posts = postsResp?.body()?.items.orEmpty().takeIf { postsResp?.isSuccessful == true } ?: emptyList(),
                     hasMore = postsResp?.body()?.hasMore == true,
                     currentPage = 1,
@@ -116,11 +122,14 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             coroutineScope {
                 val statsJob = async { runCatching { api.getFollowStats(userId) } }
+                val hikingJob = async { runCatching { api.getUserHikingStats(userId) } }
                 val postsJob = async { runCatching { api.getUserPosts(userId, 1, 20) } }
                 val statsResp = statsJob.await().getOrNull()
+                val hikingResp = hikingJob.await().getOrNull()
                 val postsResp = postsJob.await().getOrNull()
                 _state.value = _state.value.copy(
                     stats = statsResp?.body()?.takeIf { statsResp.isSuccessful } ?: _state.value.stats,
+                    hikingStats = hikingResp?.body()?.takeIf { hikingResp.isSuccessful } ?: _state.value.hikingStats,
                     posts = postsResp?.body()?.items.orEmpty().takeIf { postsResp?.isSuccessful == true }
                         ?: _state.value.posts,
                     hasMore = postsResp?.body()?.hasMore == true,
@@ -237,6 +246,24 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
      * senza ricaricare profilo+stats+posts. Chiamato alla chiusura della sheet
      * commenti (vedi [SocialFeedViewModel.setCommentCount] per la stessa logica).
      */
+    /** Rimuove un post dalla bacheca profilo (solo se [isSelf]). */
+    fun removePost(item: FeedItem) {
+        if (!_state.value.isSelf) return
+        viewModelScope.launch {
+            val resp = runCatching {
+                when (item.kind) {
+                    "session" -> api.unshareSession(item.id)
+                    else -> api.unshareActivity(item.id)
+                }
+            }.getOrNull()
+            if (resp?.isSuccessful == true) {
+                _state.value = _state.value.copy(
+                    posts = _state.value.posts.filter { it.id != item.id || it.kind != item.kind },
+                )
+            }
+        }
+    }
+
     fun setCommentCount(id: String, kind: String, count: Int) {
         val item = _state.value.posts.firstOrNull { it.id == id && it.kind == kind } ?: return
         if (item.commentsCount == count) return

@@ -10,7 +10,9 @@ import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.ActualStats
 import it.trentosmartmountain.app.data.remote.dto.CompleteSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.CreateActivityRequest
+import it.trentosmartmountain.app.data.remote.dto.RoutePoint
 import it.trentosmartmountain.app.util.ELEVATION_PROFILE_MAX_POINTS
+import it.trentosmartmountain.app.util.ROUTE_SIGNATURE_MAX_POINTS
 import it.trentosmartmountain.app.util.downsampleByIndex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,9 +43,18 @@ object SyncManager {
     private const val TAG = "SyncManager"
     private const val POLL_INTERVAL_MS = 60_000L
 
+    // Idle backoff del loop: a coda vuota il polling scala 60s → 2min → 5min (cap).
+    // Evita query Room + wakeup periodici quando non c'è nulla da sincronizzare;
+    // un nuovo elemento in coda o enqueueImmediate riportano il ritmo a 60s.
+    private const val POLL_IDLE_INTERVAL_MS = 120_000L
+    private const val POLL_IDLE_MAX_INTERVAL_MS = 300_000L
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pollMutex = Mutex()
     private var pollJob: Job? = null
+
+    @Volatile
+    private var idleStreak = 0
 
     // Avvia il poll loop. Idempotente: se è già attivo non fa nulla.
     fun start(context: Context) {
@@ -52,7 +63,12 @@ object SyncManager {
         pollJob = scope.launch {
             while (isActive) {
                 runOnce(app)
-                delay(POLL_INTERVAL_MS)
+                val nextDelay = when {
+                    idleStreak == 0 -> POLL_INTERVAL_MS
+                    idleStreak == 1 -> POLL_IDLE_INTERVAL_MS
+                    else -> POLL_IDLE_MAX_INTERVAL_MS
+                }
+                delay(nextDelay)
             }
         }
     }
@@ -66,6 +82,7 @@ object SyncManager {
      */
     fun enqueueImmediate(context: Context) {
         val app = context.applicationContext as TsmApplication
+        idleStreak = 0
         scope.launch { runOnce(app, ignoreBackoff = true) }
     }
 
@@ -75,7 +92,11 @@ object SyncManager {
     ) = pollMutex.withLock {
         val dao = app.database.completedActivityDao()
         val unsynced = dao.getUnsynced()
-        if (unsynced.isEmpty()) return@withLock
+        if (unsynced.isEmpty()) {
+            idleStreak = (idleStreak + 1).coerceAtMost(2)
+            return@withLock
+        }
+        idleStreak = 0
 
         val now = System.currentTimeMillis()
         Log.d(TAG, "Polling: ${unsynced.size} attività da sincronizzare (ignoreBackoff=$ignoreBackoff)")
@@ -116,6 +137,7 @@ object SyncManager {
                     actualStats = buildActualStats(entity),
                     difficultyLevel = entity.difficultyLevel,
                     elevationProfile = parseElevationProfile(entity.trackLatLng),
+                    routePolyline = parseRoutePolyline(entity.trackLatLng),
                 )
                 val resp = TsmApiClient.service().createActivity(req)
                 if (resp.isSuccessful) {
@@ -160,6 +182,16 @@ object SyncManager {
             val raw: List<List<Double>> = com.google.gson.Gson().fromJson(trackJson, type)
             val elevations = raw.mapNotNull { pts -> pts.getOrNull(2) }
             downsampleByIndex(elevations, ELEVATION_PROFILE_MAX_POINTS)
+        } catch (_: Exception) { null }
+    }
+
+    private fun parseRoutePolyline(trackJson: String): List<RoutePoint>? {
+        if (trackJson.isBlank() || trackJson == "[]") return null
+        return try {
+            val type = object : com.google.gson.reflect.TypeToken<List<List<Double>>>() {}.type
+            val raw: List<List<Double>> = com.google.gson.Gson().fromJson(trackJson, type)
+            val points = raw.map { pts -> RoutePoint(pts[0], pts[1]) }
+            downsampleByIndex(points, ROUTE_SIGNATURE_MAX_POINTS)
         } catch (_: Exception) { null }
     }
 

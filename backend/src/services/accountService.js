@@ -48,6 +48,17 @@ export async function changePassword(userId, { oldPassword, newPassword }) {
   await user.save();
 }
 
+/** Verifica password corrente senza emettere nuovi token (gate schermata Account). */
+export async function verifyPassword(userId, { password }) {
+  const user = await User.findById(userId);
+  if (!user) throw new Error("USER_NOT_FOUND");
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) throw new Error("WRONG_PASSWORD");
+
+  return { verified: true };
+}
+
 export async function deleteAccount(userId, { password }) {
   const user = await User.findById(userId);
   if (!user) throw new Error("USER_NOT_FOUND");

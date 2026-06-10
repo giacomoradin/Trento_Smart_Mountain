@@ -2,7 +2,9 @@ import mongoose from "mongoose";
 import Activity from "../models/activity.js";
 import HikeSession from "../models/hikeSession.js";
 import Hiker from "../models/hiker.js";
+import Story from "../models/story.js";
 import { getFollowingIds, isFollowing } from "./followService.js";
+import { createNotification } from "./notificationService.js";
 import { downsamplePolyline } from "../utils/geoPolyline.js";
 
 // Risoluzione della route signature nel feed: ~48 punti bastano a riconoscere
@@ -122,6 +124,14 @@ export async function likeActivity(activityId, userId) {
   if (!already) {
     activity.likes.push({ userId, createdAt: new Date() });
     await activity.save();
+    // Notifica l'autore (best-effort, no-op se mette like a sé stesso).
+    await createNotification({
+      recipientId: activity.userId,
+      actorId: userId,
+      type: "like",
+      targetKind: "activity",
+      targetId: activity._id,
+    });
   }
   return { likesCount: activity.likes.length, likedByMe: true };
 }
@@ -149,6 +159,13 @@ export async function likeSession(sessionId, userId) {
   if (!already) {
     session.likes.push({ userId, createdAt: new Date() });
     await session.save();
+    await createNotification({
+      recipientId: session.creatorId,
+      actorId: userId,
+      type: "like",
+      targetKind: "session",
+      targetId: session._id,
+    });
   }
   return { likesCount: session.likes.length, likedByMe: true };
 }
@@ -191,6 +208,237 @@ async function getVisibilityForAuthors(authorIds) {
     );
   }
   return map;
+}
+
+// ── DISCOVERY / RICERCA UTENTI ──────────────────────────────────────────────
+
+/**
+ * Ricerca escursionisti per username (case-insensitive, match parziale).
+ *
+ * Usata dalla schermata "Cerca persone da seguire" del mobile: alimenta il
+ * flusso "aggiungi amici" del social (follow asimmetrico).
+ *
+ *  - Esclude il viewer stesso dai risultati.
+ *  - Restituisce solo campi pubblici (`username`, `personalInfo.avatarUrl`),
+ *    coerente con userPrivacy.js.
+ *  - `isFollowedByMe` per ogni risultato → la UI mostra subito "Segui"/"Seguito"
+ *    senza una seconda query per riga.
+ *  - Ordina i non-ancora-seguiti per primi (più utili da scoprire), poi A→Z.
+ *
+ * Sicurezza: i metacaratteri regex nel termine vengono escapati per prevenire
+ * regex injection / ReDoS. Termine < 2 caratteri → nessun risultato (evita
+ * di restituire l'intero DB su query vuote).
+ *
+ * @param {string|ObjectId} viewerId  utente che cerca (per escludere sé + isFollowedByMe)
+ * @param {string} q                  termine di ricerca (username, parziale)
+ * @param {{limit?:number}} opts      cap risultati (default 20, max 50)
+ */
+export async function searchUsers(viewerId, q, { limit = 20 } = {}) {
+  const term = (q ?? "").trim();
+  if (term.length < 2) return { items: [] };
+
+  // Escape dei metacaratteri regex: il termine arriva dall'utente, non deve
+  // poter alterare il pattern (ReDoS / match imprevisti).
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(escaped, "i");
+  const safeLimit = Math.min(Math.max(1, limit), 50);
+
+  const docs = await Hiker.find({
+    username: regex,
+    _id: { $ne: viewerId },
+  })
+    .select("username personalInfo.avatarUrl")
+    .limit(safeLimit)
+    .lean();
+
+  // Una sola query per sapere quali risultati il viewer segue già.
+  const followingIds = new Set(
+    (await getFollowingIds(viewerId)).map((id) => String(id)),
+  );
+
+  const items = docs.map((d) => ({
+    user: {
+      _id: String(d._id),
+      username: d.username,
+      personalInfo: d.personalInfo?.avatarUrl
+        ? { avatarUrl: d.personalInfo.avatarUrl }
+        : null,
+    },
+    isFollowedByMe: followingIds.has(String(d._id)),
+  }));
+
+  // Non-seguiti prima (scoperta), poi ordine alfabetico per stabilità.
+  items.sort((a, b) => {
+    if (a.isFollowedByMe !== b.isFollowedByMe) return a.isFollowedByMe ? 1 : -1;
+    return (a.user.username || "").localeCompare(b.user.username || "");
+  });
+
+  return { items };
+}
+
+// ── METRICHE PROFILO (riepilogo escursionistico pubblico) ───────────────────
+
+/**
+ * Totali escursionistici ALL-TIME di un utente, per il "biglietto da visita"
+ * sul profilo (km, dislivello, uscite, punti).
+ *
+ * Aggrega due sorgenti, identico criterio di [hikeSessionService.getActivityStats]
+ * ma senza filtro anno:
+ *   - HikeSession COMPLETED dove l'utente è creator o partecipante
+ *     (preferisce `actualStats`, fallback `gpxStats`);
+ *   - Activity libere dell'utente (`actualStats`).
+ *
+ * Le due collection sono disgiunte (una sessione completata NON crea anche
+ * un'Activity), quindi la somma non doppia-conta — coerente con le card
+ * "Le Mie Attività".
+ *
+ * @param {string|ObjectId} userId
+ * @returns {Promise<{totalActivities:number,totalDistanceKm:number,totalElevationGainM:number,totalPoints:number}>}
+ */
+export async function getPublicHikingStats(userId) {
+  const [sessions, activities] = await Promise.all([
+    HikeSession.find({
+      $or: [{ creatorId: userId }, { "participants.userId": userId }],
+      status: "COMPLETED",
+    })
+      .select("actualStats gpxStats")
+      .lean(),
+    Activity.find({ userId }).select("actualStats").lean(),
+  ]);
+
+  let totalDistanceKm = 0;
+  let totalElevationGainM = 0;
+  let totalPoints = 0;
+
+  for (const s of sessions) {
+    totalDistanceKm +=
+      s.actualStats?.distanceMeters != null
+        ? s.actualStats.distanceMeters / 1000.0
+        : s.gpxStats?.distanceKm || 0;
+    totalElevationGainM +=
+      s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
+    totalPoints += s.actualStats?.finalPoints ?? s.gpxStats?.estimatedPoints ?? 0;
+  }
+  for (const a of activities) {
+    totalDistanceKm += (a.actualStats?.distanceMeters || 0) / 1000.0;
+    totalElevationGainM += a.actualStats?.elevationGainM || 0;
+    totalPoints += a.actualStats?.finalPoints || 0;
+  }
+
+  return {
+    totalActivities: sessions.length + activities.length,
+    totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
+    totalElevationGainM,
+    totalPoints,
+  };
+}
+
+// ── CLASSIFICA SETTIMANALE ──────────────────────────────────────────────────
+
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+
+/**
+ * Classifica settimanale (rolling 7 giorni) tra il viewer e gli utenti che
+ * segue: per ciascuno aggrega km / dislivello / punti / uscite delle Activity
+ * libere e delle HikeSession COMPLETED (creator o partecipante).
+ *
+ * Restituisce TUTTE le metriche per ogni utente attivo, così il client può
+ * cambiare il criterio di ordinamento (km/dislivello/punti) senza ri-chiamare
+ * il server. Default ordinato per km desc. Include solo chi ha ≥1 uscita nella
+ * finestra; `isMe` evidenzia la riga del viewer.
+ *
+ * @param {string|ObjectId} viewerId
+ * @returns {Promise<{since:string, items:Array}>}
+ */
+export async function getWeeklyLeaderboard(viewerId) {
+  const followingIds = await getFollowingIds(viewerId);
+  const uniqueIds = [
+    ...new Set([...followingIds.map(String), String(viewerId)]),
+  ];
+  const since = new Date(Date.now() - WEEK_MS);
+
+  const totals = new Map(); // uid -> { km, elevM, points, count }
+  const bump = (uid, km, elev, pts) => {
+    if (!uniqueIds.includes(uid)) return; // solo viewer + seguiti
+    const cur = totals.get(uid) ?? { km: 0, elevM: 0, points: 0, count: 0 };
+    cur.km += km || 0;
+    cur.elevM += elev || 0;
+    cur.points += pts || 0;
+    cur.count += 1;
+    totals.set(uid, cur);
+  };
+
+  const [activities, sessions] = await Promise.all([
+    Activity.find({
+      userId: { $in: uniqueIds },
+      completedAt: { $gte: since },
+    })
+      .select("userId actualStats")
+      .lean(),
+    HikeSession.find({
+      status: "COMPLETED",
+      $or: [
+        { creatorId: { $in: uniqueIds } },
+        { "participants.userId": { $in: uniqueIds } },
+      ],
+    })
+      .select("creatorId participants actualStats gpxStats endTime createdAt")
+      .lean(),
+  ]);
+
+  for (const a of activities) {
+    bump(
+      String(a.userId),
+      (a.actualStats?.distanceMeters || 0) / 1000.0,
+      a.actualStats?.elevationGainM || 0,
+      a.actualStats?.finalPoints || 0,
+    );
+  }
+  for (const s of sessions) {
+    const ref = s.endTime || s.createdAt;
+    if (!ref || new Date(ref) < since) continue;
+    const km =
+      s.actualStats?.distanceMeters != null
+        ? s.actualStats.distanceMeters / 1000.0
+        : s.gpxStats?.distanceKm || 0;
+    const elev = s.actualStats?.elevationGainM ?? s.gpxStats?.elevationGainM ?? 0;
+    const pts = s.actualStats?.finalPoints ?? s.gpxStats?.estimatedPoints ?? 0;
+    // Chi "ha fatto" la sessione: creator + partecipanti (tutti hanno camminato).
+    const members = new Set([
+      String(s.creatorId),
+      ...(s.participants || []).map((p) => String(p.userId)),
+    ]);
+    for (const uid of members) bump(uid, km, elev, pts);
+  }
+
+  const rankedIds = [...totals.keys()];
+  const users = await Hiker.find({ _id: { $in: rankedIds } })
+    .select("username personalInfo.avatarUrl")
+    .lean();
+  const userMap = new Map(users.map((u) => [String(u._id), u]));
+
+  const items = rankedIds
+    .map((uid) => {
+      const t = totals.get(uid);
+      const u = userMap.get(uid);
+      return {
+        user: {
+          _id: uid,
+          username: u?.username ?? null,
+          personalInfo: u?.personalInfo?.avatarUrl
+            ? { avatarUrl: u.personalInfo.avatarUrl }
+            : null,
+        },
+        km: Math.round(t.km * 10) / 10,
+        elevM: t.elevM,
+        points: t.points,
+        count: t.count,
+        isMe: uid === String(viewerId),
+      };
+    })
+    .sort((a, b) => b.km - a.km || b.elevM - a.elevM);
+
+  return { since: since.toISOString(), items };
 }
 
 // ── FEED AGGREGATOR ─────────────────────────────────────────────────────────
@@ -421,25 +669,56 @@ function computeProgressPct(goals, totals) {
  * Implementazione: 5 query parallele Promise.all → merge per userId → priority assignment.
  */
 export async function getSocialRowForUser(viewerId) {
+  // ── "La tua storia" (stile Instagram) ──────────────────────────────────────
+  // Il viewer NON segue se stesso, quindi le PROPRIE storie non passerebbero mai
+  // dalle query sui `followingIds`: senza questo blocco, dopo aver pubblicato una
+  // storia l'utente "non la vede da nessuna parte". La recuperiamo a parte e
+  // mettiamo l'eventuale entry self IN TESTA alla row.
+  const ownStories = await Story.find({
+    authorId: viewerId,
+    expiresAt: { $gt: new Date() },
+  })
+    .select("_id")
+    .lean();
+  let selfItem = null;
+  if (ownStories.length > 0) {
+    const self = await Hiker.findById(viewerId)
+      .select("username personalInfo.avatarUrl")
+      .lean();
+    if (self) {
+      selfItem = {
+        user: {
+          _id: String(self._id),
+          username: self.username,
+          personalInfo: self.personalInfo
+            ? { avatarUrl: self.personalInfo.avatarUrl ?? null }
+            : null,
+        },
+        status: "story",
+        isSelf: true,
+        // Anello pieno: feedback chiaro che la TUA storia è online (24h).
+        hasUnviewedStory: true,
+      };
+    }
+  }
+
   const rawFollowingIds = await getFollowingIds(viewerId);
-  if (rawFollowingIds.length === 0) return { items: [] };
+  if (rawFollowingIds.length === 0) return { items: selfItem ? [selfItem] : [] };
   // Gate di visibilità: gli autori "private" non compaiono nella row (né story
   // né live). "public"/"friends" restano visibili (il viewer ne è follower).
   const visMap = await getVisibilityForAuthors(rawFollowingIds);
   const followingIds = rawFollowingIds.filter(
     (id) => visMap.get(String(id)) !== "private",
   );
-  if (followingIds.length === 0) return { items: [] };
+  if (followingIds.length === 0) return { items: selfItem ? [selfItem] : [] };
 
-  const since24h = new Date(Date.now() - STORY_WINDOW_MS);
   const since7d = new Date(Date.now() - 7 * STORY_WINDOW_MS);
 
   // 5 query parallele per minimizzare la latenza totale.
   const [
     hikers,            // anagrafica + weeklyGoals
     liveSessions,      // ACTIVE sessions
-    storyActivities,   // shared in last 24h
-    storySessions,
+    stories,           // storie reali non scadute (TTL 24h)
     weekActivities,    // completed in last 7 days (per progress)
     weekSessions,
   ] = await Promise.all([
@@ -455,19 +734,12 @@ export async function getSocialRowForUser(viewerId) {
     })
       .select("_id creatorId participants")
       .lean(),
-    Activity.find({
-      userId: { $in: followingIds },
-      sharedAt: { $gte: since24h },
+    Story.find({
+      authorId: { $in: followingIds },
+      expiresAt: { $gt: new Date() },
     })
-      .select("_id userId sharedAt")
-      .sort({ sharedAt: -1 })
-      .lean(),
-    HikeSession.find({
-      creatorId: { $in: followingIds },
-      sharedAt: { $gte: since24h },
-    })
-      .select("_id creatorId sharedAt")
-      .sort({ sharedAt: -1 })
+      .select("authorId viewers createdAt")
+      .sort({ createdAt: -1 })
       .lean(),
     Activity.find({
       userId: { $in: followingIds },
@@ -505,25 +777,19 @@ export async function getSocialRowForUser(viewerId) {
   // ── 2. Mappa story refs per userId (più recente vince) ──
   // Iteriamo le activities + sessions già ordinate sharedAt desc così la
   // prima vista per ciascun userId è la più recente (anti N+1 per Date max).
+  // Un autore ha "story" se possiede ≥1 Story non scaduta. `hasUnviewed` è true
+  // se almeno una delle sue storie non è stata vista dal viewer → anello pieno.
   const storyByUser = new Map();
-  for (const a of storyActivities) {
-    const uid = String(a.userId);
-    if (!storyByUser.has(uid)) {
-      storyByUser.set(uid, {
-        id: String(a._id),
-        kind: "activity",
-        sharedAt: a.sharedAt,
-      });
-    }
-  }
-  for (const s of storySessions) {
-    const uid = String(s.creatorId);
-    if (!storyByUser.has(uid)) {
-      storyByUser.set(uid, {
-        id: String(s._id),
-        kind: "session",
-        sharedAt: s.sharedAt,
-      });
+  for (const st of stories) {
+    const uid = String(st.authorId);
+    const viewed = (st.viewers || []).some(
+      (v) => String(v.userId) === String(viewerId),
+    );
+    const cur = storyByUser.get(uid);
+    if (!cur) {
+      storyByUser.set(uid, { hasUnviewed: !viewed });
+    } else if (!viewed) {
+      cur.hasUnviewed = true;
     }
   }
 
@@ -577,7 +843,7 @@ export async function getSocialRowForUser(viewerId) {
       return {
         user: userPayload,
         status: "story",
-        storyActivityRef: storyByUser.get(uid),
+        hasUnviewedStory: storyByUser.get(uid).hasUnviewed,
       };
     }
     const goals = h.weeklyGoals;
@@ -604,7 +870,8 @@ export async function getSocialRowForUser(viewerId) {
     return 0;
   });
 
-  return { items };
+  // "La tua storia" sempre in testa alla row (come Instagram).
+  return { items: selfItem ? [selfItem, ...items] : items };
 }
 
 /**
@@ -637,10 +904,12 @@ export async function getPostsByUser(authorId, viewerId, { page = 1, limit = 20 
     }
   }
 
-  // Se viewer != autore, mostriamo solo i post condivisi (sharedAt != null).
-  // Se viewer == autore, mostriamo anche i privati così l'utente può
-  // "vedere la propria timeline completa" e decidere cosa pubblicare.
-  const sharedFilter = isSelf ? {} : { sharedAt: { $ne: null } };
+  // Il profilo social è la **bacheca dei post PUBBLICATI**: mostriamo SOLO i post
+  // con `sharedAt != null`, anche al proprietario. Così "Rimuovi dal feed"
+  // (unshare → sharedAt=null) li fa sparire definitivamente dal profilo, come
+  // atteso dall'utente. La cronologia completa delle attività (anche non
+  // condivise) vive nella tab "Le mie attività" (Room/Activity), non qui.
+  const sharedFilter = { sharedAt: { $ne: null } };
 
   // Stessa paginazione a lookahead di getFeedForUser: skip+limit+1 doc per
   // sorgente → hasMore esatto e payload ridotto rispetto al cap fisso.

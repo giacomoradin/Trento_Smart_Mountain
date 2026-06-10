@@ -30,8 +30,53 @@ val TSM_DEFAULT_MAP_CENTER = GeoPoint(46.0664, 11.1257)
 
 private const val USER_MARKER_ID = "tsm_user_location"
 private const val TRACK_POLYLINE_ID = "tsm_live_track"
+private const val PLANNED_ROUTE_POLYLINE_ID = "tsm_planned_route"
 private const val LIVE_MARKER_PREFIX = "live_"
 private const val SOS_MARKER_PREFIX = "sos_"
+
+private fun MapView.applyPlannedRouteLayer(
+  context: android.content.Context,
+  points: List<GeoPoint>,
+  plannedRoutePolyline: Polyline,
+  trackPolyline: Polyline,
+  trackGeoPoints: List<GeoPoint>,
+) {
+  overlays.remove(plannedRoutePolyline)
+  overlays.remove(trackPolyline)
+  PlannedRouteMapDecoration.removeEndpointMarkers(this)
+
+  var insertAt = 0
+  when {
+    points.size >= 2 -> {
+      plannedRoutePolyline.setPoints(ArrayList(points))
+      overlays.add(insertAt++, plannedRoutePolyline)
+    }
+    points.size == 1 -> {
+      val p = points.first()
+      plannedRoutePolyline.setPoints(arrayListOf(p, p))
+      overlays.add(insertAt++, plannedRoutePolyline)
+    }
+  }
+
+  if (points.isNotEmpty()) {
+    val endpoints = PlannedRouteMapDecoration.createEndpointMarkers(this, context, points)
+    endpoints.forEach { marker ->
+      overlays.add(insertAt++, marker)
+    }
+  }
+
+  when {
+    trackGeoPoints.size >= 2 -> {
+      trackPolyline.setPoints(ArrayList(trackGeoPoints))
+      overlays.add(insertAt, trackPolyline)
+    }
+    trackGeoPoints.size == 1 -> {
+      val p = trackGeoPoints.first()
+      trackPolyline.setPoints(arrayListOf(p, p))
+      overlays.add(insertAt, trackPolyline)
+    }
+  }
+}
 
 /**
  * Mappa OSMdroid con marker live colorati:
@@ -42,6 +87,8 @@ fun TsmMapView(
   modifier: Modifier = Modifier,
   userLocation: LocationSnapshot?,
   trackGeoPoints: List<GeoPoint>,
+  /** Tracciato GPX/SAT pianificato per la sessione collegata (sotto la traccia live). */
+  plannedRouteGeoPoints: List<GeoPoint> = emptyList(),
   centerOnUserTick: Int,
   centerOnLivePointLat: Double? = null,
   centerOnLivePointLon: Double? = null,
@@ -66,7 +113,10 @@ fun TsmMapView(
         setTileSource(openTopoMapTileSource())
         setMultiTouchControls(true)
         zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-        isTilesScaledToDpi = true
+        isTilesScaledToDpi = false
+        // De-zoom (pinch-out) sempre consentito.
+        minZoomLevel = 3.0
+        maxZoomLevel = 19.0
         controller.setZoom(13.0)
         // Centro provvisorio (Trento) — verrà sostituito appena il primo fix GPS
         // arriva da [LaunchedEffect autoCenterOnFirstFix] sotto. Lo lasciamo come
@@ -120,6 +170,21 @@ fun TsmMapView(
     }
   }
 
+  val plannedRoutePolyline =
+    remember(mapView) {
+      Polyline(mapView).apply {
+        id = PLANNED_ROUTE_POLYLINE_ID
+        outlinePaint.color = android.graphics.Color.parseColor("#B3FF7043")
+        outlinePaint.strokeWidth = 10f
+        outlinePaint.isAntiAlias = true
+        outlinePaint.strokeCap = Paint.Cap.ROUND
+        outlinePaint.strokeJoin = Paint.Join.ROUND
+        isEnabled = true
+        infoWindow = null
+        setOnClickListener { _, _, _ -> true }
+      }
+    }
+
   val trackPolyline =
     remember(mapView) {
       Polyline(mapView).apply {
@@ -138,6 +203,7 @@ fun TsmMapView(
     }
 
   LaunchedEffect(
+    plannedRouteGeoPoints,
     trackGeoPoints,
     liveLocations,
     sosOnlyMarkers,
@@ -148,18 +214,13 @@ fun TsmMapView(
     isCurrentUserLeader,
     hasOwnActiveSos,
   ) {
-    mapView.overlays.remove(trackPolyline)
-    when {
-      trackGeoPoints.size >= 2 -> {
-        trackPolyline.setPoints(ArrayList(trackGeoPoints))
-        mapView.overlays.add(0, trackPolyline)
-      }
-      trackGeoPoints.size == 1 -> {
-        val p = trackGeoPoints.first()
-        trackPolyline.setPoints(arrayListOf(p, p))
-        mapView.overlays.add(0, trackPolyline)
-      }
-    }
+    mapView.applyPlannedRouteLayer(
+      context = context,
+      points = plannedRouteGeoPoints,
+      plannedRoutePolyline = plannedRoutePolyline,
+      trackPolyline = trackPolyline,
+      trackGeoPoints = trackGeoPoints,
+    )
 
     mapView.overlays.removeAll(
       mapView.overlays.filterIsInstance<Marker>().filter { marker ->
@@ -275,18 +336,13 @@ fun TsmMapView(
     modifier = modifier,
     update = { view ->
       // Aggiorna anche qui: più affidabile di solo LaunchedEffect con AndroidView.
-      view.overlays.remove(trackPolyline)
-      when {
-        trackGeoPoints.size >= 2 -> {
-          trackPolyline.setPoints(ArrayList(trackGeoPoints))
-          view.overlays.add(0, trackPolyline)
-        }
-        trackGeoPoints.size == 1 -> {
-          val p = trackGeoPoints.first()
-          trackPolyline.setPoints(arrayListOf(p, p))
-          view.overlays.add(0, trackPolyline)
-        }
-      }
+      view.applyPlannedRouteLayer(
+        context = context,
+        points = plannedRouteGeoPoints,
+        plannedRoutePolyline = plannedRoutePolyline,
+        trackPolyline = trackPolyline,
+        trackGeoPoints = trackGeoPoints,
+      )
       view.invalidate()
     },
   )

@@ -31,8 +31,10 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -44,6 +46,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -87,9 +90,17 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.data.checklist.ChecklistMapper
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
+import it.trentosmartmountain.app.data.remote.dto.SessionParticipant
+import it.trentosmartmountain.app.data.remote.dto.RoutePoint
+import it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs
+import it.trentosmartmountain.app.ui.components.TsmShareStoryButton
+import it.trentosmartmountain.app.util.downsampleByIndex
+import it.trentosmartmountain.app.data.remote.dto.StoryOverlay
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.SessionParticipationActions
+import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmBorder
@@ -98,14 +109,10 @@ import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
 import it.trentosmartmountain.app.ui.theme.TsmSurfaceVariant
 import it.trentosmartmountain.app.viewmodel.SessionDetailViewModel
-import it.trentosmartmountain.app.viewmodel.SocialFeedViewModel
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.ui.components.AvatarImage
-import it.trentosmartmountain.app.ui.screens.home.ShareActivityDialog
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelProvider
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -128,49 +135,12 @@ fun SessionDetailScreen(
     onBack: () -> Unit,
     onAvviaConfirmed: (sessionId: String) -> Unit = {},
     currentUserId: String = "",
+    onUserClick: (userId: String) -> Unit = {},
+    onShareStory: (it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs) -> Unit = {},
     viewModel: SessionDetailViewModel = viewModel(),
-    // VM social Activity-scoped: stesso usato da HomeSocialScreen + Activity
-    // Detail. Il dialog "Pubblica" chiama `shareSession()` e poi `refresh()`
-    // del feed così la sessione appare immediatamente nel feed dell'utente.
-    socialFeedViewModel: SocialFeedViewModel = viewModel(
-        viewModelStoreOwner = LocalContext.current as ComponentActivity,
-        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            (LocalContext.current as ComponentActivity).application,
-        ),
-    ),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val socialState by socialFeedViewModel.state.collectAsStateWithLifecycle()
-    var showShareDialog by remember { mutableStateOf(false) }
-    // Per debug: mostra un Toast con l'errore se il ViewModel segnala un errore di caricamento o salvataggio della sessione
     val context = LocalContext.current
-
-    // Toast per esiti share (VM Activity-scoped → notifica visibile qui).
-    LaunchedEffect(socialState.shareSuccess) {
-        socialState.shareSuccess?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-            socialFeedViewModel.clearShareMessages()
-        }
-    }
-    LaunchedEffect(socialState.shareError) {
-        socialState.shareError?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-            socialFeedViewModel.clearShareMessages()
-        }
-    }
-
-    if (showShareDialog) {
-        ShareActivityDialog(
-            activityName = uiState.session?.routeDetails?.name.orEmpty(),
-            onDismiss = { showShareDialog = false },
-            onShare = { caption ->
-                showShareDialog = false
-                socialFeedViewModel.shareSession(sessionId, caption)
-            },
-        )
-    }
-
-    // TELEMETRIA: Se il ViewModel genera un errore (es. dal salvataggio), stampalo a schermo
     LaunchedEffect(uiState.error) {
         uiState.error?.let { errorMessage ->
             if (errorMessage.isNotBlank() && uiState.session != null) {
@@ -181,6 +151,14 @@ fun SessionDetailScreen(
 
     LaunchedEffect(sessionId) { viewModel.loadSession(sessionId) }
     LaunchedEffect(currentUserId) { viewModel.bindCurrentUserId(currentUserId) }
+
+    LaunchedEffect(sessionId, uiState.session?.status) {
+        if (uiState.session?.status != "PLANNED") return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(SessionDetailViewModel.AUTO_REFRESH_MS)
+            viewModel.refreshChecklistAuto()
+        }
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, sessionId) {
         val observer = LifecycleEventObserver { _, event ->
@@ -218,6 +196,34 @@ fun SessionDetailScreen(
     var showEditDatePicker by remember { mutableStateOf(false) }
     var showEditTimePicker by remember { mutableStateOf(false) }
     var showDifficultyMenu by remember { mutableStateOf(false) }
+    // Conferma rimozione DEFINITIVA di un partecipante (solo capogruppo): (userId, nome).
+    var removeConfirmUser by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    removeConfirmUser?.let { (uid, name) ->
+        AlertDialog(
+            onDismissRequest = { removeConfirmUser = null },
+            containerColor = TsmSurface,
+            title = { Text("Rimuovere $name?", color = Color.White) },
+            text = {
+                Text(
+                    "$name verrà rimosso definitivamente dalla sessione e non potrà più unirsi.",
+                    color = Color.Gray,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.removeParticipant(uid)
+                        removeConfirmUser = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
+                ) { Text("Rimuovi") }
+            },
+            dismissButton = {
+                TextButton(onClick = { removeConfirmUser = null }) { Text("Annulla", color = Color.Gray) }
+            },
+        )
+    }
 
     LaunchedEffect(uiState.editMode) {
         if (!uiState.editMode) {
@@ -268,8 +274,15 @@ fun SessionDetailScreen(
     val isCreator = session?.creatorId?._id == currentUserId || currentUserId.isBlank()
     val isToday = SessionDateFormats.isTodayApi(session?.meetingDate)
 
+    // Sfondo aurora animato dietro tutta la scheda sessione (materiali premium,
+    // coerente con Feed/Profilo). Lo Scaffold è trasparente così l'aurora traspare.
+    Box(modifier = Modifier.fillMaxSize().background(TsmBackground)) {
+        it.trentosmartmountain.app.ui.components.TsmAuroraBackground(
+            modifier = Modifier.matchParentSize(),
+            particleCount = 16,
+        )
     Scaffold(
-        containerColor = TsmBackground,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -325,7 +338,7 @@ fun SessionDetailScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = TsmBackground),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
     ) { innerPadding ->
@@ -343,14 +356,22 @@ fun SessionDetailScreen(
             return@Scaffold
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.loadSession(sessionId, manualRefresh = true) },
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
         ) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             Spacer(modifier = Modifier.height(4.dp))
 
             AnimatedVisibility(
@@ -374,13 +395,57 @@ fun SessionDetailScreen(
 
             InviteCodeCard(inviteCode = session.inviteCode)
 
+            // Condividi la pianificazione come STORIA (pre-hike) col link "Unisciti".
+            if (session.status == "PLANNED") {
+                TsmShareStoryButton(
+                    onClick = {
+                        onShareStory(
+                            StoryComposerArgs(
+                                type = "planned_session",
+                                sessionId = session._id,
+                                overlay = StoryOverlay(
+                                    title = session.routeDetails?.name,
+                                    difficultyLevel = session.routeDetails?.difficultyLevel,
+                                    distanceMeters = session.gpxStats?.distanceKm?.let { it * 1000.0 },
+                                    elevationGainM = session.gpxStats?.elevationGainM,
+                                    // Cap a 300 punti: l'overlay backend accetta max 500.
+                                    // Percorsi GPX lunghi davano 422 "Dati non validi".
+                                    routePolyline = session.plannedRoute?.polylinePoints
+                                        ?.map { RoutePoint(it.lat, it.lon) }
+                                        ?.let { downsampleByIndex(it, 300) },
+                                ),
+                            ),
+                        )
+                    },
+                )
+            }
+
             DetailCard {
                 val dist = session.gpxStats?.distanceKm
                 val elev = session.gpxStats?.elevationGainM
 
-                ElevationProfileChart(
+                val routePoints = session.plannedRoute?.polylinePoints?.map { RoutePoint(it.lat, it.lon) }
+                TsmRouteElevationPager(
+                    routePoints = routePoints,
                     elevationProfile = session.gpxStats?.elevationProfile,
-                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                    distanceKm = dist,
+                    modifier = Modifier.fillMaxWidth(),
+                    height = 180.dp,
+                    cornerRadius = 8.dp,
+                    backgroundBrush = androidx.compose.ui.graphics.SolidColor(TsmSurfaceVariant),
+                    elevationLineColor = TsmAccent,
+                    activeDotColor = TsmAccent,
+                    difficultyLevel = session.routeDetails?.difficultyLevel,
+                    expandable = true,
+                    emptyContent = {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                "Nessun tracciato disponibile",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray,
+                            )
+                        }
+                    },
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -454,9 +519,26 @@ fun SessionDetailScreen(
                 onRefresh = viewModel::refreshMeteo,
             )
 
-            ChecklistCard(uiState = uiState, viewModel = viewModel)
+            ChecklistCard(
+                uiState = uiState,
+                viewModel = viewModel,
+                onRefresh = viewModel::refreshChecklistManual,
+            )
 
-            ParticipantsCard(session = session)
+            ParticipantsCard(
+                session = session,
+                currentUserId = currentUserId,
+                onUserClick = onUserClick,
+                onApprove = { viewModel.approveParticipant(it) },
+                onReject = { viewModel.rejectParticipant(it) },
+                onRemove = { uid ->
+                    // Mostra conferma prima della rimozione definitiva (ban).
+                    val name = session.participants.orEmpty()
+                        .firstOrNull { it.userId?._id == uid }
+                        ?.userId?.username ?: "il partecipante"
+                    removeConfirmUser = uid to name
+                },
+            )
 
             val participation = remember(uiState.session, uiState.liveUiEpoch, currentUserId) {
                 viewModel.participationUi()
@@ -467,46 +549,79 @@ fun SessionDetailScreen(
                     onLeaderStart = {
                         viewModel.requestLeaderStart { onAvviaConfirmed(sessionId) }
                     },
-                    onLeaderStop = { viewModel.leaderStop() },
+                    onLeaderStop = {
+                        // ADR-001: "Arresta" del capogruppo chiude la sessione per
+                        // TUTTI → passa SEMPRE dal dialog di conferma (stesso flusso
+                        // di "Chiudi sessione per tutti"), mai da un singolo tap.
+                        viewModel.requestCloseSession()
+                    },
                     onJoinLive = {
                         viewModel.joinLive { onAvviaConfirmed(sessionId) }
                     },
                     onSoloPractice = {
                         viewModel.startSoloPractice { onAvviaConfirmed(sessionId) }
                     },
-                    onLeaveLive = { viewModel.leaveLive() },
+                    onLeaveLive = {
+                        viewModel.leaveLive()
+                        onBack()
+                    },
                     compact = false,
                     leaderStartLabel = stringResource(R.string.session_detail_avvia),
                     leaderStopLabel = stringResource(R.string.session_detail_arresta),
                 )
             }
 
-            // Bottone Condividi sul feed — solo creator (lato server stesso
-            // vincolo via FORBIDDEN_NOT_CREATOR). Visibile in qualsiasi stato
-            // della sessione (PLANNED → "annuncia uscita", COMPLETED → "racconta").
-            if (isCreator) {
+            // "Chiudi sessione" (capogruppo, modello Ibrido): forza COMPLETED per
+            // tutti anche se qualche partecipante non ha ancora concluso. Visibile al
+            // leader EFFETTIVO (creator o sostituto eletto via failover) quando la
+            // sessione è ACTIVE e ci sono altri membri.
+            val isEffectiveLeader = isCreator || session.effectiveLeaderId == currentUserId
+            if (isEffectiveLeader && session.status == "ACTIVE" && (session.participants?.size ?: 0) > 1) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = { showShareDialog = true },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = TsmAccent),
-                    shape = RoundedCornerShape(8.dp),
+                TextButton(
+                    onClick = { viewModel.requestCloseSession() },
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    androidx.compose.material3.Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Outlined.Share,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        "CONDIVIDI SUL FEED",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    )
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = TsmSos, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Chiudi sessione per tutti", color = TsmSos, fontWeight = FontWeight.SemiBold)
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+            }
         }
+    }
+
+    if (uiState.showCloseSessionConfirm) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCloseSession,
+            containerColor = TsmSurface,
+            title = { Text("Chiudere la sessione?", color = Color.White) },
+            text = {
+                Text(
+                    "La sessione verrà conclusa per TUTTI i partecipanti, anche per chi " +
+                        "non ha ancora terminato il proprio tracciato. L'operazione è irreversibile.",
+                    color = Color.Gray,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        // closeSessionForAll ferma anche l'eventuale tracking locale
+                        // del leader (dialog "Salva attività" via coordinator) —
+                        // torniamo alla shell così quel dialog è visibile.
+                        viewModel.closeSessionForAll()
+                        onBack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
+                ) { Text("Chiudi per tutti") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissCloseSession) { Text("Annulla", color = Color.Gray) }
+            },
+        )
+    }
     }
 }
 
@@ -852,76 +967,218 @@ private fun MeteoCard(
 private fun ChecklistCard(
     uiState: SessionDetailViewModel.UiState,
     viewModel: SessionDetailViewModel,
+    onRefresh: () -> Unit,
 ) {
     val checkedCount = uiState.checklist.count { it.checked }
     val total = uiState.checklist.size
+
+    val updatedAgo = uiState.checklistLastUpdate?.let { ts ->
+        val diffMs = System.currentTimeMillis() - ts
+        when {
+            diffMs < 60_000L -> "ora"
+            diffMs < 3_600_000L -> "${diffMs / 60_000L} min fa"
+            else -> "${diffMs / 3_600_000L} h fa"
+        }
+    }
+
+    val freezeLabel = when {
+        uiState.checklistIsFrozen -> "Congelata"
+        uiState.checklistFreezeAtMillis != null -> {
+            val diffMs = uiState.checklistFreezeAtMillis - System.currentTimeMillis()
+            if (diffMs <= 0) "Congelata"
+            else {
+                val hours = diffMs / 3_600_000L
+                val mins = (diffMs % 3_600_000L) / 60_000L
+                when {
+                    hours > 24 -> "Freeze tra ${hours / 24} g"
+                    hours > 0 -> "Freeze tra ${hours}h ${mins}m"
+                    else -> "Freeze tra ${mins} min"
+                }
+            }
+        }
+        else -> null
+    }
 
     DetailCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = "CHECKLIST",
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
                 color = Color.Gray,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (freezeLabel != null) {
+                    Surface(
+                        color = if (uiState.checklistIsFrozen) TsmSurfaceVariant else TsmPrimary.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(20.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                Icons.Outlined.Lock,
+                                contentDescription = null,
+                                tint = if (uiState.checklistIsFrozen) Color.Gray else TsmAccent,
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Text(
+                                freezeLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (uiState.checklistIsFrozen) Color.Gray else TsmAccent,
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = "$checkedCount / $total",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = TsmAccent,
+                    maxLines = 1,
+                )
+            }
+        }
+
+        if (uiState.checklistAcquaLitri != null || uiState.checklistCalorie != null) {
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "$checkedCount / $total",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = TsmAccent,
-                maxLines = 1
+                text = buildString {
+                    uiState.checklistAcquaLitri?.let { append("Acqua consigliata: ${"%.1f".format(it)} L") }
+                    if (uiState.checklistAcquaLitri != null && uiState.checklistCalorie != null) append(" · ")
+                    uiState.checklistCalorie?.let { append("~$it kcal") }
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray,
+            )
+        }
+
+        if (uiState.checklistMeteoApplied && !uiState.checklistMeteoLocationName.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Include previsioni meteo · ${uiState.checklistMeteoLocationName}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray.copy(alpha = 0.85f),
+            )
+        } else if (uiState.checklistUnavailableReason.isNullOrBlank() &&
+            uiState.checklist.isNotEmpty() &&
+            !uiState.checklistMeteoApplied
+        ) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Meteo non ancora applicato: in attesa del forecast o aggiorna manualmente.",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray.copy(alpha = 0.7f),
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        sh.calvin.reorderable.ReorderableColumn(
-            list = uiState.checklist,
-            onSettle = { from, to -> viewModel.onChecklistMove(from, to) },
-        ) { _, item, _ ->
-            key(item.id) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            Surface(
+                color = TsmSurfaceVariant,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.clickable(enabled = !uiState.checklistLoading) { onRefresh() },
+            ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    IconButton(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .draggableHandle(),
-                        onClick = {},
-                    ) {
-                        Icon(
-                            Icons.Outlined.DragHandle,
-                            contentDescription = "Trascina per riordinare",
-                            tint = Color(0xFF888888),
-                            modifier = Modifier.size(20.dp),
-                        )
+                    if (uiState.checklistLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp, color = TsmAccent)
+                    } else {
+                        Icon(Icons.Outlined.Schedule, null, tint = TsmAccent, modifier = Modifier.size(12.dp))
                     }
-                    Checkbox(
-                        checked = item.checked,
-                        onCheckedChange = { viewModel.onToggleCheck(item.id) },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = TsmPrimary,
-                            uncheckedColor = Color(0xFF555555),
-                            checkmarkColor = Color.White,
-                        ),
-                    )
                     Text(
-                        item.text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (item.checked) Color.Gray else Color.White,
-                        modifier = Modifier.weight(1f),
+                        when {
+                            uiState.checklistLoading -> "Aggiornamento..."
+                            updatedAgo != null -> "Aggiornato $updatedAgo"
+                            else -> "Aggiorna"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TsmAccent,
                     )
-                    IconButton(onClick = { viewModel.onRemoveItem(item.id) }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color(0xFF888888), modifier = Modifier.size(18.dp))
-                    }
                 }
+            }
+        }
+
+        when {
+            uiState.checklistUnavailableReason != null -> {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    uiState.checklistUnavailableReason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                )
+            }
+            uiState.checklistError != null -> {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    uiState.checklistError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                TextButton(onClick = onRefresh) {
+                    Text("Riprova", color = TsmAccent, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+
+        if (uiState.checklist.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            val sections = ChecklistMapper.partition(uiState.checklist)
+
+            if (sections.essenziali.isNotEmpty()) {
+                ChecklistExpandableSection(
+                    title = "Essenziali",
+                    allItems = sections.essenziali,
+                    viewModel = viewModel,
+                )
+            }
+
+            if (sections.consigliati.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                ChecklistExpandableSection(
+                    title = "Consigliati",
+                    allItems = sections.consigliati,
+                    viewModel = viewModel,
+                )
+            }
+
+            if (sections.opzionali.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                ChecklistExpandableSection(
+                    title = "Opzionali",
+                    allItems = sections.opzionali,
+                    viewModel = viewModel,
+                )
+            }
+
+            if (sections.personali.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                ChecklistSectionHeader("Aggiunti da te")
+                ChecklistItemList(
+                    items = sections.personali,
+                    viewModel = viewModel,
+                    reorderable = true,
+                    onMove = { from, to ->
+                        viewModel.onChecklistMoveInSubset(
+                            sections.personali.map { it.id },
+                            from,
+                            to,
+                        )
+                    },
+                )
             }
         }
 
@@ -955,45 +1212,275 @@ private fun ChecklistCard(
 }
 
 @Composable
-private fun ParticipantsCard(session: SessionResponse) {
-    val participants = session.participants ?: emptyList()
-    val max = session.maxParticipants ?: participants.size
+private fun ChecklistExpandableSection(
+    title: String,
+    allItems: List<SessionDetailViewModel.ChecklistItem>,
+    viewModel: SessionDetailViewModel,
+) {
+    var expanded by remember(allItems.size) { mutableStateOf(false) }
+    val hiddenCount = (allItems.size - ChecklistMapper.INITIAL_SECTION_VISIBLE).coerceAtLeast(0)
+    val visibleItems = if (expanded || hiddenCount == 0) {
+        allItems
+    } else {
+        allItems.take(ChecklistMapper.INITIAL_SECTION_VISIBLE)
+    }
 
-    DetailCard {
-        Text(
-            "PARTECIPANTI · ${participants.size}/$max",
-            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
-            color = Color.Gray,
+    ChecklistSectionHeader(title)
+    ChecklistItemList(
+        items = visibleItems,
+        viewModel = viewModel,
+        reorderable = expanded,
+        onMove = { from, to ->
+            viewModel.onChecklistMoveInSubset(allItems.map { it.id }, from, to)
+        },
+    )
+    if (hiddenCount > 0) {
+        TextButton(
+            onClick = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = TsmAccent,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                if (expanded) "Mostra meno" else "Visualizza altri $hiddenCount elementi",
+                color = TsmAccent,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChecklistSectionHeader(title: String) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+        color = TsmAccent.copy(alpha = 0.85f),
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun ChecklistItemRow(
+    item: SessionDetailViewModel.ChecklistItem,
+    viewModel: SessionDetailViewModel,
+    leading: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        leading()
+        Checkbox(
+            checked = item.checked,
+            onCheckedChange = { viewModel.onToggleCheck(item.id) },
+            colors = CheckboxDefaults.colors(
+                checkedColor = TsmPrimary,
+                uncheckedColor = Color(0xFF555555),
+                checkmarkColor = Color.White,
+            ),
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            participants.forEach { p ->
-                val username = p.userId?.username ?: "?"
-                val isCreator = p.role == "groupLeader"
-                // Borda accent solo per il creator; usiamo un Box wrapper così la
-                // border non interferisce con il clip circolare dell'AvatarImage.
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .then(if (isCreator) Modifier.border(2.dp, TsmAccent, CircleShape) else Modifier),
-                ) {
-                    AvatarImage(
-                        avatarUrl = p.userId?.avatarUrl,
-                        fallbackName = username,
-                        size = 40.dp,
-                    )
-                }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                item.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (item.checked) Color.Gray else Color.White,
+            )
+            if (!item.motivo.isNullOrBlank()) {
+                Text(
+                    item.motivo,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray.copy(alpha = 0.8f),
+                )
             }
-            val emptySlots = (max - participants.size).coerceIn(0, 4)
-            repeat(emptySlots) {
-                Box(
-                    modifier = Modifier.size(40.dp).clip(CircleShape).background(TsmSurfaceVariant).border(1.dp, Color(0xFF3A3A3A), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("+", style = MaterialTheme.typography.labelMedium, color = Color(0xFF555555))
+        }
+        if (item.isPersonal) {
+            IconButton(onClick = { viewModel.onRemoveItem(item.id) }, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = Color(0xFF888888), modifier = Modifier.size(18.dp))
+            }
+        } else {
+            Spacer(modifier = Modifier.size(28.dp))
+        }
+    }
+}
+
+@Composable
+private fun ChecklistItemList(
+    items: List<SessionDetailViewModel.ChecklistItem>,
+    viewModel: SessionDetailViewModel,
+    reorderable: Boolean,
+    onMove: (Int, Int) -> Unit,
+) {
+    if (items.isEmpty()) return
+
+    if (reorderable) {
+        sh.calvin.reorderable.ReorderableColumn(
+            list = items,
+            onSettle = onMove,
+        ) { _, item, _ ->
+            key(item.id) {
+                ChecklistItemRow(item, viewModel) {
+                    IconButton(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .draggableHandle(),
+                        onClick = {},
+                    ) {
+                        Icon(
+                            Icons.Outlined.DragHandle,
+                            contentDescription = "Trascina per riordinare",
+                            tint = Color(0xFF888888),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
         }
+    } else {
+        items.forEach { item ->
+            key(item.id) {
+                ChecklistItemRow(item, viewModel) {
+                    Spacer(modifier = Modifier.width(28.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ParticipantsCard(
+    session: SessionResponse,
+    currentUserId: String,
+    onUserClick: (userId: String) -> Unit = {},
+    onApprove: (userId: String) -> Unit = {},
+    onReject: (userId: String) -> Unit = {},
+    onRemove: (userId: String) -> Unit = {},
+) {
+    val participants = session.participants ?: emptyList()
+    val accepted = participants.filter { !it.isPending }
+    val pending = participants.filter { it.isPending }
+    val max = session.maxParticipants ?: accepted.size
+
+    val isViewerLeader = session.creatorId?._id == currentUserId
+    // Un membro già accettato (incluso il capogruppo) può approvare/rifiutare i pending.
+    val isViewerAcceptedMember = accepted.any { it.userId?._id == currentUserId }
+
+    DetailCard {
+        Text(
+            "PARTECIPANTI · ${accepted.size}/$max",
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+            color = Color.Gray,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        accepted.forEach { p ->
+            val subtitle = when {
+                p.role == "groupLeader" -> "Capogruppo"
+                !p.approvedBy?.username.isNullOrBlank() -> "Accettato da ${p.approvedBy?.username}"
+                else -> "Partecipante"
+            }
+            ParticipantRow(
+                participant = p,
+                subtitle = subtitle,
+                onUserClick = onUserClick,
+                trailing = {
+                    // Solo il capogruppo può rimuovere definitivamente (no se stesso).
+                    if (isViewerLeader && p.role != "groupLeader") {
+                        IconButton(onClick = { p.userId?._id?.let(onRemove) }) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Rimuovi", tint = TsmSos)
+                        }
+                    }
+                },
+            )
+        }
+
+        if (pending.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                "IN ATTESA · ${pending.size}",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                color = Color(0xFFFB8C00),
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            pending.forEach { p ->
+                ParticipantRow(
+                    participant = p,
+                    subtitle = "Richiesta in attesa di approvazione",
+                    pendingBadge = true,
+                    onUserClick = onUserClick,
+                    trailing = {
+                        if (isViewerAcceptedMember) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { p.userId?._id?.let(onApprove) }) {
+                                    Icon(Icons.Filled.CheckCircle, contentDescription = "Accetta", tint = TsmPrimary)
+                                }
+                                IconButton(onClick = { p.userId?._id?.let(onReject) }) {
+                                    Icon(Icons.Outlined.Close, contentDescription = "Rifiuta", tint = TsmSos)
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ParticipantRow(
+    participant: SessionParticipant,
+    subtitle: String,
+    onUserClick: (userId: String) -> Unit,
+    pendingBadge: Boolean = false,
+    trailing: @Composable () -> Unit = {},
+) {
+    val pid = participant.userId?._id
+    val name = participant.userId?.username ?: "?"
+    val isCreator = participant.role == "groupLeader"
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .clickable(enabled = !pid.isNullOrBlank()) { pid?.let(onUserClick) }
+                .then(if (isCreator) Modifier.border(2.dp, TsmAccent, CircleShape) else Modifier),
+        ) {
+            AvatarImage(avatarUrl = participant.userId?.avatarUrl, fallbackName = name, size = 40.dp)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    name,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                )
+                if (pendingBadge) {
+                    Surface(color = Color(0xFFFB8C00).copy(alpha = 0.18f), shape = RoundedCornerShape(4.dp)) {
+                        Text(
+                            "IN ATTESA",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color(0xFFFB8C00),
+                        )
+                    }
+                }
+            }
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        }
+        trailing()
     }
 }
 

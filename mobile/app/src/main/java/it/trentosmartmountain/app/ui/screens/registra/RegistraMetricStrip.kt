@@ -1,6 +1,7 @@
 package it.trentosmartmountain.app.ui.screens.registra
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,14 +14,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.location.TrackingStatus
-import it.trentosmartmountain.app.ui.theme.TsmAccent
-import it.trentosmartmountain.app.ui.theme.TsmSurface
+import it.trentosmartmountain.app.ui.theme.TsmColors
 
 /** Striscia metriche live: tempo, distanza, dislivello, quota (visibile solo con tracking attivo). */
 @Composable
@@ -38,9 +39,14 @@ fun RegistraMetricStrip(
     modifier =
       modifier
         .fillMaxWidth()
-        .clip(RoundedCornerShape(12.dp))
-        .background(TsmSurface.copy(alpha = 0.94f))
-        .padding(horizontal = 12.dp, vertical = 8.dp),
+        .clip(RoundedCornerShape(14.dp))
+        .background(
+          Brush.verticalGradient(
+            listOf(TsmColors.CardElevated.copy(alpha = 0.96f), TsmColors.Card.copy(alpha = 0.96f)),
+          ),
+        )
+        .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(14.dp))
+        .padding(horizontal = 12.dp, vertical = 10.dp),
     horizontalArrangement = Arrangement.SpaceEvenly,
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -79,7 +85,7 @@ private fun MetricColumn(
     Text(
       text = value,
       style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-      color = if (highlight) TsmAccent else Color.White,
+      color = if (highlight) TsmColors.Primary else Color.White,
     )
   }
 }

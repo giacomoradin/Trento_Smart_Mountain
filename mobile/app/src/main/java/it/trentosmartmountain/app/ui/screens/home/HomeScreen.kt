@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.data.remote.dto.StoryViewerLaunchContext
 
 /**
  * Tab **Home**: due sotto-tab interni (navigazione locale, non Jetpack Navigation).
@@ -33,7 +34,11 @@ fun HomeScreen(
   onActivityClick: (activityId: String, sessionId: String?) -> Unit = { _, _ -> },
   onNavigateToUserProfile: (userId: String) -> Unit = {},
   onNavigateToSessionDetail: (sessionId: String) -> Unit = {},
-  onNavigateToStoryViewer: (refId: String, kind: String) -> Unit = { _, _ -> },
+  onNavigateToStoryViewer: (StoryViewerLaunchContext) -> Unit = {},
+  onNavigateToUserSearch: () -> Unit = {},
+  onNavigateToLeaderboard: () -> Unit = {},
+  onNavigateToNotifications: () -> Unit = {},
+  onNavigateToPostDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
 ) {
   var subTab by rememberSaveable { mutableIntStateOf(0) }
 
@@ -55,6 +60,10 @@ fun HomeScreen(
         onUserClick = onNavigateToUserProfile,
         onLiveClick = onNavigateToSessionDetail,
         onStoryClick = onNavigateToStoryViewer,
+        onSearchClick = onNavigateToUserSearch,
+        onLeaderboardClick = onNavigateToLeaderboard,
+        onNotificationsClick = onNavigateToNotifications,
+        onOpenDetail = onNavigateToPostDetail,
       )
       1 -> ActivityListScreen(onActivityClick = onActivityClick)
     }

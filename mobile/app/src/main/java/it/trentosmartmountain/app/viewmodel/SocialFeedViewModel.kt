@@ -44,6 +44,10 @@ data class SocialFeedState(
     val socialRow: List<SocialRowItem> = emptyList(),
     /** Set degli `activityRefId` già marcati come "vista" dal viewer. */
     val viewedStoryIds: Set<String> = emptySet(),
+    /** Notifiche non lette → badge sulla campanella in cima al feed. */
+    val unreadNotifications: Int = 0,
+    val deleteSuccess: String? = null,
+    val deleteError: String? = null,
 )
 
 /**
@@ -90,9 +94,11 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                 val viewedJob = async {
                     runCatching { viewedStoryDao.getViewedSince(since24h) }
                 }
+                val notifJob = async { runCatching { api.getUnreadNotificationsCount() } }
                 val feedResp = feedJob.await().getOrNull()
                 val rowResp = rowJob.await().getOrNull()
                 val viewedIds = viewedJob.await().getOrNull().orEmpty().toSet()
+                val notifResp = notifJob.await().getOrNull()
 
                 _state.value = _state.value.copy(
                     isLoading = false,
@@ -103,6 +109,8 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                     socialRow = rowResp?.body()?.items.orEmpty().takeIf { rowResp?.isSuccessful == true }
                         ?: _state.value.socialRow,
                     viewedStoryIds = viewedIds,
+                    unreadNotifications = notifResp?.body()?.unreadCount?.takeIf { notifResp.isSuccessful }
+                        ?: _state.value.unreadNotifications,
                     error = when {
                         feedResp == null || !feedResp.isSuccessful ->
                             "Errore caricamento feed (${feedResp?.code() ?: "rete"})."
@@ -110,6 +118,34 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                     },
                 )
             }
+        }
+    }
+
+    /**
+     * Aggiorna SOLO la social-row (anelli live/story), senza ricaricare il feed
+     * né resettare lo scroll. Chiamata al ritorno sul feed (ON_RESUME) così la
+     * storia appena pubblicata — inclusa "La tua storia" — compare subito senza
+     * dover fare un pull-to-refresh manuale.
+     */
+    fun refreshSocialRow() {
+        viewModelScope.launch {
+            val rowResp = runCatching { api.getSocialRow() }.getOrNull()
+            if (rowResp?.isSuccessful == true) {
+                _state.value = _state.value.copy(
+                    socialRow = rowResp.body()?.items.orEmpty(),
+                )
+            }
+        }
+    }
+
+    /**
+     * Azzera il badge notifiche in locale: chiamato quando l'utente apre il
+     * centro notifiche (che le marca come lette lato server). Evita di mostrare
+     * un badge stale al ritorno sul feed senza dover ri-fare il fetch.
+     */
+    fun clearNotificationBadge() {
+        if (_state.value.unreadNotifications != 0) {
+            _state.value = _state.value.copy(unreadNotifications = 0)
         }
     }
 
@@ -215,9 +251,7 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                     _state.value = _state.value.copy(shareSuccess = "Pubblicato sul feed.")
                     refresh()
                 } else {
-                    _state.value = _state.value.copy(
-                        shareError = "Impossibile pubblicare (${resp.code()}).",
-                    )
+                    _state.value = _state.value.copy(shareError = shareErrorMessage(resp.code()))
                 }
             }.onFailure {
                 _state.value = _state.value.copy(shareError = it.message ?: "Errore di rete.")
@@ -236,9 +270,7 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
                     _state.value = _state.value.copy(shareSuccess = "Pubblicato sul feed.")
                     refresh()
                 } else {
-                    _state.value = _state.value.copy(
-                        shareError = "Impossibile pubblicare (${resp.code()}).",
-                    )
+                    _state.value = _state.value.copy(shareError = shareErrorMessage(resp.code(), isSession = true))
                 }
             }.onFailure {
                 _state.value = _state.value.copy(shareError = it.message ?: "Errore di rete.")
@@ -246,14 +278,46 @@ class SocialFeedViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    /** Rimuove la condivisione di un'attività dal feed (DELETE share). */
-    fun unshareActivity(activityId: String) {
-        viewModelScope.launch {
-            runCatching { api.unshareActivity(activityId) }
-                .onSuccess { resp ->
-                    if (resp.isSuccessful) refresh()
-                }
+    /** Mappa lo status HTTP dello share su un messaggio leggibile e azionabile. */
+    private fun shareErrorMessage(code: Int, isSession: Boolean = false): String = when (code) {
+        403 -> if (isSession) {
+            "Solo il capogruppo può condividere la sessione del gruppo."
+        } else {
+            "Non hai i permessi per condividere questa attività."
         }
+        404 -> "Attività non più disponibile sul server: prova ad aggiornare la lista."
+        else -> "Impossibile pubblicare (errore $code)."
+    }
+
+    /**
+     * Rimuove un post dal feed (solo il proprietario).
+     * Attività → unshare activity; sessione → unshare session.
+     */
+    fun removeFeedPost(item: FeedItem, onRemoved: () -> Unit = {}) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(deleteError = null, deleteSuccess = null)
+            val resp = runCatching {
+                when (item.kind) {
+                    "session" -> api.unshareSession(item.id)
+                    else -> api.unshareActivity(item.id)
+                }
+            }.getOrNull()
+            if (resp?.isSuccessful == true) {
+                _state.value = _state.value.copy(
+                    items = _state.value.items.filter { it.id != item.id || it.kind != item.kind },
+                    deleteSuccess = "Post rimosso dal feed.",
+                )
+                onRemoved()
+            } else {
+                _state.value = _state.value.copy(
+                    deleteError = "Impossibile rimuovere il post (${resp?.code() ?: "rete"}).",
+                )
+            }
+        }
+    }
+
+    fun clearDeleteMessages() {
+        _state.value = _state.value.copy(deleteSuccess = null, deleteError = null)
     }
 
     /**

@@ -36,11 +36,23 @@ object AvatarUtils {
 
     private const val TAG = "AvatarUtils"
 
-    /** Lato massimo dell'avatar dopo il downscale (px). */
-    const val TARGET_DIMENSION_PX: Int = 500
+    /**
+     * Lato massimo dell'avatar dopo il downscale (px).
+     *
+     * Bump da 500 → 720: il vecchio valore generava avatar visibilmente sgranati
+     * sui device Hi-DPI (un avatar 56dp su Pixel 7 = ~336 px reali). 720 mantiene
+     * sample 1:1 anche su display ad alta densità senza far esplodere il base64.
+     */
+    const val TARGET_DIMENSION_PX: Int = 720
 
-    /** Qualità JPEG usata per la compressione (0–100). */
-    const val JPEG_QUALITY: Int = 70
+    /**
+     * Qualità JPEG usata per la compressione (0–100).
+     *
+     * Bump da 70 → 88: 70 introduceva artefatti di blocking visibili sui dettagli
+     * fini (volti) anche dopo downscale. 88 è il sweet-spot Strava/Instagram:
+     * ~1.6× byte-size del 70, qualità percettiva pulita.
+     */
+    const val JPEG_QUALITY: Int = 88
 
     /** Prefisso del data URI che l'app produce e si aspetta dal server. */
     const val DATA_URI_PREFIX: String = "data:image/jpeg;base64,"
@@ -158,7 +170,15 @@ object AvatarUtils {
         val base64Body = dataUri.substring(commaIdx + "base64,".length)
         return try {
             val bytes = Base64.decode(base64Body, Base64.DEFAULT)
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            // Storie/avatar grandi: decode con sample size per evitare OOM sul main thread.
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            val sample = calculateInSampleSize(bounds, TARGET_DIMENSION_PX * 2)
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        } catch (t: OutOfMemoryError) {
+            Log.w(TAG, "OOM decodeDataUri")
+            null
         } catch (t: Throwable) {
             Log.w(TAG, "decodeDataUri fallito: ${t.message}")
             null
@@ -170,6 +190,13 @@ object AvatarUtils {
      * JPEG q70 → Base64 data URI. Ritorna `null` se uno qualsiasi degli step
      * fallisce (così il chiamante può mostrare un Toast di errore).
      */
+    private fun calculateInSampleSize(bounds: BitmapFactory.Options, maxSide: Int): Int {
+        val long = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
+        var sample = 1
+        while (long / sample > maxSide) sample *= 2
+        return sample
+    }
+
     fun prepareAvatarForUpload(resolver: ContentResolver, uri: Uri): String? {
         val bitmap = loadOrientedBitmapFromUri(resolver, uri) ?: return null
         val small = downscaleToBox(bitmap)

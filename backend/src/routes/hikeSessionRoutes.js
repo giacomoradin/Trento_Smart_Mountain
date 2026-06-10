@@ -1,5 +1,8 @@
 import express from "express";
-
+import { generateChecklist, isChecklistFrozen, getFreezeAt, buildSentieroLikeFromSession } from '../services/checklistService.js';
+import { getLocationForecast } from '../services/weatherService.js';   
+import HikeSession from '../models/hikeSession.js';   
+import Sentiero from '../models/sentiero.js';    
 import { authenticate } from "../middleware/authMiddleware.js";
 import { authenticatedLimiter } from "../middleware/rateLimitMiddleware.js";
 import {
@@ -18,6 +21,7 @@ import {
   liveLocationsQuerySchema,
   liveTrackingSuspendSchema,
   liveTrackingResumeSchema,
+  participantParamsSchema,
 } from "../middleware/validationMiddleware.js";
 
 import {
@@ -30,11 +34,16 @@ import {
   joinSession,
   leaveSession,
   completeSession,
+  forceCompleteSession,
   getActivityStats,
   postLiveLocation,
   getLiveLocations,
   suspendLiveTracking,
   resumeLiveTracking,
+  approveParticipant,
+  rejectParticipant,
+  removeParticipant,
+  hideSessionFromActivities,
 } from "../services/hikeSessionService.js";
 import { listSessionEmergencies } from "../services/emergencyService.js";
 import {
@@ -48,6 +57,9 @@ import {
   getComments,
   deleteComment,
 } from "../services/commentService.js";
+
+
+             
 
 const router = express.Router();
 
@@ -66,6 +78,7 @@ router.post("/", validate(createSessionSchema), async (req, res, next) => {
     minExperienceLevel,
     gpxFileName,
     gpxStats,
+    sentieroCode,
     plannedRoute,
   } = req.body;
 
@@ -82,6 +95,7 @@ router.post("/", validate(createSessionSchema), async (req, res, next) => {
       ...(minExperienceLevel && { minExperienceLevel }),
       ...(gpxFileName && { gpxFileName }),
       ...(gpxStats && { gpxStats }),
+      ...(sentieroCode && { sentieroCode }),
       ...(plannedRoute && { plannedRoute }),
     };
     const session = await createSession(
@@ -317,7 +331,269 @@ router.get(
     }
   },
 );
+ 
+/**
+ * Risolve il codice sentiero SAT per la checklist: body (override) → sessione persistita.
+ */
+function resolveSentieroCode(session, bodySentieroCode) {
+  const fromBody = typeof bodySentieroCode === 'string' ? bodySentieroCode.trim() : '';
+  const fromSession = typeof session.sentieroCode === 'string' ? session.sentieroCode.trim() : '';
+  return (fromBody || fromSession || '').toUpperCase();
+}
 
+function buildChecklistPartenza(session, partenza) {
+  if (partenza) return new Date(partenza);
+  if (session.meetingDate) return new Date(new Date(session.meetingDate).setUTCHours(8, 0, 0, 0));
+  return new Date();
+}
+
+/** Sentiero SAT dal DB, oppure adattatore da sessione GPX. */
+async function resolveSentieroForChecklist(session, bodySentieroCode) {
+  const sentieroCode = resolveSentieroCode(session, bodySentieroCode);
+  if (sentieroCode) {
+    const sentiero = await Sentiero.findOne({ codice: sentieroCode }).lean();
+    if (!sentiero) {
+      return { error: { status: 404, message: `Sentiero ${sentieroCode} non trovato.` } };
+    }
+    return { sentiero };
+  }
+
+  const sentiero = buildSentieroLikeFromSession(session);
+  if (!sentiero) {
+    return {
+      error: {
+        status: 400,
+        message: 'Dati percorso insufficienti per generare la checklist (servono distanza/difficoltà o durata GPX).',
+      },
+    };
+  }
+  return { sentiero };
+}
+
+// ─── POST /api/v1/sessions/:id/checklist ─────────────────────────────────────
+/**
+ * Genera la checklist per la prima volta.
+ * Richiede che la sessione sia in stato PLANNED.
+ * Se la sessione ha già una checklist, restituisce 409 — usare PUT per aggiornare.
+ *
+ * Body (opzionale):
+ *   {
+ *     "sentieroCode": "E131",           // override opzionale se assente usa session.sentieroCode
+ *     "locationId":   "uuid-del-luogo", // externalId meteo opzionale
+ *     "partenza":     "2026-06-15T07:00:00Z" // ISO opzionale, default meetingDate 08:00
+ *   }
+ */
+router.post('/:id/checklist', validate(idParamSchema, 'params'), async (req, res, next) => {
+  /*
+    #swagger.tags = ['Checklist']
+    #swagger.description = 'Genera la checklist per la prima volta. Solo per sessioni PLANNED. Richiede sentieroCode nel body; locationId e partenza sono opzionali.'
+    #swagger.parameters['id'] = { description: 'Session ID', required: true, type: 'string' }
+    #swagger.requestBody = {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            required: ["sentieroCode"],
+            properties: {
+              sentieroCode: { type: "string", example: "E131" },
+              locationId:   { type: "string", example: "5d9e12bb-7274-483e-9acd-44bfdcb916e5" },
+              partenza:     { type: "string", format: "date-time", example: "2026-06-15T07:00:00Z" }
+            }
+          }
+        }
+      }
+    }
+    #swagger.responses[201] = { description: 'Checklist generata con successo' }
+    #swagger.responses[400] = { description: 'Bad request (sentieroCode mancante)' }
+    #swagger.responses[403] = { description: 'Forbidden (non sei il creator)' }
+    #swagger.responses[404] = { description: 'Sessione o sentiero non trovati' }
+    #swagger.responses[409] = { description: 'Conflict (checklist già esistente o sessione non PLANNED)' }
+  */
+  try {
+    const session = await HikeSession.findById(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Sessione non trovata.' });
+
+    if (session.creatorId.toString() !== req.user.userId.toString()) {
+      return res.status(403).json({ error: 'Solo il creatore può generare la checklist.' });
+    }
+
+    if (session.status !== 'PLANNED') {
+      return res.status(409).json({ error: 'La checklist può essere generata solo per sessioni in stato PLANNED.' });
+    }
+
+    if (session.checklist) {
+      return res.status(409).json({
+        error: 'La checklist esiste già. Usa PUT /sessions/:id/checklist per aggiornarla.',
+      });
+    }
+
+    const { sentieroCode: bodySentieroCode, locationId, partenza } = req.body;
+    const resolved = await resolveSentieroForChecklist(session, bodySentieroCode);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json({ error: resolved.error.message });
+    }
+    const { sentiero } = resolved;
+
+    let forecastResult = null;
+    if (locationId) {
+      try {
+        forecastResult = await getLocationForecast(locationId);
+      } catch (err) {
+        console.warn(`[checklistRoute] Forecast non disponibile per ${locationId}:`, err.message);
+      }
+    }
+
+    const checklistData = generateChecklist(sentiero, forecastResult, buildChecklistPartenza(session, partenza));
+    session.checklist = checklistData;
+    await session.save();
+
+    res.status(201).json({
+      message: 'Checklist generata con successo.',
+      checklist: session.checklist,
+      meteoDisponibile: forecastResult !== null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+ 
+// ─── PUT /api/v1/sessions/:id/checklist ──────────────────────────────────────
+/**
+ * Rigenera (aggiorna) la checklist con dati meteo aggiornati.
+ * Non disponibile se la checklist è congelata (da mezzanotte del giorno prima).
+ *
+ * Body: stesso schema di POST.
+ */
+router.put('/:id/checklist', validate(idParamSchema, 'params'), async (req, res, next) => {
+  /*
+    #swagger.tags = ['Checklist']
+    #swagger.description = 'Rigenera la checklist con dati meteo aggiornati. Non disponibile dopo il freeze (mezzanotte del giorno prima della sessione).'
+    #swagger.parameters['id'] = { description: 'Session ID', required: true, type: 'string' }
+    #swagger.requestBody = {
+      required: true,
+      content: {
+        "application/json": {
+          schema: {
+            type: "object",
+            required: ["sentieroCode"],
+            properties: {
+              sentieroCode: { type: "string", example: "E131" },
+              locationId:   { type: "string", example: "5d9e12bb-7274-483e-9acd-44bfdcb916e5" },
+              partenza:     { type: "string", format: "date-time", example: "2026-06-15T07:00:00Z" }
+            }
+          }
+        }
+      }
+    }
+    #swagger.responses[200] = { description: 'Checklist aggiornata con successo' }
+    #swagger.responses[400] = { description: 'Bad request (sentieroCode mancante)' }
+    #swagger.responses[403] = { description: 'Forbidden (non sei il creator o checklist congelata)' }
+    #swagger.responses[404] = { description: 'Sessione, sentiero o checklist non trovati' }
+  */
+  try {
+    const session = await HikeSession.findById(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Sessione non trovata.' });
+
+    if (session.creatorId.toString() !== req.user.userId.toString()) {
+      return res.status(403).json({ error: 'Solo il creatore può aggiornare la checklist.' });
+    }
+
+    if (!session.checklist) {
+      return res.status(404).json({
+        error: 'Checklist non ancora generata. Usa POST /sessions/:id/checklist prima.',
+      });
+    }
+
+    if (session.checklist.isFrozen || isChecklistFrozen(session.meetingDate)) {
+      if (!session.checklist.isFrozen) {
+        session.checklist.isFrozen = true;
+        session.checklist.frozenAt = getFreezeAt(session.meetingDate);
+        await session.save();
+      }
+      return res.status(403).json({
+        error: 'La checklist è congelata: non è più possibile aggiornarla.',
+        frozenAt: session.checklist.frozenAt,
+        motivo: 'Il freeze avviene alla mezzanotte del giorno prima della sessione.',
+      });
+    }
+
+    const { sentieroCode: bodySentieroCode, locationId, partenza } = req.body;
+    const resolved = await resolveSentieroForChecklist(session, bodySentieroCode);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json({ error: resolved.error.message });
+    }
+    const { sentiero } = resolved;
+
+    let forecastResult = null;
+    if (locationId) {
+      try {
+        forecastResult = await getLocationForecast(locationId);
+      } catch (err) {
+        console.warn(`[checklistRoute] Forecast non disponibile per ${locationId}:`, err.message);
+      }
+    }
+
+    const checklistData = generateChecklist(sentiero, forecastResult, buildChecklistPartenza(session, partenza));
+    checklistData.generatedAt = session.checklist.generatedAt;
+    session.checklist = checklistData;
+    await session.save();
+
+    res.status(200).json({
+      message: 'Checklist aggiornata con successo.',
+      checklist: session.checklist,
+      meteoDisponibile: forecastResult !== null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+ 
+// ─── GET /api/v1/sessions/:id/checklist ──────────────────────────────────────
+/**
+ * Recupera la checklist della sessione.
+ * Accessibile a tutti i partecipanti (non solo al creator).
+ */
+router.get('/:id/checklist', validate(idParamSchema, 'params'), async (req, res, next) => {
+  /*
+    #swagger.tags = ['Checklist']
+    #swagger.description = 'Recupera la checklist della sessione. Accessibile a tutti i partecipanti. Restituisce anche lo stato del freeze.'
+    #swagger.parameters['id'] = { description: 'Session ID', required: true, type: 'string' }
+    #swagger.responses[200] = { description: 'OK' }
+    #swagger.responses[403] = { description: 'Forbidden (non sei partecipante)' }
+    #swagger.responses[404] = { description: 'Sessione o checklist non trovate' }
+  */
+  try {
+    const session = await HikeSession.findById(req.params.id).lean();
+    if (!session) return res.status(404).json({ error: 'Sessione non trovata.' });
+
+    const userId    = req.user.userId.toString();
+    const isCreator = session.creatorId?.toString() === userId;
+    const isParticip = (session.participants || []).some(
+      p => (p.userId?._id || p.userId)?.toString() === userId,
+    );
+    if (!isCreator && !isParticip) {
+      return res.status(403).json({ error: 'Non sei autorizzato a vedere questa checklist.' });
+    }
+
+    if (!session.checklist) {
+      return res.status(404).json({ error: 'Checklist non ancora generata per questa sessione.' });
+    }
+
+    const frozenLive = isChecklistFrozen(session.meetingDate);
+    const freezeAt   = getFreezeAt(session.meetingDate);
+
+    res.status(200).json({
+      checklist: session.checklist,
+      freeze: {
+        isFrozen: session.checklist.isFrozen || frozenLive,
+        frozenAt: session.checklist.frozenAt ?? freezeAt,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 // GET /api/v1/sessions/:id — dettaglio singola sessione (solo partecipanti o admin)
 router.get(
   "/:id",
@@ -328,22 +604,11 @@ router.get(
       if (!session)
         return res.status(404).json({ error: "Sessione non trovata" });
 
-      // Restringi la lettura ai partecipanti (creator incluso) e agli admin.
-      // Evita che chiunque con un ObjectId valido possa leggere sessioni altrui.
-      const userId = req.user.userId.toString();
-      const isAdmin = req.user.role === "admin";
-      const creatorId = (
-        session.creatorId?._id || session.creatorId
-      )?.toString();
-      const isParticipant = (session.participants || []).some((p) => {
-        const pid = (p.userId?._id || p.userId)?.toString();
-        return pid === userId;
-      });
-      if (!isAdmin && creatorId !== userId && !isParticipant) {
-        return res
-          .status(403)
-          .json({ error: "Non sei autorizzato a vedere questa sessione" });
-      }
+      // Lettura consentita a QUALSIASI utente autenticato: le sessioni sono
+      // referenziate dalle storie e dal feed ("vedi escursione"), quindi devono
+      // essere visualizzabili anche dai non-membri (sola lettura). Le operazioni
+      // sensibili (posizioni live, checklist, gestione partecipanti) restano
+      // protette dai rispettivi controlli a valle.
       res.status(200).json(session);
     } catch (err) {
       // CastError di Mongoose per ObjectId malformato → 400 (semantica diversa
@@ -394,6 +659,25 @@ router.patch(
   },
 );
 
+// POST /api/v1/sessions/:id/close — chiusura forzata dal capogruppo ("Chiudi
+// sessione"): porta a COMPLETED per tutti, anche con partecipanti non conclusi.
+router.post(
+  "/:id/close",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Chiude forzatamente la sessione (COMPLETED per tutti). Riservata al capogruppo.'
+    */
+    try {
+      const session = await forceCompleteSession(req.params.id, req.user.userId);
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // POST /api/v1/sessions/:id/leave — abbandona sessione
 router.post(
   "/:id/leave",
@@ -401,6 +685,102 @@ router.post(
   async (req, res, next) => {
     try {
       const session = await leaveSession(req.user.userId, req.params.id);
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// DELETE /api/v1/sessions/:id/from-activities — nasconde una sessione COMPLETED
+// dalla lista "Le mie attività" dell'utente (non cancella il documento, che
+// appartiene anche agli altri partecipanti). Fix: senza questo, eliminando
+// un'attività di sessione dal mobile (solo tombstone locale) la sessione
+// riappariva dopo logout/login.
+router.delete(
+  "/:id/from-activities",
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Rimuove la sessione dalla lista "Le mie attività" del chiamante (hide per-utente, non cancella il documento).'
+    */
+    try {
+      const result = await hideSessionFromActivities(
+        req.params.id,
+        req.user.userId,
+      );
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── Gestione partecipanti: approvazione / rifiuto / rimozione ───────────────
+
+// POST /api/v1/sessions/:id/participants/:userId/approve — accetta una richiesta
+// pending. Autorizzato: capogruppo OPPURE un partecipante già accettato.
+router.post(
+  "/:id/participants/:userId/approve",
+  validate(participantParamsSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Approva una richiesta di partecipazione in attesa. Autorizzato al capogruppo o a un partecipante già accettato.'
+    */
+    try {
+      const session = await approveParticipant(
+        req.params.id,
+        req.user.userId,
+        req.params.userId,
+      );
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// POST /api/v1/sessions/:id/participants/:userId/reject — rifiuta una richiesta
+// pending (non è un ban). Autorizzato come approve.
+router.post(
+  "/:id/participants/:userId/reject",
+  validate(participantParamsSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Rifiuta (rimuove) una richiesta di partecipazione in attesa. Autorizzato al capogruppo o a un partecipante già accettato.'
+    */
+    try {
+      const session = await rejectParticipant(
+        req.params.id,
+        req.user.userId,
+        req.params.userId,
+      );
+      res.status(200).json(session);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// DELETE /api/v1/sessions/:id/participants/:userId — rimuove definitivamente un
+// partecipante e lo banna da questa sessione. Solo capogruppo.
+router.delete(
+  "/:id/participants/:userId",
+  validate(participantParamsSchema, "params"),
+  async (req, res, next) => {
+    /*
+      #swagger.tags = ['Sessions']
+      #swagger.description = 'Rimuove definitivamente un partecipante (ban locale alla sessione). Riservato al capogruppo.'
+    */
+    try {
+      const session = await removeParticipant(
+        req.params.id,
+        req.user.userId,
+        req.params.userId,
+      );
       res.status(200).json(session);
     } catch (err) {
       next(err);

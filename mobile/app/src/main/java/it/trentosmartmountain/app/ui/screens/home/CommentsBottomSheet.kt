@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.home
 
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +71,8 @@ private val AccentCyan = TsmColors.Cyan
 fun CommentsBottomSheet(
     target: CommentsTarget?,
     onDismiss: () -> Unit,
+    /** Tap su avatar/username di un commento → profilo social dell'autore. */
+    onUserClick: (userId: String) -> Unit = {},
     /**
      * Notifica il conteggio commenti aggiornato del target alla chiusura, così
      * il chiamante può aggiornare il proprio item senza ricaricare tutto. Default
@@ -155,6 +158,12 @@ fun CommentsBottomSheet(
                         items = state.items,
                         currentUserId = state.currentUserId,
                         onDelete = viewModel::deleteComment,
+                        onUserClick = { id ->
+                            // Chiudi la sheet prima di navigare al profilo dell'autore.
+                            onCountChanged(target.id, target.kind, state.count)
+                            onDismiss()
+                            onUserClick(id)
+                        },
                     )
                 }
             }
@@ -179,6 +188,7 @@ private fun CommentList(
     items: List<CommentItem>,
     currentUserId: String?,
     onDelete: (commentId: String) -> Unit,
+    onUserClick: (userId: String) -> Unit = {},
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -189,6 +199,7 @@ private fun CommentList(
                 comment = c,
                 isOwn = currentUserId != null && c.userId?._id == currentUserId,
                 onDelete = { onDelete(c._id) },
+                onUserClick = onUserClick,
             )
         }
         item { Spacer(Modifier.height(8.dp)) }
@@ -200,12 +211,15 @@ private fun CommentRow(
     comment: CommentItem,
     isOwn: Boolean,
     onDelete: () -> Unit,
+    onUserClick: (userId: String) -> Unit = {},
 ) {
+    val authorId = comment.userId?._id
     Row(verticalAlignment = Alignment.Top) {
         AvatarImage(
             avatarUrl = comment.userId?.avatarUrl,
             fallbackName = comment.userId?.username,
             size = 32.dp,
+            modifier = Modifier.clickable(enabled = !authorId.isNullOrBlank()) { authorId?.let(onUserClick) },
         )
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -215,6 +229,7 @@ private fun CommentRow(
                     color = Color.White,
                     fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.clickable(enabled = !authorId.isNullOrBlank()) { authorId?.let(onUserClick) },
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(

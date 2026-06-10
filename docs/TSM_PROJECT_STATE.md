@@ -1,5 +1,32 @@
 # Trento Smart Mountain — Stato del progetto
 
+## 🔋 Sprint 3 kick-off — 10 giugno 2026 (bug fix, consumi, sicurezza, modulo rifiuti)
+
+> Backend **261/261 test verdi** (19 suite, +8 modulo rifiuti); mobile **`compileDebugKotlin` BUILD SUCCESSFUL**. Branch `UI`, nessun push (lavoro locale).
+
+**Bug fix (B-01/02/03 della retrospettiva M4):**
+- **B-01 — Zoom mappa "bloccato troppo distante"**: root cause = liste punti ricreate a ogni ricomposizione (no `remember`) che ri-triggeravano `zoomToBoundingBox` resettando lo zoom dell'utente al livello fit. Fix: `remember` in `TsmRouteMapDialog` + fingerprint **per-valore** del contenuto in `TsmSentieriMapView` (`contentKey`) e `TsmRouteMapPreview` (`routeKey`) al posto delle chiavi per-identità.
+- **B-02 — Badge NFC sempre "ATTIVO"**: il badge in `ProfileScreen` era condizionato a `nfcAvailable` (presenza chip) invece dello stato reattivo `nfcEnabled` (già aggiornato da BroadcastReceiver + ON_RESUME). Ora badge a 3 stati: ATTIVO (verde) / DISATTIVATO (ambra) / NON DISPONIBILE (rosso).
+- **B-03 — "Termina" incoerente Unisciti vs dettaglio**: `SessionJoinViewModel.leaderStop` non eseguiva il **force-close ADR-001** (solo stop locale → la sessione restava ACTIVE per gli altri); inoltre l'Hub bypassava `leaderStop` quando live. Ora entrambi i flussi convergono: stop coordinato + `forceCloseSession` + navigazione al dialog "Salva attività" se live.
+
+**Audit consumi (focus batteria):**
+- **Frecce direzionali mappe**: la fase animata cambiava a ogni frame → `MapView.invalidate()` a ~60 Hz *per ogni mappa visibile*. Quantizzata a 18 step/ciclo → ~7 Hz (−87/89% di redraw) in `TsmRouteMapPreview` e `TsmSentieriMapView`, visivamente identico.
+- **GPS idle (tab Registra, non registrando)**: `UserLocationTracker` da HIGH_ACCURACY @2 s/1 s → @5 s/2,5 s (−60% duty cycle); durante la registrazione resta il ForegroundTrackingService a 2 s.
+- **SyncManager**: idle backoff del poll loop 60 s → 2 min → 5 min (cap) a coda vuota; `enqueueImmediate` e nuovo lavoro resettano a 60 s.
+- Verificati e lasciati invariati (giustificati): live polling sessione 5 s (sicurezza gruppo), SOS retry 15 s (solo con SOS pendente), BLE `SCAN_MODE_LOW_LATENCY` (solo durante SOS attivo), animazioni decorative (composition-scoped).
+
+**Sicurezza:**
+- `requireRoles("rifugio", "admin")` su `/api/v1/refuge/*` (prima bastava un JWT qualsiasi).
+- Verificato: `authenticate` + `authenticatedLimiter` su tutte le route Sprint 2 (stories, board, follow, emergency, badge, credits); Joi su tutti i write.
+- `npm audit --omit=dev`: **0 vulnerabilità** (erano 6 moderate a inizio Sprint 2).
+
+**Nuovo — Modulo Rifiuti & Logistica (ADR-002, MVP read-only):**
+- Backend: `services/wasteService.js` (config 6 categorie + grigliato, 4 vettori, formule del Simulatore web/elaborato OGA), route `/api/v1/refuge/waste/{config,simulate}` con auth+limiter+ruoli+Joi (`wasteSimulationSchema`), 8 test in `__tests__/routes/waste.test.js` con valori di riferimento (elicottero 2 viaggi → 2,00 €/kg, coerente col c_kg dell'elaborato).
+- Mobile: `WasteSimulatorScreen` + `WasteSimulatorViewModel` + DTO; entry card "Rifiuti & Logistica" nella dashboard rifugio; route `REFUGE_WASTE`.
+- Prossimi step (non MVP): persistenza `WasteRecord` (storico stagionale), riduzioni per categoria da UI, benchmark anonimo tra rifugi.
+
+---
+
 ## 🚚 Consegna — giugno 2026 (ridisegno sessioni ADR-001 + auth + polish finale)
 
 > Backend **253/253 test verdi** (18 suite); mobile **`compileDebugKotlin` BUILD SUCCESSFUL**.

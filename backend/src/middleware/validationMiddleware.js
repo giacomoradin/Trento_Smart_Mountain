@@ -638,3 +638,31 @@ export const patchEmergencySchema = Joi.object({
     otherwise: Joi.forbidden(),
   }),
 });
+
+/**
+ * Body POST /api/v1/refuge/waste/simulate (ADR-002, MVP).
+ * Parametri del bilancio di massa stagionale; le riduzioni per categoria sono
+ * applicate solo se `compactorEnabled` ed entro un cap prudenziale del 95%.
+ */
+export const wasteSimulationSchema = Joi.object({
+  periodDays: Joi.number().integer().min(1).max(365).required(),
+  beds: Joi.number().integer().min(0).max(500).required(),
+  bedOccupancy: Joi.number().min(0).max(1).required(),
+  dayVisitors: Joi.number().integer().min(0).max(5000).required(),
+  wastePerGuestKg: Joi.number().min(0).max(5).default(0.2),
+  wastePerVisitorKg: Joi.number().min(0).max(5).default(0.1),
+  screeningPerGuestKg: Joi.number().min(0).max(5).default(0.2),
+  compactorEnabled: Joi.boolean().default(false),
+  reductions: Joi.array()
+    .items(
+      Joi.object({
+        category: Joi.string()
+          .valid("Organico", "Plastica", "Vetro", "Metalli", "Cartone", "Altro/indiff.")
+          .required(),
+        massReductionPct: Joi.number().min(0).max(95).default(0),
+        volumeReductionPct: Joi.number().min(0).max(95).default(0),
+      }),
+    )
+    .max(6)
+    .default([]),
+});

@@ -36,12 +36,15 @@ export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
     // Il campo `email` può contenere un'email OPPURE uno username (login con
-    // entrambi). Risolviamo per email (case-insensitive, salvata lowercase) o per
-    // username (match esatto). $or → un solo round-trip.
+    // entrambi). Risolviamo per email (salvata lowercase) o per username.
+    // Collation strength 2 = case-insensitive ma accent-sensitive: "Rifugio
+    // Vajolet" e "rifugio vajolet" coincidono. Senza, il match esatto respingeva
+    // gli username con maiuscole/spazi (tipici degli account rifugio) digitati
+    // con casing diverso → 401 inspiegabile.
     const identifier = (email || "").trim();
     const user = await User.findOne({
       $or: [{ email: identifier.toLowerCase() }, { username: identifier }],
-    });
+    }).collation({ locale: "it", strength: 2 });
     if (!user)
       return res.status(401).json({ message: "Credenziali non valide." });
 

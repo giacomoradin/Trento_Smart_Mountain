@@ -56,9 +56,19 @@ Tutti gli endpoint richiedono JWT. Spec completa auto-generata in `swagger-outpu
 `GET /hikers/:id` applica `profileVisibility`: per viewer non-self, profili `private` (o `friends` senza follow) restituiscono un profilo **limitato** `{ _id, username, isVerified, personalInfo.avatarUrl, restricted: true, visibility }`.
 
 ### Rifugio — Dashboard IoT (dati mock)
+> Da giugno 2026 le route `/api/v1/refuge/*` sono protette da `requireRoles("rifugio", "admin")` (prima bastava il JWT di qualsiasi utente).
+
 | Metodo | Endpoint | Descrizione |
 |---|---|---|
 | GET | `/api/v1/refuge/dashboard` | Sensori + edge nodes BLE-mesh + passaggi del rifugio loggato |
+
+### Rifugio — Rifiuti & Logistica (ADR-002, MVP read-only)
+> Porta dentro TSM il modello del *Simulatore Gestione Rifiuti — Rifugi Alpini* (elaborato OGA ID-22): bilancio di massa stagionale su 6 categorie merceologiche + grigliato, alert di compliance (art. 185-bis D.Lgs. 152/2006: max 30 m³ / 90 giorni di giacenza) e confronto costi tra 4 vettori outbound con `C_kg = (C_fix + c_var·t)/(P·S_t)`. Nessuna persistenza (calcolo puro); auth + rate limit + `requireRoles("rifugio","admin")` + Joi `wasteSimulationSchema`.
+
+| Metodo | Endpoint | Descrizione |
+|---|---|---|
+| GET | `/api/v1/refuge/waste/config` | Categorie merceologiche, vettori e limiti normativi |
+| POST | `/api/v1/refuge/waste/simulate` | Simulazione stagionale: totali pre/post trattamento, breakdown, alert compliance, costi per vettore + vettore più economico |
 
 ### Bacheca rifugi
 | Metodo | Endpoint | Descrizione |

@@ -20,7 +20,7 @@ Documento di riferimento per le scelte di sicurezza del backend Express e del cl
 
 - **Anonimo**: può solo POST `/auth/login`, POST `/auth/register/*`, GET `/auth/verify/:token`, GET `/api-docs`.
 - **Hiker autenticato (JWT)**: CRUD sulle proprie sessioni e attività; lettura/scrittura limitata da `userId`.
-- **Refuge autenticato**: come hiker + endpoint refuge-specific (TBD).
+- **Refuge autenticato**: come hiker + endpoint refuge-specific protetti da `requireRoles("rifugio", "admin")`: dashboard IoT (`/api/v1/refuge/dashboard`), modulo Rifiuti & Logistica (`/api/v1/refuge/waste/*`), bacheca (`POST/PATCH/DELETE /api/v1/board`).
 - **Admin autenticato**: bypass autorizzazione, accesso `/admin/*` (gestione utenti).
 - **Network attacker (MITM)**: TLS termina su Render; certificati validi gestiti dalla piattaforma.
 
@@ -98,7 +98,7 @@ Il client mobile NON parla mai direttamente con Brevo, MongoDB o le API meteo. T
 
 - **Lockfile**: `package-lock.json` committato; rebuild deterministico.
 - **Dipendenze critiche**: jsonwebtoken 9.x (cve-2022-23529 fixed), bcrypt 6.x, express 4.22+, mongoose 8.x.
-- **Audit**: `npm audit` come gate manuale prima di ogni release (TODO: integrazione CI).
+- **Audit**: `npm audit` come gate manuale prima di ogni release (TODO: integrazione CI). Stato 10/06/2026: `npm audit --omit=dev` → **0 vulnerabilità** (le 6 moderate di inizio Sprint 2 sono state risolte).
 
 ### A07:2021 — Identification and Authentication Failures
 

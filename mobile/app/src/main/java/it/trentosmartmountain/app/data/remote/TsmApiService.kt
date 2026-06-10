@@ -12,6 +12,8 @@ import it.trentosmartmountain.app.data.remote.dto.ActivityStatsResponse
 import it.trentosmartmountain.app.data.remote.dto.ApiMessageBody
 import it.trentosmartmountain.app.data.remote.dto.BadgeItem
 import it.trentosmartmountain.app.data.remote.dto.BoardListResponse
+import it.trentosmartmountain.app.data.remote.dto.WasteSimulationRequest
+import it.trentosmartmountain.app.data.remote.dto.WasteSimulationResponse
 import it.trentosmartmountain.app.data.remote.dto.BoardPost
 import it.trentosmartmountain.app.data.remote.dto.CertificateItem
 import it.trentosmartmountain.app.data.remote.dto.CreateBoardPostRequest
@@ -148,6 +150,12 @@ interface TsmApiService {
   /** Dashboard IoT del rifugio loggato (sensori + edge nodes + passaggi, mock). */
   @GET("api/v1/refuge/dashboard")
   suspend fun getRefugeDashboard(): Response<RefugeDashboardResponse>
+
+  /** Simulazione rifiuti & logistica del rifugio (ADR-002, MVP read-only). */
+  @POST("api/v1/refuge/waste/simulate")
+  suspend fun simulateWaste(
+    @Body request: WasteSimulationRequest,
+  ): Response<WasteSimulationResponse>
 
   // ── Bacheca rifugi ──
   /** Feed bacheca consultabile da tutti gli escursionisti. */

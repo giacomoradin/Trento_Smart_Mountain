@@ -74,8 +74,11 @@ class UserLocationTracker(context: Context) {
     )
 
   companion object {
-    private const val UPDATE_INTERVAL_MS = 2_000L
-    private const val MIN_UPDATE_INTERVAL_MS = 1_000L
+    // Questo tracker alimenta SOLO la mappa in idle (pallino utente + barre segnale):
+    // durante la registrazione viene fermato e subentra il ForegroundTrackingService
+    // (2 s). In idle 5 s bastano e il duty cycle del chip GPS scende di ~60%.
+    private const val UPDATE_INTERVAL_MS = 5_000L
+    private const val MIN_UPDATE_INTERVAL_MS = 2_500L
 
     /**
      * Livello qualità segnale GPS (0–4) derivato dall'accuracia orizzontale in metri.

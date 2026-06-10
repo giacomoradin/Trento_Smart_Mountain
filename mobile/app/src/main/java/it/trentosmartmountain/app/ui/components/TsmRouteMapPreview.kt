@@ -31,6 +31,9 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
 
+/** Step di quantizzazione della fase frecce: limita gli invalidate della MapView a ~7,5 Hz. */
+private const val ARROWS_PHASE_STEPS = 18
+
 /**
  * Anteprima statica (senza interazione) di un percorso su mappa OSMdroid.
  *
@@ -80,8 +83,13 @@ fun TsmRouteMapPreview(
         ),
         label = "route-arrows-tween",
     )
+    // Quantizzazione a 18 step/ciclo: il tween cambia valore a ogni frame (~60 Hz)
+    // e ogni cambio invalida l'intera MapView (tile + polyline + overlay). Con la
+    // fase quantizzata l'invalidate scende a ~7,5 Hz — visivamente identico per
+    // chevron in scorrimento lento, ma ~87% di redraw in meno (batteria/jank,
+    // moltiplicato per ogni mappa visibile nel feed).
     var arrowsPhase by remember { mutableStateOf(0f) }
-    arrowsPhase = phase
+    arrowsPhase = (phase * ARROWS_PHASE_STEPS).toInt() / ARROWS_PHASE_STEPS.toFloat()
 
     val mapView = remember(interactive, storySceneMode) {
         MapView(context).apply {
@@ -143,7 +151,19 @@ fun TsmRouteMapPreview(
         if (geoPoints.size >= 2 && showTrack) mapView.invalidate()
     }
 
-    LaunchedEffect(geoPoints, interactive, lineColor, showTrack, storySceneMode) {
+    // Fingerprint per-valore della traccia: protegge l'auto-fit da ricomposizioni
+    // del parent che ricreano la lista punti con lo stesso contenuto. Senza,
+    // sulle mappe interattive ogni re-fit resettava lo zoom dell'utente al
+    // livello bounding-box ("zoom bloccato troppo distante").
+    val routeKey = remember(geoPoints) {
+        buildString {
+            append(geoPoints.size)
+            geoPoints.firstOrNull()?.let { append('|'); append(it.latitude); append(','); append(it.longitude) }
+            geoPoints.lastOrNull()?.let { append('|'); append(it.latitude); append(','); append(it.longitude) }
+        }
+    }
+
+    LaunchedEffect(routeKey, interactive, lineColor, showTrack, storySceneMode) {
         trackPolyline.outlinePaint.color = lineColor
         when {
             interactive -> Unit

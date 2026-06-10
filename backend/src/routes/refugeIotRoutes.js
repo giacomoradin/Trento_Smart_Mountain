@@ -8,6 +8,7 @@
 import express from "express";
 
 import { authenticate } from "../middleware/authMiddleware.js";
+import { requireRoles } from "../middleware/authorizationMiddleware.js";
 import { authenticatedLimiter } from "../middleware/rateLimitMiddleware.js";
 import { getRefugeDashboard } from "../services/refugeIotService.js";
 
@@ -15,6 +16,9 @@ const router = express.Router();
 
 router.use(authenticate);
 router.use(authenticatedLimiter);
+// La dashboard IoT espone telemetria operativa del rifugio: accesso riservato
+// al rifugista loggato (e admin), come da Access Control Matrix.
+router.use(requireRoles("rifugio", "admin"));
 
 /** GET /api/v1/refuge/dashboard — dashboard IoT del rifugio loggato. */
 router.get("/dashboard", async (req, res, next) => {

@@ -40,7 +40,10 @@ fun TsmRouteMapDialog(
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
             Box(modifier = Modifier.fillMaxSize()) {
-                val geoPoints = routePoints.map { GeoPoint(it.lat, it.lon) }
+                // remember: senza, ogni ricomposizione creava una nuova List che
+                // ri-triggerava l'auto-fit in TsmSentieriMapView resettando lo
+                // zoom dell'utente al livello bounding-box ("zoom bloccato").
+                val geoPoints = remember(routePoints) { routePoints.map { GeoPoint(it.lat, it.lon) } }
                 val endpointMarkers = remember(routePoints) {
                     if (geoPoints.size < 2) emptyList()
                     else listOf(

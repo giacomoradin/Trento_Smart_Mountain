@@ -53,6 +53,7 @@ import it.trentosmartmountain.app.ui.screens.quiz.QuizResultScreen
 import it.trentosmartmountain.app.ui.screens.quiz.QuizScreen
 import it.trentosmartmountain.app.ui.screens.refuge.RefugeMainScreen
 import it.trentosmartmountain.app.ui.screens.refuge.RefugeProfileScreen
+import it.trentosmartmountain.app.ui.screens.refuge.WasteSimulatorScreen
 import it.trentosmartmountain.app.ui.screens.register.EmailVerificationPendingScreen
 import it.trentosmartmountain.app.ui.screens.register.ForgotPasswordScreen
 import it.trentosmartmountain.app.ui.screens.register.RegisterRifugioScreen
@@ -264,6 +265,13 @@ fun TsmNavHost() {
         composable(Routes.MAIN_RIFUGIO) {
             RefugeMainScreen(
                 onNavigateToProfile = { navController.navigate(Routes.REFUGE_PROFILE) },
+                onNavigateToWaste = { navController.navigate(Routes.REFUGE_WASTE) },
+            )
+        }
+
+        composable(Routes.REFUGE_WASTE) {
+            WasteSimulatorScreen(
+                onBack = { navController.popBackStack() },
             )
         }
 

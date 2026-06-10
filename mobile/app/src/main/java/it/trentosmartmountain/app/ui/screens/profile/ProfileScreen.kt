@@ -480,23 +480,38 @@ fun ProfileScreen(
                                     style = MaterialTheme.typography.titleSmall,
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                if (nfcAvailable) {
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = Color(0xFF1A3D1A),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
+                                when {
+                                    nfcEnabled -> {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFF1A3D1A),
                                         ) {
-                                            Box(Modifier.size(6.dp).clip(CircleShape).background(AccentGreen))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("NFC ATTIVO", color = AccentGreen, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Box(Modifier.size(6.dp).clip(CircleShape).background(AccentGreen))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("NFC ATTIVO", color = AccentGreen, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
-                                } else {
-                                    Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF3A1A1A)) {
-                                        Text("NFC NON DISPONIBILE", color = Color(0xFFFF6B6B), modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall)
+                                    nfcAvailable -> {
+                                        Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF3D2E1A)) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFFB454)))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("NFC DISATTIVATO", color = Color(0xFFFFB454), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    else -> {
+                                        Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF3A1A1A)) {
+                                            Text("NFC NON DISPONIBILE", color = Color(0xFFFF6B6B), modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall)
+                                        }
                                     }
                                 }
                             }

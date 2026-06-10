@@ -10,6 +10,7 @@ import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.session.SessionLiveController
 import it.trentosmartmountain.app.data.session.SessionParticipationResolver
+import it.trentosmartmountain.app.repository.SessionCommandRepository
 import it.trentosmartmountain.app.data.session.SessionParticipationUi
 import it.trentosmartmountain.app.data.session.UserSessionLiveState
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
@@ -228,9 +229,18 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun leaderStop(sessionId: String) {
+        // 1) Ferma/salva il tracking del leader (dialog Salva/Scarta via coordinator,
+        //    se sta tracciando su questo device).
         liveController.leaderStop(viewModelScope, sessionId)
-        refreshLiveStates()
-        loadSessions()
+        // 2) ADR-001: "Arresta" del capogruppo CHIUDE la sessione per TUTTI (force).
+        //    Stessa semantica di SessionDetailViewModel.leaderStop — senza questo
+        //    force-close, dal tab Unisciti la sessione restava ACTIVE per gli altri
+        //    partecipanti (comportamento divergente dal dettaglio sessione).
+        viewModelScope.launch {
+            SessionCommandRepository(getApplication()).forceCloseSession(sessionId)
+            refreshLiveStates()
+            loadSessions()
+        }
     }
 
     fun joinLive(sessionId: String) {

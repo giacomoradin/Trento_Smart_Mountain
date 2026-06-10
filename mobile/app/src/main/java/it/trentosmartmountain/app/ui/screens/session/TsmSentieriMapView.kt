@@ -121,15 +121,19 @@ fun TsmSentieriMapView(
     )
     // Holder mutabile letto dal callback overlay (OSMdroid Overlay.draw() gira
     // fuori da Compose, quindi una semplice cella di un FloatArray ci basta).
+    // Fase quantizzata a 18 step/ciclo: il tween cambia a ogni frame (~60 Hz) e
+    // ogni cambio invaliderebbe l'intera MapView; quantizzata scende a ~6,5 Hz
+    // (ciclo 2,8 s) con scorrimento visivamente identico — taglio ~89% dei redraw.
+    val quantizedPhase = (arrowsPhaseAnim * 18).toInt() / 18f
     val phaseHolder = remember { floatArrayOf(0f) }
-    phaseHolder[0] = arrowsPhaseAnim
+    phaseHolder[0] = quantizedPhase
     val directionArrows = remember(mapView) {
         RouteDirectionArrowsOverlay(
             pointsProvider = { trackPolyline.actualPoints ?: emptyList() },
             phaseProvider = { phaseHolder[0] },
         )
     }
-    LaunchedEffect(arrowsPhaseAnim) { mapView.invalidate() }
+    LaunchedEffect(quantizedPhase) { mapView.invalidate() }
 
     // Marker icons cache per tipo (evita di ricreare il bitmap a ogni marker).
     val iconCache = remember { mutableMapOf<SentieroMarkerType, Drawable>() }
@@ -141,7 +145,20 @@ fun TsmSentieriMapView(
     // Info window custom (tema scuro) condivisa da tutti i marker, al posto del bubble di default.
     val sharedInfoWindow = remember(mapView) { TsmMarkerInfoWindow(mapView) }
 
-    LaunchedEffect(markers, polyline) {
+    // Fingerprint per-valore del contenuto: una nuova identità di lista con lo
+    // stesso contenuto (parent che non usa remember) NON deve ri-eseguire il
+    // rebuild + auto-fit, altrimenti lo zoom dell'utente viene riportato al
+    // livello bounding-box a ogni ricomposizione ("zoom bloccato troppo distante").
+    val contentKey = remember(markers, polyline) {
+        buildString {
+            append(polyline.size)
+            polyline.firstOrNull()?.let { append('|'); append(it.latitude); append(','); append(it.longitude) }
+            polyline.lastOrNull()?.let { append('|'); append(it.latitude); append(','); append(it.longitude) }
+            markers.forEach { append('|'); append(it.id); append(':'); append(it.point.latitude); append(','); append(it.point.longitude) }
+        }
+    }
+
+    LaunchedEffect(contentKey) {
         InfoWindow.closeAllInfoWindowsOn(mapView)
         mapView.overlays.clear()
 

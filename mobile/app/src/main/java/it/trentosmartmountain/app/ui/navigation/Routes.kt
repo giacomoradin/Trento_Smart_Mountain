@@ -20,6 +20,8 @@ object Routes {
   const val MAIN_RIFUGIO = "main_rifugio"
   /** Scheda profilo del rifugista (identità struttura + bacheca + logout). */
   const val REFUGE_PROFILE = "refuge_profile"
+  /** Simulatore Rifiuti & Logistica del rifugio (ADR-002, MVP). */
+  const val REFUGE_WASTE = "refuge_waste"
   /** Recupero password via email. */
   const val FORGOT_PASSWORD = "forgot_password"
   /** Dettaglio sessione escursione (modale sul nav principale). */

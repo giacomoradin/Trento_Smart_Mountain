@@ -568,20 +568,8 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
 
     fun dismissAvviaConfirm() = _uiState.update { it.copy(showAvviaConfirm = false) }
 
-    fun leaderStop() {
-        val sessionId = _uiState.value.session?._id ?: return
-        // 1) Ferma/salva il tracking del leader (dialog Salva/Scarta via coordinator,
-        //    se sta tracciando su questo device).
-        liveController.leaderStop(viewModelScope, sessionId)
-        // 2) ADR-001: "Arresta" del capogruppo CHIUDE la sessione per TUTTI (force).
-        //    Vale sempre, anche se un partecipante è ancora live/non concluso (niente
-        //    più ghost che bloccano). Non dipende dall'activeSessionId del tab Registra.
-        viewModelScope.launch {
-            SessionCommandRepository(getApplication()).forceCloseSession(sessionId)
-            bumpLiveUi()
-            reloadSessionQuiet(sessionId)
-        }
-    }
+    // NB: l'Arresta/Chiudi del capogruppo passa SEMPRE dal dialog di conferma
+    // (requestCloseSession → closeSessionForAll); nessuna chiusura da singolo tap.
 
     fun joinLive(onNavigate: () -> Unit) {
         val sessionId = _uiState.value.session?._id ?: return
@@ -614,9 +602,15 @@ class SessionDetailViewModel(application: Application) : AndroidViewModel(applic
      */
     fun closeSessionForAll() {
         val sessionId = _uiState.value.session?._id ?: return
+        // 1) Ferma/salva anche l'eventuale tracking locale del leader (dialog
+        //    Salva/Scarta via coordinator, se sta tracciando su questo device).
+        liveController.leaderStop(viewModelScope, sessionId)
+        // 2) ADR-001: force-close per TUTTI (il backend autorizza solo
+        //    creator/leader effettivo: FORBIDDEN_NOT_LEADER per gli altri).
         viewModelScope.launch {
             val ok = SessionCommandRepository(getApplication()).forceCloseSession(sessionId)
             if (ok) reloadSessionQuiet(sessionId)
+            bumpLiveUi()
             _uiState.update { it.copy(showCloseSessionConfirm = false) }
         }
     }

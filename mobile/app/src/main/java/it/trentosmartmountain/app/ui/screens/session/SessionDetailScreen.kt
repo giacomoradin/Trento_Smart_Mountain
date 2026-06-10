@@ -550,12 +550,10 @@ fun SessionDetailScreen(
                         viewModel.requestLeaderStart { onAvviaConfirmed(sessionId) }
                     },
                     onLeaderStop = {
-                        // Arresta la sessione: se è in corso un'attività, il
-                        // SessionStopCoordinator fa comparire su Registra il dialog
-                        // "Salva attività" (stessa logica di "Termina"). Torniamo alla
-                        // shell così il dialog è visibile e l'attività non viene persa.
-                        viewModel.leaderStop()
-                        onBack()
+                        // ADR-001: "Arresta" del capogruppo chiude la sessione per
+                        // TUTTI → passa SEMPRE dal dialog di conferma (stesso flusso
+                        // di "Chiudi sessione per tutti"), mai da un singolo tap.
+                        viewModel.requestCloseSession()
                     },
                     onJoinLive = {
                         viewModel.joinLive { onAvviaConfirmed(sessionId) }
@@ -609,7 +607,13 @@ fun SessionDetailScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = { viewModel.closeSessionForAll() },
+                    onClick = {
+                        // closeSessionForAll ferma anche l'eventuale tracking locale
+                        // del leader (dialog "Salva attività" via coordinator) —
+                        // torniamo alla shell così quel dialog è visibile.
+                        viewModel.closeSessionForAll()
+                        onBack()
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
                 ) { Text("Chiudi per tutti") }
             },

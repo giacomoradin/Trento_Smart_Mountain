@@ -126,7 +126,11 @@ class TrackingPersistenceRepository(context: Context) {
         startTimeMs = startMs,
         endTimeMs = now,
         movingSeconds = snapshot.movingSeconds,
-        totalSeconds = snapshot.movingSeconds,
+        // Tempo totale wall-clock start→stop: include le pause (auto e manuali).
+        // Prima era salvato = movingSeconds, quindi la timeline del dettaglio
+        // attività non poteva MAI mostrare l'evento "Pause" (total > moving
+        // era sempre falso).
+        totalSeconds = ((now - startMs) / 1000L).coerceAtLeast(snapshot.movingSeconds),
         distanceMeters = snapshot.distanceMeters,
         elevationGainMeters = snapshot.elevationGainMeters,
         currentAltitudeMeters = snapshot.currentAltitudeMeters,

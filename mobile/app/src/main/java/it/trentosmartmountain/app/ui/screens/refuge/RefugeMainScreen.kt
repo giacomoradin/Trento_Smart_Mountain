@@ -18,8 +18,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.outlined.Air
+import androidx.compose.material.icons.outlined.Recycling
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.WaterDrop
@@ -144,9 +146,25 @@ private fun WasteEntryCard(onClick: () -> Unit) {
     onClick = onClick,
     color = CardBg,
     shape = RoundedCornerShape(14.dp),
+    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
     modifier = Modifier.fillMaxWidth(),
   ) {
     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+      Surface(
+        modifier = Modifier.size(44.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF15301B),
+      ) {
+        Box(contentAlignment = Alignment.Center) {
+          Icon(
+            Icons.Outlined.Recycling,
+            contentDescription = null,
+            tint = OnlineGreen,
+            modifier = Modifier.size(26.dp),
+          )
+        }
+      }
+      Spacer(Modifier.width(12.dp))
       Column(Modifier.weight(1f)) {
         Text(
           "Rifiuti & Logistica",
@@ -155,13 +173,17 @@ private fun WasteEntryCard(onClick: () -> Unit) {
           style = MaterialTheme.typography.titleSmall,
         )
         Text(
-          "Simula il bilancio stagionale e confronta i costi di evacuazione (elicottero, teleferica, drone).",
+          "Bilancio stagionale e costi di evacuazione (elicottero, teleferica, drone).",
           color = TextSecondary,
           style = MaterialTheme.typography.bodySmall,
         )
       }
-      Spacer(Modifier.width(12.dp))
-      Text("→", color = Cyan, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+      Spacer(Modifier.width(8.dp))
+      Icon(
+        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = Cyan,
+      )
     }
   }
 }

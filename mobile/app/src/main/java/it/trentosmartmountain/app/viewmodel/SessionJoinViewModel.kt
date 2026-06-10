@@ -42,6 +42,8 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
         val isRemoving: Boolean = false,
         val currentUserId: String = "",
         val avviaConfirmSessionId: String? = null,
+        /** Sessione per cui è aperto il dialog di conferma "Arresta per tutti" (ADR-001). */
+        val arrestaConfirmSessionId: String? = null,
     )
 
     data class RemovalRequest(val sessionId: String, val mode: RemovalMode)
@@ -228,14 +230,33 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
         _uiState.update { it.copy(avviaConfirmSessionId = null) }
     }
 
-    fun leaderStop(sessionId: String) {
+    /**
+     * Apre il dialog di conferma per "Arresta" (ADR-001: chiude per TUTTI).
+     * L'azione distruttiva non parte mai da un singolo tap.
+     */
+    fun requestLeaderStop(sessionId: String) {
+        _uiState.update { it.copy(arrestaConfirmSessionId = sessionId) }
+    }
+
+    fun dismissLeaderStop() {
+        _uiState.update { it.copy(arrestaConfirmSessionId = null) }
+    }
+
+    /** Conferma dal dialog: esegue lo stop coordinato + force-close. */
+    fun confirmLeaderStop() {
+        val sessionId = _uiState.value.arrestaConfirmSessionId ?: return
+        _uiState.update { it.copy(arrestaConfirmSessionId = null) }
+        leaderStop(sessionId)
+    }
+
+    private fun leaderStop(sessionId: String) {
         // 1) Ferma/salva il tracking del leader (dialog Salva/Scarta via coordinator,
         //    se sta tracciando su questo device).
         liveController.leaderStop(viewModelScope, sessionId)
         // 2) ADR-001: "Arresta" del capogruppo CHIUDE la sessione per TUTTI (force).
-        //    Stessa semantica di SessionDetailViewModel.leaderStop — senza questo
-        //    force-close, dal tab Unisciti la sessione restava ACTIVE per gli altri
-        //    partecipanti (comportamento divergente dal dettaglio sessione).
+        //    Stessa semantica di SessionDetailViewModel — senza questo force-close,
+        //    dal tab Unisciti la sessione restava ACTIVE per gli altri partecipanti.
+        //    Il backend autorizza solo creator/leader effettivo (FORBIDDEN_NOT_LEADER).
         viewModelScope.launch {
             SessionCommandRepository(getApplication()).forceCloseSession(sessionId)
             refreshLiveStates()

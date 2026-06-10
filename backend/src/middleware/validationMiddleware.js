@@ -48,8 +48,12 @@ const objectIdField = Joi.string()
   .pattern(/^[0-9a-fA-F]{24}$/)
   .message("ID non valido");
 
+// Login: il campo `email` accetta ORA sia un'email sia uno username (login con
+// l'uno o l'altro). Quindi NON imponiamo più il formato email: stringa generica
+// (3-254 char). Il service risolve l'utente per email O username. Backward-compat:
+// il client continua a inviare il campo `email`.
 export const loginSchema = Joi.object({
-  email: emailField.required(),
+  email: Joi.string().trim().min(3).max(254).required(),
   password: passwordField.required(),
 });
 
@@ -107,6 +111,9 @@ const gpxStatsSchema = Joi.object({
     .max(7 * 24 * 3600),
 });
 
+// Tracciato pianificato: polyline campionata + bounding box opzionale.
+// Limite a 2000 punti (allineato al downsampling lato client) per evitare
+// payload e documenti sproporzionati.
 const plannedRouteSchema = Joi.object({
   source: Joi.string().valid("GPX", "SAT").required(),
   polylinePoints: Joi.array()
@@ -156,6 +163,8 @@ export const createSessionSchema = Joi.object({
   minExperienceLevel: difficultyField,
   gpxFileName: Joi.string().max(200),
   gpxStats: gpxStatsSchema,
+  // Codice sentiero SAT (modalità DB); null/assente in modalità GPX.
+  sentieroCode: Joi.string().max(40).trim().allow(null, ""),
   plannedRoute: plannedRouteSchema.optional(),
 });
 
@@ -280,6 +289,90 @@ export const idParamSchema = Joi.object({
   id: objectIdField.required(),
 });
 
+// Path params `:id` (sessione) + `:userId` (partecipante target) per le route
+// di approvazione/rifiuto/rimozione partecipanti.
+export const participantParamsSchema = Joi.object({
+  id: objectIdField.required(),
+  userId: objectIdField.required(),
+});
+
+// Path param `:userId` (es. GET /stories/user/:userId).
+export const userIdParamSchema = Joi.object({
+  userId: objectIdField.required(),
+});
+
+// ── Stories ─────────────────────────────────────────────────────────────────
+// Cap dimensione media (lunghezza Base64 ≈ byte). Il body limit globale è 5mb
+// (securityMiddleware): teniamo margine col cap per-media; il controllo del
+// totale per-storia è nel service. durationSec ≤ 10 per i video brevi.
+const STORY_MEDIA_MAX_CHARS = 3_800_000; // ~3.8MB per singolo media (video)
+
+const storyMediaItemSchema = Joi.object({
+  kind: Joi.string().valid("image", "video").required(),
+  dataUri: Joi.string()
+    .pattern(/^data:(image|video)\/[a-zA-Z0-9.+-]+;base64,/)
+    .max(STORY_MEDIA_MAX_CHARS)
+    .required(),
+  durationSec: Joi.number().min(0).max(10).optional(),
+});
+
+const storyOverlayPointSchema = Joi.object({
+  lat: Joi.number().min(-90).max(90).required(),
+  lon: Joi.number().min(-180).max(180).required(),
+});
+
+const storyStickerTransformSchema = Joi.object({
+  offsetX: Joi.number().required(),
+  offsetY: Joi.number().required(),
+  scale: Joi.number().min(0.1).max(5).required(),
+  rotationDeg: Joi.number().required(),
+});
+
+const hexColorField = Joi.string().pattern(/^#[0-9A-Fa-f]{6}$/);
+
+export const createStorySchema = Joi.object({
+  type: Joi.string().valid("planned_session", "activity").required(),
+  sessionId: objectIdField.optional(),
+  activityId: objectIdField.optional(),
+  caption: Joi.string().trim().max(200).allow("", null).optional(),
+  media: Joi.array().items(storyMediaItemSchema).max(4).default([]),
+  overlay: Joi.object({
+    title: Joi.string().max(120).allow("", null),
+    activityType: Joi.string().max(40).allow("", null),
+    difficultyLevel: Joi.string().max(8).allow("", null),
+    distanceMeters: Joi.number().min(0).allow(null),
+    elevationGainM: Joi.number().min(0).allow(null),
+    movingSeconds: Joi.number().min(0).allow(null),
+    routePolyline: Joi.array().items(storyOverlayPointSchema).max(500).optional(),
+    editorDecor: Joi.object({
+      routeOverlayKind: Joi.string().valid("trace", "map_widget", "map_scene").optional(),
+      routeColor: hexColorField.optional(),
+      routeTransform: storyStickerTransformSchema.optional(),
+      mapWidgetTransform: storyStickerTransformSchema.optional(),
+      floatingText: Joi.string().trim().max(80).allow("", null).optional(),
+      textColor: hexColorField.optional(),
+      textTransform: storyStickerTransformSchema.optional(),
+      textFont: Joi.string()
+        .valid("classic", "elegant", "mono", "handwritten")
+        .optional(),
+    }).optional(),
+  }).optional(),
+})
+  .custom((value, helpers) => {
+    // Almeno un riferimento coerente col type (validazione semantica).
+    if (value.type === "planned_session" && !value.sessionId) {
+      return helpers.error("any.invalid");
+    }
+    if (value.type === "activity" && !value.activityId && !value.sessionId) {
+      return helpers.error("any.invalid");
+    }
+    return value;
+  })
+  .messages({
+    "any.invalid":
+      "Riferimento mancante: planned_session richiede sessionId, activity richiede activityId o sessionId.",
+  });
+
 export const statsQuerySchema = Joi.object({
   year: Joi.number().integer().min(2000).max(3000),
 });
@@ -300,6 +393,10 @@ export const changePasswordSchema = Joi.object({
 });
 
 export const deleteAccountSchema = Joi.object({
+  password: Joi.string().required(),
+});
+
+export const verifyPasswordSchema = Joi.object({
   password: Joi.string().required(),
 });
 
@@ -432,6 +529,29 @@ export const commentSchema = Joi.object({
 });
 
 /**
+ * Body POST bacheca rifugi: `type` whitelist, titolo 1..120, testo 1..2000,
+ * `validUntil` ISO opzionale. Allineato a models/refugeBoardPost.js + boardService.
+ * La validazione nel service resta come defense-in-depth.
+ */
+export const createBoardPostSchema = Joi.object({
+  type: Joi.string().valid("info", "avviso", "pericolo").default("info"),
+  title: Joi.string().min(1).max(120).trim().required(),
+  body: Joi.string().min(1).max(2000).trim().required(),
+  validUntil: Joi.date().iso().allow(null).optional(),
+});
+
+/**
+ * Body PATCH bacheca: tutti i campi opzionali ma almeno uno presente (`.min(1)`).
+ * Stessi vincoli del create per i campi forniti.
+ */
+export const updateBoardPostSchema = Joi.object({
+  type: Joi.string().valid("info", "avviso", "pericolo"),
+  title: Joi.string().min(1).max(120).trim(),
+  body: Joi.string().min(1).max(2000).trim(),
+  validUntil: Joi.date().iso().allow(null),
+}).min(1);
+
+/**
  * Params per DELETE /comments/:cid. ObjectId del commento.
  * Nominato `cid` per distinguerlo dal `:id` del parent nelle route nested.
  */
@@ -517,4 +637,32 @@ export const patchEmergencySchema = Joi.object({
     then: Joi.optional(),
     otherwise: Joi.forbidden(),
   }),
+});
+
+/**
+ * Body POST /api/v1/refuge/waste/simulate (ADR-002, MVP).
+ * Parametri del bilancio di massa stagionale; le riduzioni per categoria sono
+ * applicate solo se `compactorEnabled` ed entro un cap prudenziale del 95%.
+ */
+export const wasteSimulationSchema = Joi.object({
+  periodDays: Joi.number().integer().min(1).max(365).required(),
+  beds: Joi.number().integer().min(0).max(500).required(),
+  bedOccupancy: Joi.number().min(0).max(1).required(),
+  dayVisitors: Joi.number().integer().min(0).max(5000).required(),
+  wastePerGuestKg: Joi.number().min(0).max(5).default(0.2),
+  wastePerVisitorKg: Joi.number().min(0).max(5).default(0.1),
+  screeningPerGuestKg: Joi.number().min(0).max(5).default(0.2),
+  compactorEnabled: Joi.boolean().default(false),
+  reductions: Joi.array()
+    .items(
+      Joi.object({
+        category: Joi.string()
+          .valid("Organico", "Plastica", "Vetro", "Metalli", "Cartone", "Altro/indiff.")
+          .required(),
+        massReductionPct: Joi.number().min(0).max(95).default(0),
+        volumeReductionPct: Joi.number().min(0).max(95).default(0),
+      }),
+    )
+    .max(6)
+    .default([]),
 });

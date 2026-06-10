@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-  android:width="108dp"
-  android:height="108dp"
-  android:viewportWidth="108"
-  android:viewportHeight="108">
-  <path
-    android:fillColor="@color/tsm_primary"
-    android:pathData="M54,28 L78,72 L30,72 Z" />
-</vector>
+<!-- Foreground adaptive icon: logo da Figma "TSM logo" (docs/TSM_logo.jpeg).
+     Inset ~15%: i vertici del rombo restano dentro il canvas (non toccano i bordi). -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_foreground_img"
+    android:inset="15%" />

@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
  */
 data class ProfileV2UiState(
     val isLoadingProfile: Boolean = true,
+    val isRefreshing: Boolean = false,
     val isSavingSection: Boolean = false,
     val personalInfo: PersonalInfo? = null,
     val experience: Experience? = null,
@@ -62,20 +63,25 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /** Ricarica il profilo dal server. Chiamato in init e via pull-to-refresh manuale. */
-    fun loadProfile() {
+    fun loadProfile(manualRefresh: Boolean = false) {
         viewModelScope.launch {
             val userId = tokenStorage.getToken()?.let { JwtDecoder.userIdFrom(it) }
             if (userId.isNullOrBlank()) {
-                _state.value = _state.value.copy(isLoadingProfile = false)
+                _state.value = _state.value.copy(isLoadingProfile = false, isRefreshing = false)
                 return@launch
             }
-            _state.value = _state.value.copy(isLoadingProfile = true)
+            _state.value =
+                _state.value.copy(
+                    isLoadingProfile = if (manualRefresh) _state.value.isLoadingProfile else true,
+                    isRefreshing = manualRefresh,
+                )
             runCatching { api.getUserById(userId) }
                 .onSuccess { resp ->
                     val body = resp.body()
                     if (resp.isSuccessful && body != null) {
                         _state.value = _state.value.copy(
                             isLoadingProfile = false,
+                            isRefreshing = false,
                             personalInfo = body.personalInfo,
                             experience = body.experience,
                             preferences = body.preferences,
@@ -89,10 +95,12 @@ class ProfileV2ViewModel(application: Application) : AndroidViewModel(applicatio
                             language = body.preferences?.language,
                         )
                     } else {
-                        _state.value = _state.value.copy(isLoadingProfile = false)
+                        _state.value = _state.value.copy(isLoadingProfile = false, isRefreshing = false)
                     }
                 }
-                .onFailure { _state.value = _state.value.copy(isLoadingProfile = false) }
+                .onFailure {
+                    _state.value = _state.value.copy(isLoadingProfile = false, isRefreshing = false)
+                }
             // Carico in seconda battuta gli stats settimanali. Indipendente dal
             // profilo: se fallisce non azzeriamo i dati personali, restano null.
             loadWeeklyStats()

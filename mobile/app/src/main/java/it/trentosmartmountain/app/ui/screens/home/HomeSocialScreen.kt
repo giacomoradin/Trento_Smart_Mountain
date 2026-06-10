@@ -5,21 +5,37 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -28,19 +44,32 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.ui.components.FeedSkeleton
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
 import it.trentosmartmountain.app.ui.components.TsmEmptyState
 import it.trentosmartmountain.app.ui.components.TsmErrorState
 import it.trentosmartmountain.app.ui.components.TsmLoadingState
 import it.trentosmartmountain.app.ui.theme.TsmColors
+import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.data.remote.JwtDecoder
+import it.trentosmartmountain.app.data.remote.dto.StoryViewerLaunchContext
 import it.trentosmartmountain.app.viewmodel.SocialFeedViewModel
 
 private val DarkSurface = TsmColors.FeedBackground
 private val AccentCyan = TsmColors.Cyan
+private val TextPrimary = TsmColors.TextPrimary
 private val TextSecondary = TsmColors.TextSecondary
 
 /**
@@ -68,13 +97,29 @@ fun HomeSocialScreen(
     ),
     onUserClick: (userId: String) -> Unit = {},
     onCommentClick: (itemId: String, kind: String) -> Unit = { _, _ -> },
+    /** Tap sul corpo della card: apre il dettaglio social del post. */
+    onOpenDetail: (item: it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     /** Tap su anello LIVE: apre la SessionDetail della sessione in corso. */
     onLiveClick: (sessionId: String) -> Unit = {},
-    /** Tap su anello STORY: apre lo StoryViewerScreen full-screen. */
-    onStoryClick: (refId: String, kind: String) -> Unit = { _, _ -> },
+    /** Tap su anello STORY: apre lo StoryViewerScreen (coda autori per swipe tra utenti). */
+    onStoryClick: (StoryViewerLaunchContext) -> Unit = {},
+    /** Tap sulla barra "Trova persone": apre la ricerca utenti ("aggiungi amici"). */
+    onSearchClick: () -> Unit = {},
+    /** Tap sull'icona trofeo: apre la classifica settimanale. */
+    onLeaderboardClick: () -> Unit = {},
+    /** Tap sulla campanella: apre il centro notifiche. */
+    onNotificationsClick: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val storyAuthorIds = remember(state.socialRow) {
+        state.socialRow.filter { it.status == "story" }.map { it.user._id }
+    }
+    val currentUserId = remember {
+        JwtDecoder.userIdFrom(
+            (context.applicationContext as TsmApplication).tokenStorage.getToken().orEmpty(),
+        )
+    }
     // Target attuale della BottomSheet commenti (null = chiusa).
     var commentsTarget by remember { mutableStateOf<CommentsTarget?>(null) }
 
@@ -92,29 +137,83 @@ fun HomeSocialScreen(
             viewModel.clearShareMessages()
         }
     }
+    LaunchedEffect(state.deleteSuccess) {
+        state.deleteSuccess?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearDeleteMessages()
+        }
+    }
+    LaunchedEffect(state.deleteError) {
+        state.deleteError?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.clearDeleteMessages()
+        }
+    }
 
-    Surface(modifier = modifier.fillMaxSize(), color = DarkSurface) {
+    // Al ritorno sul feed (es. dopo aver pubblicato una storia dal composer)
+    // aggiorniamo SOLO gli anelli live/story — così "La tua storia" appena creata
+    // compare subito, senza pull-to-refresh e senza resettare lo scroll del feed.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshSocialRow()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+     // Aurora di profondità dietro al feed: le card glass "galleggiano" sopra.
+     TsmAuroraBackground(
+        modifier = Modifier.fillMaxSize(),
+        baseColor = DarkSurface,
+        particleCount = 22,
+     )
+     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
+      Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+          Box(modifier = Modifier.weight(1f)) { SearchEntryBar(onClick = onSearchClick) }
+          IconButton(onClick = onLeaderboardClick) {
+            Icon(
+              Icons.Filled.EmojiEvents,
+              contentDescription = stringResource(R.string.cd_leaderboard),
+              tint = AccentCyan,
+            )
+          }
+          IconButton(
+            onClick = {
+              // Aprire = leggere: azzeriamo subito il badge locale (server le marca lette).
+              viewModel.clearNotificationBadge()
+              onNotificationsClick()
+            },
+            modifier = Modifier.padding(end = 8.dp),
+          ) {
+            BadgedBox(badge = {
+              if (state.unreadNotifications > 0) {
+                Badge {
+                  Text(if (state.unreadNotifications > 99) "99+" else "${state.unreadNotifications}")
+                }
+              }
+            }) {
+              Icon(Icons.Filled.Notifications, contentDescription = stringResource(R.string.cd_notifications), tint = AccentCyan)
+            }
+          }
+        }
         PullToRefreshBox(
             // Lo spinner pull-to-refresh va mostrato solo durante un refresh CON
             // contenuti già a schermo; il primo caricamento usa TsmLoadingState.
             isRefreshing = state.isLoading && state.items.isNotEmpty(),
             onRefresh = { viewModel.refresh() },
+            modifier = Modifier.weight(1f),
         ) {
             when {
-                state.isLoading && state.items.isEmpty() -> TsmLoadingState()
+                state.isLoading && state.items.isEmpty() && state.socialRow.isEmpty() -> FeedSkeleton()
                 // Errore di rete con lista vuota: stato dedicato (prima appariva
                 // come "feed vuoto", facendo credere all'utente di non seguire
                 // nessuno invece che a un problema di connessione).
-                state.error != null && state.items.isEmpty() -> TsmErrorState(
+                state.error != null && state.items.isEmpty() && state.socialRow.isEmpty() -> TsmErrorState(
                     message = "Non riesco a caricare il feed. Controlla la connessione e riprova.",
                     onRetry = { viewModel.refresh() },
-                )
-                state.items.isEmpty() -> TsmEmptyState(
-                    emoji = "👥",
-                    title = "Il tuo feed è vuoto",
-                    message = "Segui qualcuno o pubblica una tua attività dalla sezione \"Personale\" → tap su un'attività → Condividi.",
-                    actionLabel = "Aggiorna",
-                    onAction = { viewModel.refresh() },
                 )
                 else -> FeedList(
                     items = state.items,
@@ -123,6 +222,7 @@ fun HomeSocialScreen(
                     onLoadMore = viewModel::loadMore,
                     onLikeToggle = viewModel::toggleLike,
                     onUserClick = onUserClick,
+                    onOpenDetail = onOpenDetail,
                     onCommentClick = { id, kind ->
                         // Apre la BottomSheet commenti per il post tappato.
                         // L'on demand: il VM carica la lista la prima volta che
@@ -134,23 +234,68 @@ fun HomeSocialScreen(
                         onCommentClick(id, kind)
                     },
                     socialRow = state.socialRow,
-                    viewedStoryIds = state.viewedStoryIds,
                     onUserAvatarClick = onUserClick,
                     onLiveClick = onLiveClick,
-                    onStoryClick = onStoryClick,
+                    onStoryClick = { authorId ->
+                        onStoryClick(
+                            StoryViewerLaunchContext(
+                                userIds = storyAuthorIds,
+                                startIndex = storyAuthorIds.indexOf(authorId).coerceAtLeast(0),
+                            ),
+                        )
+                    },
+                    currentUserId = currentUserId,
+                    onDeletePost = { item -> viewModel.removeFeedPost(item) },
+                    onRefreshEmpty = { viewModel.refresh() },
                 )
             }
         }
+      }
+     }
     }
 
     // BottomSheet condivisa: si apre solo quando `commentsTarget != null`.
     CommentsBottomSheet(
         target = commentsTarget,
         onDismiss = { commentsTarget = null },
+        onUserClick = onUserClick,
         // Aggiorna SOLO il contatore dell'item interessato alla chiusura: niente
         // più refresh totale del feed (che ricaricava tutto e perdeva lo scroll).
         onCountChanged = viewModel::setCommentCount,
     )
+}
+
+/**
+ * Barra "Trova persone da seguire" in cima al feed: non è un campo editabile,
+ * è un bottone che apre la schermata di ricerca utenti dedicata (flusso
+ * "aggiungi amici"). Stile coerente con una search bar per affordance chiara.
+ */
+@Composable
+private fun SearchEntryBar(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF2C2C2E),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Filled.Search,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                stringResource(R.string.social_search_bar),
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
 }
 
 @Composable
@@ -161,12 +306,15 @@ private fun FeedList(
     onLoadMore: () -> Unit,
     onLikeToggle: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit,
     onUserClick: (String) -> Unit,
+    onOpenDetail: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     onCommentClick: (String, String) -> Unit,
     socialRow: List<it.trentosmartmountain.app.data.remote.dto.SocialRowItem> = emptyList(),
-    viewedStoryIds: Set<String> = emptySet(),
     onUserAvatarClick: (String) -> Unit = {},
     onLiveClick: (String) -> Unit = {},
-    onStoryClick: (String, String) -> Unit = { _, _ -> },
+    onStoryClick: (String) -> Unit = {},
+    currentUserId: String? = null,
+    onDeletePost: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
+    onRefreshEmpty: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
 
@@ -194,11 +342,39 @@ private fun FeedList(
             item(key = "avatar-row") {
                 AvatarRow(
                     items = socialRow,
-                    viewedStoryIds = viewedStoryIds,
                     onUserClick = onUserAvatarClick,
                     onLiveClick = onLiveClick,
                     onStoryClick = onStoryClick,
                 )
+            }
+        }
+        if (items.isEmpty()) {
+            item(key = "feed-empty") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp, horizontal = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("👥", style = MaterialTheme.typography.displaySmall)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Il tuo feed è vuoto",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Segui qualcuno o pubblica una tua attività dalla sezione \"Personale\" → tap su un'attività → Condividi.",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    TextButton(onClick = onRefreshEmpty) {
+                        Text("Aggiorna", color = AccentCyan, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
         items(
@@ -210,6 +386,9 @@ private fun FeedList(
                 onLikeToggle = { onLikeToggle(feedItem) },
                 onCommentClick = { onCommentClick(feedItem.id, feedItem.kind) },
                 onUserClick = onUserClick,
+                onOpenDetail = { onOpenDetail(feedItem) },
+                currentUserId = currentUserId,
+                onDeletePost = { onDeletePost(feedItem) },
             )
         }
         if (isLoadingMore) {

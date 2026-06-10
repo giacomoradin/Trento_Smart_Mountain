@@ -92,6 +92,12 @@ fun LiveParticipantContent(
       }
     }
 
+    // Sesso — rispetta profileVisibility (privato / solo amici / pubblico).
+    LeaderDetailRow(
+      label = stringResource(R.string.live_participant_sex),
+      value = formatSex(user.sex),
+    )
+
     if (isGroupLeaderViewer || isSelfViewer) {
       Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
@@ -110,10 +116,6 @@ fun LiveParticipantContent(
         LeaderDetailRow(
           label = stringResource(R.string.live_participant_altitude),
           value = formatAltitude(participant.location.altitudeM),
-        )
-        LeaderDetailRow(
-          label = stringResource(R.string.live_participant_sex),
-          value = formatSex(user.sex),
         )
         LeaderDetailRow(
           label = stringResource(R.string.live_participant_last_update),
@@ -176,7 +178,7 @@ fun LiveUserDto.displayLabel(): String {
 private fun formatAltitude(altitudeM: Double?): String =
   altitudeM?.let { "${it.toInt()} m" } ?: "—"
 
-private fun formatSex(sex: String?): String =
+fun formatSex(sex: String?): String =
   when (sex?.uppercase(Locale.ROOT)) {
     "M" -> "Maschio"
     "F" -> "Femmina"

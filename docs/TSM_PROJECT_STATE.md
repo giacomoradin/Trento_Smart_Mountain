@@ -1,5 +1,199 @@
 # Trento Smart Mountain — Stato del progetto
 
+## 🔋 Sprint 3 kick-off — 10 giugno 2026 (bug fix, consumi, sicurezza, modulo rifiuti)
+
+> Backend **261/261 test verdi** (19 suite, +8 modulo rifiuti); mobile **`compileDebugKotlin` BUILD SUCCESSFUL**. Branch `UI`, nessun push (lavoro locale).
+
+**Bug fix (B-01/02/03 della retrospettiva M4):**
+- **B-01 — Zoom mappa "bloccato troppo distante"**: root cause = liste punti ricreate a ogni ricomposizione (no `remember`) che ri-triggeravano `zoomToBoundingBox` resettando lo zoom dell'utente al livello fit. Fix: `remember` in `TsmRouteMapDialog` + fingerprint **per-valore** del contenuto in `TsmSentieriMapView` (`contentKey`) e `TsmRouteMapPreview` (`routeKey`) al posto delle chiavi per-identità.
+- **B-02 — Badge NFC sempre "ATTIVO"**: il badge in `ProfileScreen` era condizionato a `nfcAvailable` (presenza chip) invece dello stato reattivo `nfcEnabled` (già aggiornato da BroadcastReceiver + ON_RESUME). Ora badge a 3 stati: ATTIVO (verde) / DISATTIVATO (ambra) / NON DISPONIBILE (rosso).
+- **B-03 — "Termina" incoerente Unisciti vs dettaglio**: `SessionJoinViewModel.leaderStop` non eseguiva il **force-close ADR-001** (solo stop locale → la sessione restava ACTIVE per gli altri); inoltre l'Hub bypassava `leaderStop` quando live. Ora entrambi i flussi convergono: stop coordinato + `forceCloseSession` + navigazione al dialog "Salva attività" se live.
+
+**Audit consumi (focus batteria):**
+- **Frecce direzionali mappe**: la fase animata cambiava a ogni frame → `MapView.invalidate()` a ~60 Hz *per ogni mappa visibile*. Quantizzata a 18 step/ciclo → ~7 Hz (−87/89% di redraw) in `TsmRouteMapPreview` e `TsmSentieriMapView`, visivamente identico.
+- **GPS idle (tab Registra, non registrando)**: `UserLocationTracker` da HIGH_ACCURACY @2 s/1 s → @5 s/2,5 s (−60% duty cycle); durante la registrazione resta il ForegroundTrackingService a 2 s.
+- **SyncManager**: idle backoff del poll loop 60 s → 2 min → 5 min (cap) a coda vuota; `enqueueImmediate` e nuovo lavoro resettano a 60 s.
+- Verificati e lasciati invariati (giustificati): live polling sessione 5 s (sicurezza gruppo), SOS retry 15 s (solo con SOS pendente), BLE `SCAN_MODE_LOW_LATENCY` (solo durante SOS attivo), animazioni decorative (composition-scoped).
+
+**Sicurezza:**
+- `requireRoles("rifugio", "admin")` su `/api/v1/refuge/*` (prima bastava un JWT qualsiasi).
+- Verificato: `authenticate` + `authenticatedLimiter` su tutte le route Sprint 2 (stories, board, follow, emergency, badge, credits); Joi su tutti i write.
+- `npm audit --omit=dev`: **0 vulnerabilità** (erano 6 moderate a inizio Sprint 2).
+
+**Nuovo — Modulo Rifiuti & Logistica (ADR-002, MVP read-only):**
+- Backend: `services/wasteService.js` (config 6 categorie + grigliato, 4 vettori, formule del Simulatore web/elaborato OGA), route `/api/v1/refuge/waste/{config,simulate}` con auth+limiter+ruoli+Joi (`wasteSimulationSchema`), 8 test in `__tests__/routes/waste.test.js` con valori di riferimento (elicottero 2 viaggi → 2,00 €/kg, coerente col c_kg dell'elaborato).
+- Mobile: `WasteSimulatorScreen` + `WasteSimulatorViewModel` + DTO; entry card "Rifiuti & Logistica" nella dashboard rifugio; route `REFUGE_WASTE`.
+- Prossimi step (non MVP): persistenza `WasteRecord` (storico stagionale), riduzioni per categoria da UI, benchmark anonimo tra rifugi.
+
+---
+
+## 🚚 Consegna — giugno 2026 (ridisegno sessioni ADR-001 + auth + polish finale)
+
+> Backend **253/253 test verdi** (18 suite); mobile **`compileDebugKotlin` BUILD SUCCESSFUL**.
+
+**Sessioni — ridisegno ciclo di vita (ADR-001, vedi `docs/ADR-session-lifecycle.md`)**
+Separati i due cicli di vita prima sovrapposti su un unico `status`:
+- **Lifecycle sessione** (`PLANNED→ACTIVE→COMPLETED`) controllato dal **leader**.
+- **Partecipazione del singolo** → `participants[].participationState`
+  (`idle/live/finished/left`), **ortogonale** e non bloccante.
+- **"Arresta" del capogruppo CHIUDE sempre per tutti** (`/close` con **auto-finalize**
+  dei membri ancora live) → risolve il bug "non riesco a terminare la sessione" /
+  sessioni **ghost** tenute aperte da un partecipante che non concludeva.
+- `completeSession` = conclusione **individuale** (non forza lo stato globale);
+  auto-complete solo quando **tutti** gli accettati sono `finished/left`.
+- **Failover** esclude i membri `finished/left` (no elezione di un ghost); il creator
+  conserva sempre il diritto di chiudere.
+- Mobile: `SessionLiveStateStore.reconcileWithSessions` azzera lo stato live locale
+  anche su `COMPLETED` → eliminata l'ultima desync della doppia macchina a stati.
+- Rimosso `finishedParticipants[]` (assorbito da `participationState`).
+
+**Auth — login con email O username**: `POST /auth/login` (campo `email` = email o
+username, lookup `$or`); validazione client/server rilassata.
+
+**Logout pulisce la cache**: `ProfileViewModel.logout` ora svuota `cacheDir` + gli
+store `SharedPreferences` (`tsm_session_live_state`, `tsm_board_dismissed`) → niente
+stato stantio dopo il re-login (causa di bug segnalati).
+
+**Bug-D re-auth password**: `WRONG_PASSWORD`/`WRONG_OLD_PASSWORD` → **403** (distinto
+dal 401 "token scaduto") così il mobile non confonde "password errata" con sessione
+scaduta. Test allineati.
+
+**Polish/ottimizzazione finale**: rimosso dead code (`finishedParticipants`, import
+`Patterns` inutilizzato), commenti/doc allineati (`database_schema.md`,
+`api_reference.md`, ADR).
+
+> ⚠️ **Deploy**: tutte le modifiche backend (ADR-001 sessioni, login email/username)
+> vivono sul branch `UI` e richiedono **deploy** + **rebuild APK** per essere attive.
+
+---
+
+## 🎨 Polish grafico + hardening stabilità — giugno 2026 (consegna)
+
+> Mobile **build pulita SUCCESSFUL**; backend **248/248 test verdi** (17 suite).
+
+**Design system (riusabile)**: `TsmGradients` (preset Brush + `altitudeTint`),
+`TsmMotion` (durate/easing/spring), `TsmDimens` (spacing + corner radius),
+`TsmGlass` esteso (`TsmPulseGlow`, `TsmGlassChip`, `TsmGradientButton`),
+`TsmAnimatedCounter` (count-up).
+
+**Splash brandizzato**: eliminato il bianco all'avvio — `windowBackground` a
+gradiente montano + logo (`splash_background.xml`), tema dark; `TsmBootScreen`
+con reveal animato (logo + orizzonte montano disegnato via Canvas).
+
+**Schermate**: aurora/glass portati a parità su Formazione, Notifiche,
+Follower/Seguiti, Ricerca utenti, Classifica (oltre a Feed/Profilo/Sessione già
+fatti). Anello storie a **gradiente conico rotante**; **comet** luminosa lungo la
+traccia GPX; medaglie classifica "materiche" (oro/argento/bronzo + glow) con
+count-up; emoji placeholder → icone vettoriali; bottom nav con micro-bounce +
+colori palette.
+
+**Hardening stabilità**:
+- Backend: handler globali `unhandledRejection` / `uncaughtException` (log + shutdown
+  controllato → riavvio pulito del process manager).
+- Mobile: crash logger globale `Thread.setDefaultUncaughtExceptionHandler` (tag
+  `TSM-CRASH`) — rende diagnosticabili i crash che prima davano "schermata bianca"
+  senza traccia in Logcat. Audit `.first()`/`!!` nei path UI: già guardati.
+- Overlay mappa (frecce/comet) in `try/catch` + sanitize coordinate NaN/Inf.
+
+> _Polish opzionale futuro (non bloccante)_: scrub+tooltip interattivo
+> sull'altimetria, transizioni shared-element in navigazione, pull-to-refresh
+> custom col logo, set completo di icone custom mountain-tech, particellari
+> contestuali (neve/scintille) e sfondi reattivi al meteo. Fondamenta già pronte
+> (`TsmGradients`/`TsmMotion`/`TsmGlass`) per applicarli rapidamente.
+
+---
+
+## ✅ Chiusura Sprint 2 — giugno 2026
+
+> Build mobile **`compileDebugKotlin` BUILD SUCCESSFUL**; backend **248/248 test verdi** (17 suite).
+
+Ultimo round di fix/feature + consolidamento prima della chiusura:
+
+**Sessioni — ridisegno logica capogruppo/partecipanti**
+- **Completamento "Ibrido"**: ogni membro conclude il proprio tracking (`finishedParticipants[]` + crediti per-utente); la sessione passa a `COMPLETED` quando **tutti gli accettati** hanno finito → **sessione in solitaria** finalmente terminabile (rimossa la race `markSessionPlanned`↔`completeSession`).
+- **"Chiudi sessione per tutti"** (`POST /sessions/:id/close`): force-close del capogruppo.
+- **Failover capogruppo**: heartbeat sul live-location; se il leader è inattivo >90s → **elezione automatica** del partecipante accettato più anziano ancora live; **reclaim** automatico al rientro del creator. `currentLeaderId` + `statoFailover`.
+- **Elimina attività di sessione** propagato al server (`hiddenForUsers[]` via `DELETE /sessions/:id/from-activities`) → non riappaiono dopo logout/login.
+
+**Feed / Attività**
+- Profilo altimetrico **ricco** (gradiente per quota, marker max, assi + MIN/MAX) usato **anche nel feed** (prima ricadeva sul chart piatto). Share routing corretto (no più 404 su attività di sessione).
+- **Frecce direzionali animate** (stile Komoot) sulla polyline GPX, adattive allo zoom.
+
+**Storie**
+- Editor: **drag/pinch/rotate** di traccia e sticker risolti (gesture canonica), rotazione 1:1, toolbar premium, **scelta font** (Classico/Elegante/Mono/Corsivo), mappa aggiungibile **anche su video**.
+- Qualità immagini upload aumentata; cattura video low-res con size-limit.
+
+**Robustezza / UI**
+- Guard anti-overwrite tracking + dialog Salva/Scarta/Annulla; insets nav-bar; sfondo aurora su Sessione/Pianifica; overlay mappa hardening (try/catch + sanitize coordinate NaN).
+
+> ⚠️ **Deploy**: le modifiche backend (completamento Ibrido, `/close`, `/from-activities`, failover, story `textFont`) vivono sul branch `UI` e richiedono deploy per essere attive.
+
+---
+
+## ⏱️ Aggiornamento Sprint 3 — giugno 2026
+
+> Build mobile **`compileDebugKotlin` green**; backend **220/220 test verdi** (15 suite).
+
+Funzionalità aggiunte dopo lo Sprint 2:
+
+**Social (completo)**
+- Ricerca/scoperta utenti, liste follower/seguiti navigabili.
+- Metriche escursionistiche sul profilo (km/dislivello/uscite/punti) + classifica settimanale tra i seguiti.
+- **Notifiche** in-app (follow/like/commento) con centro notifiche + badge non-letti + deep-link.
+- Badge "Ti segue"; **gate privacy** profilo (`profileVisibility` applicato in `getHikerById` + feed + bacheca).
+
+**Rifugio — Dashboard IoT (mock)**
+- Modelli `EdgeNode`, `RefugeSensorReading`, `RefugePassage` + seed mock + `GET /api/v1/refuge/dashboard`.
+- UI dashboard fedele al mockup (sensori, edge nodes BLE-mesh, passaggi/social-credit) + scheda profilo rifugista.
+- ⚠️ Nessun ingest MQTT reale: dati generati lato server, schema definitivo.
+
+**Bacheca rifugi**
+- Modello `RefugeBoardPost` (info/avviso/pericolo, `validUntil`) + CRUD `/api/v1/board` Joi-validato.
+- Composizione lato rifugista (crea/modifica/elimina) + consultazione utenti (icona in Home/Pianificazione/Registra).
+
+**Altro**: fix bug attività (paginazione feed, cancel sfida, eliminazioni persistenti); pipeline CI; 0 vulnerabilità npm; copertura test backend 88 → 220.
+
+> _Polish residuo (non bloccante): estrazione stringhe i18n delle schermate nuove, unificazione design-token su `TsmColors`, skeleton loaders._
+
+### 🐛 Fix UI/UX mobile — giugno 2026 (sessione fix)
+
+Correzioni mirate (incluse regressioni **non ancora notate dall'utente**):
+
+- **Build mobile ripristinata**: `:app:compileDebugKotlin` non compilava più per regressioni pre-esistenti — import mancanti in `FeedCard.kt` (`fillMaxSize`/`clip`/`CircleShape`), riferimento errato `FeedUser.userId` (→ `_id`) e mismatch di tipo `List<Any>` vs `List<RoutePoint>` in `SessionHubScreen`. Risolte.
+- **Traccia GPX + altimetria come due schede swipe** — nuovo componente unico `ui/components/TsmRouteElevationPager.kt`: 1ª pagina = traccia su **mappa** OpenTopoMap con **inizio = cerchio verde** e **fine = bandiera a scacchi** (via `TsmRouteMapPreview`), 2ª pagina (swipe a destra) = **profilo altimetrico** (`ElevationSparkline`). Adottato in **feed, dettaglio social, dettaglio attività e Unisciti (lista + dettaglio sessione)**: elimina l'incoerenza per cui alcune attività pianificate mostravano solo l'altimetria e altre solo la traccia, e rimuove le copie divergenti/bacate del pager.
+- **Avatar utenti coerenti + tap → profilo social ovunque**: i partecipanti del **Dettaglio Attività** (prima iniziali statiche, non cliccabili) e del **Dettaglio Sessione**, e gli **autori dei commenti** (`CommentsBottomSheet`), ora usano `AvatarImage` (foto profilo) e al tap aprono il profilo social. `onUserClick` propagato fino a `SessionDetailScreen`, `ActivityDetailScreen`, `UserProfileScreen` e alle destinazioni in `TsmNavHost`. Le liste social (ricerca, follower/seguiti, classifica, notifiche, feed, hub sessioni) erano già conformi. _Fuori scope_: gli sheet di tracking live (`LiveParticipantSheet`/`GroupRosterMenu`) restano "schede" del partecipante sulla mappa, non navigano al profilo social.
+- **Arresto sessione da "Unisciti" con salvataggio**: arrestando una sessione **mentre il tracking è attivo**, ora compare lo stesso dialog "Salva attività" del tasto **Termina** in Registra (Salva / Scarta / Annulla) e l'escursione viene **salvata**; prima l'attività veniva **persa** (`detachFromLiveTracking`). Implementazione: il `SessionStopCoordinator`, se c'è un tracking in corso, instrada verso `requestStopTracking()` (anziché lo stacco silenzioso); `HikerMainScreen` osserva `showStopConfirm` e porta l'utente sulla tab Registra dove vive il dialog; `SessionDetailScreen` torna alla shell allo stop così il dialog è visibile.
+
+> Backend / API / DB **invariati** (nessuna modifica a endpoint o schema): `api_reference.md` e `database_schema.md` restano allineati.
+
+### 🚀 Stories reali + Approvazione partecipanti + Sesso visibile — giugno 2026
+
+> Build mobile **`compileDebugKotlin` green**; backend **238/238 test verdi (17 suite)**.
+
+Epic a fasi (0→A→B→C→D):
+
+**Fase 0 — Sesso partecipanti**: `getLiveLocations` invia `personalInfo.sex` a **tutti i membri** (non solo capogruppo); mostrato in `LiveParticipantSheet` e `GroupRosterMenu`.
+
+**Fase A — Join sessione con approvazione/rimozione**
+- `participants[]` esteso con `status` (`pending`/`accepted`, default accepted per retrocompat) + `approvedBy`; nuovo `removedUserIds[]` (ban locale alla sessione).
+- `joinSession` ora crea una **richiesta pending** (+ check ban). Nuovi endpoint: `POST /sessions/:id/participants/:userId/approve` e `/reject` (capogruppo **o** un partecipante già accettato), `DELETE /sessions/:id/participants/:userId` (rimozione definitiva, **solo capogruppo**).
+- Mobile: `ParticipantsCard` dinamica (accettati + sezione **In attesa** con accetta/rifiuta, "accettato da X", rimuovi per il capogruppo); join → feedback "richiesta inviata". +7 test backend.
+
+**Fase B — Sistema Stories reale (sostituisce la derivazione dai post)**
+- Nuovo model `Story` (TTL 24h via index): `type` (`planned_session`/`activity`), `sessionId`/`activityId`, `inviteCode` snapshot, `caption`, `media[]` (Base64 foto/video capped), `overlay` (titolo/distanza/dislivello/tempo/traccia), `viewers[]`.
+- Endpoint `/api/v1/stories`: `POST`, `GET /user/:userId`, `POST /:id/view`, `DELETE /:id` (auth + rate limit + Joi con cap dimensione media). `getSocialRowForUser` ora deriva l'anello "story" dalle Story reali (+ `hasUnviewedStory`). +8 test backend.
+
+**Fase C — Stories mobile**
+- `StoryViewerScreen` riscritto: carica le storie reali dell'autore (`/stories/user/:id`), progress segmentata + auto-advance, **media reali** (foto da Base64, video breve da cache file + `VideoView`), overlay tracciamento, bottone **"Unisciti"** per le storie `planned_session`, `markViewed` per segmento.
+- `StoryComposerScreen` + VM: picker foto/video (PhotoPicker, niente permessi), encoding Base64 (immagine compressa via `AvatarUtils`, video con cap), pubblicazione. Entry point **"Condividi come storia"** in `ActivityDetailScreen` (post-hike) e `SessionDetailScreen` (pre-hike).
+- AvatarRow / Home / Nav ricablati: le storie si aprono **per autore** (`STORY_VIEWER = story_viewer/{userId}`); nuovo `STORY_COMPOSER` con holder `pendingStoryDraft`.
+
+**Fase D — Media/permessi**: scelta gallery PhotoPicker → **nessun permesso** runtime aggiuntivo necessario; cap media coerenti client/server (immagine ≤ ~1.5MB, video ≤ ~3.5MB, sotto il body limit 5mb).
+
+> Media decisi con l'utente: foto + **video breve capped** in Base64 (no object storage nello stack). Doc API/DB aggiornati in `api_reference.md` e `database_schema.md`.
+
+---
+
 > Snapshot dell'architettura, codebase e implementazione corrente. Aggiornato al **26 maggio 2026 (sessione serale)** — Sprint 2 con feature **Foto profilo utente** completata (privacy gate fix, componente Compose `AvatarImage` riusabile, EXIF rotation, foto visibile in ProfileScreen / ProfileViewScreen / partecipanti sessioni), oltre alle tre sessioni precedenti dello stesso giorno (notturna: discriminator persistence + anti-cheat; pomeridiana: refresh token rotation + WAL Room v5). Build mobile **`compileDebugKotlin` green**, backend **88/89 test verdi** (1 test fragile pre-esistente su `BREVO_API_KEY`).
 
 ---
@@ -180,12 +374,16 @@ trento-smart-mountain/
 - ✅ Bottone "Risincronizza ($n)" bypassa il backoff (`SyncManager.enqueueImmediate(ignoreBackoff=true)`)
 - ✅ Empty state contestuale (no attività vs no attività per periodo)
 - ✅ ElevationProfileChart con assi disegnati nel canvas (no più sovrapposizione)
-- ✅ ActivityDetailScreen: metric grid, mappa preview, partecipanti, profilo altimetrico, timeline split km, badge dinamici, export GPX
+- ✅ ActivityDetailScreen: metric grid, mappa preview (TsmRouteMapPreview con OSMdroid), partecipanti, profilo altimetrico, timeline split km, performance badges (Alpinista, Maratoneta), export GPX
+- ✅ PostDetailScreen: dettaglio social avanzato con timeline split ogni 5km e performance badges per un'esperienza "Strava-like".
+- ✅ Nuova rotta `POST_DETAIL` in `TsmNavHost.kt` e `Routes.kt` per la navigazione nel feed social.
+- ✅ TsmRouteMapPreview: nuovo componente basato su OSMdroid che renderizza il tracciato GPX sopra una mappa topografica reale, sostituendo la vecchia RouteTracePreview statica. Integrato in FeedCard, ActivityDetailScreen e PostDetailScreen.
 - ✅ Delete con cleanup remoto per attività libere (DELETE /activities/:id)
 
 #### Sync engine
 
 - ✅ SyncManager: coroutine loop 60s + backoff incrementale per record (1m → 5m → 30m → 1h cap)
+- ✅ Fix bug GPX: aggiunto `parseRoutePolyline` in `SyncManager.kt` per garantire l'invio della `routePolyline` durante il sync delle attività libere (risolve tracce mancanti nel feed social).
 - ✅ `enqueueImmediate()` per pull-to-refresh manuale
 - ✅ Room v4 con campi `retry_count`, `last_retry_at_ms`, `remote_id`
 - ✅ Marcatura `isSynced=1` post upload + tracking `remoteId` per delete cross-device

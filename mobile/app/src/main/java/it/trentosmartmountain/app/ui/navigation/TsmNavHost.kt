@@ -23,18 +23,28 @@ import androidx.navigation.navArgument
 import it.trentosmartmountain.app.TsmApplication
 import it.trentosmartmountain.app.data.local.AuthSession
 import it.trentosmartmountain.app.data.remote.JwtDecoder
+import it.trentosmartmountain.app.data.remote.dto.FeedItem
+import it.trentosmartmountain.app.data.remote.dto.StoryViewerLaunchContext
 import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
 import it.trentosmartmountain.app.data.remote.dto.QuizSubmissionResponse
 import it.trentosmartmountain.app.ui.screens.account.AccountEditScreen
+import it.trentosmartmountain.app.ui.screens.account.AccountPasswordGateScreen
 import it.trentosmartmountain.app.ui.screens.account.ChangePasswordScreen
 import it.trentosmartmountain.app.ui.screens.account.DeleteAccountScreen
 import it.trentosmartmountain.app.ui.screens.auth.AuthEntryScreen
 import it.trentosmartmountain.app.ui.screens.badges.BadgesScreen
+import it.trentosmartmountain.app.ui.screens.board.BoardScreen
 import it.trentosmartmountain.app.ui.screens.challenges.ChallengeDetailScreen
 import it.trentosmartmountain.app.ui.screens.challenges.ChallengesScreen
 import it.trentosmartmountain.app.ui.screens.challenges.CreateChallengeScreen
 import it.trentosmartmountain.app.ui.screens.formazione.FormazioneScreen
 import it.trentosmartmountain.app.ui.screens.home.ActivityDetailScreen
+import it.trentosmartmountain.app.ui.screens.home.FollowListScreen
+import it.trentosmartmountain.app.ui.screens.home.LeaderboardScreen
+import it.trentosmartmountain.app.ui.screens.home.NotificationsScreen
+import it.trentosmartmountain.app.ui.screens.home.PostDetailScreen
+import it.trentosmartmountain.app.ui.screens.home.UserSearchScreen
+import it.trentosmartmountain.app.viewmodel.FollowListType
 import it.trentosmartmountain.app.ui.screens.login.LoginScreen
 import it.trentosmartmountain.app.ui.screens.main.HikerMainScreen
 import it.trentosmartmountain.app.ui.screens.nfc.NfcResultScreen
@@ -42,6 +52,8 @@ import it.trentosmartmountain.app.ui.screens.nfc.NfcScanScreen
 import it.trentosmartmountain.app.ui.screens.quiz.QuizResultScreen
 import it.trentosmartmountain.app.ui.screens.quiz.QuizScreen
 import it.trentosmartmountain.app.ui.screens.refuge.RefugeMainScreen
+import it.trentosmartmountain.app.ui.screens.refuge.RefugeProfileScreen
+import it.trentosmartmountain.app.ui.screens.refuge.WasteSimulatorScreen
 import it.trentosmartmountain.app.ui.screens.register.EmailVerificationPendingScreen
 import it.trentosmartmountain.app.ui.screens.register.ForgotPasswordScreen
 import it.trentosmartmountain.app.ui.screens.register.RegisterRifugioScreen
@@ -90,6 +102,21 @@ fun TsmNavHost() {
     }
     var pendingQuizTitle by rememberSaveable { mutableStateOf("") }
     var pendingQuizId by rememberSaveable { mutableStateOf("") }
+    var pendingPostDetail by rememberSaveable(stateSaver = gsonSaver<FeedItem>()) {
+        mutableStateOf<FeedItem?>(null)
+    }
+    // Holder per il composer storie (come pendingPostDetail): l'origine setta gli
+    // args (tipo + ref + overlay) e naviga a STORY_COMPOSER.
+    var pendingStoryDraft by rememberSaveable(
+        stateSaver = gsonSaver<it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs>(),
+    ) {
+        mutableStateOf<it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs?>(null)
+    }
+    var pendingStoryViewerContext by rememberSaveable(
+        stateSaver = gsonSaver<StoryViewerLaunchContext>(),
+    ) {
+        mutableStateOf<StoryViewerLaunchContext?>(null)
+    }
 
     fun navigateToMainAfterLogin() {
         val token = application.tokenStorage.getToken()
@@ -193,7 +220,7 @@ fun TsmNavHost() {
                 },
                 onNavigateToFormazione = { navController.navigate(Routes.FORMAZIONE) },
                 onNavigateToNfcScan = { navController.navigate(Routes.NFC_SCAN) },
-                onNavigateToAccount = { navController.navigate(Routes.ACCOUNT_EDIT) },
+                onNavigateToAccount = { navController.navigate(Routes.ACCOUNT_PASSWORD_GATE) },
                 onNavigateToOnboarding = { navController.navigate(Routes.ONBOARDING_PERSONAL_INFO) },
                 onNavigateToGoals = { navController.navigate(Routes.GOALS_EDIT) },
                 onNavigateToChallenges = { navController.navigate(Routes.CHALLENGES) },
@@ -202,14 +229,58 @@ fun TsmNavHost() {
                 onNavigateToUserProfile = { userId ->
                     navController.navigate(Routes.userProfileRoute(userId))
                 },
-                onNavigateToStoryViewer = { refId, kind ->
-                    navController.navigate(Routes.storyViewerRoute(refId, kind))
+                onNavigateToStoryViewer = { launch ->
+                    launch.startUserId?.let { startId ->
+                        pendingStoryViewerContext = launch
+                        navController.navigate(Routes.storyViewerRoute(startId))
+                    }
+                },
+                onNavigateToUserSearch = { navController.navigate(Routes.USER_SEARCH) },
+                onNavigateToLeaderboard = { navController.navigate(Routes.LEADERBOARD) },
+                onNavigateToNotifications = { navController.navigate(Routes.NOTIFICATIONS) },
+                onNavigateToBoard = { navController.navigate(Routes.boardRoute(false)) },
+                onNavigateToPostDetail = { item ->
+                    pendingPostDetail = item
+                    navController.navigate(Routes.POST_DETAIL)
                 },
             )
         }
 
+        composable(Routes.POST_DETAIL) {
+            val item = pendingPostDetail
+            if (item != null) {
+                PostDetailScreen(
+                    item = item,
+                    onBack = { navController.popBackStack() },
+                    onUserClick = { userId ->
+                        navController.navigate(Routes.userProfileRoute(userId))
+                    }
+                )
+            } else {
+                // Fallback se per qualche motivo lo stato viene perso
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
+        }
+
         composable(Routes.MAIN_RIFUGIO) {
-            RefugeMainScreen(onLoggedOut = { navigateToAuthEntry() })
+            RefugeMainScreen(
+                onNavigateToProfile = { navController.navigate(Routes.REFUGE_PROFILE) },
+                onNavigateToWaste = { navController.navigate(Routes.REFUGE_WASTE) },
+            )
+        }
+
+        composable(Routes.REFUGE_WASTE) {
+            WasteSimulatorScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.REFUGE_PROFILE) {
+            RefugeProfileScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToBoard = { navController.navigate(Routes.boardRoute(true)) },
+                onLoggedOut = { navigateToAuthEntry() },
+            )
         }
 
         // Dettaglio sessione — navigazione full-screen sopra HikerMainScreen
@@ -222,6 +293,11 @@ fun TsmNavHost() {
                 sessionId = sessionId,
                 currentUserId = currentUserId,
                 onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onShareStory = { args ->
+                    pendingStoryDraft = args
+                    navController.navigate(Routes.STORY_COMPOSER)
+                },
                 onAvviaConfirmed = { _ ->
                     // Pop a HikerMainScreen: il VM ha già chiamato SessionStartCoordinator.requestStart,
                     // HikerMainScreen.collect → switch tab Registra, RegistraVM.autoStartFromSession.
@@ -244,6 +320,11 @@ fun TsmNavHost() {
                 activityId = activityId,
                 sessionId = sessionId,
                 onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onShareStory = { args ->
+                    pendingStoryDraft = args
+                    navController.navigate(Routes.STORY_COMPOSER)
+                },
             )
         }
 
@@ -358,6 +439,17 @@ fun TsmNavHost() {
             }
         }
 
+        composable(Routes.ACCOUNT_PASSWORD_GATE) {
+            AccountPasswordGateScreen(
+                onBack = { navController.popBackStack() },
+                onVerified = {
+                    navController.navigate(Routes.ACCOUNT_EDIT) {
+                        popUpTo(Routes.ACCOUNT_PASSWORD_GATE) { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable(Routes.ACCOUNT_EDIT) {
             AccountEditScreen(
                 onBack = { navController.popBackStack() },
@@ -439,7 +531,7 @@ fun TsmNavHost() {
         composable(Routes.PROFILE_VIEW) {
             ProfileViewScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToEdit = { navController.navigate(Routes.ACCOUNT_EDIT) },
+                onNavigateToEdit = { navController.navigate(Routes.ACCOUNT_PASSWORD_GATE) },
             )
         }
 
@@ -454,38 +546,110 @@ fun TsmNavHost() {
             it.trentosmartmountain.app.ui.screens.home.UserProfileScreen(
                 userId = userId,
                 onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onOpenFollowList = { uid, type ->
+                    val typeArg =
+                        if (type == FollowListType.FOLLOWING) "following" else "followers"
+                    navController.navigate(Routes.followListRoute(uid, typeArg))
+                },
+                onOpenDetail = { item ->
+                    pendingPostDetail = item
+                    navController.navigate(Routes.POST_DETAIL)
+                },
             )
         }
 
-        // ── Story viewer full-screen (5s timer, Instagram-like) ──────────
-        composable(
-            route = Routes.STORY_VIEWER,
-            arguments = listOf(
-                navArgument("refId") { type = NavType.StringType },
-                navArgument("kind") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = "activity"
+        // ── Social: ricerca/scoperta utenti ("aggiungi amici") ───────────
+        composable(Routes.USER_SEARCH) {
+            UserSearchScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+            )
+        }
+
+        // ── Social: classifica settimanale ───────────────────────────────
+        composable(Routes.LEADERBOARD) {
+            LeaderboardScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+            )
+        }
+
+        // ── Social: centro notifiche ──────────────────────────────────────
+        composable(Routes.NOTIFICATIONS) {
+            NotificationsScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onOpenActivity = { activityId, sessionId ->
+                    navController.navigate(Routes.activityDetailRoute(activityId, sessionId))
                 },
-            ),
-        ) { backStackEntry ->
-            val refId = backStackEntry.arguments?.getString("refId").orEmpty()
-            val kind = backStackEntry.arguments?.getString("kind") ?: "activity"
-            it.trentosmartmountain.app.ui.screens.home.StoryViewerScreen(
-                refId = refId,
-                kind = kind,
-                onClose = { navController.popBackStack() },
-                onOpenFullActivity = { rid, k ->
-                    // Story → Activity Detail. Per kind="session" non c'è una
-                    // ActivityDetailScreen dedicata per il viewer, ma quella
-                    // attuale gestisce entrambi i casi (sessionId opzionale).
-                    if (k == "session") {
-                        navController.navigate(Routes.sessionDetailRoute(rid))
-                    } else {
-                        navController.navigate(Routes.activityDetailRoute(rid, null))
-                    }
+                onOpenSession = { sessionId ->
+                    navController.navigate(Routes.sessionDetailRoute(sessionId))
                 },
             )
+        }
+
+        // ── Bacheca rifugi (consultazione utente / gestione rifugista) ────
+        composable(
+            route = Routes.BOARD,
+            arguments = listOf(navArgument("manage") { type = NavType.BoolType; defaultValue = false }),
+        ) { backStackEntry ->
+            val manage = backStackEntry.arguments?.getBoolean("manage") ?: false
+            BoardScreen(manage = manage, onBack = { navController.popBackStack() })
+        }
+
+        // ── Social: lista follower/seguiti (navigazione del grafo) ───────
+        composable(
+            route = Routes.FOLLOW_LIST,
+            arguments = listOf(
+                navArgument("userId") { type = NavType.StringType },
+                navArgument("type") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val uid = backStackEntry.arguments?.getString("userId").orEmpty()
+            val typeArg = backStackEntry.arguments?.getString("type") ?: "followers"
+            val listType =
+                if (typeArg == "following") FollowListType.FOLLOWING else FollowListType.FOLLOWERS
+            FollowListScreen(
+                userId = uid,
+                type = listType,
+                onBack = { navController.popBackStack() },
+                onUserClick = { targetId -> navController.navigate(Routes.userProfileRoute(targetId)) },
+            )
+        }
+
+        // ── Story viewer full-screen (Instagram-like, storie reali per autore) ──
+        composable(
+            route = Routes.STORY_VIEWER,
+            arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val storyUserId = backStackEntry.arguments?.getString("userId").orEmpty()
+            it.trentosmartmountain.app.ui.screens.home.StoryViewerScreen(
+                userId = storyUserId,
+                launchContext = pendingStoryViewerContext,
+                onClose = {
+                    pendingStoryViewerContext = null
+                    navController.popBackStack()
+                },
+                onOpenSession = { sid -> navController.navigate(Routes.sessionDetailRoute(sid)) },
+            )
+        }
+
+        // ── Composer storie (foto/video + overlay) ───────────────────────
+        composable(Routes.STORY_COMPOSER) { _ ->
+            val draft = pendingStoryDraft
+            if (draft != null) {
+                it.trentosmartmountain.app.ui.screens.home.StoryComposerScreen(
+                    args = draft,
+                    onClose = { navController.popBackStack() },
+                    onPublished = {
+                        pendingStoryDraft = null
+                        navController.popBackStack()
+                    },
+                )
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
         }
 
         // ── Onboarding v2 (3 step skippable) ─────────────────────────────────

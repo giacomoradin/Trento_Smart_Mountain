@@ -10,6 +10,7 @@ import it.trentosmartmountain.app.data.remote.dto.JoinSessionRequest
 import it.trentosmartmountain.app.data.remote.dto.SessionResponse
 import it.trentosmartmountain.app.data.session.SessionLiveController
 import it.trentosmartmountain.app.data.session.SessionParticipationResolver
+import it.trentosmartmountain.app.repository.SessionCommandRepository
 import it.trentosmartmountain.app.data.session.SessionParticipationUi
 import it.trentosmartmountain.app.data.session.UserSessionLiveState
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
@@ -34,11 +35,15 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
         val isLoadingSessions: Boolean = false,
         val isJoining: Boolean = false,
         val joinError: String? = null,
+        /** Messaggio informativo dopo un join riuscito (richiesta in attesa di approvazione). */
+        val joinInfo: String? = null,
         val generalError: String? = null,
         val removeConfirm: RemovalRequest? = null,
         val isRemoving: Boolean = false,
         val currentUserId: String = "",
         val avviaConfirmSessionId: String? = null,
+        /** Sessione per cui è aperto il dialog di conferma "Arresta per tutti" (ADR-001). */
+        val arrestaConfirmSessionId: String? = null,
     )
 
     data class RemovalRequest(val sessionId: String, val mode: RemovalMode)
@@ -60,9 +65,28 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
         return SessionParticipationResolver.resolve(session, isCreator, local)
     }
 
-    fun loadSessions() {
+    /** Estrae il campo `message` dal corpo d'errore JSON del backend (se presente). */
+    private fun serverMessage(response: retrofit2.Response<*>): String? = try {
+        response.errorBody()?.string()?.let { raw ->
+            org.json.JSONObject(raw).optString("message").ifBlank { null }
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * @param preserveJoinInfo se false azzera il banner "richiesta inviata"
+     *   (usato dal pull-to-refresh: la scritta deve sparire all'aggiornamento).
+     */
+    fun loadSessions(preserveJoinInfo: Boolean = true) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingSessions = true, generalError = null) }
+            _uiState.update {
+                it.copy(
+                    isLoadingSessions = true,
+                    generalError = null,
+                    joinInfo = if (preserveJoinInfo) it.joinInfo else null,
+                )
+            }
             try {
                 val response = TsmApiClient.service().getMySessions()
                 if (response.isSuccessful) {
@@ -104,7 +128,7 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
             cleaned.startsWith("TSM") -> cleaned.substring(3).take(4)
             else -> cleaned.take(4)
         }
-        _uiState.update { it.copy(joinCode = "TSM-$trailing", joinError = null) }
+        _uiState.update { it.copy(joinCode = "TSM-$trailing", joinError = null, joinInfo = null) }
     }
 
     fun onJoinSession() {
@@ -118,10 +142,18 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 val response = TsmApiClient.service().joinSession(JoinSessionRequest(code))
                 if (response.isSuccessful) {
-                    _uiState.update { it.copy(isJoining = false, joinCode = "TSM-") }
+                    _uiState.update {
+                        it.copy(
+                            isJoining = false,
+                            joinCode = "TSM-",
+                            joinInfo = "Richiesta inviata: in attesa di approvazione del capogruppo.",
+                        )
+                    }
                     loadSessions()
                 } else {
-                    val error = when (response.code()) {
+                    // Preferisci il messaggio specifico del backend (es. "Sei stato
+                    // rimosso da questa sessione…", "Richiesta già inviata…").
+                    val error = serverMessage(response) ?: when (response.code()) {
                         404 -> "Codice non trovato."
                         409 -> "Sei già in questa sessione o in un'altra attiva."
                         else -> "Errore server (${response.code()})."
@@ -198,10 +230,38 @@ class SessionJoinViewModel(application: Application) : AndroidViewModel(applicat
         _uiState.update { it.copy(avviaConfirmSessionId = null) }
     }
 
-    fun leaderStop(sessionId: String) {
+    /**
+     * Apre il dialog di conferma per "Arresta" (ADR-001: chiude per TUTTI).
+     * L'azione distruttiva non parte mai da un singolo tap.
+     */
+    fun requestLeaderStop(sessionId: String) {
+        _uiState.update { it.copy(arrestaConfirmSessionId = sessionId) }
+    }
+
+    fun dismissLeaderStop() {
+        _uiState.update { it.copy(arrestaConfirmSessionId = null) }
+    }
+
+    /** Conferma dal dialog: esegue lo stop coordinato + force-close. */
+    fun confirmLeaderStop() {
+        val sessionId = _uiState.value.arrestaConfirmSessionId ?: return
+        _uiState.update { it.copy(arrestaConfirmSessionId = null) }
+        leaderStop(sessionId)
+    }
+
+    private fun leaderStop(sessionId: String) {
+        // 1) Ferma/salva il tracking del leader (dialog Salva/Scarta via coordinator,
+        //    se sta tracciando su questo device).
         liveController.leaderStop(viewModelScope, sessionId)
-        refreshLiveStates()
-        loadSessions()
+        // 2) ADR-001: "Arresta" del capogruppo CHIUDE la sessione per TUTTI (force).
+        //    Stessa semantica di SessionDetailViewModel — senza questo force-close,
+        //    dal tab Unisciti la sessione restava ACTIVE per gli altri partecipanti.
+        //    Il backend autorizza solo creator/leader effettivo (FORBIDDEN_NOT_LEADER).
+        viewModelScope.launch {
+            SessionCommandRepository(getApplication()).forceCloseSession(sessionId)
+            refreshLiveStates()
+            loadSessions()
+        }
     }
 
     fun joinLive(sessionId: String) {

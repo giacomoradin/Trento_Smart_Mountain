@@ -89,6 +89,19 @@ data class FollowStatsResponse(
     @SerializedName("followers") val followers: Int,
     @SerializedName("following") val following: Int,
     @SerializedName("isFollowedByMe") val isFollowedByMe: Boolean,
+    /** True se l'utente target segue il viewer → badge "Ti segue" sul profilo. */
+    @SerializedName("followsViewer") val followsViewer: Boolean = false,
+)
+
+/**
+ * Totali escursionistici ALL-TIME per il "biglietto da visita" del profilo
+ * (GET /api/v1/users/:id/hiking-stats). Aggrega sessioni COMPLETED + attività libere.
+ */
+data class HikingStatsResponse(
+    @SerializedName("totalActivities") val totalActivities: Int = 0,
+    @SerializedName("totalDistanceKm") val totalDistanceKm: Double = 0.0,
+    @SerializedName("totalElevationGainM") val totalElevationGainM: Int = 0,
+    @SerializedName("totalPoints") val totalPoints: Int = 0,
 )
 
 data class FollowListResponse(
@@ -99,6 +112,74 @@ data class FollowListResponse(
 data class FollowListEntry(
     @SerializedName("user") val user: FeedUser?,
     @SerializedName("since") val since: String?,
+)
+
+// ── Ricerca / scoperta utenti (GET /api/v1/users/search) ────────────────────
+
+/** Risposta di GET /users/search: lista di utenti che matchano lo username. */
+data class UserSearchResponse(
+    @SerializedName("items") val items: List<UserSearchItem> = emptyList(),
+)
+
+/**
+ * Singolo risultato di ricerca: utente pubblico (username + avatar) +
+ * `isFollowedByMe` per mostrare subito "Segui"/"Seguito" senza altra query.
+ */
+data class UserSearchItem(
+    @SerializedName("user") val user: FeedUser?,
+    @SerializedName("isFollowedByMe") val isFollowedByMe: Boolean = false,
+)
+
+// ── Classifica settimanale (GET /api/v1/users/me/weekly-leaderboard) ────────
+
+data class WeeklyLeaderboardResponse(
+    @SerializedName("since") val since: String? = null,
+    @SerializedName("items") val items: List<LeaderboardEntry> = emptyList(),
+)
+
+/** Riga della classifica: utente + totali settimanali (km/dislivello/punti/uscite). */
+data class LeaderboardEntry(
+    @SerializedName("user") val user: FeedUser?,
+    @SerializedName("km") val km: Double = 0.0,
+    @SerializedName("elevM") val elevM: Int = 0,
+    @SerializedName("points") val points: Int = 0,
+    @SerializedName("count") val count: Int = 0,
+    @SerializedName("isMe") val isMe: Boolean = false,
+)
+
+// ── Notifiche (/api/v1/users/me/notifications) ──────────────────────────────
+
+data class NotificationsResponse(
+    @SerializedName("count") val count: Int = 0,
+    @SerializedName("unreadCount") val unreadCount: Int = 0,
+    @SerializedName("hasMore") val hasMore: Boolean = false,
+    @SerializedName("items") val items: List<NotificationItem> = emptyList(),
+)
+
+/**
+ * Notifica social. `type` ∈ {follow, like, comment}; per like/comment
+ * `targetKind`/`targetId` puntano all'Activity/HikeSession coinvolta (per il deep-link).
+ */
+data class NotificationItem(
+    @SerializedName("_id") val _id: String,
+    @SerializedName("type") val type: String,
+    @SerializedName("actor") val actor: FeedUser?,
+    @SerializedName("targetKind") val targetKind: String? = null,
+    @SerializedName("targetId") val targetId: String? = null,
+    /** Testo precomputato dal server (promemoria/allerte rifugi). Le social lo derivano client-side. */
+    @SerializedName("message") val message: String? = null,
+    /** false per le notifiche dinamiche (promemoria/allerte): nessun swipe-delete. */
+    @SerializedName("deletable") val deletable: Boolean = true,
+    @SerializedName("read") val read: Boolean = false,
+    @SerializedName("createdAt") val createdAt: String? = null,
+)
+
+data class UnreadCountResponse(
+    @SerializedName("unreadCount") val unreadCount: Int = 0,
+)
+
+data class MarkReadResponse(
+    @SerializedName("updated") val updated: Int = 0,
 )
 
 // ── Commenti ───────────────────────────────────────────────────────────────
@@ -147,6 +228,10 @@ data class PublicUserProfile(
     @SerializedName("username") val username: String?,
     @SerializedName("email") val email: String? = null,
     @SerializedName("isVerified") val isVerified: Boolean? = null,
+    /** True se il profilo è limitato per visibilità (private / friends-non-seguito). */
+    @SerializedName("restricted") val restricted: Boolean? = null,
+    /** "public" | "friends" | "private" — presente quando restricted. */
+    @SerializedName("visibility") val visibility: String? = null,
     @SerializedName("socialCredits") val socialCredits: Int? = null,
     @SerializedName("personalInfo") val personalInfo: FeedUserPersonalInfo? = null,
 ) {
@@ -172,19 +257,14 @@ data class SocialRowResponse(
  *
  * Campi opzionali popolati solo per il loro status:
  *  - [liveSessionId] solo per "live" → deep link a SessionDetail
- *  - [storyActivityRef] solo per "story" → apre StoryViewerScreen
+ *  - [hasUnviewedStory] solo per "story" → anello pieno se ≥1 storia non vista;
+ *    il viewer si apre per `user._id` (le storie reali stanno in /stories/user/:id)
  *  - [weeklyProgressPct] solo per "goal" ∈ [0,1]
  */
 data class SocialRowItem(
     @SerializedName("user") val user: FeedUser,
     @SerializedName("status") val status: String,
     @SerializedName("liveSessionId") val liveSessionId: String? = null,
-    @SerializedName("storyActivityRef") val storyActivityRef: StoryActivityRef? = null,
+    @SerializedName("hasUnviewedStory") val hasUnviewedStory: Boolean = false,
     @SerializedName("weeklyProgressPct") val weeklyProgressPct: Float? = null,
-)
-
-data class StoryActivityRef(
-    @SerializedName("id") val id: String,
-    @SerializedName("kind") val kind: String,         // "activity" | "session"
-    @SerializedName("sharedAt") val sharedAt: String?,
 )

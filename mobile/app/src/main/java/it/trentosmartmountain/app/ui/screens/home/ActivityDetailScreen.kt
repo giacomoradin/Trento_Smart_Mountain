@@ -3,6 +3,7 @@ package it.trentosmartmountain.app.ui.screens.home
 import android.app.Application
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +73,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.estimation.HikeEstimation
+import it.trentosmartmountain.app.data.remote.dto.RoutePoint
+import it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs
+import it.trentosmartmountain.app.ui.components.TsmShareStoryButton
+import it.trentosmartmountain.app.util.downsampleByIndex
+import it.trentosmartmountain.app.data.remote.dto.StoryOverlay
+import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
@@ -91,6 +99,8 @@ fun ActivityDetailScreen(
     activityId: String,
     sessionId: String? = null,
     onBack: () -> Unit,
+    onUserClick: (userId: String) -> Unit = {},
+    onShareStory: (it.trentosmartmountain.app.data.remote.dto.StoryComposerArgs) -> Unit = {},
     viewModel: ActivityDetailViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application,
@@ -112,35 +122,61 @@ fun ActivityDetailScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showShareDialog by remember { mutableStateOf(false) }
 
+    val currentUserId = remember {
+        runCatching {
+            it.trentosmartmountain.app.data.local.TokenStorage
+                .getInstance(context)
+                .getToken()
+                ?.let { tok -> it.trentosmartmountain.app.data.remote.JwtDecoder.userIdFrom(tok) }
+        }.getOrNull()
+    }
+
     LaunchedEffect(activityId) { viewModel.load(activityId, sessionId) }
 
     if (showShareDialog) {
+        // Determina se l'utente loggato è il creator della sessione: solo lui
+        // può condividere la SESSIONE come post di gruppo. I partecipanti non-
+        // creator hanno la PROPRIA Activity sincronizzata (entity.remoteId) e
+        // condividono quella — è la loro versione personale dell'uscita.
+        val isCreator = uiState.session?.creatorId?._id == currentUserId
         ShareActivityDialog(
             activityName = uiState.name,
             onDismiss = { showShareDialog = false },
             onShare = { caption ->
                 showShareDialog = false
-                // Distingue share di session (gruppo) da activity (libera):
-                // se l'attività ha sessionId, è una sessione completata e
-                // la condivisione passa per /sessions/:id/share. Authorization
-                // server-side: solo creator può condividere la sessione.
-                if (sessionId.isNullOrBlank()) {
-                    // Lo share di un'attività libera richiede l'ID backend (ObjectId
-                    // MongoDB), NON l'id Room locale (che per le attività registrate
-                    // sul device è un UUID → 422 "ID non valido"). Usiamo il remoteId,
-                    // disponibile solo dopo la sincronizzazione.
-                    val remoteId = uiState.local?.remoteId
-                    if (remoteId != null) {
+                // Tre casi:
+                //   (a) attività libera (sessionId null) → share via /activities/:id/share
+                //   (b) sessione e sono il creator → share via /sessions/:id/share
+                //   (c) sessione ma sono partecipante → share dell'attività personale
+                //       collegata alla sessione (il backend rifiuterebbe lo shareSession
+                //       con 403). È UX coerente con Strava: ognuno condivide la propria.
+                val remoteId = uiState.local?.remoteId
+                when {
+                    sessionId.isNullOrBlank() -> {
+                        if (remoteId != null) {
+                            socialFeedViewModel.shareActivity(remoteId, caption)
+                        } else {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Sincronizza l'attività prima di condividerla.",
+                                android.widget.Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    }
+                    isCreator -> socialFeedViewModel.shareSession(sessionId, caption)
+                    remoteId != null -> {
+                        // Partecipante: pubblica la propria registrazione individuale
+                        // (mappa + altimetria dei punti realmente camminati).
                         socialFeedViewModel.shareActivity(remoteId, caption)
-                    } else {
+                    }
+                    else -> {
                         android.widget.Toast.makeText(
                             context,
-                            "Sincronizza l'attività prima di condividerla.",
+                            "Solo il capogruppo può condividere la sessione del gruppo. " +
+                                "Attendi che la tua attività si sincronizzi per condividere la tua versione.",
                             android.widget.Toast.LENGTH_LONG,
                         ).show()
                     }
-                } else {
-                    socialFeedViewModel.shareSession(sessionId, caption)
                 }
             },
         )
@@ -329,24 +365,30 @@ fun ActivityDetailScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp)
-                            .clip(RoundedCornerShape(8.dp)).background(TsmSurfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (uiState.trackPoints.isNotEmpty()) {
-                            Text(
-                                "Mappa · ${uiState.trackPoints.size} punti GPS",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TsmAccent,
-                            )
-                        } else {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    TsmRouteElevationPager(
+                        routePoints = uiState.trackPoints.map { RoutePoint(it.first, it.second) },
+                        elevationProfile = uiState.elevationProfile,
+                        distanceKm = uiState.distanceKm,
+                        elevationMinM = uiState.elevationMinM,
+                        elevationMaxM = uiState.elevationMaxM,
+                        modifier = Modifier.fillMaxWidth(),
+                        height = 200.dp,
+                        cornerRadius = 8.dp,
+                        backgroundBrush = androidx.compose.ui.graphics.SolidColor(TsmSurfaceVariant),
+                        elevationLineColor = TsmAccent,
+                        activeDotColor = TsmAccent,
+                        expandable = true,
+                        emptyContent = {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
                                 Icon(Icons.Outlined.RadioButtonChecked, null, tint = Color.Gray, modifier = Modifier.size(32.dp))
                                 Text("Nessun tracciato GPS disponibile", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
-                        }
-                    }
+                        },
+                    )
 
                     Spacer(modifier = Modifier.height(10.dp))
                     // Condividi sul feed sociale (apre dialog "Pubblica" con caption opzionale)
@@ -360,6 +402,32 @@ fun ActivityDetailScreen(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("CONDIVIDI SUL FEED", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
                     }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    // Condividi come STORIA (foto/video breve + overlay tracciamento, 24h)
+                    TsmShareStoryButton(
+                        onClick = {
+                            onShareStory(
+                                StoryComposerArgs(
+                                    type = "activity",
+                                    sessionId = sessionId,
+                                    activityId = if (sessionId == null) uiState.local?.remoteId else null,
+                                    overlay = StoryOverlay(
+                                        title = uiState.name,
+                                        activityType = uiState.activityType,
+                                        difficultyLevel = uiState.difficultyLevel,
+                                        distanceMeters = uiState.distanceKm * 1000.0,
+                                        elevationGainM = uiState.elevationGainM,
+                                        movingSeconds = uiState.movingSeconds.toLong(),
+                                        // Cap a 300 punti (overlay backend max 500).
+                                        routePolyline = uiState.trackPoints
+                                            .map { RoutePoint(it.first, it.second) }
+                                            .let { downsampleByIndex(it, 300) }
+                                            ?.takeIf { it.isNotEmpty() },
+                                    ),
+                                ),
+                            )
+                        },
+                    )
                     Spacer(modifier = Modifier.height(10.dp))
                     // Download GPX
                     Button(
@@ -397,18 +465,23 @@ fun ActivityDetailScreen(
                         participants.forEach { p ->
                             val name = p.userId?.username ?: "Utente"
                             val isOrganizer = p.role == "groupLeader"
+                            val isMe = p.userId?._id == currentUserId
+                            val pid = p.userId?._id
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !pid.isNullOrBlank()) { pid?.let(onUserClick) }
+                                    .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                val initials = name.split(" ").take(2).joinToString("") { it.firstOrNull()?.uppercaseChar()?.toString() ?: "" }
-                                Box(
-                                    modifier = Modifier.size(36.dp).clip(CircleShape).background(TsmAccent),
-                                    contentAlignment = Alignment.Center,
-                                ) { Text(initials, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = Color.Black) }
+                                AvatarImage(
+                                    avatarUrl = p.userId?.avatarUrl,
+                                    fallbackName = name,
+                                    size = 36.dp,
+                                )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(if (isOrganizer) "Tu" else name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                                    Text(if (isMe) "Tu" else name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
                                     Text(if (isOrganizer) "Organizzatore" else "Partecipante", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                 }
                                 Icon(Icons.Filled.CheckCircle, null, tint = TsmPrimary, modifier = Modifier.size(20.dp))
@@ -726,15 +799,15 @@ private fun buildGpxString(
 
 // ── Badges significativi ──
 
-private data class BadgeInfo(val emoji: String, val title: String, val subtitle: String, val bgColor: Color, val textColor: Color)
+private data class ActivityBadgeInfo(val emoji: String, val title: String, val subtitle: String, val bgColor: Color, val textColor: Color)
 
 /**
  * Badge basati su soglie reali dell'escursionismo CAI.
  * Ogni badge ha una soglia significativa + un subtitolo con il valore effettivo.
  * L'efficienza (μ) dal modello TSM guida i badge di performance.
  */
-private fun buildBadges(uiState: ActivityDetailViewModel.UiState): List<BadgeInfo> {
-    val badges = mutableListOf<BadgeInfo>()
+private fun buildBadges(uiState: ActivityDetailViewModel.UiState): List<ActivityBadgeInfo> {
+    val badges = mutableListOf<ActivityBadgeInfo>()
     val distKm = uiState.distanceKm
     val elevM = uiState.elevationGainM
     val movingH = uiState.movingSeconds / 3600.0
@@ -742,47 +815,47 @@ private fun buildBadges(uiState: ActivityDetailViewModel.UiState): List<BadgeInf
     val mu = if (movingH > 0 && tNom > 0) (tNom / movingH).coerceIn(0.0, 2.0) else 0.0
 
     // 🏔 Alpinista: dislivello ≥ 1000m (soglia escursionismo EE/EEA)
-    if (elevM >= 1000) badges.add(BadgeInfo(
+    if (elevM >= 1000) badges.add(ActivityBadgeInfo(
         "🏔", "Alpinista",
         "+${elevM}m · soglia EE superata",
         Color(0xFF4A148C).copy(alpha = 0.25f), Color(0xFFCE93D8),
     ))
     // ⛰ Quotista: dislivello 500-999m
-    else if (elevM >= 500) badges.add(BadgeInfo(
+    else if (elevM >= 500) badges.add(ActivityBadgeInfo(
         "⛰", "Quotista",
         "+${elevM}m D+",
         Color(0xFF1A237E).copy(alpha = 0.25f), Color(0xFF90CAF9),
     ))
 
     // 🏃 In Forma: μ > 1.1 = più veloce del 10% rispetto al ritmo CAI
-    if (mu > 1.1) badges.add(BadgeInfo(
+    if (mu > 1.1) badges.add(ActivityBadgeInfo(
         "🏃", "In Forma",
         "Ritmo +${((mu - 1) * 100).roundToInt()}% CAI",
         Color(0xFF1B5E20).copy(alpha = 0.25f), TsmPrimary,
     ))
     // 🐢 Passo Costante: 0.9 ≤ μ ≤ 1.1 = nella media CAI (ottimo per safety)
-    else if (mu in 0.9..1.1) badges.add(BadgeInfo(
+    else if (mu in 0.9..1.1) badges.add(ActivityBadgeInfo(
         "🎯", "Passo Costante",
         "Ritmo in linea CAI",
         Color(0xFF004D40).copy(alpha = 0.25f), TsmAccent,
     ))
 
     // 🗺 Lungo cammino: ≥ 20km
-    if (distKm >= 20) badges.add(BadgeInfo(
+    if (distKm >= 20) badges.add(ActivityBadgeInfo(
         "🗺", "Lungo Cammino",
         "%.1f km percorsi".format(distKm),
         Color(0xFFE65100).copy(alpha = 0.25f), Color(0xFFFF9800),
     ))
 
     // ⭐ Punti bonus: se μ_clip = 1.2 (massima efficienza)
-    if (mu >= 1.15) badges.add(BadgeInfo(
+    if (mu >= 1.15) badges.add(ActivityBadgeInfo(
         "⭐", "Efficienza Max",
         "${uiState.points ?: 0} pt bonus",
         Color(0xFFF57F17).copy(alpha = 0.25f), Color(0xFFFFD700),
     ))
 
     // ✅ Completato: sempre presente (almeno un badge)
-    if (badges.isEmpty()) badges.add(BadgeInfo(
+    if (badges.isEmpty()) badges.add(ActivityBadgeInfo(
         "✅", "Completato",
         "%.1f km · +${elevM}m".format(distKm),
         Color(0xFF212121).copy(alpha = 0.5f), Color(0xFF888888),

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sfondo della finestra all'avvio (pre-Compose): sostituisce il bianco di default
+  con il gradiente brandizzato "montagna + tech" (Tech Navy → background assoluto)
+  e il logo centrato. Si raccorda senza stacco al boot-screen Compose (TsmBootScreen).
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="125"
+                android:startColor="#0B2233"
+                android:centerColor="#06141C"
+                android:endColor="#080B11"
+                android:type="linear" />
+        </shape>
+    </item>
+    <item
+        android:width="148dp"
+        android:height="148dp"
+        android:drawable="@drawable/tsm_logo"
+        android:gravity="center" />
+</layer-list>

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Follow from "../models/follow.js";
 import User from "../models/user.js";
+import { createNotification } from "./notificationService.js";
 
 /**
  * Servizio per la gestione delle relazioni di follow asimmetrico.
@@ -43,6 +44,12 @@ export async function followUser(followerId, followingId) {
 
   try {
     const follow = await Follow.create({ followerId, followingId });
+    // Notifica l'utente seguito (solo su follow nuovo, non sul re-follow idempotente).
+    await createNotification({
+      recipientId: followingId,
+      actorId: followerId,
+      type: "follow",
+    });
     return follow.toObject();
   } catch (err) {
     if (err.code === 11000) {
@@ -113,17 +120,22 @@ export async function getFollowers(userId, { page = 1, limit = 20 } = {}) {
  * Segui/Smetti senza una seconda query lato client).
  */
 export async function getFollowStats(targetUserId, viewerId) {
-  const [followers, following, mine] = await Promise.all([
+  const [followers, following, mine, theirs] = await Promise.all([
     Follow.countDocuments({ followingId: targetUserId }),
     Follow.countDocuments({ followerId: targetUserId }),
     viewerId
       ? Follow.exists({ followerId: viewerId, followingId: targetUserId })
+      : null,
+    // `followsViewer`: il target segue il viewer? → badge "Ti segue" sul profilo.
+    viewerId
+      ? Follow.exists({ followerId: targetUserId, followingId: viewerId })
       : null,
   ]);
   return {
     followers,
     following,
     isFollowedByMe: Boolean(mine),
+    followsViewer: Boolean(theirs),
   };
 }
 

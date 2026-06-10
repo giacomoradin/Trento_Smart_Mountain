@@ -36,6 +36,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -43,7 +44,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +70,7 @@ import it.trentosmartmountain.app.data.preferences.UnitsFormatter
 import it.trentosmartmountain.app.data.remote.dto.WeeklyGoals
 import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.util.AvatarUtils
 import it.trentosmartmountain.app.viewmodel.ProfileV2ViewModel
@@ -83,7 +87,7 @@ private val TextSecondary = Color(0xFF8E8E93)
 private val ChipBlue = Color(0xFF1A3A5C)
 private val ChipGreen = Color(0xFF1A3D1A)
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     modifier: Modifier = Modifier,
@@ -96,6 +100,7 @@ fun ProfileScreen(
     onNavigateToChallenges: () -> Unit = {},
     onNavigateToBadges: () -> Unit = {},
     onNavigateToProfileView: () -> Unit = {},
+    onNavigateToBoard: () -> Unit = {},
     viewModel: ProfileViewModel = viewModel(
         factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
             LocalContext.current.applicationContext as Application,
@@ -111,7 +116,40 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val profileV2State by profileV2ViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val nfcAvailable = NfcAdapter.getDefaultAdapter(context) != null
+    val nfcAdapter = remember { NfcAdapter.getDefaultAdapter(context) }
+    val nfcAvailable = nfcAdapter != null
+    
+    // Stato reattivo dell'NFC (aggiornato tramite BroadcastReceiver e OnResume)
+    var nfcEnabled by remember { mutableStateOf(nfcAvailable && nfcAdapter?.isEnabled == true) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    DisposableEffect(context, nfcAvailable, lifecycleOwner) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
+                if (intent?.action == NfcAdapter.ACTION_ADAPTER_STATE_CHANGED) {
+                    nfcEnabled = nfcAdapter?.isEnabled == true
+                }
+            }
+        }
+        if (nfcAvailable) {
+            context.registerReceiver(receiver, android.content.IntentFilter(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED))
+        }
+
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                nfcEnabled = nfcAvailable && nfcAdapter?.isEnabled == true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            if (nfcAvailable) {
+                runCatching { context.unregisterReceiver(receiver) }
+            }
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val coroutineScope = rememberCoroutineScope()
     var showRemoveAvatarDialog by remember { mutableStateOf(false) }
 
@@ -178,7 +216,14 @@ fun ProfileScreen(
         )
     }
 
-    Surface(modifier = modifier.fillMaxSize(), color = DarkSurface) {
+    Box(modifier = modifier.fillMaxSize()) {
+      // Aurora di profondità dietro al profilo (materiale premium percepibile).
+      TsmAuroraBackground(
+          modifier = Modifier.fillMaxSize(),
+          baseColor = DarkSurface,
+          particleCount = 18,
+      )
+      Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         if (uiState.showBlockingLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = AccentCyan)
@@ -186,12 +231,21 @@ fun ProfileScreen(
             return@Surface
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+        PullToRefreshBox(
+            isRefreshing = profileV2State.isRefreshing || uiState.showInlineRefresh,
+            onRefresh = {
+                viewModel.loadProfile()
+                profileV2ViewModel.loadProfile(manualRefresh = true)
+            },
+            modifier = Modifier.fillMaxSize(),
         ) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -235,37 +289,44 @@ fun ProfileScreen(
                     // sta succedendo (era il vecchio "click e nessun feedback" che
                     // confondeva — bug #6 del report).
                     val hasAvatar = !profileV2State.personalInfo?.avatarUrl.isNullOrBlank()
-                    Box(modifier = Modifier.size(64.dp)) {
-                        AvatarImage(
-                            avatarUrl = profileV2State.personalInfo?.avatarUrl,
-                            fallbackName = uiState.username,
-                            size = 64.dp,
-                            isLoading = profileV2State.isSavingSection,
-                            backgroundColorOverride = Color(0xFF2D5A2D),
-                            modifier = Modifier.combinedClickable(
-                                enabled = !profileV2State.isSavingSection,
-                                onClick = { photoPickerLauncher.launch("image/*") },
-                                onLongClick = {
-                                    if (hasAvatar) showRemoveAvatarDialog = true
-                                },
-                            ),
+                    Box(contentAlignment = Alignment.Center) {
+                        // Glow brand dietro l'avatar (materiale premium).
+                        it.trentosmartmountain.app.ui.components.TsmGlow(
+                            color = TsmPrimary,
+                            modifier = Modifier.size(96.dp),
+                            alpha = 0.30f,
                         )
-                        // Badge "fotocamera" in basso a destra: suggerisce visivamente
-                        // che l'avatar è tappabile per cambiare la foto.
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .align(Alignment.BottomEnd)
-                                .background(TsmPrimary, CircleShape)
-                                .border(1.dp, Color.White, CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Default.CameraAlt,
-                                contentDescription = "Cambia foto",
-                                tint = Color.White,
-                                modifier = Modifier.size(12.dp),
+                        Box(modifier = Modifier.size(64.dp)) {
+                            AvatarImage(
+                                avatarUrl = profileV2State.personalInfo?.avatarUrl,
+                                fallbackName = uiState.username,
+                                size = 64.dp,
+                                isLoading = profileV2State.isSavingSection,
+                                backgroundColorOverride = Color(0xFF003748),
+                                modifier = Modifier.combinedClickable(
+                                    enabled = !profileV2State.isSavingSection,
+                                    onClick = { photoPickerLauncher.launch("image/*") },
+                                    onLongClick = {
+                                        if (hasAvatar) showRemoveAvatarDialog = true
+                                    },
+                                ),
                             )
+                            // Badge "fotocamera" in basso a destra: l'avatar è tappabile.
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .background(TsmPrimary, CircleShape)
+                                    .border(1.dp, Color.White, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.CameraAlt,
+                                    contentDescription = "Cambia foto",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
                         }
                     }
                     Spacer(Modifier.width(16.dp))
@@ -299,10 +360,22 @@ fun ProfileScreen(
             val level = uiState.level
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.07f)),
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(
+                                    it.trentosmartmountain.app.ui.theme.TsmColors.CardElevated,
+                                    it.trentosmartmountain.app.ui.theme.TsmColors.Card,
+                                ),
+                            ),
+                        )
+                        .padding(16.dp),
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -407,23 +480,38 @@ fun ProfileScreen(
                                     style = MaterialTheme.typography.titleSmall,
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                if (nfcAvailable) {
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = Color(0xFF1A3D1A),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
+                                when {
+                                    nfcEnabled -> {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFF1A3D1A),
                                         ) {
-                                            Box(Modifier.size(6.dp).clip(CircleShape).background(AccentGreen))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("NFC ATTIVO", color = AccentGreen, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Box(Modifier.size(6.dp).clip(CircleShape).background(AccentGreen))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("NFC ATTIVO", color = AccentGreen, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
-                                } else {
-                                    Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF3A1A1A)) {
-                                        Text("NFC NON DISPONIBILE", color = Color(0xFFFF6B6B), modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall)
+                                    nfcAvailable -> {
+                                        Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF3D2E1A)) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFFB454)))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("NFC DISATTIVATO", color = Color(0xFFFFB454), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    else -> {
+                                        Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF3A1A1A)) {
+                                            Text("NFC NON DISPONIBILE", color = Color(0xFFFF6B6B), modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall)
+                                        }
                                     }
                                 }
                             }
@@ -559,6 +647,30 @@ fun ProfileScreen(
             Spacer(Modifier.height(12.dp))
 
             Card(
+                modifier = Modifier.fillMaxWidth().clickable { onNavigateToBoard() },
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("📋", fontSize = 22.sp)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Bacheca rifugi", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                            Text("Avvisi e segnalazioni dai rifugi", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Card(
                 modifier = Modifier.fillMaxWidth().clickable { onNavigateToAccount() },
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
                 shape = RoundedCornerShape(12.dp),
@@ -595,7 +707,9 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(24.dp))
+            }
         }
+      }
     }
 }
 

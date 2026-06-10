@@ -29,7 +29,29 @@ data class SessionResponse(
     val startTime: String?,
     val endTime: String?,
     val createdAt: String?,
-)
+    /**
+     * Codice del sentiero SAT scelto in pianificazione (modalità DB). Null in modalità GPX.
+     * Usato dalla SessionDetail per invocare la checklist dinamica con il codice corretto (US-7).
+     */
+    val sentieroCode: String? = null,
+    /**
+     * Tracciato pianificato (GPX importato o sentiero SAT) per overlay in tab Registra
+     * e controllo distanza dal percorso durante il live tracking.
+     */
+    val plannedRoute: PlannedRoute? = null,
+    /**
+     * Leader EFFETTIVO corrente (failover): di norma == creatorId, ma può essere un
+     * partecipante se il creator si è disconnesso ed è scattata l'elezione. Null sui
+     * documenti vecchi → il client ricade su creatorId. Vedi [effectiveLeaderId].
+     */
+    val currentLeaderId: String? = null,
+    /** True quando la leadership è passata a un sostituto (failover attivo). */
+    val statoFailover: Boolean = false,
+) {
+    /** Id del leader effettivo: currentLeaderId se presente, altrimenti il creator. */
+    val effectiveLeaderId: String?
+        get() = currentLeaderId ?: creatorId?._id
+}
 
 /** Dettagli percorso inclusi nella sessione (nome, difficoltà, punti GeoJSON). */
 data class SessionRouteDetailsResponse(
@@ -91,9 +113,26 @@ data class SessionUserPersonalInfo(
     val avatarUrl: String? = null,
 )
 
-/** Partecipante a una sessione con ruolo e timestamp di join. */
+/** Partecipante a una sessione con ruolo, stato di approvazione e timestamp. */
 data class SessionParticipant(
     val userId: SessionUserInfo?,
     val role: String?,
     val joinedAt: String?,
-)
+    /** "pending" (richiesta in attesa) | "accepted". Null sui doc legacy → trattato come accepted. */
+    val status: String? = null,
+    /** Chi ha approvato la richiesta (capogruppo o partecipante accettato). */
+    val approvedBy: SessionUserInfo? = null,
+    /**
+     * Ciclo di vita della PARTECIPAZIONE (ADR-001): idle|live|finished|left.
+     * Ortogonale a [status] (approvazione). Fonte autoritativa per riconciliare lo
+     * stato live locale (es. dopo che il capogruppo ha chiuso, finished → niente ghost).
+     */
+    val participationState: String? = null,
+) {
+    /** Helper: il partecipante è in attesa di approvazione? */
+    val isPending: Boolean get() = status == "pending"
+
+    /** Helper: la partecipazione è conclusa o abbandonata? */
+    val isFinishedParticipation: Boolean
+        get() = participationState == "finished" || participationState == "left"
+}

@@ -33,7 +33,17 @@ import {
   getFeedForUser,
   getPostsByUser,
   getSocialRowForUser,
+  searchUsers,
+  getPublicHikingStats,
+  getWeeklyLeaderboard,
 } from "../services/socialService.js";
+import {
+  getNotifications,
+  getUnreadCount,
+  markAllRead,
+  deleteNotification,
+  deleteAllNotifications,
+} from "../services/notificationService.js";
 
 const router = express.Router();
 
@@ -41,6 +51,23 @@ router.use(authenticate);
 router.use(authenticatedLimiter);
 
 // ── Me-relative: precedono i :id-relative per priorità di matching ──────
+
+/**
+ * GET /api/v1/users/search?q=&limit= — ricerca escursionisti per username.
+ *
+ * Cuore del flusso "aggiungi amici": match parziale case-insensitive, esclude
+ * il viewer, ritorna `{ items: [{ user, isFollowedByMe }] }`. Path statico
+ * definito prima dei `:id`-relative per evitare qualsiasi ambiguità di match.
+ */
+router.get("/search", async (req, res, next) => {
+  try {
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const result = await searchUsers(req.user.userId, req.query.q, { limit });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
 /** GET /api/v1/users/me/following — lista paginata di chi seguo. */
 router.get("/me/following", async (req, res, next) => {
@@ -109,6 +136,71 @@ router.get("/me/social-row", async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/v1/users/me/weekly-leaderboard — classifica settimanale (rolling 7gg)
+ * tra il viewer e gli utenti che segue. Vedi `socialService.getWeeklyLeaderboard`.
+ */
+router.get("/me/weekly-leaderboard", async (req, res, next) => {
+  try {
+    const result = await getWeeklyLeaderboard(req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/v1/users/me/notifications — centro notifiche paginato. */
+router.get("/me/notifications", async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const result = await getNotifications(req.user.userId, { page, limit });
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/v1/users/me/notifications/unread-count — badge non-letti (polling). */
+router.get("/me/notifications/unread-count", async (req, res, next) => {
+  try {
+    const result = await getUnreadCount(req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/v1/users/me/notifications/read — segna tutte come lette. */
+router.post("/me/notifications/read", async (req, res, next) => {
+  try {
+    const result = await markAllRead(req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/v1/users/me/notifications — elimina TUTTE le notifiche. */
+router.delete("/me/notifications", async (req, res, next) => {
+  try {
+    const result = await deleteAllNotifications(req.user.userId);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/v1/users/me/notifications/:nid — elimina una singola notifica. */
+router.delete("/me/notifications/:nid", async (req, res, next) => {
+  try {
+    const result = await deleteNotification(req.user.userId, req.params.nid);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Target-specific: precedono :id "naked" ─────────────────────────────
 
 /** GET /api/v1/users/:id/follow-stats — counts + isFollowedByMe per il bottone. */
@@ -119,6 +211,59 @@ router.get(
     try {
       const stats = await getFollowStats(req.params.id, req.user.userId);
       res.status(200).json(stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * GET /api/v1/users/:id/hiking-stats — totali escursionistici ALL-TIME.
+ * Alimenta il "biglietto da visita" del profilo (km/dislivello/uscite/punti).
+ */
+router.get(
+  "/:id/hiking-stats",
+  validate(followIdParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const stats = await getPublicHikingStats(req.params.id);
+      res.status(200).json(stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * GET /api/v1/users/:id/followers — follower di un utente qualsiasi.
+ * Stessa shape di /me/followers; abilita la navigazione del grafo sociale
+ * (tap sul contatore FOLLOWER del profilo di un altro utente).
+ */
+router.get(
+  "/:id/followers",
+  validate(followIdParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const result = await getFollowers(req.params.id, { page, limit });
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/** GET /api/v1/users/:id/following — utenti seguiti da un utente qualsiasi. */
+router.get(
+  "/:id/following",
+  validate(followIdParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const result = await getFollowing(req.params.id, { page, limit });
+      res.status(200).json(result);
     } catch (err) {
       next(err);
     }

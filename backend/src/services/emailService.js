@@ -100,9 +100,13 @@ async function sendEmail(toEmail, subject, htmlContent) {
     },
   };
 
-  let response;
-  try {
-    response = await fetch("https://api.brevo.com/v3/smtp/email", {
+  // Timeout + 1 retry: senza un AbortSignal una chiamata appesa a Brevo
+  // bloccherebbe il flusso di registrazione/reset finché il socket non scade
+  // (potenzialmente minuti). Con timeout esplicito falliamo veloce e ritentiamo
+  // una volta sugli errori transitori di rete.
+  const EMAIL_TIMEOUT_MS = 10_000;
+  const doFetch = () =>
+    fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
         "accept": "application/json",
@@ -110,10 +114,20 @@ async function sendEmail(toEmail, subject, htmlContent) {
         "content-type": "application/json",
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(EMAIL_TIMEOUT_MS),
     });
+
+  let response;
+  try {
+    response = await doFetch();
   } catch (networkErr) {
-    console.error("[emailService] Errore di rete verso Brevo API:", networkErr.message);
-    throw networkErr;
+    console.warn(`[emailService] 1° tentativo fallito (${networkErr.message}) — retry...`);
+    try {
+      response = await doFetch();
+    } catch (retryErr) {
+      console.error("[emailService] Errore di rete verso Brevo API:", retryErr.message);
+      throw retryErr;
+    }
   }
 
   if (!response.ok) {

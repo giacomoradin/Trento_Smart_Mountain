@@ -106,6 +106,14 @@ private fun RosterActiveRow(
   onClick: () -> Unit,
 ) {
   val user = item.user
+  // Sesso se il backend lo espone (gate visibilità profilo).
+  val sexLabel = formatSex(user.sex)
+  val secondary =
+    if (sexLabel != "—") {
+      "${formatRosterTrackingStatus(item.location.trackingStatus)} · $sexLabel"
+    } else {
+      formatRosterTrackingStatus(item.location.trackingStatus)
+    }
   Row(
     modifier =
       Modifier
@@ -128,7 +136,7 @@ private fun RosterActiveRow(
         fontWeight = FontWeight.Medium,
       )
       Text(
-        text = formatRosterTrackingStatus(item.location.trackingStatus),
+        text = secondary,
         style = MaterialTheme.typography.bodySmall,
         color = TsmAccent,
       )

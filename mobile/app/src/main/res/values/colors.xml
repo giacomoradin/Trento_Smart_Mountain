@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <color name="tsm_primary">#FF156B60</color>
+
+  <!-- Palette logo / icona app (Tech Navy + Athletic Orange) -->
+  <!-- Sfondo icona launcher: allineato al canvas del logo Figma "TSM logo" -->
+  <color name="tsm_icon_bg">#FF1A1F24</color>
+  <color name="tsm_orange">#FFFC5200</color>
+  <color name="tsm_teal">#FF2E8B82</color>
+  <color name="tsm_teal_dark">#FF1F6258</color>
+  <color name="tsm_teal_light">#FF49B3A6</color>
+  <color name="tsm_cream">#FFE8DCC0</color>
+  <color name="tsm_navy_pine">#FF0B2233</color>
 </resources>

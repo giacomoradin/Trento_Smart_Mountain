@@ -51,15 +51,15 @@ class SessionCommandRepository(context: Context) {
     }
   }
 
-  /** Riporta la sessione da ACTIVE a PLANNED (solo capogruppo sul backend). */
-  suspend fun markSessionPlanned(sessionId: String) {
+  /**
+   * Chiusura forzata della sessione (modello Ibrido, "Chiudi sessione"): porta a
+   * COMPLETED per tutti, anche con partecipanti non ancora conclusi. Solo capogruppo.
+   * @return true se il server ha confermato la chiusura.
+   */
+  suspend fun forceCloseSession(sessionId: String): Boolean =
     runCatching {
-      TsmApiClient.service().updateSessionStatus(
-        sessionId,
-        UpdateSessionStatusRequest(status = "PLANNED"),
-      )
-    }
-  }
+      TsmApiClient.service().closeSession(sessionId).isSuccessful
+    }.getOrDefault(false)
 
   /**
    * Completa una sessione di gruppo o crea un'attività libera, a seconda

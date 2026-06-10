@@ -1,6 +1,7 @@
 import Comment from "../models/comment.js";
 import Activity from "../models/activity.js";
 import HikeSession from "../models/hikeSession.js";
+import { createNotification } from "./notificationService.js";
 
 /**
  * Servizio commenti su Activity/HikeSession.
@@ -61,7 +62,7 @@ function modelFor(kind) {
  * abbiamo l'audit log.
  */
 export async function addComment(activityRefId, kind, userId, text) {
-  await loadAndAuthorize(activityRefId, kind, userId);
+  const parent = await loadAndAuthorize(activityRefId, kind, userId);
   const trimmed = (text || "").trim();
   if (trimmed.length < 1) throw new Error("COMMENT_EMPTY");
 
@@ -78,6 +79,16 @@ export async function addComment(activityRefId, kind, userId, text) {
     { _id: activityRefId },
     { $inc: { commentsCount: 1 } },
   );
+
+  // Notifica l'autore del post commentato (best-effort, no-op su self-comment).
+  const ownerId = kind === "activity" ? parent.userId : parent.creatorId;
+  await createNotification({
+    recipientId: ownerId,
+    actorId: userId,
+    type: "comment",
+    targetKind: kind,
+    targetId: activityRefId,
+  });
 
   // Restituiamo il commento populated per la UI (avatar + username dell'autore).
   return Comment.findById(comment._id)

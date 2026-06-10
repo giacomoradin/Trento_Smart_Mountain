@@ -6,9 +6,21 @@ const OPEN_STATUSES = ["ACTIVE", "SHARED_WITH_GROUP"];
 const TERMINAL_STATUSES = ["DISMISSED", "CANCELLED_BY_SENDER"];
 
 export function isSessionGroupLeader(session, userId) {
+  const uid = userId.toString();
+  // Leader EFFETTIVO corrente (failover): se la leadership è passata a un
+  // sostituto, è lui ad avere i poteri da capogruppo.
+  if (session.currentLeaderId && session.currentLeaderId.toString() === uid) {
+    return true;
+  }
+  // Il creator originale conserva sempre i poteri (e fa reclaim al rientro):
+  // così non c'è mai un vuoto di leadership se il creator è ancora presente.
+  if (session.creatorId && session.creatorId.toString() === uid) {
+    return true;
+  }
+  // Fallback retrocompat: ruolo groupLeader nei partecipanti (documenti vecchi).
   return session.participants.some(
     (p) =>
-      (p.userId?._id || p.userId).toString() === userId.toString() &&
+      (p.userId?._id || p.userId).toString() === uid &&
       p.role === "groupLeader",
   );
 }
@@ -178,6 +190,15 @@ export async function patchEmergency(emergencyId, userId, action, extras = {}) {
   switch (action) {
     case "cancel": {
       if (emergency.senderUserId.toString() !== userId.toString()) throw new Error("FORBIDDEN");
+      if (extras.reason === "MISTAKE") {
+        await emergency.populate([
+          { path: "senderUserId", select: "username email" },
+          { path: "sessionId", select: "routeDetails.name inviteCode status" },
+        ]);
+        const deleted = emergency.toObject();
+        await Emergency.findByIdAndDelete(emergency._id);
+        return deleted;
+      }
       emergency.status = "CANCELLED_BY_SENDER";
       emergency.cancelledAt = new Date();
       emergency.cancelledBy = userId;

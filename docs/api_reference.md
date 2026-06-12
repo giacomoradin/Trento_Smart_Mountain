@@ -32,94 +32,107 @@ Il vecchio `POST /users` è mantenuto come **shim deprecato** che smista interna
 Tutti gli endpoint richiedono JWT. Spec completa auto-generata in `swagger-output.json` (UI `/api-docs`).
 
 ### Social — scoperta & grafo
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| GET | `/api/v1/users/search?q=&limit=` | Ricerca utenti per username (+ `isFollowedByMe`) |
-| GET | `/api/v1/users/:id/followers` · `/:id/following` | Follower / seguiti di un utente |
-| GET | `/api/v1/users/:id/hiking-stats` | Totali ALL-TIME (km/dislivello/uscite/punti) |
-| GET | `/api/v1/users/me/weekly-leaderboard` | Classifica settimanale tra i seguiti |
-| GET | `/api/v1/users/:id/follow-stats` | Ora include `followsViewer` (badge "Ti segue") |
+
+| Metodo | Endpoint                                         | Descrizione                                      |
+| ------ | ------------------------------------------------ | ------------------------------------------------ |
+| GET    | `/api/v1/users/search?q=&limit=`                 | Ricerca utenti per username (+ `isFollowedByMe`) |
+| GET    | `/api/v1/users/:id/followers` · `/:id/following` | Follower / seguiti di un utente                  |
+| GET    | `/api/v1/users/:id/hiking-stats`                 | Totali ALL-TIME (km/dislivello/uscite/punti)     |
+| GET    | `/api/v1/users/me/weekly-leaderboard`            | Classifica settimanale tra i seguiti             |
+| GET    | `/api/v1/users/:id/follow-stats`                 | Ora include `followsViewer` (badge "Ti segue")   |
 
 ### Dettaglio Social (Mobile)
-| Route | Componente | Descrizione |
-|---|---|---|
+
+| Route         | Componente            | Descrizione                                                                                                                        |
+| ------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `POST_DETAIL` | `PostDetailScreen.kt` | Dettaglio avanzato attività social con mappa OSMdroid, performance badges (Alpinista, Maratoneta) e timeline degli split ogni 5km. |
 
 ### Notifiche
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| GET | `/api/v1/users/me/notifications?page=` | Centro notifiche (follow/like/comment) |
-| GET | `/api/v1/users/me/notifications/unread-count` | Conteggio non-letti (badge) |
-| POST | `/api/v1/users/me/notifications/read` | Segna tutte come lette |
+
+| Metodo | Endpoint                                      | Descrizione                            |
+| ------ | --------------------------------------------- | -------------------------------------- |
+| GET    | `/api/v1/users/me/notifications?page=`        | Centro notifiche (follow/like/comment) |
+| GET    | `/api/v1/users/me/notifications/unread-count` | Conteggio non-letti (badge)            |
+| POST   | `/api/v1/users/me/notifications/read`         | Segna tutte come lette                 |
 
 ### Privacy profilo
+
 `GET /hikers/:id` applica `profileVisibility`: per viewer non-self, profili `private` (o `friends` senza follow) restituiscono un profilo **limitato** `{ _id, username, isVerified, personalInfo.avatarUrl, restricted: true, visibility }`.
 
 ### Rifugio — Dashboard IoT (dati mock)
+
 > Da giugno 2026 le route `/api/v1/refuge/*` sono protette da `requireRoles("rifugio", "admin")` (prima bastava il JWT di qualsiasi utente).
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| GET | `/api/v1/refuge/dashboard` | Sensori + edge nodes BLE-mesh + passaggi del rifugio loggato (incl. `refuge.avatarUrl`) |
-| PATCH | `/api/v1/refuge/profile` | Foto della struttura: `avatarUrl` data URI Base64 (stesso formato/limiti dell'avatar hiker, `""` per rimuoverla) — Joi `refugeProfileUpdateSchema` |
+| Metodo | Endpoint                   | Descrizione                                                                                                                                        |
+| ------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/refuge/dashboard` | Sensori + edge nodes BLE-mesh + passaggi del rifugio loggato (incl. `refuge.avatarUrl`)                                                            |
+| PATCH  | `/api/v1/refuge/profile`   | Foto della struttura: `avatarUrl` data URI Base64 (stesso formato/limiti dell'avatar hiker, `""` per rimuoverla) — Joi `refugeProfileUpdateSchema` |
 
 ### Rifugio — Rifiuti & Logistica (ADR-002, MVP read-only)
-> Porta dentro TSM il modello del *Simulatore Gestione Rifiuti — Rifugi Alpini* (elaborato OGA ID-22): bilancio di massa stagionale su 6 categorie merceologiche + grigliato, alert di compliance (art. 185-bis D.Lgs. 152/2006: max 30 m³ / 90 giorni di giacenza) e confronto costi tra 4 vettori outbound con `C_kg = (C_fix + c_var·t)/(P·S_t)`. Nessuna persistenza (calcolo puro); auth + rate limit + `requireRoles("rifugio","admin")` + Joi `wasteSimulationSchema`.
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| GET | `/api/v1/refuge/waste/config` | Categorie merceologiche, vettori e limiti normativi |
-| POST | `/api/v1/refuge/waste/simulate` | Simulazione stagionale: totali pre/post trattamento, breakdown, alert compliance, costi per vettore + vettore più economico |
+> Porta dentro TSM il modello del _Simulatore Gestione Rifiuti — Rifugi Alpini_ (elaborato OGA ID-22): bilancio di massa stagionale su 6 categorie merceologiche + grigliato, alert di compliance (art. 185-bis D.Lgs. 152/2006: max 30 m³ / 90 giorni di giacenza) e confronto costi tra 4 vettori outbound con `C_kg = (C_fix + c_var·t)/(P·S_t)`. Nessuna persistenza (calcolo puro); auth + rate limit + `requireRoles("rifugio","admin")` + Joi `wasteSimulationSchema`.
+
+| Metodo | Endpoint                        | Descrizione                                                                                                                 |
+| ------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/refuge/waste/config`   | Categorie merceologiche, vettori e limiti normativi                                                                         |
+| POST   | `/api/v1/refuge/waste/simulate` | Simulazione stagionale: totali pre/post trattamento, breakdown, alert compliance, costi per vettore + vettore più economico |
 
 ### Bacheca rifugi
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| GET | `/api/v1/board?type=&activeOnly=` | Feed bacheca (tutti gli utenti) |
-| GET | `/api/v1/board/mine` | Post del rifugio loggato |
-| POST | `/api/v1/board` | Crea (solo rifugio/admin) — Joi `createBoardPostSchema` |
-| PATCH | `/api/v1/board/:id` | Modifica (autore/admin) |
-| DELETE | `/api/v1/board/:id` | Elimina (autore/admin) |
+
+| Metodo | Endpoint                          | Descrizione                                             |
+| ------ | --------------------------------- | ------------------------------------------------------- |
+| GET    | `/api/v1/board?type=&activeOnly=` | Feed bacheca (tutti gli utenti)                         |
+| GET    | `/api/v1/board/mine`              | Post del rifugio loggato                                |
+| POST   | `/api/v1/board`                   | Crea (solo rifugio/admin) — Joi `createBoardPostSchema` |
+| PATCH  | `/api/v1/board/:id`               | Modifica (autore/admin)                                 |
+| DELETE | `/api/v1/board/:id`               | Elimina (autore/admin)                                  |
 
 ### Sessione — approvazione partecipanti (giugno 2026)
+
 > `joinSession` ora crea una richiesta **`pending`** (non più ingresso immediato). Il sub-doc `participants[]` ha `status` (`pending`/`accepted`) + `approvedBy`; la sessione ha `removedUserIds[]` (ban locale).
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| POST | `/api/v1/sessions/:id/participants/:userId/approve` | Approva un pending (capogruppo **o** un partecipante già accettato) |
-| POST | `/api/v1/sessions/:id/participants/:userId/reject` | Rifiuta/rimuove un pending (capogruppo o partecipante accettato) |
-| DELETE | `/api/v1/sessions/:id/participants/:userId` | Rimuove **definitivamente** + ban (solo capogruppo) |
+| Metodo | Endpoint                                            | Descrizione                                                         |
+| ------ | --------------------------------------------------- | ------------------------------------------------------------------- |
+| POST   | `/api/v1/sessions/:id/participants/:userId/approve` | Approva un pending (capogruppo **o** un partecipante già accettato) |
+| POST   | `/api/v1/sessions/:id/participants/:userId/reject`  | Rifiuta/rimuove un pending (capogruppo o partecipante accettato)    |
+| DELETE | `/api/v1/sessions/:id/participants/:userId`         | Rimuove **definitivamente** + ban (solo capogruppo)                 |
 
 Errori: `403 FORBIDDEN_NOT_MEMBER`/`FORBIDDEN_NOT_LEADER`, `404 PARTICIPANT_NOT_FOUND`, `409 PARTICIPANT_NOT_PENDING`/`PARTICIPANT_BANNED`, `400 CANNOT_REMOVE_CREATOR`.
 
 ### Stories (`/api/v1/stories`) — giugno 2026
+
 > Storie effimere (TTL **24h**). `type`: `planned_session` (pre-hike + `inviteCode` per "Unisciti") o `activity` (preview post-hike). Media foto/video **Base64** capped (no object storage). Auth + rate limit + Joi `createStorySchema`.
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| POST | `/api/v1/stories` | Crea storia (`type`, `sessionId`/`activityId`, `caption`, `media[]`, `overlay`) — 413 se media troppo grande, 403 se ref non autorizzato |
-| GET | `/api/v1/stories/user/:userId` | Storie non scadute di un autore (gate visibilità) + `viewedByMe` |
-| GET | `/api/v1/stories/:id` | Singola storia (deep-link) |
-| POST | `/api/v1/stories/:id/view` | Marca come vista (idempotente) |
-| DELETE | `/api/v1/stories/:id` | Elimina (solo autore) |
+| Metodo | Endpoint                       | Descrizione                                                                                                                              |
+| ------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/v1/stories`              | Crea storia (`type`, `sessionId`/`activityId`, `caption`, `media[]`, `overlay`) — 413 se media troppo grande, 403 se ref non autorizzato |
+| GET    | `/api/v1/stories/user/:userId` | Storie non scadute di un autore (gate visibilità) + `viewedByMe`                                                                         |
+| GET    | `/api/v1/stories/:id`          | Singola storia (deep-link)                                                                                                               |
+| POST   | `/api/v1/stories/:id/view`     | Marca come vista (idempotente)                                                                                                           |
+| DELETE | `/api/v1/stories/:id`          | Elimina (solo autore)                                                                                                                    |
 
 > Avatar Row: `getSocialRowForUser` espone `status: "story"` + `hasUnviewedStory` quando l'autore ha ≥1 Story non scaduta; il viewer mobile si apre **per autore**.
 
 ### Sessione — completamento "Ibrido" + failover (chiusura Sprint 2)
+
 > Ridisegno della logica capogruppo/partecipanti.
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| PATCH | `/api/v1/sessions/:id/complete` | Conclusione **individuale** del chiamante (ADR-001: `participants[].participationState = "finished"` + crediti per-utente). La sessione passa a `COMPLETED` solo quando **tutti gli accettati** sono `finished`/`left` (es. sessione in solitaria → chiusura immediata). Accettata anche a sessione già `COMPLETED` (chi si ferma dopo il force-close del capogruppo non perde crediti/stato). |
-| POST | `/api/v1/sessions/:id/close` | **Chiusura del capogruppo** (`COMPLETED` per tutti) con **auto-finalize** dei membri ancora `live` (niente sessioni "ghost"). Solo capogruppo/leader effettivo (`403 FORBIDDEN_NOT_LEADER`). È ciò che invoca "Arresta" del leader. |
-| DELETE | `/api/v1/sessions/:id/from-activities` | Nasconde una sessione COMPLETED dalla lista "Le mie attività" del chiamante (`hiddenForUsers[]`, hide per-utente; il documento resta per gli altri). `403 NOT_IN_SESSION` se non membro. |
+| Metodo | Endpoint                               | Descrizione                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PATCH  | `/api/v1/sessions/:id/complete`        | Conclusione **individuale** del chiamante (ADR-001: `participants[].participationState = "finished"` + crediti per-utente). La sessione passa a `COMPLETED` solo quando **tutti gli accettati** sono `finished`/`left` (es. sessione in solitaria → chiusura immediata). Accettata anche a sessione già `COMPLETED` (chi si ferma dopo il force-close del capogruppo non perde crediti/stato). |
+| POST   | `/api/v1/sessions/:id/close`           | **Chiusura del capogruppo** (`COMPLETED` per tutti) con **auto-finalize** dei membri ancora `live` (niente sessioni "ghost"). Solo capogruppo/leader effettivo (`403 FORBIDDEN_NOT_LEADER`). È ciò che invoca "Arresta" del leader.                                                                                                                                                            |
+| DELETE | `/api/v1/sessions/:id/from-activities` | Nasconde una sessione COMPLETED dalla lista "Le mie attività" del chiamante (`hiddenForUsers[]`, hide per-utente; il documento resta per gli altri). `403 NOT_IN_SESSION` se non membro.                                                                                                                                                                                                       |
 
 ### Attività — copia personale di sessione (giugno 2026)
-> `POST /api/v1/activities` accetta ora `sourceSessionId` (objectId opzionale): il client la invia per **ogni membro** al termine di una sessione di gruppo, così anche i partecipanti non-creator hanno una *propria* Activity condivisibile sul feed (prima la share rispondeva `404 ACTIVITY_NOT_FOUND` perché il loro `remoteId` era il sessionId). Garanzie lato service:
+
+> `POST /api/v1/activities` accetta ora `sourceSessionId` (objectId opzionale): il client la invia per **ogni membro** al termine di una sessione di gruppo, così anche i partecipanti non-creator hanno una _propria_ Activity condivisibile sul feed (prima la share rispondeva `404 ACTIVITY_NOT_FOUND` perché il loro `remoteId` era il sessionId). Garanzie lato service:
+>
 > - **idempotente** per coppia `(userId, sourceSessionId)`: i retry del SyncManager aggiornano la copia esistente, niente duplicati;
 > - **nessun ri-accredito crediti** (già accreditati da `PATCH /sessions/:id/complete`);
 > - **esclusa dalle statistiche aggregate** (`GET /sessions/stats`): la HikeSession di origine conta già una volta.
 
 **Failover capogruppo** (nessun nuovo endpoint, logica lato `getLiveLocations`/`postLiveLocation`):
+
 - L'upload di posizione del **leader effettivo** aggiorna `lastHeartbeat` (heartbeat).
 - Se il leader è inattivo **>90s** e la sessione è `ACTIVE`, al successivo fetch di live-locations viene eletto leader il **partecipante accettato più anziano** ancora live (posizione <35s) → `currentLeaderId`, `statoFailover=true` + notifica al neo-capogruppo.
 - Se il **creator originale** rientra (riprende a inviare posizione) → **reclaim** automatico (`statoFailover=false`).
@@ -180,13 +193,13 @@ oppure
 Login utente. Il campo `email` accetta **email O username** (lookup `$or` lato server):
 il login funziona con entrambi. La validazione non impone più il formato email.
 
-| Campo            | Tipo | Note                                       |
-| ---------------- | ---- | ------------------------------------------ |
-| **Auth**         | —    | Pubblico                                   |
-| **Body**         | JSON | `{ email, password }` — `email` = email **o** username |
+| Campo            | Tipo | Note                                                     |
+| ---------------- | ---- | -------------------------------------------------------- |
+| **Auth**         | —    | Pubblico                                                 |
+| **Body**         | JSON | `{ email, password }` — `email` = email **o** username   |
 | **Response 200** | JSON | `{ token, accessToken, refreshToken, refreshExpiresAt }` |
-| **Response 401** | JSON | `{ message: "Credenziali non valide." }`   |
-| **Response 403** | JSON | `{ message: "Accesso negato. ... verifica SMTP ..." }` |
+| **Response 401** | JSON | `{ message: "Credenziali non valide." }`                 |
+| **Response 403** | JSON | `{ message: "Accesso negato. ... verifica SMTP ..." }`   |
 
 #### Esempio request
 

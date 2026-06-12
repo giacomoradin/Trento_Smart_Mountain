@@ -55,10 +55,16 @@ export async function createActivity(userId, payload) {
   // (l'utente può creare tante attività quante ne vuole).
   // ECCEZIONE: le copie personali di sessione NON accreditano nulla — i crediti
   // della sessione sono già stati accreditati da completeSession (per-utente).
-  const basePoints = sourceSessionId ? 0 : (activity.actualStats?.finalPoints ?? 0);
+  const basePoints = sourceSessionId
+    ? 0
+    : (activity.actualStats?.finalPoints ?? 0);
   if (basePoints > 0) {
     const user = await User.findById(userId).select("experience").lean();
-    const credits = applyBaselineMultiplier(basePoints, user, activity.difficultyLevel);
+    const credits = applyBaselineMultiplier(
+      basePoints,
+      user,
+      activity.difficultyLevel,
+    );
     if (credits > 0) {
       await addCredits({
         userId,
@@ -66,7 +72,10 @@ export async function createActivity(userId, payload) {
         source: "free_activity",
         refId: activity._id,
         refKind: "Activity",
-        note: credits !== basePoints ? `baseline μ applicato (base=${basePoints})` : undefined,
+        note:
+          credits !== basePoints
+            ? `baseline μ applicato (base=${basePoints})`
+            : undefined,
       });
     }
   }
@@ -86,14 +95,16 @@ export async function getActivitiesByUser(userId) {
 export async function getActivityById(activityId, userId) {
   const activity = await Activity.findById(activityId).lean();
   if (!activity) throw new Error("ACTIVITY_NOT_FOUND");
-  if (activity.userId.toString() !== userId.toString()) throw new Error("FORBIDDEN");
+  if (activity.userId.toString() !== userId.toString())
+    throw new Error("FORBIDDEN");
   return activity;
 }
 
 export async function deleteActivity(activityId, userId) {
   const activity = await Activity.findById(activityId);
   if (!activity) throw new Error("ACTIVITY_NOT_FOUND");
-  if (activity.userId.toString() !== userId.toString()) throw new Error("FORBIDDEN");
+  if (activity.userId.toString() !== userId.toString())
+    throw new Error("FORBIDDEN");
   await activity.deleteOne();
 }
 
@@ -110,7 +121,9 @@ export async function getCombinedActivityStats(userId, year, hikeSessionStats) {
 
   const diffScore = { T: 0.25, E: 0.5, EE: 0.75, EEA: 1.0 };
   const monthlyCount = [...hikeSessionStats.monthlyActivityCount];
-  const monthlyDiffSum = monthlyCount.map((_, i) => hikeSessionStats.monthlyAvgDifficulty[i] || 0);
+  const monthlyDiffSum = monthlyCount.map(
+    (_, i) => hikeSessionStats.monthlyAvgDifficulty[i] || 0,
+  );
   const monthlyDiffN = monthlyCount.map((c) => (c > 0 ? 1 : 0));
 
   let totalDist = hikeSessionStats.totalDistanceKm;

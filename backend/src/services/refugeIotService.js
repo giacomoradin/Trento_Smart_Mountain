@@ -16,7 +16,12 @@ import RefugePassage from "../models/refugePassage.js";
 const MOCK_NODES = [
   { code: "EDGE-NODE-01", name: "Passo Principe", signalPct: 92, online: true },
   { code: "EDGE-NODE-02", name: "Sentiero 546", signalPct: 71, online: true },
-  { code: "EDGE-NODE-03", name: "Cresta Catinaccio", signalPct: 0, online: false },
+  {
+    code: "EDGE-NODE-03",
+    name: "Cresta Catinaccio",
+    signalPct: 0,
+    online: false,
+  },
   { code: "EDGE-NODE-04", name: "Rifugio", signalPct: 100, online: true },
 ];
 
@@ -136,12 +141,25 @@ export async function getRefugeDashboard(refugeId) {
     live: true,
     sensors: reading
       ? {
-        temperature: { value: reading.temperatureC, trend: reading.temperatureTrend },
-        humidity: { value: reading.humidityPct, trend: reading.humidityTrend },
-        wind: { value: reading.windKmh, dir: reading.windDir, gust: reading.windGustKmh },
-        pressure: { value: reading.pressureHpa, trend: reading.pressureTrend },
-        capturedAt: reading.capturedAt,
-      }
+          temperature: {
+            value: reading.temperatureC,
+            trend: reading.temperatureTrend,
+          },
+          humidity: {
+            value: reading.humidityPct,
+            trend: reading.humidityTrend,
+          },
+          wind: {
+            value: reading.windKmh,
+            dir: reading.windDir,
+            gust: reading.windGustKmh,
+          },
+          pressure: {
+            value: reading.pressureHpa,
+            trend: reading.pressureTrend,
+          },
+          capturedAt: reading.capturedAt,
+        }
       : null,
     edgeNodes: nodes.map((n) => ({
       code: n.code,
@@ -172,7 +190,8 @@ export async function getRefugeDashboard(refugeId) {
  */
 export async function updateRefugeProfile(refugeId, { avatarUrl } = {}) {
   const update = {};
-  if (avatarUrl !== undefined) update.avatarUrl = avatarUrl === "" ? null : avatarUrl;
+  if (avatarUrl !== undefined)
+    update.avatarUrl = avatarUrl === "" ? null : avatarUrl;
 
   const refuge = await Refuge.findByIdAndUpdate(
     refugeId,

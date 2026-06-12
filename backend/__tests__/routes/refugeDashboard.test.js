@@ -15,7 +15,10 @@ async function createTestRefuge(rifugioName = "Rifugio Dash") {
     rifugioName,
     quota: 2243,
   });
-  return { refuge: refuge.toObject(), token: generateValidToken(refuge._id.toString(), "rifugio") };
+  return {
+    refuge: refuge.toObject(),
+    token: generateValidToken(refuge._id.toString(), "rifugio"),
+  };
 }
 
 describe("Refuge IoT Dashboard", () => {
@@ -31,7 +34,9 @@ describe("Refuge IoT Dashboard", () => {
     expect(res.body.sensors).not.toBeNull();
     expect(typeof res.body.sensors.temperature.value).toBe("number");
     expect(res.body.edgeNodesTotal).toBeGreaterThan(0);
-    expect(res.body.edgeNodesOnline).toBeLessThanOrEqual(res.body.edgeNodesTotal);
+    expect(res.body.edgeNodesOnline).toBeLessThanOrEqual(
+      res.body.edgeNodesTotal,
+    );
     expect(Array.isArray(res.body.passages.items)).toBe(true);
     expect(res.body.passages.totalCreditsToday).toBeGreaterThanOrEqual(0);
   });

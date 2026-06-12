@@ -672,6 +672,131 @@ fun TsmNavHost() {
             }
         }
 
+        // ── Vista profilo completo (read-only) ────────────────────────────
+        composable(Routes.PROFILE_VIEW) {
+            ProfileViewScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToEdit = { navController.navigate(Routes.ACCOUNT_PASSWORD_GATE) },
+            )
+        }
+
+        // ── Profilo pubblico altri utenti (Social, Sprint 2) ──────────────
+        // Path arg `userId`. Aperto da FeedCard.tap su avatar e da future
+        // entry-point (es. CommentsBottomSheet → autore del commento).
+        composable(
+            route = Routes.USER_PROFILE,
+            arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId").orEmpty()
+            it.trentosmartmountain.app.ui.screens.home.UserProfileScreen(
+                userId = userId,
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onOpenFollowList = { uid, type ->
+                    val typeArg =
+                        if (type == FollowListType.FOLLOWING) "following" else "followers"
+                    navController.navigate(Routes.followListRoute(uid, typeArg))
+                },
+                onOpenDetail = { item ->
+                    pendingPostDetail = item
+                    navController.navigate(Routes.POST_DETAIL)
+                },
+            )
+        }
+
+        // ── Social: ricerca/scoperta utenti ("aggiungi amici") ───────────
+        composable(Routes.USER_SEARCH) {
+            UserSearchScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+            )
+        }
+
+        // ── Social: classifica settimanale ───────────────────────────────
+        composable(Routes.LEADERBOARD) {
+            LeaderboardScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+            )
+        }
+
+        // ── Social: centro notifiche ──────────────────────────────────────
+        composable(Routes.NOTIFICATIONS) {
+            NotificationsScreen(
+                onBack = { navController.popBackStack() },
+                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onOpenActivity = { activityId, sessionId ->
+                    navController.navigate(Routes.activityDetailRoute(activityId, sessionId))
+                },
+                onOpenSession = { sessionId ->
+                    navController.navigate(Routes.sessionDetailRoute(sessionId))
+                },
+            )
+        }
+
+        // ── Bacheca rifugi (consultazione utente / gestione rifugista) ────
+        composable(
+            route = Routes.BOARD,
+            arguments = listOf(navArgument("manage") { type = NavType.BoolType; defaultValue = false }),
+        ) { backStackEntry ->
+            val manage = backStackEntry.arguments?.getBoolean("manage") ?: false
+            BoardScreen(manage = manage, onBack = { navController.popBackStack() })
+        }
+
+        // ── Social: lista follower/seguiti (navigazione del grafo) ───────
+        composable(
+            route = Routes.FOLLOW_LIST,
+            arguments = listOf(
+                navArgument("userId") { type = NavType.StringType },
+                navArgument("type") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val uid = backStackEntry.arguments?.getString("userId").orEmpty()
+            val typeArg = backStackEntry.arguments?.getString("type") ?: "followers"
+            val listType =
+                if (typeArg == "following") FollowListType.FOLLOWING else FollowListType.FOLLOWERS
+            FollowListScreen(
+                userId = uid,
+                type = listType,
+                onBack = { navController.popBackStack() },
+                onUserClick = { targetId -> navController.navigate(Routes.userProfileRoute(targetId)) },
+            )
+        }
+
+        // ── Story viewer full-screen (Instagram-like, storie reali per autore) ──
+        composable(
+            route = Routes.STORY_VIEWER,
+            arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val storyUserId = backStackEntry.arguments?.getString("userId").orEmpty()
+            it.trentosmartmountain.app.ui.screens.home.StoryViewerScreen(
+                userId = storyUserId,
+                launchContext = pendingStoryViewerContext,
+                onClose = {
+                    pendingStoryViewerContext = null
+                    navController.popBackStack()
+                },
+                onOpenSession = { sid -> navController.navigate(Routes.sessionDetailRoute(sid)) },
+            )
+        }
+
+        // ── Composer storie (foto/video + overlay) ───────────────────────
+        composable(Routes.STORY_COMPOSER) { _ ->
+            val draft = pendingStoryDraft
+            if (draft != null) {
+                it.trentosmartmountain.app.ui.screens.home.StoryComposerScreen(
+                    args = draft,
+                    onClose = { navController.popBackStack() },
+                    onPublished = {
+                        pendingStoryDraft = null
+                        navController.popBackStack()
+                    },
+                )
+            } else {
+                LaunchedEffect(Unit) { navController.popBackStack() }
+            }
+        }
+
         // ── Onboarding v2 (3 step skippable) ─────────────────────────────────
         // Tutti i 3 step condividono lo stesso ProfileV2ViewModel (factory default,
         // scope al graph) → quando l'ultimo step chiama completeOnboarding(), il

@@ -349,9 +349,14 @@ export const createStorySchema = Joi.object({
     distanceMeters: Joi.number().min(0).allow(null),
     elevationGainM: Joi.number().min(0).allow(null),
     movingSeconds: Joi.number().min(0).allow(null),
-    routePolyline: Joi.array().items(storyOverlayPointSchema).max(500).optional(),
+    routePolyline: Joi.array()
+      .items(storyOverlayPointSchema)
+      .max(500)
+      .optional(),
     editorDecor: Joi.object({
-      routeOverlayKind: Joi.string().valid("trace", "map_widget", "map_scene").optional(),
+      routeOverlayKind: Joi.string()
+        .valid("trace", "map_widget", "map_scene")
+        .optional(),
       routeColor: hexColorField.optional(),
       routeTransform: storyStickerTransformSchema.optional(),
       mapWidgetTransform: storyStickerTransformSchema.optional(),
@@ -669,7 +674,14 @@ export const wasteSimulationSchema = Joi.object({
     .items(
       Joi.object({
         category: Joi.string()
-          .valid("Organico", "Plastica", "Vetro", "Metalli", "Cartone", "Altro/indiff.")
+          .valid(
+            "Organico",
+            "Plastica",
+            "Vetro",
+            "Metalli",
+            "Cartone",
+            "Altro/indiff.",
+          )
           .required(),
         massReductionPct: Joi.number().min(0).max(95).default(0),
         volumeReductionPct: Joi.number().min(0).max(95).default(0),

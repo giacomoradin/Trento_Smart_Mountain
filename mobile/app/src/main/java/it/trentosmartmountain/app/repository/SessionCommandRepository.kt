@@ -71,6 +71,12 @@ class SessionCommandRepository(context: Context) {
     activityName: String,
     startTimeMs: Long,
     movingSeconds: Long,
+    /**
+     * Tempo totale wall-clock start→stop (include pause auto/manuali). Senza,
+     * il server riceveva total==moving e l'evento "Pause" della timeline non
+     * poteva mai comparire dopo un re-import dal sync.
+     */
+    totalSeconds: Long,
     distanceMeters: Double,
     elevationGainMeters: Int,
     currentAltitudeMeters: Int?,
@@ -94,7 +100,7 @@ class SessionCommandRepository(context: Context) {
     val finalPts = HikeEstimation.finalPoints(distKm, elevationGainMeters, actualH)
     val payload = ActualStats(
       movingSeconds = movingSeconds,
-      totalSeconds = movingSeconds,
+      totalSeconds = totalSeconds.coerceAtLeast(movingSeconds),
       distanceMeters = distanceMeters,
       elevationGainM = elevationGainMeters,
       finalPoints = finalPts,
@@ -104,14 +110,44 @@ class SessionCommandRepository(context: Context) {
 
     return runCatching {
       if (sessionId != null) {
-        val resp = TsmApiClient.service().completeSession(
-          sessionId,
-          CompleteSessionRequest(actualStats = payload),
+        // 1) Conclusione individuale ADR-001 (participationState=finished +
+        //    crediti). Best-effort: il backend la accetta anche a sessione già
+        //    COMPLETED (force-close del capogruppo); se fallisce con un errore
+        //    client (es. partecipante rimosso) NON blocchiamo il passo 2 —
+        //    la registrazione resta dell'utente.
+        val completeResp = runCatching {
+          TsmApiClient.service().completeSession(
+            sessionId,
+            CompleteSessionRequest(actualStats = payload),
+          )
+        }.getOrNull()
+
+        // 2) Copia PERSONALE dell'uscita (idempotente per utente+sessione sul
+        //    backend): è ciò che il membro condivide sul feed. Senza, il
+        //    remoteId restava il sessionId e la share rispondeva 404
+        //    ACTIVITY_NOT_FOUND per tutti i partecipanti non-creator.
+        val personalReq = CreateActivityRequest(
+          name = activityName.trim().ifBlank { "Escursione" },
+          activityType = "hiking",
+          startTimeMs = if (startTimeMs > 0) startTimeMs else System.currentTimeMillis() - movingSeconds * 1000L,
+          endTimeMs = System.currentTimeMillis(),
+          actualStats = payload,
+          elevationProfile = downsampleByIndex(elevations, ELEVATION_PROFILE_MAX_POINTS),
+          routePolyline = downsampleByIndex(routePoints, ROUTE_MAX_POINTS),
+          sourceSessionId = sessionId,
         )
-        if (resp.isSuccessful) SyncResult.Synced(remoteId = sessionId)
-        else {
-          SyncManager.enqueueImmediate(appContext)
-          SyncResult.Pending
+        val personalResp = TsmApiClient.service().createActivity(personalReq)
+        when {
+          personalResp.isSuccessful ->
+            SyncResult.Synced(remoteId = personalResp.body()?._id ?: sessionId)
+          completeResp?.isSuccessful == true ->
+            // Sessione conclusa ma copia personale non riuscita: il SyncManager
+            // ritenterà la createActivity (idempotente) al prossimo giro.
+            SyncResult.Pending.also { SyncManager.enqueueImmediate(appContext) }
+          else -> {
+            SyncManager.enqueueImmediate(appContext)
+            SyncResult.Pending
+          }
         }
       } else {
         val req = CreateActivityRequest(

@@ -119,13 +119,37 @@ object SyncManager {
         try {
             val sessionId = entity.sessionId
             if (sessionId != null) {
-                val resp = TsmApiClient.service()
-                    .completeSession(sessionId, CompleteSessionRequest(buildActualStats(entity)))
+                // 1) Conclusione individuale ADR-001 — best-effort: il server la
+                //    accetta anche a sessione già chiusa dal capogruppo; un 4xx
+                //    (es. partecipante rimosso) non blocca la copia personale.
+                runCatching {
+                    TsmApiClient.service()
+                        .completeSession(sessionId, CompleteSessionRequest(buildActualStats(entity)))
+                }.onSuccess { resp ->
+                    if (!resp.isSuccessful) {
+                        Log.w(TAG, "[${entity.id}] completeSession HTTP ${resp.code()} (proseguo con copia personale)")
+                    }
+                }
+
+                // 2) Copia PERSONALE dell'uscita (idempotente lato server per
+                //    utente+sessione): è il documento condivisibile sul feed.
+                val req = CreateActivityRequest(
+                    name = entity.name,
+                    activityType = entity.activityType,
+                    startTimeMs = entity.startTimeMs,
+                    endTimeMs = entity.endTimeMs,
+                    actualStats = buildActualStats(entity),
+                    difficultyLevel = entity.difficultyLevel,
+                    elevationProfile = parseElevationProfile(entity.trackLatLng),
+                    routePolyline = parseRoutePolyline(entity.trackLatLng),
+                    sourceSessionId = sessionId,
+                )
+                val resp = TsmApiClient.service().createActivity(req)
                 if (resp.isSuccessful) {
-                    dao.markSynced(entity.id, sessionId)
-                    Log.i(TAG, "[${entity.id}] session sync OK")
+                    dao.markSynced(entity.id, resp.body()?._id ?: sessionId)
+                    Log.i(TAG, "[${entity.id}] session sync OK (personal copy ${resp.body()?._id})")
                 } else {
-                    Log.w(TAG, "[${entity.id}] session sync HTTP ${resp.code()}")
+                    Log.w(TAG, "[${entity.id}] session personal copy HTTP ${resp.code()}")
                     dao.bumpRetry(entity.id, now)
                 }
             } else {

@@ -83,6 +83,25 @@ import it.trentosmartmountain.app.ui.util.gsonSaver
 private val DarkSurface = Color(0xFF1C1C1E)
 private val AccentCyan = Color(0xFF4DD0E1)
 
+/**
+ * Pop "sicuro": non rimuove mai l'ULTIMA destination. Un pop di troppo (doppio
+ * tap su back, callback duplicato dopo un'azione lenta) svuotava il NavHost
+ * lasciando visibile solo il window background blu col logo → app percepita
+ * come "bloccata sullo splash".
+ */
+private fun androidx.navigation.NavHostController.safePop() {
+    if (previousBackStackEntry != null) popBackStack()
+}
+
+/**
+ * Apre il profilo social di un utente. `launchSingleTop` evita che un double-tap
+ * sull'avatar impili due copie della stessa schermata (il back sembrava "non
+ * funzionare" perché tornava su un duplicato identico).
+ */
+private fun androidx.navigation.NavHostController.openUserProfile(userId: String) {
+    navigate(Routes.userProfileRoute(userId)) { launchSingleTop = true }
+}
+
 @Composable
 fun TsmNavHost() {
     val application = LocalContext.current.applicationContext as TsmApplication
@@ -169,13 +188,13 @@ fun TsmNavHost() {
                         popUpTo(Routes.REGISTER) { inclusive = true }
                     }
                 },
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
             )
         }
 
         composable(Routes.REGISTER_RIFUGIO) {
             RegisterRifugioScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onRegistrationPendingVerification = { email, serverMessage ->
                     navController.navigate(Routes.emailVerificationPendingRoute(email, serverMessage)) {
                         popUpTo(Routes.REGISTER_RIFUGIO) { inclusive = true }
@@ -185,7 +204,7 @@ fun TsmNavHost() {
         }
 
         composable(Routes.FORGOT_PASSWORD) {
-            ForgotPasswordScreen(onBack = { navController.popBackStack() })
+            ForgotPasswordScreen(onBack = { navController.safePop() })
         }
 
         composable(
@@ -205,7 +224,7 @@ fun TsmNavHost() {
                         popUpTo(Routes.AUTH_ENTRY) { inclusive = false }
                     }
                 },
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
             )
         }
 
@@ -227,7 +246,7 @@ fun TsmNavHost() {
                 onNavigateToBadges = { navController.navigate(Routes.BADGES) },
                 onNavigateToProfileView = { navController.navigate(Routes.PROFILE_VIEW) },
                 onNavigateToUserProfile = { userId ->
-                    navController.navigate(Routes.userProfileRoute(userId))
+                    navController.openUserProfile(userId)
                 },
                 onNavigateToStoryViewer = { launch ->
                     launch.startUserId?.let { startId ->
@@ -251,14 +270,14 @@ fun TsmNavHost() {
             if (item != null) {
                 PostDetailScreen(
                     item = item,
-                    onBack = { navController.popBackStack() },
+                    onBack = { navController.safePop() },
                     onUserClick = { userId ->
-                        navController.navigate(Routes.userProfileRoute(userId))
+                        navController.openUserProfile(userId)
                     }
                 )
             } else {
                 // Fallback se per qualche motivo lo stato viene perso
-                LaunchedEffect(Unit) { navController.popBackStack() }
+                LaunchedEffect(Unit) { navController.safePop() }
             }
         }
 
@@ -271,15 +290,16 @@ fun TsmNavHost() {
 
         composable(Routes.REFUGE_WASTE) {
             WasteSimulatorScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
             )
         }
 
         composable(Routes.REFUGE_PROFILE) {
             RefugeProfileScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onNavigateToBoard = { navController.navigate(Routes.boardRoute(true)) },
                 onLoggedOut = { navigateToAuthEntry() },
+                onNavigateToChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
             )
         }
 
@@ -292,8 +312,8 @@ fun TsmNavHost() {
             SessionDetailScreen(
                 sessionId = sessionId,
                 currentUserId = currentUserId,
-                onBack = { navController.popBackStack() },
-                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onBack = { navController.safePop() },
+                onUserClick = { uid -> navController.openUserProfile(uid) },
                 onShareStory = { args ->
                     pendingStoryDraft = args
                     navController.navigate(Routes.STORY_COMPOSER)
@@ -319,8 +339,8 @@ fun TsmNavHost() {
             ActivityDetailScreen(
                 activityId = activityId,
                 sessionId = sessionId,
-                onBack = { navController.popBackStack() },
-                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onBack = { navController.safePop() },
+                onUserClick = { uid -> navController.openUserProfile(uid) },
                 onShareStory = { args ->
                     pendingStoryDraft = args
                     navController.navigate(Routes.STORY_COMPOSER)
@@ -332,7 +352,7 @@ fun TsmNavHost() {
 
         composable(Routes.FORMAZIONE) {
             FormazioneScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onNavigateToQuiz = { slug, _ ->
                     // Il backend risolve il primo quiz non superato per la categoria
                     // (endpoint /quiz/categories/:slug/next). UI behavior del mockup "Continua →".
@@ -348,7 +368,7 @@ fun TsmNavHost() {
             val quizId = backStackEntry.arguments?.getString("quizId").orEmpty()
             QuizScreen(
                 quizId = quizId,
-                onClose = { navController.popBackStack() },
+                onClose = { navController.safePop() },
                 onResult = { submission, qId, title ->
                     pendingQuizResult = submission
                     pendingQuizTitle = title
@@ -367,7 +387,7 @@ fun TsmNavHost() {
             val slug = backStackEntry.arguments?.getString("slug").orEmpty()
             QuizScreen(
                 categorySlug = slug,
-                onClose = { navController.popBackStack() },
+                onClose = { navController.safePop() },
                 onResult = { submission, qId, title ->
                     pendingQuizResult = submission
                     pendingQuizTitle = title
@@ -414,7 +434,7 @@ fun TsmNavHost() {
 
         composable(Routes.NFC_SCAN) {
             NfcScanScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onResult = { response ->
                     pendingNfcResult = response
                     navController.navigate(Routes.NFC_RESULT) {
@@ -435,13 +455,13 @@ fun TsmNavHost() {
                     },
                 )
             } else {
-                navController.popBackStack()
+                navController.safePop()
             }
         }
 
         composable(Routes.ACCOUNT_PASSWORD_GATE) {
             AccountPasswordGateScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onVerified = {
                     navController.navigate(Routes.ACCOUNT_EDIT) {
                         popUpTo(Routes.ACCOUNT_PASSWORD_GATE) { inclusive = true }
@@ -452,7 +472,7 @@ fun TsmNavHost() {
 
         composable(Routes.ACCOUNT_EDIT) {
             AccountEditScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onNavigateToChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
                 onNavigateToDeleteAccount = { navController.navigate(Routes.DELETE_ACCOUNT) },
                 onNavigateToPersonalInfo = { navController.navigate(Routes.PERSONAL_INFO_EDIT) },
@@ -467,12 +487,12 @@ fun TsmNavHost() {
         }
 
         composable(Routes.CHANGE_PASSWORD) {
-            ChangePasswordScreen(onBack = { navController.popBackStack() })
+            ChangePasswordScreen(onBack = { navController.safePop() })
         }
 
         composable(Routes.DELETE_ACCOUNT) {
             DeleteAccountScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onAccountDeleted = {
                     application.tokenStorage.clearToken()
                     navigateToAuthEntry()
@@ -482,29 +502,29 @@ fun TsmNavHost() {
 
         // ── Profilo v2: edit per-sezione ──────────────────────────────────────
         composable(Routes.PERSONAL_INFO_EDIT) {
-            PersonalInfoEditScreen(onBack = { navController.popBackStack() })
+            PersonalInfoEditScreen(onBack = { navController.safePop() })
         }
         composable(Routes.EXPERIENCE_EDIT) {
-            ExperienceEditScreen(onBack = { navController.popBackStack() })
+            ExperienceEditScreen(onBack = { navController.safePop() })
         }
         composable(Routes.PREFERENCES_EDIT) {
-            PreferencesEditScreen(onBack = { navController.popBackStack() })
+            PreferencesEditScreen(onBack = { navController.safePop() })
         }
         composable(Routes.GOALS_EDIT) {
-            GoalsEditScreen(onBack = { navController.popBackStack() })
+            GoalsEditScreen(onBack = { navController.safePop() })
         }
 
         // ── Social: Challenges ─────────────────────────────────────────────
         composable(Routes.CHALLENGES) {
             ChallengesScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onNavigateToCreate = { navController.navigate(Routes.CHALLENGE_CREATE) },
                 onNavigateToDetail = { id -> navController.navigate(Routes.challengeDetailRoute(id)) },
             )
         }
         composable(Routes.CHALLENGE_CREATE) {
             CreateChallengeScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onCreated = { id ->
                     // Sostituisce la schermata create con la detail della sfida appena nata,
                     // così il back-button torna alla lista, non al form.
@@ -519,18 +539,18 @@ fun TsmNavHost() {
             arguments = listOf(navArgument("id") { type = NavType.StringType }),
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id").orEmpty()
-            ChallengeDetailScreen(challengeId = id, onBack = { navController.popBackStack() })
+            ChallengeDetailScreen(challengeId = id, onBack = { navController.safePop() })
         }
 
         // ── Bacheca Badges + Certificati ──────────────────────────────────
         composable(Routes.BADGES) {
-            BadgesScreen(onBack = { navController.popBackStack() })
+            BadgesScreen(onBack = { navController.safePop() })
         }
 
         // ── Vista profilo completo (read-only) ────────────────────────────
         composable(Routes.PROFILE_VIEW) {
             ProfileViewScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.safePop() },
                 onNavigateToEdit = { navController.navigate(Routes.ACCOUNT_PASSWORD_GATE) },
             )
         }
@@ -545,8 +565,8 @@ fun TsmNavHost() {
             val userId = backStackEntry.arguments?.getString("userId").orEmpty()
             it.trentosmartmountain.app.ui.screens.home.UserProfileScreen(
                 userId = userId,
-                onBack = { navController.popBackStack() },
-                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onBack = { navController.safePop() },
+                onUserClick = { uid -> navController.openUserProfile(uid) },
                 onOpenFollowList = { uid, type ->
                     val typeArg =
                         if (type == FollowListType.FOLLOWING) "following" else "followers"
@@ -562,24 +582,24 @@ fun TsmNavHost() {
         // ── Social: ricerca/scoperta utenti ("aggiungi amici") ───────────
         composable(Routes.USER_SEARCH) {
             UserSearchScreen(
-                onBack = { navController.popBackStack() },
-                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onBack = { navController.safePop() },
+                onUserClick = { uid -> navController.openUserProfile(uid) },
             )
         }
 
         // ── Social: classifica settimanale ───────────────────────────────
         composable(Routes.LEADERBOARD) {
             LeaderboardScreen(
-                onBack = { navController.popBackStack() },
-                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onBack = { navController.safePop() },
+                onUserClick = { uid -> navController.openUserProfile(uid) },
             )
         }
 
         // ── Social: centro notifiche ──────────────────────────────────────
         composable(Routes.NOTIFICATIONS) {
             NotificationsScreen(
-                onBack = { navController.popBackStack() },
-                onUserClick = { uid -> navController.navigate(Routes.userProfileRoute(uid)) },
+                onBack = { navController.safePop() },
+                onUserClick = { uid -> navController.openUserProfile(uid) },
                 onOpenActivity = { activityId, sessionId ->
                     navController.navigate(Routes.activityDetailRoute(activityId, sessionId))
                 },
@@ -595,7 +615,7 @@ fun TsmNavHost() {
             arguments = listOf(navArgument("manage") { type = NavType.BoolType; defaultValue = false }),
         ) { backStackEntry ->
             val manage = backStackEntry.arguments?.getBoolean("manage") ?: false
-            BoardScreen(manage = manage, onBack = { navController.popBackStack() })
+            BoardScreen(manage = manage, onBack = { navController.safePop() })
         }
 
         // ── Social: lista follower/seguiti (navigazione del grafo) ───────
@@ -613,8 +633,8 @@ fun TsmNavHost() {
             FollowListScreen(
                 userId = uid,
                 type = listType,
-                onBack = { navController.popBackStack() },
-                onUserClick = { targetId -> navController.navigate(Routes.userProfileRoute(targetId)) },
+                onBack = { navController.safePop() },
+                onUserClick = { targetId -> navController.openUserProfile(targetId) },
             )
         }
 
@@ -629,7 +649,7 @@ fun TsmNavHost() {
                 launchContext = pendingStoryViewerContext,
                 onClose = {
                     pendingStoryViewerContext = null
-                    navController.popBackStack()
+                    navController.safePop()
                 },
                 onOpenSession = { sid -> navController.navigate(Routes.sessionDetailRoute(sid)) },
             )
@@ -641,14 +661,14 @@ fun TsmNavHost() {
             if (draft != null) {
                 it.trentosmartmountain.app.ui.screens.home.StoryComposerScreen(
                     args = draft,
-                    onClose = { navController.popBackStack() },
+                    onClose = { navController.safePop() },
                     onPublished = {
                         pendingStoryDraft = null
-                        navController.popBackStack()
+                        navController.safePop()
                     },
                 )
             } else {
-                LaunchedEffect(Unit) { navController.popBackStack() }
+                LaunchedEffect(Unit) { navController.safePop() }
             }
         }
 

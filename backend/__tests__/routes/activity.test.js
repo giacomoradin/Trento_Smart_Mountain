@@ -77,6 +77,75 @@ describe("Activity Routes", () => {
   });
 
   // ══════════════════════════════════════════════════════════════════
+  // POST /api/v1/activities con sourceSessionId — copia personale di
+  // una sessione di gruppo (ADR-001: ogni membro condivide la propria)
+  // ══════════════════════════════════════════════════════════════════
+
+  describe("POST /api/v1/activities (sourceSessionId)", () => {
+    test("session copy is idempotent per (user, session) and shareable", async () => {
+      const { token } = await createTestHiker({
+        username: "groupmember",
+        email: "groupmember@test.com",
+      });
+      const sessionId = "64b000000000000000000abc";
+
+      const first = await request(app)
+        .post("/api/v1/activities")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ ...VALID_ACTIVITY, sourceSessionId: sessionId });
+      expect(first.status).toBe(201);
+      expect(first.body.sourceSessionId).toBe(sessionId);
+
+      // Retry dello stesso upload (SyncManager / re-login): stesso _id, niente duplicato.
+      const second = await request(app)
+        .post("/api/v1/activities")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ ...VALID_ACTIVITY, name: "Retry sync", sourceSessionId: sessionId });
+      expect(second.status).toBe(201);
+      expect(second.body._id).toBe(first.body._id);
+
+      const list = await request(app)
+        .get("/api/v1/activities")
+        .set("Authorization", `Bearer ${token}`);
+      expect(list.body.length).toBe(1);
+
+      // Il partecipante può condividere la PROPRIA copia sul feed (era il 404
+      // "non è possibile condividerla sul social" quando remoteId == sessionId).
+      const share = await request(app)
+        .post(`/api/v1/activities/${first.body._id}/share`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ caption: "La mia versione dell'uscita" });
+      expect(share.status).toBe(200);
+    });
+
+    test("session copies are excluded from aggregated stats (no double count)", async () => {
+      const { token } = await createTestHiker({
+        username: "statsuser",
+        email: "statsuser@test.com",
+      });
+      const year = new Date(VALID_ACTIVITY.endTimeMs).getFullYear();
+
+      // 1 attività libera (conta) + 1 copia di sessione (NON conta)
+      await request(app)
+        .post("/api/v1/activities")
+        .set("Authorization", `Bearer ${token}`)
+        .send(VALID_ACTIVITY);
+      await request(app)
+        .post("/api/v1/activities")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ ...VALID_ACTIVITY, sourceSessionId: "64b000000000000000000def" });
+
+      const stats = await request(app)
+        .get(`/api/v1/sessions/stats?year=${year}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(stats.status).toBe(200);
+      expect(stats.body.totalActivities).toBe(1);
+      expect(stats.body.totalDistanceKm).toBeCloseTo(5.2, 1);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════
   // GET /api/v1/activities — Lista propria
   // ══════════════════════════════════════════════════════════════════
 

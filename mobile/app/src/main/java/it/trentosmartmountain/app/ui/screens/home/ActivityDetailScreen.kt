@@ -82,6 +82,7 @@ import it.trentosmartmountain.app.ui.components.AvatarImage
 import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSos
 import it.trentosmartmountain.app.ui.theme.TsmSurface
@@ -208,7 +209,15 @@ fun ActivityDetailScreen(
             text = { Text("L'attività verrà rimossa dal dispositivo. Questa azione è irreversibile.", color = Color.Gray) },
             confirmButton = {
                 Button(
-                    onClick = { viewModel.deleteActivity { onBack() } },
+                    // Chiudi SUBITO il dialog: con la rete lenta (cold start
+                    // Render 30-100s) restava aperto e ogni tap extra su
+                    // "Elimina" accodava un altro onBack() → pop multipli →
+                    // back stack vuoto → schermata blu del window background
+                    // percepita come "app bloccata sul logo".
+                    onClick = {
+                        showDeleteConfirm = false
+                        viewModel.deleteActivity { onBack() }
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
                 ) { Text("Elimina") }
             },
@@ -303,7 +312,9 @@ fun ActivityDetailScreen(
                         MetricCell(
                             label = "DISTANZA",
                             value = "%.1f km".format(uiState.distanceKm),
-                            valueColor = TsmAccent,
+                            // Info (azzurro brillante) anziché Cyan: sul Card scuro
+                            // il teal risultava percepito come "grigio su grigio".
+                            valueColor = TsmColors.Info,
                             subValue = null,
                             modifier = Modifier.weight(1f),
                         )
@@ -749,10 +760,18 @@ private fun TimelineEventRow(event: it.trentosmartmountain.app.viewmodel.Timelin
         Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(event.label, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
-            event.subtitle?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
+            // TextSecondary (Slate 400) anziché Gray pieno: i sottotitoli con
+            // distanza/durata erano illeggibili sul Card scuro.
+            event.subtitle?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = TsmColors.TextSecondary)
+            }
         }
         event.timeLabel?.let {
-            Text(it, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = Color.Gray)
+            Text(
+                it,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = TsmColors.TextSecondary,
+            )
         }
     }
 }

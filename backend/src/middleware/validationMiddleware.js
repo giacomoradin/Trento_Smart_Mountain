@@ -267,6 +267,12 @@ export const createActivitySchema = Joi.object({
     .required(),
   actualStats: actualStatsRequiredSchema.required(),
   difficultyLevel: difficultyField,
+  // Copia personale dell'uscita di una sessione di gruppo (ADR-001): il client
+  // la invia per ogni membro al termine del tracking, così anche i partecipanti
+  // non-creator possono condividere la PROPRIA registrazione sul feed. Il
+  // service la rende idempotente per (userId, sourceSessionId) e non accredita
+  // crediti (già accreditati da completeSession).
+  sourceSessionId: objectIdField,
   elevationProfile: Joi.array().items(Joi.number()).max(200),
   // Traccia GPS campionata per la "route signature" del feed. Il client invia
   // già downsampled (~80 punti); accettiamo fino a 500 per tolleranza e il
@@ -460,6 +466,12 @@ const avatarDataUriField = Joi.string()
     "string.max": "avatarUrl supera la dimensione massima consentita (7 MB).",
   })
   .allow(null, "");
+
+// Profilo del rifugio (PATCH /api/v1/refuge/profile): per ora solo la foto
+// della struttura; .min(1) impedisce body vuoti.
+export const refugeProfileUpdateSchema = Joi.object({
+  avatarUrl: avatarDataUriField,
+}).min(1);
 
 export const personalInfoSchema = Joi.object({
   sex: Joi.string().valid("M", "F", "X", "N"),

@@ -39,6 +39,13 @@ object StoryBitmapExporter {
         editorCanvasWidthPx: Float = width.toFloat(),
         editorCanvasHeightPx: Float = height.toFloat(),
         quality: Int = StoryComposerExport.QUALITY,
+        /**
+         * Se false, NON cuoce traccia/widget/testo nell'immagine: resta solo lo
+         * sfondo (foto, gradiente o scena mappa). Gli overlay vengono inviati
+         * come `editorDecor` e renderizzati LIVE (animati) dal viewer — è ciò
+         * che rende mappa e polyline "dinamiche" nelle storie foto.
+         */
+        bakeOverlays: Boolean = true,
     ): String? {
         val mapT =
             mapSceneTransform.scaledForExport(editorCanvasWidthPx, editorCanvasHeightPx, width, height)
@@ -75,7 +82,7 @@ object StoryBitmapExporter {
                 // Overlay traccia / widget-mappa — disponibili anche SENZA media di
                 // sfondo (si sovrappongono allo sfondo scuro). Rispettano la scelta
                 // esplicita dell'utente (routeOverlayMode).
-                if (routePoints.size >= 2) {
+                if (bakeOverlays && routePoints.size >= 2) {
                     when (routeOverlayMode) {
                         RouteOverlayMode.TRACE ->
                             drawRouteSticker(canvas, width, height, routePoints, routeT, routeColor)
@@ -99,7 +106,7 @@ object StoryBitmapExporter {
         }
 
         val text = floatingText?.trim().orEmpty()
-        if (text.isNotBlank() && textT != null) {
+        if (bakeOverlays && text.isNotBlank() && textT != null) {
             drawTextSticker(canvas, width, height, text, textT, textColor, textFont)
         }
 

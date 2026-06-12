@@ -104,7 +104,9 @@ object StoryMapSnapshotter {
                             layoutParams =
                                 FrameLayout.LayoutParams(width, height)
                             setTileSource(openTopoMapTileSource())
-                            isTilesScaledToDpi = false
+                            // Coerente con le mappe interattive: tile scalate
+                            // alla densità schermo (leggibili negli snapshot).
+                            isTilesScaledToDpi = true
                             minZoomLevel = 3.0
                             maxZoomLevel = 19.0
                             setMultiTouchControls(false)

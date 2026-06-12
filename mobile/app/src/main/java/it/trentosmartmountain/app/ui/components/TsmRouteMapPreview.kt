@@ -99,7 +99,11 @@ fun TsmRouteMapPreview(
     val mapView = remember(interactive, storySceneMode) {
         MapView(context).apply {
             setTileSource(openTopoMapTileSource())
-            isTilesScaledToDpi = false
+            // Tile scalate alla densità schermo: senza, su display ~450dpi le
+            // tile 256px sono renderizzate 1:1 e anche al massimo zoom la mappa
+            // appare "lontana" e illeggibile (era il vero motivo dello "zoom
+            // bloccato troppo distante" segnalato tre volte).
+            isTilesScaledToDpi = true
             minZoomLevel = 3.0
             maxZoomLevel = 19.0
             if (interactive) {

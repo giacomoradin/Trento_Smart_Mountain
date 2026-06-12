@@ -111,7 +111,7 @@ export async function getRefugeDashboard(refugeId) {
 
   const [refuge, reading, nodes, passages] = await Promise.all([
     Refuge.findById(refugeId)
-      .select("rifugioName quota caiCode posti email isVerified")
+      .select("rifugioName quota caiCode posti email isVerified avatarUrl")
       .lean(),
     RefugeSensorReading.findOne({ refugeId }).sort({ capturedAt: -1 }).lean(),
     EdgeNode.find({ refugeId }).sort({ code: 1 }).lean(),
@@ -131,6 +131,7 @@ export async function getRefugeDashboard(refugeId) {
       posti: refuge?.posti ?? null,
       email: refuge?.email ?? null,
       verified: refuge?.isVerified ?? false,
+      avatarUrl: refuge?.avatarUrl ?? null,
     },
     live: true,
     sensors: reading
@@ -161,4 +162,25 @@ export async function getRefugeDashboard(refugeId) {
       })),
     },
   };
+}
+
+/**
+ * Aggiorna il profilo del rifugio loggato (per ora: foto della struttura).
+ * Usa il modello discriminator `Refuge` (MAI `User.findByIdAndUpdate` per i
+ * campi del sotto-schema: lo strict mode li scarterebbe in silenzio — vedi
+ * bug S2-C1). `avatarUrl: ""` resetta la foto.
+ */
+export async function updateRefugeProfile(refugeId, { avatarUrl } = {}) {
+  const update = {};
+  if (avatarUrl !== undefined) update.avatarUrl = avatarUrl === "" ? null : avatarUrl;
+
+  const refuge = await Refuge.findByIdAndUpdate(
+    refugeId,
+    { $set: update },
+    { new: true, runValidators: true },
+  )
+    .select("rifugioName avatarUrl")
+    .lean();
+  if (!refuge) throw new Error("REFUGE_NOT_FOUND");
+  return { name: refuge.rifugioName, avatarUrl: refuge.avatarUrl ?? null };
 }

@@ -131,6 +131,7 @@ Campi specifici **flat sul documento** (non più subdocument):
   quota: Number,                      // metri s.l.m.
   posti: Number,                      // capienza posti letto
   coordinates: String,                // "lat lng" testuale
+  avatarUrl: String,                  // foto struttura, data URI Base64 (PATCH /api/v1/refuge/profile), default null
 }
 ```
 
@@ -359,6 +360,13 @@ locations.type_1; // filtri type=town
   activityType: String,               // enum ["hiking", "trail", "skitouring", "trekking"], default "hiking"
   difficultyLevel: String,            // enum ["T", "E", "EE", "EEA"], opzionale
 
+  // Copia PERSONALE di una sessione di gruppo (ADR-001, giugno 2026): valorizzato
+  // quando questa Activity è la registrazione individuale di un membro di una
+  // HikeSession — permette anche ai partecipanti non-creator di condividere la
+  // propria uscita sul feed. Idempotente per (userId, sourceSessionId); esclusa
+  // dalle stats aggregate (la sessione conta già); nessun ri-accredito crediti.
+  sourceSessionId: ObjectId,          // ref HikeSession, default null, indexed
+
   startTimeMs: Number,                // epoch ms (coerente col client mobile)
   endTimeMs: Number,
   completedAt: Date,                  // default Date.now, indexed
@@ -393,7 +401,7 @@ activities.startPoint_2dsphere; // sparse, per query geografiche future
 #### Note operative
 
 - **Ownership** verificato esplicitamente nei service (`getActivityById`, `deleteActivity`) tramite `userId === req.user.userId` → 403 altrimenti.
-- **Idempotency**: niente check di duplicate sul backend. Il mobile genera un UUID locale, il backend assegna `_id` Mongo proprio; il client traccia `remoteId` per cross-device delete.
+- **Idempotency**: per le attività libere niente check di duplicate (l'utente può creare quante attività vuole). Per le **copie di sessione** (`sourceSessionId` valorizzato) il create è idempotente per coppia `(userId, sourceSessionId)`: i retry del SyncManager aggiornano il documento esistente.
 - **Lifecycle**: niente status. Una attività esiste o non esiste (DELETE hard).
 - **Integrazione con feed Social** (Sprint 2 piano): aggiungerà `sharedAt: Date?` + `likes[]` + denormalizzato `commentsCount` — vedi `docs/sprint2_social.md`.
 

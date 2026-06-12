@@ -656,11 +656,21 @@ class RegistraViewModel(application: Application) : AndroidViewModel(application
       val localId = persistence.finalize(finalize)
       _uiState.update { it.copy(activitySaved = true) }
 
+      // Tempo totale wall-clock start→stop: stesso calcolo di finalize(),
+      // include le pause auto/manuali (totale ≥ moving → evento "Pause" in timeline).
+      val wallClockTotalSeconds = if (finalize.startTimeMs > 0) {
+        ((System.currentTimeMillis() - finalize.startTimeMs) / 1000L)
+          .coerceAtLeast(finalize.movingSeconds)
+      } else {
+        finalize.movingSeconds
+      }
+
       val result = sessionCommands.completeOrUpload(
         sessionId = snapState.activeSessionId,
         activityName = finalize.activityName,
         startTimeMs = finalize.startTimeMs,
         movingSeconds = finalize.movingSeconds,
+        totalSeconds = wallClockTotalSeconds,
         distanceMeters = finalize.distanceMeters,
         elevationGainMeters = finalize.elevationGainMeters,
         currentAltitudeMeters = finalize.currentAltitudeMeters,

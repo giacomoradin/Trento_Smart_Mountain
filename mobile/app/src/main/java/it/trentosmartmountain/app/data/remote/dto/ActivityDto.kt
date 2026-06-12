@@ -17,6 +17,13 @@ data class CreateActivityRequest(
     val elevationProfile: List<Double>? = null,
     /** Traccia GPS campionata (max ~80 punti) per la route signature del feed. */
     val routePolyline: List<RoutePoint>? = null,
+    /**
+     * Sessione di gruppo di origine: quando valorizzato il backend crea la
+     * copia PERSONALE dell'uscita (idempotente per utente+sessione, esclusa
+     * dalle statistiche aggregate, senza ri-accredito crediti). Serve a ogni
+     * membro per condividere la propria registrazione sul feed (ADR-001).
+     */
+    val sourceSessionId: String? = null,
 )
 
 /** Risposta dopo creazione/lettura di un'attività libera. */

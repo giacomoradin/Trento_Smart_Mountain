@@ -169,7 +169,12 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
      * `syncFreeActivitiesToRoom` la vedono ancora come esistente e NON la
      * re-importano al riavvio dell'app.
      */
+    /** Guardia di rientranza: un solo delete in volo, i tap extra sono ignorati. */
+    private var deleteInFlight = false
+
     fun deleteActivity(onDeleted: () -> Unit) {
+        if (deleteInFlight) return
+        deleteInFlight = true
         val id = _uiState.value.activityId
         viewModelScope.launch {
             // Tutto in try/catch: un'eccezione non gestita nel coroutine (DB, rete)

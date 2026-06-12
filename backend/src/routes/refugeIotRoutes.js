@@ -10,7 +10,14 @@ import express from "express";
 import { authenticate } from "../middleware/authMiddleware.js";
 import { requireRoles } from "../middleware/authorizationMiddleware.js";
 import { authenticatedLimiter } from "../middleware/rateLimitMiddleware.js";
-import { getRefugeDashboard } from "../services/refugeIotService.js";
+import {
+  validate,
+  refugeProfileUpdateSchema,
+} from "../middleware/validationMiddleware.js";
+import {
+  getRefugeDashboard,
+  updateRefugeProfile,
+} from "../services/refugeIotService.js";
 
 const router = express.Router();
 
@@ -29,5 +36,19 @@ router.get("/dashboard", async (req, res, next) => {
     next(err);
   }
 });
+
+/** PATCH /api/v1/refuge/profile — aggiorna la foto della struttura (Joi + role gate). */
+router.patch(
+  "/profile",
+  validate(refugeProfileUpdateSchema),
+  async (req, res, next) => {
+    try {
+      const result = await updateRefugeProfile(req.user.userId, req.body);
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export default router;

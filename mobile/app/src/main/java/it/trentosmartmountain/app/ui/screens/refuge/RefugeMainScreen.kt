@@ -52,6 +52,8 @@ import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.remote.dto.EdgeNodeDto
 import it.trentosmartmountain.app.data.remote.dto.PassageDto
 import it.trentosmartmountain.app.data.remote.dto.RefugeSensorsDto
+import it.trentosmartmountain.app.ui.components.tsmNavigationBarPadding
+import it.trentosmartmountain.app.ui.components.tsmStatusBarPadding
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.RefugeDashboardViewModel
 import kotlin.math.abs
@@ -96,6 +98,10 @@ fun RefugeMainScreen(
     Column(
       modifier = Modifier
         .fillMaxSize()
+        // Edge-to-edge: senza questi insets il contenuto finiva sotto l'area
+        // notifiche in alto e sotto i tasti di navigazione in basso.
+        .tsmStatusBarPadding()
+        .tsmNavigationBarPadding()
         .verticalScroll(rememberScrollState())
         .padding(horizontal = 20.dp),
     ) {
@@ -104,6 +110,7 @@ fun RefugeMainScreen(
         refugeName = state.data?.refuge?.name ?: "Rifugio",
         altitudeM = state.data?.refuge?.altitudeM,
         live = state.data?.live == true,
+        avatarUrl = state.data?.refuge?.avatarUrl,
         onProfileClick = onNavigateToProfile,
       )
       Spacer(Modifier.height(16.dp))
@@ -191,7 +198,13 @@ private fun WasteEntryCard(onClick: () -> Unit) {
 // ── Header ──────────────────────────────────────────────────────────────────
 
 @Composable
-private fun DashboardHeader(refugeName: String, altitudeM: Int?, live: Boolean, onProfileClick: () -> Unit) {
+private fun DashboardHeader(
+  refugeName: String,
+  altitudeM: Int?,
+  live: Boolean,
+  avatarUrl: String? = null,
+  onProfileClick: () -> Unit,
+) {
   Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
     Column(modifier = Modifier.weight(1f)) {
       val alt = altitudeM?.let { " · ${"%,d".format(it).replace(",", ".")} M" } ?: ""
@@ -210,12 +223,21 @@ private fun DashboardHeader(refugeName: String, altitudeM: Int?, live: Boolean, 
       )
     }
     IconButton(onClick = onProfileClick) {
-      Icon(
-        Icons.Filled.AccountCircle,
-        contentDescription = stringResource(R.string.cd_refuge_profile),
-        tint = Cyan,
-        modifier = Modifier.size(28.dp),
-      )
+      if (!avatarUrl.isNullOrBlank()) {
+        // Foto della struttura come accesso al profilo (parità con l'area hiker).
+        it.trentosmartmountain.app.ui.components.AvatarImage(
+          avatarUrl = avatarUrl,
+          fallbackName = refugeName,
+          size = 30.dp,
+        )
+      } else {
+        Icon(
+          Icons.Filled.AccountCircle,
+          contentDescription = stringResource(R.string.cd_refuge_profile),
+          tint = Cyan,
+          modifier = Modifier.size(28.dp),
+        )
+      }
     }
     Spacer(Modifier.width(4.dp))
     if (live) {

@@ -23,6 +23,19 @@ data class RefugeInfoDto(
     @SerializedName("posti") val posti: Int? = null,
     @SerializedName("email") val email: String? = null,
     @SerializedName("verified") val verified: Boolean = false,
+    /** Foto della struttura (data URI Base64), null se non impostata. */
+    @SerializedName("avatarUrl") val avatarUrl: String? = null,
+)
+
+/** Body per PATCH /api/v1/refuge/profile (foto struttura; "" per rimuoverla). */
+data class RefugeProfileUpdateRequest(
+    @SerializedName("avatarUrl") val avatarUrl: String?,
+)
+
+/** Risposta di PATCH /api/v1/refuge/profile. */
+data class RefugeProfileUpdateResponse(
+    @SerializedName("name") val name: String = "Rifugio",
+    @SerializedName("avatarUrl") val avatarUrl: String? = null,
 )
 
 data class RefugeSensorsDto(

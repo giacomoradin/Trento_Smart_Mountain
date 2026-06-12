@@ -60,7 +60,8 @@ Tutti gli endpoint richiedono JWT. Spec completa auto-generata in `swagger-outpu
 
 | Metodo | Endpoint | Descrizione |
 |---|---|---|
-| GET | `/api/v1/refuge/dashboard` | Sensori + edge nodes BLE-mesh + passaggi del rifugio loggato |
+| GET | `/api/v1/refuge/dashboard` | Sensori + edge nodes BLE-mesh + passaggi del rifugio loggato (incl. `refuge.avatarUrl`) |
+| PATCH | `/api/v1/refuge/profile` | Foto della struttura: `avatarUrl` data URI Base64 (stesso formato/limiti dell'avatar hiker, `""` per rimuoverla) — Joi `refugeProfileUpdateSchema` |
 
 ### Rifugio — Rifiuti & Logistica (ADR-002, MVP read-only)
 > Porta dentro TSM il modello del *Simulatore Gestione Rifiuti — Rifugi Alpini* (elaborato OGA ID-22): bilancio di massa stagionale su 6 categorie merceologiche + grigliato, alert di compliance (art. 185-bis D.Lgs. 152/2006: max 30 m³ / 90 giorni di giacenza) e confronto costi tra 4 vettori outbound con `C_kg = (C_fix + c_var·t)/(P·S_t)`. Nessuna persistenza (calcolo puro); auth + rate limit + `requireRoles("rifugio","admin")` + Joi `wasteSimulationSchema`.
@@ -108,9 +109,15 @@ Errori: `403 FORBIDDEN_NOT_MEMBER`/`FORBIDDEN_NOT_LEADER`, `404 PARTICIPANT_NOT_
 
 | Metodo | Endpoint | Descrizione |
 |---|---|---|
-| PATCH | `/api/v1/sessions/:id/complete` | Conclusione **individuale** del chiamante (ADR-001: `participants[].participationState = "finished"` + crediti per-utente). La sessione passa a `COMPLETED` solo quando **tutti gli accettati** sono `finished`/`left` (es. sessione in solitaria → chiusura immediata). |
+| PATCH | `/api/v1/sessions/:id/complete` | Conclusione **individuale** del chiamante (ADR-001: `participants[].participationState = "finished"` + crediti per-utente). La sessione passa a `COMPLETED` solo quando **tutti gli accettati** sono `finished`/`left` (es. sessione in solitaria → chiusura immediata). Accettata anche a sessione già `COMPLETED` (chi si ferma dopo il force-close del capogruppo non perde crediti/stato). |
 | POST | `/api/v1/sessions/:id/close` | **Chiusura del capogruppo** (`COMPLETED` per tutti) con **auto-finalize** dei membri ancora `live` (niente sessioni "ghost"). Solo capogruppo/leader effettivo (`403 FORBIDDEN_NOT_LEADER`). È ciò che invoca "Arresta" del leader. |
 | DELETE | `/api/v1/sessions/:id/from-activities` | Nasconde una sessione COMPLETED dalla lista "Le mie attività" del chiamante (`hiddenForUsers[]`, hide per-utente; il documento resta per gli altri). `403 NOT_IN_SESSION` se non membro. |
+
+### Attività — copia personale di sessione (giugno 2026)
+> `POST /api/v1/activities` accetta ora `sourceSessionId` (objectId opzionale): il client la invia per **ogni membro** al termine di una sessione di gruppo, così anche i partecipanti non-creator hanno una *propria* Activity condivisibile sul feed (prima la share rispondeva `404 ACTIVITY_NOT_FOUND` perché il loro `remoteId` era il sessionId). Garanzie lato service:
+> - **idempotente** per coppia `(userId, sourceSessionId)`: i retry del SyncManager aggiornano la copia esistente, niente duplicati;
+> - **nessun ri-accredito crediti** (già accreditati da `PATCH /sessions/:id/complete`);
+> - **esclusa dalle statistiche aggregate** (`GET /sessions/stats`): la HikeSession di origine conta già una volta.
 
 **Failover capogruppo** (nessun nuovo endpoint, logica lato `getLiveLocations`/`postLiveLocation`):
 - L'upload di posizione del **leader effettivo** aggiorna `lastHeartbeat` (heartbeat).

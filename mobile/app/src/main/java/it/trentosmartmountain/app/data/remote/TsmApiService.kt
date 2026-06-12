@@ -151,6 +151,12 @@ interface TsmApiService {
   @GET("api/v1/refuge/dashboard")
   suspend fun getRefugeDashboard(): Response<RefugeDashboardResponse>
 
+  /** Aggiorna la foto della struttura del rifugio loggato ("" per rimuoverla). */
+  @PATCH("api/v1/refuge/profile")
+  suspend fun updateRefugeProfile(
+    @Body request: it.trentosmartmountain.app.data.remote.dto.RefugeProfileUpdateRequest,
+  ): Response<it.trentosmartmountain.app.data.remote.dto.RefugeProfileUpdateResponse>
+
   /** Simulazione rifiuti & logistica del rifugio (ADR-002, MVP read-only). */
   @POST("api/v1/refuge/waste/simulate")
   suspend fun simulateWaste(

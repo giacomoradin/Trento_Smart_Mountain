@@ -52,4 +52,52 @@ describe("Refuge IoT Dashboard", () => {
     const res = await request(app).get("/api/v1/refuge/dashboard");
     expect(res.status).toBe(401);
   });
+
+  describe("PATCH /api/v1/refuge/profile (foto struttura)", () => {
+    const TINY_PNG =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+    test("refuge can set and clear its photo (visible in dashboard)", async () => {
+      const r = await createTestRefuge("Rifugio Foto");
+
+      const set = await request(app)
+        .patch("/api/v1/refuge/profile")
+        .set("Authorization", `Bearer ${r.token}`)
+        .send({ avatarUrl: TINY_PNG });
+      expect(set.status).toBe(200);
+      expect(set.body.avatarUrl).toBe(TINY_PNG);
+
+      const dash = await request(app)
+        .get("/api/v1/refuge/dashboard")
+        .set("Authorization", `Bearer ${r.token}`);
+      expect(dash.body.refuge.avatarUrl).toBe(TINY_PNG);
+
+      // avatarUrl="" resetta la foto (stesso contratto dell'avatar hiker).
+      const clear = await request(app)
+        .patch("/api/v1/refuge/profile")
+        .set("Authorization", `Bearer ${r.token}`)
+        .send({ avatarUrl: "" });
+      expect(clear.status).toBe(200);
+      expect(clear.body.avatarUrl).toBeNull();
+    });
+
+    test("rejects non-image data URI (422) and hiker role (403)", async () => {
+      const r = await createTestRefuge();
+      const bad = await request(app)
+        .patch("/api/v1/refuge/profile")
+        .set("Authorization", `Bearer ${r.token}`)
+        .send({ avatarUrl: "data:text/html;base64,PGI+ciE8L2I+" });
+      expect(bad.status).toBe(422);
+
+      const { token: hikerToken } = await createTestHiker({
+        username: "nofoto",
+        email: "nofoto@test.com",
+      });
+      const forbidden = await request(app)
+        .patch("/api/v1/refuge/profile")
+        .set("Authorization", `Bearer ${hikerToken}`)
+        .send({ avatarUrl: TINY_PNG });
+      expect(forbidden.status).toBe(403);
+    });
+  });
 });

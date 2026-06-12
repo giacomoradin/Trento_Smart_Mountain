@@ -30,11 +30,13 @@ fun StoryViewerDecorations(
     modifier: Modifier = Modifier,
 ) {
     val d = decor ?: return
-    val pts = routePoints.takeIf { it.size >= 2 } ?: return
+    // pts nullable: una storia può avere solo testo (nessuna traccia) — il
+    // testo va comunque renderizzato live, non solo quando c'è la route.
+    val pts = routePoints.takeIf { it.size >= 2 }
     val color = hexToColor(d.routeColor, Color(0xFF4DD0E1))
 
     Box(modifier = modifier.fillMaxSize()) {
-        BoxWithConstraints(
+        if (pts != null) BoxWithConstraints(
             modifier =
                 Modifier
                     .fillMaxSize()

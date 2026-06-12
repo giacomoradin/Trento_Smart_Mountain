@@ -70,7 +70,9 @@ fun TsmSentieriMapView(
             setTileSource(openTopoMapTileSource())
             setMultiTouchControls(true)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-            isTilesScaledToDpi = false
+            // Tile scalate alla densità schermo: a 1:1 su display hi-dpi anche
+            // lo zoom massimo sembrava "troppo distante" (vera causa B-01).
+            isTilesScaledToDpi = true
             // Limiti zoom espliciti: garantiscono il de-zoom (pinch-out) anche sotto
             // il livello di auto-fit. Senza, alcune versioni OSMdroid bloccano il
             // min-zoom dopo zoomToBoundingBox → "non si riesce a rimpicciolire".

@@ -1,5 +1,37 @@
 # Trento Smart Mountain — Stato del progetto
 
+## 🩹 Sprint 3 — 12 giugno 2026 (round bug fix dal field testing: zoom, autopause, storie live, sync partecipanti, navigazione, area rifugista)
+
+> Backend **330/330 test verdi** (22 suite, +5 nuovi); mobile **`compileDebugKotlin` BUILD SUCCESSFUL**. Branch `UI`, lavoro locale (no push).
+
+**Zoom mappa — causa radice DEFINITIVA (terza segnalazione):** `isTilesScaledToDpi = false` su tutte le MapView: su display ~450 dpi le tile 256 px erano renderizzate 1:1, quindi **anche al massimo zoom la mappa appariva "lontana" e illeggibile**. Ora `true` ovunque (`TsmMapView`, `TsmSentieriMapView`, `TsmRouteMapPreview`, `StoryMapSnapshotter`): resa ~2,8× più vicina a parità di livello, oltre ai fix precedenti su auto-fit (`routeKey`/`contentKey`).
+
+**Autopause in timeline — anello mancante trovato:** `SessionCommandRepository.completeOrUpload` inviava `totalSeconds = movingSeconds` (hardcoded) → il server salvava totale==movimento e al re-import dal sync l'evento "Pause" non poteva mai comparire. Ora il chiamante passa il **wall-clock reale** start→stop (stesso calcolo di `finalize`).
+
+**Storie "non dinamiche" — causa radice:** per le storie FOTO il composer azzerava `editorDecor` e cuoceva mappa/traccia/testo in un JPEG statico (`editorDecor = if (isVideo) decor else null`). Ora `editorDecor` + `routePolyline` sono inviati SEMPRE e l'exporter non cuoce più gli overlay (`bakeOverlays=false`): il viewer renderizza mappa (frecce animate ~30 Hz), traccia e testo **live** sopra il media; il JPEG resta come sfondo/fallback. `StoryViewerDecorations` renderizza ora il testo anche senza traccia.
+
+**Sessioni — il partecipante non poteva sincronizzare/condividere (evidente dopo il force-close del leader):**
+- Root cause della share: il `remoteId` del partecipante era il **sessionId** → `POST /activities/:sessionId/share` → `404 ACTIVITY_NOT_FOUND`. Nessuna Activity personale esisteva server-side per i partecipanti.
+- Fix architetturale (ADR-001): al termine del tracking di una sessione, il client crea anche la **copia personale** (`POST /activities` con `sourceSessionId`) — idempotente per `(userId, sourceSessionId)`, esclusa dalle stats aggregate (niente doppio conteggio), senza ri-accredito crediti. `markSynced` usa l'id della copia → la share del partecipante funziona, anche a sessione già chiusa dal capogruppo (il backend accetta `complete` post-COMPLETED e la copia personale è indipendente dallo stato sessione). `SyncManager` allineato (retry idempotenti, traccia personale inclusa).
+
+**Freeze "schermata blu col logo" (soprattutto eliminando un'attività):**
+- Root cause: il dialog "Elimina" non si chiudeva al tap e la navigazione attendeva la rete (cold start Render 30–100 s) → tap ripetuti accodavano più `popBackStack()` → **back stack vuoto** → restava visibile solo il window background (blu + logo) = app percepita come bloccata sullo splash.
+- Fix: dialog chiuso subito al tap, guardia di rientranza in `deleteActivity`, e **`safePop()`** in tutto il NavHost (38 call-site: mai rimuovere l'ultima destination).
+
+**Bloccato sul profilo utente dopo follow:** double-tap sull'avatar impilava due copie identiche della schermata (il back "non funzionava"). Ora `openUserProfile()` con `launchSingleTop` su tutti i 9 entry-point + safePop.
+
+**Dettaglio attività:** valore DISTANZA da Cyan→`TsmColors.Info` (era percepito grigio su grigio); sottotitoli e orari timeline da `Color.Gray`→`TextSecondary`.
+
+**Area rifugista:**
+- **Insets**: dashboard e simulatore rifiuti non sbordano più sotto status bar / tasti di navigazione (`tsmStatusBarPadding` + `tsmNavigationBarPadding`).
+- **Foto della struttura**: nuovo `Refuge.avatarUrl` + `PATCH /api/v1/refuge/profile` (Joi `refugeProfileUpdateSchema`, stesso formato/limiti dell'avatar hiker, `""` per rimuovere; update via modello discriminator `Refuge`, mai `User.findByIdAndUpdate`). Mobile: picker + compressione (pipeline `AvatarUtils`), avatar nella scheda profilo e nell'header dashboard; esposto in `GET /refuge/dashboard`.
+- **Impostazioni**: sezione con "Cambia password" (endpoint `change-password` role-agnostic) accanto a bacheca e logout.
+- Il refactor profondo di design dell'area rifugista (S3-14) resta pianificato come task dedicato.
+
+**Test nuovi:** copia personale di sessione (idempotenza, share 200, esclusione stats), foto rifugio (set/clear/422 data URI non-image/403 hiker). Suite completa: 330/330.
+
+---
+
 ## 🔋 Sprint 3 kick-off — 10 giugno 2026 (bug fix, consumi, sicurezza, modulo rifiuti)
 
 > Backend **261/261 test verdi** (19 suite, +8 modulo rifiuti); mobile **`compileDebugKotlin` BUILD SUCCESSFUL**. Branch `UI`, nessun push (lavoro locale).

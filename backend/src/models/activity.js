@@ -19,6 +19,19 @@ const activitySchema = new Schema({
     enum: ["hiking", "trail", "skitouring", "trekking"],
     default: "hiking",
   },
+
+  // Sessione di gruppo di origine: valorizzato quando questa Activity è la
+  // copia PERSONALE dell'uscita di un membro di una HikeSession (ognuno
+  // condivide la propria registrazione sul feed, ADR-001). Le copie sono:
+  //  - idempotenti per coppia (userId, sourceSessionId) — vedi createActivity;
+  //  - escluse dalle statistiche aggregate (la sessione conta già una volta);
+  //  - senza accredito crediti (già accreditati da completeSession).
+  sourceSessionId: {
+    type: Schema.Types.ObjectId,
+    ref: "HikeSession",
+    default: null,
+    index: true,
+  },
   difficultyLevel: { type: String, enum: ["T", "E", "EE", "EEA"] },
 
   // epoch ms — stesso formato del client mobile per coerenza

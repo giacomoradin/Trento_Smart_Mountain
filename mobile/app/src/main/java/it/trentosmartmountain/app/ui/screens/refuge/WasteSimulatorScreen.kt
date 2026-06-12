@@ -41,6 +41,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.WasteSimulationResponse
+import it.trentosmartmountain.app.ui.components.tsmNavigationBarPadding
+import it.trentosmartmountain.app.ui.components.tsmStatusBarPadding
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.WasteSimulatorViewModel
 import java.util.Locale
@@ -80,6 +82,9 @@ fun WasteSimulatorScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Edge-to-edge: insets per non finire sotto status/navigation bar.
+                .tsmStatusBarPadding()
+                .tsmNavigationBarPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
         ) {

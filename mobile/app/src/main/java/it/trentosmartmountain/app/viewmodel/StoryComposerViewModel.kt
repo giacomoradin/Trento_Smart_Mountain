@@ -289,10 +289,14 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
             val s = _state.value
             val isVideo = s.mediaKind == "video"
             val decor = buildEditorDecor(s)
+            // editorDecor SEMPRE inviato (prima solo per i video): il viewer
+            // renderizza mappa/traccia/testo LIVE sopra il media, con frecce
+            // animate — era il motivo per cui le storie foto risultavano
+            // "non dinamiche" (tutto cotto in un JPEG statico).
             val overlayForPublish =
                 args.overlay?.copy(
-                    routePolyline = if (isVideo) args.overlay.routePolyline else null,
-                    editorDecor = if (isVideo) decor else null,
+                    routePolyline = args.overlay.routePolyline,
+                    editorDecor = decor,
                 )
 
             val media: List<StoryMedia> =
@@ -319,25 +323,9 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
                         } else {
                             null
                         }
-                    // Widget mappa: ogni volta che l'utente sceglie MAP_WIDGET, con o
-                    // senza media di sfondo.
-                    val mapWidgetBmp =
-                        if (s.routeOverlayMode == RouteOverlayMode.MAP_WIDGET &&
-                            s.routePoints.size >= 2
-                        ) {
-                            withContext(Dispatchers.Main) {
-                                StoryMapSnapshotter.captureScene(
-                                    hostActivity = hostActivity,
-                                    points = s.routePoints,
-                                    width = (StoryComposerExport.WIDTH * 0.72f).toInt().coerceAtLeast(320),
-                                    height = (StoryComposerExport.HEIGHT * 0.42f).toInt().coerceAtLeast(240),
-                                    lineColorArgb = lineArgb,
-                                    storyScene = false,
-                                )
-                            }
-                        } else {
-                            null
-                        }
+                    // Widget mappa: non più cotto nel JPEG — il viewer lo
+                    // renderizza live (animato) dall'editorDecor.
+                    val mapWidgetBmp: android.graphics.Bitmap? = null
                     val dataUri =
                         withContext(Dispatchers.Default) {
                             try {
@@ -366,6 +354,9 @@ class StoryComposerViewModel(application: Application) : AndroidViewModel(applic
                                     editorCanvasWidthPx = editorCanvasWidthPx,
                                     editorCanvasHeightPx = editorCanvasHeightPx,
                                     quality = StoryComposerExport.QUALITY,
+                                    // Overlay live nel viewer (editorDecor): nel JPEG
+                                    // resta solo lo sfondo (foto o scena mappa bed).
+                                    bakeOverlays = false,
                                 )
                             } finally {
                                 mapSceneBmp?.recycle()

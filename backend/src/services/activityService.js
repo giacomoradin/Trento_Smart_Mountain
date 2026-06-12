@@ -8,6 +8,28 @@ import { evaluateAllBadges } from "./badgeService.js";
 import { downsamplePolyline } from "../utils/geoPolyline.js";
 
 export async function createActivity(userId, payload) {
+  const sourceSessionId = payload.sourceSessionId || null;
+
+  // Copia personale di una sessione di gruppo (ADR-001): idempotente per
+  // coppia (userId, sourceSessionId). Il client può ritentare l'upload
+  // (stop → retry SyncManager → re-login) senza creare duplicati: il
+  // secondo invio aggiorna la copia esistente e ritorna lo stesso _id.
+  if (sourceSessionId) {
+    const existing = await Activity.findOne({ userId, sourceSessionId });
+    if (existing) {
+      existing.name = payload.name ?? existing.name;
+      existing.actualStats = payload.actualStats ?? existing.actualStats;
+      if (payload.elevationProfile?.length) {
+        existing.elevationProfile = payload.elevationProfile;
+      }
+      if (payload.routePolyline?.length) {
+        existing.routePolyline = downsamplePolyline(payload.routePolyline, 80);
+      }
+      await existing.save();
+      return existing;
+    }
+  }
+
   const activity = new Activity({
     userId,
     name: payload.name,
@@ -18,6 +40,7 @@ export async function createActivity(userId, payload) {
     completedAt: new Date(payload.endTimeMs),
     actualStats: payload.actualStats,
     elevationProfile: payload.elevationProfile,
+    sourceSessionId,
     // Persiste la traccia GPS ricampionata (max 80 punti) per la route
     // signature del feed. Il client invia già downsampled, ma ricampioniamo
     // lato server come hard cap difensivo (storage + payload feed bounded).
@@ -30,7 +53,9 @@ export async function createActivity(userId, payload) {
   // (vedi creditTransaction): un secondo POST con stesso payload non genera doppio
   // accredito perché crea una nuova Activity con _id diverso → comportamento atteso
   // (l'utente può creare tante attività quante ne vuole).
-  const basePoints = activity.actualStats?.finalPoints ?? 0;
+  // ECCEZIONE: le copie personali di sessione NON accreditano nulla — i crediti
+  // della sessione sono già stati accreditati da completeSession (per-utente).
+  const basePoints = sourceSessionId ? 0 : (activity.actualStats?.finalPoints ?? 0);
   if (basePoints > 0) {
     const user = await User.findById(userId).select("experience").lean();
     const credits = applyBaselineMultiplier(basePoints, user, activity.difficultyLevel);
@@ -75,7 +100,13 @@ export async function deleteActivity(activityId, userId) {
 // Unifica HikeSession.COMPLETED + Activity per le aggregate annuali della HOME.
 // Riceve già le stats delle sessioni e ci somma le attività libere dell'anno.
 export async function getCombinedActivityStats(userId, year, hikeSessionStats) {
-  const activities = await Activity.find({ userId }).lean();
+  // Esclude le copie personali di sessione (sourceSessionId valorizzato): la
+  // HikeSession di origine è già contata in hikeSessionStats — includerle
+  // raddoppierebbe km/dislivello/punti per ogni uscita di gruppo.
+  const activities = await Activity.find({
+    userId,
+    sourceSessionId: null,
+  }).lean();
 
   const diffScore = { T: 0.25, E: 0.5, EE: 0.75, EEA: 1.0 };
   const monthlyCount = [...hikeSessionStats.monthlyActivityCount];

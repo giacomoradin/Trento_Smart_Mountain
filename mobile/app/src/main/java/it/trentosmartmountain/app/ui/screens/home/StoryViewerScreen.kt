@@ -314,7 +314,9 @@ private fun StoryPager(
         val decor = current.overlay?.editorDecor
         val routePts = current.overlay?.routePolyline.orEmpty()
         when {
-            decor != null && routePts.size >= 2 -> {
+            // Decor presente → overlay LIVE (mappa con frecce animate, traccia,
+            // testo) sopra il media; anche per le storie solo-testo.
+            decor != null -> {
                 StoryViewerDecorations(
                     decor = decor,
                     routePoints = routePts,

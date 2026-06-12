@@ -12,6 +12,7 @@ import { createHiker } from "../services/hikerService.js";
 import { createRefuge } from "../services/refugeService.js";
 import {
   loginLimiter,
+  refreshLimiter,
   registerLimiter,
   passwordResetLimiter,
 } from "../middleware/rateLimitMiddleware.js";
@@ -56,9 +57,10 @@ const router = express.Router();
 
 // Auth core — rate limit + schema validation per ogni endpoint sensibile.
 router.post("/login", loginLimiter, validate(loginSchema), loginUser);
-// /refresh: niente schema Joi pesante (body minimo). Rate limit con loginLimiter
-// per evitare brute-force di refresh token (96-char hex, ma meglio safe).
-router.post("/refresh", loginLimiter, refreshTokens);
+// /refresh: limiter DEDICATO (non più l'istanza di loginLimiter): il contatore
+// per-IP condiviso faceva sì che i refresh falliti (token ruotato/revocato dopo
+// uno switch account) bloccassero anche il login con credenziali corrette.
+router.post("/refresh", refreshLimiter, refreshTokens);
 router.post("/logout", logout);
 router.get("/verify/:token", verifyEmail);
 router.post(

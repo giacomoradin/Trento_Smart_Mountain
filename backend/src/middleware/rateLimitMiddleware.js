@@ -44,6 +44,23 @@ export const loginLimiter = rateLimit({
   skip: skipInTest,
 });
 
+// Limiter DEDICATO a /auth/refresh. Prima la route riusava l'ISTANZA di
+// loginLimiter → contatore per-IP condiviso: una raffica di refresh falliti
+// (token ruotato/revocato dopo uno switch account, retry dell'Authenticator
+// mobile) esauriva i 10 tentativi e bloccava anche POST /auth/login con
+// credenziali CORRETTE fino allo scadere della finestra — percepito lato app
+// come "credenziali non valide finché non cancello la cache". Budget più alto:
+// il brute-force di un refresh token (96 hex char) resta impraticabile.
+export const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  skipSuccessfulRequests: true,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+  skip: skipInTest,
+});
+
 // Soglia più alta per permettere testing intensivo (es. delete -> recreate flow).
 export const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,

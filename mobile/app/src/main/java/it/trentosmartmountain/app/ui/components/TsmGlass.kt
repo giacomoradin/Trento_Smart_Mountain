@@ -1,10 +1,16 @@
 package it.trentosmartmountain.app.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -40,19 +47,60 @@ import it.trentosmartmountain.app.ui.theme.TsmMotion
 fun TsmGlassCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 18.dp,
-    border: Color = Color.White.copy(alpha = 0.06f),
+    border: Color = Color.White.copy(alpha = 0.10f),
     topColor: Color = TsmColors.CardElevated,
     bottomColor: Color = TsmColors.Card,
+    /** Elevazione a riposo: dà profondità reale (ombra) alle card su tutto l'app. */
+    elevation: Dp = 10.dp,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(cornerRadius)
+    // Micro-interazione di pressione (pass "oltre"): quando la card è cliccabile
+    // si comprime appena (0.97), il bordo si accende e si "appoggia" (ombra ridotta).
+    // Definita QUI una volta → ogni card interattiva dell'app risponde uguale.
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val isPressed = pressed && onClick != null
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = TsmMotion.springSmooth(),
+        label = "glass-press-scale",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (isPressed) Color.White.copy(alpha = 0.32f) else border,
+        animationSpec = TsmMotion.tweenFast(),
+        label = "glass-press-border",
+    )
+    val elev by animateDpAsState(
+        targetValue = if (isPressed) 2.dp else elevation,
+        animationSpec = TsmMotion.tweenFast(),
+        label = "glass-press-elev",
+    )
     Column(
         modifier = modifier
+            .scale(pressScale)
+            // Ombra reale (clip=false) PRIMA del clip: stacca la card dallo sfondo.
+            .shadow(elev, shape, clip = false)
             .clip(shape)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                } else {
+                    Modifier
+                },
+            )
             .background(Brush.verticalGradient(listOf(topColor, bottomColor)))
-            .border(1.dp, border, shape),
+            // Sheen: una luce che "cade" sul bordo superiore del vetro, come un
+            // riflesso — dà spessore al materiale. Su tema scuro è il segnale di
+            // profondità che si legge meglio (le ombre nere si vedono poco).
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = 0.13f),
+                    0.45f to Color.Transparent,
+                ),
+            )
+            .border(1.dp, borderColor, shape),
         content = content,
     )
 }
@@ -71,8 +119,12 @@ fun TsmGlow(
     Box(
         modifier = modifier
             .background(
+                // Mid-stop: il glow resta intenso più a lungo prima di sfumare →
+                // alone più "pieno" e presente (intensificazione sistema).
                 Brush.radialGradient(
-                    colors = listOf(color.copy(alpha = alpha), Color.Transparent),
+                    0f to color.copy(alpha = alpha),
+                    0.5f to color.copy(alpha = alpha * 0.5f),
+                    1f to Color.Transparent,
                 ),
             ),
     )
@@ -108,7 +160,7 @@ fun Modifier.tsmShimmer(
     durationMillis: Int = 2600,
 ): Modifier {
     val transition = rememberInfiniteTransition(label = "shimmer-sweep")
-    val progress by transition.animateFloat(
+    val progressRaw = transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -117,6 +169,12 @@ fun Modifier.tsmShimmer(
         ),
         label = "shimmer-x",
     )
+    // PERF: ~30 update/s (78 step sul ciclo) invece del pieno frame-rate.
+    val progress by remember {
+        androidx.compose.runtime.derivedStateOf { (progressRaw.value * 78f).toInt() / 78f }
+    }
+    val reduceMotion = rememberReduceMotion()
+    if (reduceMotion) return this // niente sweep con "riduci animazioni"
     return this.drawWithContent {
         drawContent()
         val bandW = size.width * 0.4f
@@ -146,7 +204,7 @@ fun TsmPulseGlow(
     maxAlpha: Float = 0.45f,
 ) {
     val transition = rememberInfiniteTransition(label = "pulse-glow")
-    val t by transition.animateFloat(
+    val tRaw = transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -155,6 +213,12 @@ fun TsmPulseGlow(
         ),
         label = "pulse",
     )
+    // PERF: 32 livelli (~18 update/s sul ciclo da 1,8 s) — un glow morbido non
+    // ha bisogno del pieno frame-rate. Con "riduci animazioni" resta fisso a metà.
+    val reduceMotion = rememberReduceMotion()
+    val t by remember(reduceMotion) {
+        androidx.compose.runtime.derivedStateOf { if (reduceMotion) 0.5f else (tRaw.value * 32f).toInt() / 32f }
+    }
     val alpha = minAlpha + (maxAlpha - minAlpha) * t
     Box(
         modifier = modifier
@@ -224,13 +288,38 @@ fun TsmGradientButton(
     leading: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(cornerRadius)
+    // Press-state: la CTA si comprime al tocco e si "appoggia" (ombra ridotta),
+    // stesso feel delle glass card.
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val isPressed = pressed && enabled
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = TsmMotion.springSmooth(),
+        label = "cta-press-scale",
+    )
+    val elev by animateDpAsState(
+        targetValue = if (!enabled) 0.dp else if (isPressed) 2.dp else 10.dp,
+        animationSpec = TsmMotion.tweenFast(),
+        label = "cta-press-elev",
+    )
     Row(
         modifier = modifier
+            .scale(pressScale)
+            // Ombra reale sotto la CTA: la fa "galleggiare" sopra la pagina.
+            .shadow(elev, shape, clip = false)
             .height(height)
             .clip(shape)
             .background(if (enabled) fill else Brush.horizontalGradient(listOf(TsmColors.CardElevated, TsmColors.Card)))
-            .border(1.dp, Color.White.copy(alpha = if (enabled) 0.18f else 0.06f), shape)
-            .clickable(enabled = enabled, onClick = onClick)
+            // Gloss: riflesso luminoso sulla metà superiore della CTA.
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = if (enabled) 0.18f else 0f),
+                    0.5f to Color.Transparent,
+                ),
+            )
+            .border(1.dp, Color.White.copy(alpha = if (enabled) 0.28f else 0.06f), shape)
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,

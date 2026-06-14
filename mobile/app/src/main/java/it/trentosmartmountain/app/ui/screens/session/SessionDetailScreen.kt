@@ -113,7 +113,7 @@ import it.trentosmartmountain.app.ui.util.SessionDateFormats
 import it.trentosmartmountain.app.ui.components.AvatarImage
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 

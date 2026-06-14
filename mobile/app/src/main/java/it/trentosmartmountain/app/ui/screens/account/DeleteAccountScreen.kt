@@ -1,7 +1,9 @@
 package it.trentosmartmountain.app.ui.screens.account
 
 import android.app.Application
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,10 +45,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
 import it.trentosmartmountain.app.viewmodel.AccountEditViewModel
 
 private val DarkSurface = Color(0xFF1C1C1E)
@@ -78,8 +84,11 @@ fun DeleteAccountScreen(
         state.error?.let { snackbarHost.showSnackbar(it); viewModel.clearMessages() }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 10)
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHost) },
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("Elimina account", color = AccentRed, fontWeight = FontWeight.Bold) },
@@ -88,19 +97,20 @@ fun DeleteAccountScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
-        containerColor = DarkSurface,
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A1A1A)),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentRed),
+            TsmGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 14.dp,
+                topColor = Color(0xFF2A1620),
+                bottomColor = Color(0xFF1E1014),
+                border = AccentRed.copy(alpha = 0.5f),
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Icon(Icons.Default.Warning, contentDescription = null, tint = AccentRed)
@@ -133,49 +143,33 @@ fun DeleteAccountScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            Button(
-                // Apre il dialog di conferma — la delete viene chiamata SOLO dopo "ELIMINA"
-                // così un tap accidentale sul pulsante rosso non rende l'azione irreversibile.
+            // Apre il dialog di conferma — la delete viene chiamata SOLO dopo "ELIMINA"
+            // così un tap accidentale sul pulsante rosso non rende l'azione irreversibile.
+            TsmGradientButton(
+                text = if (state.isLoading) "ELIMINAZIONE…" else "ELIMINA DEFINITIVAMENTE",
                 onClick = { showConfirmDialog = true },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentRed),
+                modifier = Modifier.fillMaxWidth(),
+                fill = Brush.horizontalGradient(listOf(AccentRed, Color(0xFFB0003A))),
                 enabled = !state.isLoading && password.isNotBlank(),
-            ) {
-                if (state.isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.height(20.dp))
-                else Text("ELIMINA DEFINITIVAMENTE", fontWeight = FontWeight.Bold, color = Color.White)
-            }
+            )
         }
 
         if (showConfirmDialog) {
-            AlertDialog(
-                onDismissRequest = { showConfirmDialog = false },
-                icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = AccentRed) },
-                title = { Text("Sei sicuro?", fontWeight = FontWeight.Bold, color = AccentRed) },
-                text = {
-                    Text(
-                        "Eliminerai il tuo account, tutte le attività personali e i quiz completati. " +
-                            "Le sessioni di gruppo di cui sei Capogruppo verranno trasferite a un altro " +
-                            "partecipante (o annullate se sei l'unico iscritto). Questa operazione non è annullabile.",
-                        color = Color.White,
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                    )
+            it.trentosmartmountain.app.ui.components.TsmAlertDialog(
+                onDismiss = { showConfirmDialog = false },
+                title = "Sei sicuro?",
+                text = "Eliminerai il tuo account, tutte le attività personali e i quiz completati. " +
+                    "Le sessioni di gruppo di cui sei Capogruppo verranno trasferite a un altro " +
+                    "partecipante (o annullate se sei l'unico iscritto). Questa operazione non è annullabile.",
+                confirmLabel = "ELIMINA",
+                destructive = true,
+                icon = Icons.Default.Warning,
+                onConfirm = {
+                    showConfirmDialog = false
+                    viewModel.deleteAccount(password)
                 },
-                confirmButton = {
-                    TextButton(onClick = {
-                        showConfirmDialog = false
-                        viewModel.deleteAccount(password)
-                    }) {
-                        Text("ELIMINA", color = AccentRed, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showConfirmDialog = false }) {
-                        Text("Annulla", color = AccentCyan)
-                    }
-                },
-                containerColor = Color(0xFF2A1A1A),
             )
         }
+    }
     }
 }

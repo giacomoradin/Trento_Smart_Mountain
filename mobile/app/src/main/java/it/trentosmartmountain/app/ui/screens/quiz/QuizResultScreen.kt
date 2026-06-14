@@ -27,6 +27,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,8 +39,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Brush
 import it.trentosmartmountain.app.data.remote.dto.BreakdownItem
 import it.trentosmartmountain.app.data.remote.dto.QuizSubmissionResponse
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmGlow
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
+import it.trentosmartmountain.app.ui.components.TsmRewardBurst
 
 private val DarkSurface = Color(0xFF1C1C1E)
 private val CardBackground = Color(0xFF2C2C2E)
@@ -57,6 +68,11 @@ fun QuizResultScreen(
     val passed = submission.passed
     val accentColor = if (passed) AccentGreen else AccentRed
 
+    // Celebrazione "wow" allo sblocco: scintille brand sull'esito superato.
+    var celebrate by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (passed) celebrate = true }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Surface(modifier = Modifier.fillMaxSize(), color = DarkSurface) {
         // LazyColumn so the breakdown list is scrollable and we don't blow up the
         // composition with many Card children inside a verticalScroll Column.
@@ -68,6 +84,8 @@ fun QuizResultScreen(
             item {
                 Spacer(Modifier.height(32.dp))
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(160.dp)) {
+                    // Glow morbido dietro al ring: dà profondità "premio" all'esito.
+                    TsmGlow(color = accentColor, modifier = Modifier.size(180.dp), alpha = 0.35f)
                     CircularProgressIndicator(
                         progress = { submission.score.toFloat() },
                         modifier = Modifier.fillMaxSize(),
@@ -142,11 +160,7 @@ fun QuizResultScreen(
 
             // ── Stats row ──────────────────────────────────────────────────
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = CardBackground),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
+                TsmGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 14.dp) {
                     Row(
                         modifier = Modifier.padding(16.dp).fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -184,14 +198,12 @@ fun QuizResultScreen(
             // ── Action buttons ─────────────────────────────────────────────
             item {
                 Spacer(Modifier.height(12.dp))
-                Button(
+                TsmGradientButton(
+                    text = "TORNA ALLA FORMAZIONE",
                     onClick = onBackToFormazione,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                ) {
-                    Text("TORNA ALLA FORMAZIONE", fontWeight = FontWeight.Bold, color = Color.White)
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                    fill = Brush.horizontalGradient(listOf(AccentGreen, Color(0xFF2E7D32))),
+                )
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(
                     onClick = onRetry,
@@ -205,6 +217,8 @@ fun QuizResultScreen(
                 Spacer(Modifier.height(24.dp))
             }
         }
+    }
+        TsmRewardBurst(play = celebrate, onFinished = { celebrate = false })
     }
 }
 

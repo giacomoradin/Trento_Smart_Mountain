@@ -1,5 +1,6 @@
 package it.trentosmartmountain.app.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.trentosmartmountain.app.data.remote.TsmApiClient
@@ -29,6 +30,10 @@ import java.io.IOException
  * per ottenere `percorsoCoordinate`. Nessuna navigazione di screen: il dialog vive sopra "Pianifica".
  */
 class SessionRoutePickerViewModel : ViewModel() {
+
+    private companion object {
+        const val TAG = "RoutePicker"
+    }
 
     enum class Step { Destinations, TrailsForDestination, TrailDetail }
 
@@ -120,12 +125,15 @@ class SessionRoutePickerViewModel : ViewModel() {
                         )
                     }
                 } else {
+                    Log.e(TAG, "loadDestinations: HTTP ${response.code()}")
                     _uiState.update { it.copy(isLoading = false, error = "Errore server (${response.code()}).") }
                 }
             } catch (e: IOException) {
+                Log.e(TAG, "loadDestinations: I/O", e)
                 _uiState.update { it.copy(isLoading = false, error = "Nessuna connessione al server.") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message ?: "Errore imprevisto.") }
+                Log.e(TAG, "loadDestinations: errore inatteso", e)
+                _uiState.update { it.copy(isLoading = false, error = "Impossibile caricare i percorsi. Riprova.") }
             }
         }
     }
@@ -216,17 +224,20 @@ class SessionRoutePickerViewModel : ViewModel() {
                         it.copy(isLoading = false, step = Step.TrailsForDestination, error = "Sentiero non trovato.")
                     }
                 } else {
+                    Log.e(TAG, "onTrailClick($codice): HTTP ${response.code()}")
                     _uiState.update {
                         it.copy(isLoading = false, step = Step.TrailsForDestination, error = "Errore server (${response.code()}).")
                     }
                 }
             } catch (e: IOException) {
+                Log.e(TAG, "onTrailClick($codice): I/O", e)
                 _uiState.update {
                     it.copy(isLoading = false, step = Step.TrailsForDestination, error = "Nessuna connessione al server.")
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "onTrailClick($codice): errore inatteso", e)
                 _uiState.update {
-                    it.copy(isLoading = false, step = Step.TrailsForDestination, error = e.message ?: "Errore imprevisto.")
+                    it.copy(isLoading = false, step = Step.TrailsForDestination, error = "Impossibile aprire il sentiero. Riprova.")
                 }
             }
         }

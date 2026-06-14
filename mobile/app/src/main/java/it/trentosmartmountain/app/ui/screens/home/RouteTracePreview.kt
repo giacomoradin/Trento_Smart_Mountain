@@ -39,7 +39,7 @@ fun RouteTracePreview(
 
     // Animazione tratteggiata per far sembrare il tracciato "animato" (Bug 5)
     val transition = rememberInfiniteTransition(label = "route-dash")
-    val phase by transition.animateFloat(
+    val phaseRaw = transition.animateFloat(
         initialValue = 0f,
         targetValue = 60f,
         animationSpec = infiniteRepeatable(
@@ -48,6 +48,10 @@ fun RouteTracePreview(
         ),
         label = "phase"
     )
+    // PERF: ~30 update/s (45 step sul ciclo da 1,5 s) invece del pieno frame-rate.
+    val phase by remember {
+        androidx.compose.runtime.derivedStateOf { (phaseRaw.value / 60f * 45f).toInt() / 45f * 60f }
+    }
 
     Canvas(modifier = modifier) {
         if (projected.size < 2) return@Canvas

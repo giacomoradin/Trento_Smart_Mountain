@@ -47,10 +47,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.background
+import it.trentosmartmountain.app.ui.components.TsmSnackbar
 import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.data.remote.dto.Challenge
 import it.trentosmartmountain.app.data.remote.dto.ChallengeProgressItem
 import it.trentosmartmountain.app.TsmApplication
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
 import it.trentosmartmountain.app.viewmodel.ChallengeDetailViewModel
 
 private val DarkSurface = Color(0xFF1C1C1E)
@@ -83,8 +87,11 @@ fun ChallengeDetailScreen(
         if (!msg.isNullOrBlank()) { snackbar.showSnackbar(msg); viewModel.clearMessages() }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 12)
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { SnackbarHost(snackbar) { TsmSnackbar(it) } },
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("Sfida", color = Color.White, fontWeight = FontWeight.Bold) },
@@ -93,10 +100,9 @@ fun ChallengeDetailScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
-        containerColor = DarkSurface,
     ) { padding ->
         if (state.isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -123,9 +129,10 @@ fun ChallengeDetailScreen(
 
             // Inviti pendenti per ME → bottoni accept/decline
             if (isInvitedMe && ch.status != "COMPLETED" && ch.status != "CANCELLED") {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2A3A)),
-                    shape = RoundedCornerShape(12.dp),
+                TsmGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 14.dp,
+                    border = AccentCyan.copy(alpha = 0.5f),
                 ) {
                     Column(Modifier.padding(14.dp)) {
                         Text("Sei stato invitato a questa sfida", color = AccentCyan, fontWeight = FontWeight.Bold)
@@ -161,14 +168,14 @@ fun ChallengeDetailScreen(
             }
         }
     }
+    }
 }
 
 @Composable
 private fun HeaderCard(ch: Challenge) {
-    Card(
+    TsmGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp),
+        cornerRadius = 14.dp,
     ) {
         Column(Modifier.padding(16.dp)) {
             Text(ch.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -211,10 +218,10 @@ private fun ProgressRow(
         else -> Color.White
     }
     val progress = if (target != null && target > 0) (item.value / target).toFloat().coerceIn(0f, 1f) else 0f
-    Card(
+    TsmGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(10.dp),
+        cornerRadius = 12.dp,
+        border = if (isWinner || isMe) color.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.06f),
     ) {
         Column(Modifier.padding(12.dp)) {
             Row(

@@ -21,10 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -61,6 +61,7 @@ import it.trentosmartmountain.app.data.location.TrackingStatus
 import it.trentosmartmountain.app.data.remote.JwtDecoder
 import it.trentosmartmountain.app.data.remote.dto.EmergencyResponse
 import it.trentosmartmountain.app.data.remote.dto.SosMapMarkerDto
+import it.trentosmartmountain.app.ui.components.TsmRewardBurst
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.theme.TsmSurface
@@ -84,6 +85,17 @@ fun RegistraScreen(
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   val context = LocalContext.current
+
+  // "Wow" alla fine di un'attività salvata: scintille celebrative sulla mappa.
+  // `activitySaved` viene messo a true dal VM al termine del salvataggio; qui lo
+  // consumiamo (reset) così la prossima registrazione lo ri-attiva.
+  var celebrateSaved by remember { mutableStateOf(false) }
+  LaunchedEffect(uiState.activitySaved) {
+    if (uiState.activitySaved) {
+      celebrateSaved = true
+      viewModel.dismissActivitySaved()
+    }
+  }
 
   val hasFineLocation =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -395,6 +407,9 @@ fun RegistraScreen(
         )
       }
     }
+
+    // Celebrazione "attività salvata" (sopra mappa e controlli).
+    TsmRewardBurst(play = celebrateSaved, onFinished = { celebrateSaved = false })
   }
 
   if (uiState.showSosConfirmDialog) {
@@ -766,7 +781,7 @@ private fun SwitchSessionDialog(
           contentAlignment = Alignment.Center,
         ) {
           Icon(
-            androidx.compose.material.icons.Icons.Outlined.DirectionsRun,
+            androidx.compose.material.icons.Icons.AutoMirrored.Outlined.DirectionsRun,
             contentDescription = null,
             tint = it.trentosmartmountain.app.ui.theme.TsmColors.Primary,
             modifier = Modifier.size(30.dp),

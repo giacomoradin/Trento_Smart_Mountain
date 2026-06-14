@@ -48,6 +48,7 @@ data class ProfileUiState(
     val weeklyGoals: WeeklyGoals? = null,
 )
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as TsmApplication
@@ -127,6 +128,16 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     fun logout(onDone: () -> Unit) {
         viewModelScope.launch {
+            // Revoca server-side del refresh token (best-effort, PRIMA del clear
+            // locale che lo cancellerebbe): senza, il token restava valido 30
+            // giorni dopo il logout — incoerenza di sicurezza tra device e server.
+            tokenStorage.getRefreshToken()?.takeIf { it.isNotBlank() }?.let { refresh ->
+                runCatching {
+                    api.logout(
+                        it.trentosmartmountain.app.data.remote.dto.LogoutRequest(refreshToken = refresh),
+                    )
+                }
+            }
             tokenStorage.clearToken()
             profileRepository.clearLocalCache()
             app.database.completedActivityDao().deleteAll()

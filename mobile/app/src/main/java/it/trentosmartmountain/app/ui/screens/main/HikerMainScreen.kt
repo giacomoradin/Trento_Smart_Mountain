@@ -1,6 +1,11 @@
 package it.trentosmartmountain.app.ui.screens.main
 
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Home
@@ -110,6 +115,23 @@ fun HikerMainScreen(
 
   Scaffold(
     bottomBar = {
+      androidx.compose.foundation.layout.Column {
+        // Hairline luminosa di separazione: il contenuto "scorre sotto" la
+        // barra invece di sbatterci contro (stessa grammatica delle glass card).
+        androidx.compose.foundation.layout.Box(
+          modifier = androidx.compose.ui.Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(
+              androidx.compose.ui.graphics.Brush.horizontalGradient(
+                listOf(
+                  androidx.compose.ui.graphics.Color.Transparent,
+                  androidx.compose.ui.graphics.Color.White.copy(alpha = 0.14f),
+                  androidx.compose.ui.graphics.Color.Transparent,
+                ),
+              ),
+            ),
+        )
       NavigationBar(
         containerColor = it.trentosmartmountain.app.ui.theme.TsmColors.Card,
       ) {
@@ -149,9 +171,35 @@ fun HikerMainScreen(
           colors = navColors,
         )
       }
+      }
     },
   ) { innerPadding ->
-    when (selectedTab) {
+    // Cambio tab con "fade-through" Material (90ms out → 200ms in + scala
+    // 0.96→1): si percepisce intenzionale ma resta ISTANTANEO al dito. La
+    // prima versione (slide 400ms) rendeva l'app meno reattiva: la velocità
+    // è parte del premium, mai sacrificarla per il motion.
+    androidx.compose.animation.AnimatedContent(
+      targetState = selectedTab,
+      transitionSpec = {
+        (
+          androidx.compose.animation.fadeIn(
+            androidx.compose.animation.core.tween(200, delayMillis = 60),
+          ) +
+            androidx.compose.animation.scaleIn(
+              initialScale = 0.96f,
+              animationSpec = androidx.compose.animation.core.tween(
+                200,
+                delayMillis = 60,
+                easing = it.trentosmartmountain.app.ui.theme.TsmMotion.EaseOutCubic,
+              ),
+            )
+          ).togetherWith(
+          androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(90)),
+        )
+      },
+      label = "tab-content",
+    ) { tab ->
+    when (tab) {
       HikerTab.Home -> HomeScreen(
         modifier = Modifier.padding(innerPadding),
         onActivityClick = onNavigateToActivityDetail,
@@ -191,6 +239,7 @@ fun HikerMainScreen(
         onNavigateToBoard = onNavigateToBoard,
         modifier = Modifier.padding(innerPadding),
       )
+    }
     }
   }
 }

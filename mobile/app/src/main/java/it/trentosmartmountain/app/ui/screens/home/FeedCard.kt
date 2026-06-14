@@ -136,29 +136,17 @@ fun FeedCard(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Rimuovere dal feed?", color = TextPrimary) },
-            text = {
-                Text(
-                    "Il post non sarà più visibile nel feed. L'attività o la sessione restano sul tuo account.",
-                    color = TextSecondary,
-                )
+        it.trentosmartmountain.app.ui.components.TsmAlertDialog(
+            onDismiss = { showDeleteConfirm = false },
+            title = "Rimuovere dal feed?",
+            text = "Il post non sarà più visibile nel feed. L'attività o la sessione restano sul tuo account.",
+            confirmLabel = "Rimuovi",
+            destructive = true,
+            icon = Icons.Outlined.Delete,
+            onConfirm = {
+                showDeleteConfirm = false
+                onDeletePost?.invoke()
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirm = false
-                        onDeletePost?.invoke()
-                    },
-                ) { Text("Rimuovi", color = AccentRed) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Annulla", color = TextSecondary)
-                }
-            },
-            containerColor = CardBackground,
         )
     }
 
@@ -166,16 +154,23 @@ fun FeedCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.07f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
     ) {
       Box {
         Column(
-            // Materiale glass: gradiente sottile dentro la card bordata.
+            // Materiale glass: gradiente sottile dentro la card bordata + sheen
+            // superiore (stesso linguaggio di TsmGlassCard dopo l'intensificazione).
             // Gesti: tap singolo = apri dettaglio, doppio tap = like (+ burst cuore).
             modifier = Modifier
                 .background(
                     Brush.verticalGradient(listOf(TsmColors.CardElevated, TsmColors.Card)),
+                )
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.White.copy(alpha = 0.07f),
+                        0.42f to Color.Transparent,
+                    ),
                 )
                 .pointerInput(item.id) {
                     detectTapGestures(
@@ -467,11 +462,13 @@ private fun PointsBadge(points: Int) {
 @Composable
 private fun StatCell(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
+        // Cifre mono "telemetria" (identità dati TSM).
         Text(
             value,
             color = TextPrimary,
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp,
+            style = it.trentosmartmountain.app.ui.theme.TsmType.Numeric,
         )
         Spacer(Modifier.height(2.dp))
         Text(

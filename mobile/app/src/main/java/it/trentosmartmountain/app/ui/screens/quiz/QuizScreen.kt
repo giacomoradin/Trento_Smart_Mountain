@@ -52,7 +52,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.graphics.Brush
 import it.trentosmartmountain.app.data.remote.dto.QuizSubmissionResponse
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.QuizState
 import it.trentosmartmountain.app.viewmodel.QuizViewModel
 
@@ -155,9 +159,11 @@ fun QuizScreen(
                         Spacer(Modifier.height(4.dp))
                         Text("Hai completato l'intera categoria.", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(20.dp))
-                        Button(onClick = onClose, colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)) {
-                            Text("TORNA ALLA FORMAZIONE", fontWeight = FontWeight.Bold, color = Color.White)
-                        }
+                        TsmGradientButton(
+                            text = "TORNA ALLA FORMAZIONE",
+                            onClick = onClose,
+                            fill = Brush.horizontalGradient(listOf(AccentGreen, Color(0xFF2E7D32))),
+                        )
                     }
                 }
                 is QuizState.Question -> {
@@ -196,12 +202,8 @@ fun QuizScreen(
                         )
                         Spacer(Modifier.height(16.dp))
 
-                        // Question card
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = CardBackground),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
+                        // Question card (glass)
+                        TsmGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 14.dp) {
                             Text(
                                 text = question.text,
                                 modifier = Modifier.padding(16.dp),
@@ -213,77 +215,71 @@ fun QuizScreen(
 
                         Spacer(Modifier.height(16.dp))
 
-                        // Options
+                        // Options — stato selezionato evidenziato (bordo+sfondo accent, lettera accent).
                         question.choices.forEachIndexed { idx, choice ->
                             val isSelected = s.selectedChoice == idx
-                            val borderColor = when {
-                                !s.isAnswered && isSelected -> AccentCyan
-                                !s.isAnswered -> Color(0xFF3A3A3C)
-                                else -> Color(0xFF3A3A3C)
-                            }
-                            val bgColor = when {
-                                !s.isAnswered && isSelected -> Color(0xFF1A2A3A)
-                                else -> CardBackground
-                            }
+                            val borderColor = if (isSelected && !s.isAnswered) AccentCyan else Color(0xFF3A3A3C)
+                            val bgColor = if (isSelected && !s.isAnswered) AccentCyan.copy(alpha = 0.12f) else CardBackground
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(bottom = 8.dp)
                                     .clickable(enabled = !s.isAnswered) { viewModel.selectChoice(idx) },
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = bgColor,
-                                border = BorderStroke(1.dp, borderColor),
+                                border = BorderStroke(if (isSelected && !s.isAnswered) 1.5.dp else 1.dp, borderColor),
                             ) {
                                 Row(
                                     modifier = Modifier.padding(14.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Box(
-                                        modifier = Modifier.size(22.dp).clip(CircleShape).background(Color(0xFF3A3A3C)),
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isSelected && !s.isAnswered) AccentCyan else Color(0xFF3A3A3C)),
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Text(
                                             text = ('A' + idx).toString(),
-                                            color = TextSecondary,
-                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isSelected && !s.isAnswered) Color(0xFF0A1420) else TextSecondary,
+                                            style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
                                         )
                                     }
                                     Spacer(Modifier.width(12.dp))
-                                    Text(choice, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        choice,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f),
+                                    )
                                 }
                             }
                         }
 
                         Spacer(Modifier.height(8.dp))
 
+                        val greenFill = Brush.horizontalGradient(listOf(AccentGreen, Color(0xFF2E7D32)))
                         // Confirm button (when not answered yet)
                         if (!s.isAnswered && s.selectedChoice != null) {
-                            Button(
+                            TsmGradientButton(
+                                text = "CONFERMA RISPOSTA",
                                 onClick = { viewModel.confirmAnswer() },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                            ) {
-                                Text("CONFERMA RISPOSTA", fontWeight = FontWeight.Bold, color = Color.White)
-                            }
+                                modifier = Modifier.fillMaxWidth(),
+                                fill = greenFill,
+                            )
                         }
 
                         // "Prossima domanda" button (after answered — no per-question feedback shown since we do batched submit)
                         if (s.isAnswered) {
                             val isLast = s.currentIndex == quiz.questions.size - 1
-                            Button(
+                            TsmGradientButton(
+                                text = if (isLast) "INVIA QUIZ →" else "PROSSIMA DOMANDA →",
                                 onClick = { viewModel.nextQuestion() },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                            ) {
-                                Text(
-                                    if (isLast) "INVIA QUIZ →" else "PROSSIMA DOMANDA →",
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                )
-                            }
+                                modifier = Modifier.fillMaxWidth(),
+                                fill = greenFill,
+                            )
                         }
 
                         Spacer(Modifier.height(24.dp))

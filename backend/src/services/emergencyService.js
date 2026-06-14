@@ -135,7 +135,10 @@ function assertCanViewEmergency(emergency, session, userId) {
 
   if (emergency.status === "SHARED_WITH_GROUP") return;
 
-  if (emergency.senderUserId.toString() === userId.toString() && OPEN_STATUSES.includes(emergency.status)) {
+  // senderUserId può arrivare popolato (getEmergencyById fa populate prima di
+  // questo check): normalizziamo a id come altrove nel codice (_id || valore).
+  const senderId = (emergency.senderUserId?._id || emergency.senderUserId).toString();
+  if (senderId === userId.toString() && OPEN_STATUSES.includes(emergency.status)) {
     return;
   }
 

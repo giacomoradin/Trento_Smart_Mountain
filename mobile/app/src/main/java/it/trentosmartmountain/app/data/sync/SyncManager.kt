@@ -149,7 +149,7 @@ object SyncManager {
                     dao.markSynced(entity.id, resp.body()?._id ?: sessionId)
                     Log.i(TAG, "[${entity.id}] session sync OK (personal copy ${resp.body()?._id})")
                 } else {
-                    Log.w(TAG, "[${entity.id}] session personal copy HTTP ${resp.code()}")
+                    Log.w(TAG, "[${entity.id}] session personal copy HTTP ${resp.code()} ${runCatching { resp.errorBody()?.string() }.getOrNull().orEmpty()}")
                     dao.bumpRetry(entity.id, now)
                 }
             } else {
@@ -169,7 +169,7 @@ object SyncManager {
                     dao.markSynced(entity.id, remoteId)
                     Log.i(TAG, "[${entity.id}] free activity sync OK remoteId=$remoteId")
                 } else {
-                    Log.w(TAG, "[${entity.id}] free activity sync HTTP ${resp.code()}")
+                    Log.w(TAG, "[${entity.id}] free activity sync HTTP ${resp.code()} ${runCatching { resp.errorBody()?.string() }.getOrNull().orEmpty()}")
                     dao.bumpRetry(entity.id, now)
                 }
             }

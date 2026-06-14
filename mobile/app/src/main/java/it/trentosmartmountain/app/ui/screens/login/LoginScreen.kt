@@ -119,35 +119,51 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text(
-                text = "EMAIL O USERNAME",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            OutlinedTextField(
-                value = uiState.email,
-                onValueChange = viewModel::onEmailChange,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("mario.rossi@email.com  ·  oppure  mariorossi", color = Color.Gray) },
-                singleLine = true,
-                enabled = !uiState.isLoading,
-                isError = uiState.emailError != null,
-                supportingText = uiState.emailError?.let { err -> { Text(err) } },
-                leadingIcon = {
-                    Icon(Icons.Outlined.Email, contentDescription = null, tint = TsmAccent)
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = TsmAccent,
-                    unfocusedBorderColor = Color(0xFF3A3A3A),
-                    focusedContainerColor = TsmSurfaceVariant,
-                    unfocusedContainerColor = TsmSurfaceVariant,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                ),
-                shape = RoundedCornerShape(8.dp),
-            )
+            // Form raccolto in una glass card del design system: stessa
+            // grammatica visiva di feed/telemetria (gradiente sottile + hairline).
+            it.trentosmartmountain.app.ui.components.TsmGlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "EMAIL O USERNAME",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = uiState.email,
+                    onValueChange = viewModel::onEmailChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("mario.rossi@email.com  ·  oppure  mariorossi", color = Color.Gray) },
+                    singleLine = true,
+                    enabled = !uiState.isLoading,
+                    isError = uiState.emailError != null,
+                    supportingText = uiState.emailError?.let { err -> { Text(err) } },
+                    // Niente auto-capitalize/auto-correct: la tastiera alterava
+                    // silenziosamente l'identificativo digitato (es. maiuscola
+                    // iniziale forzata sullo username) → 401 "inspiegabili".
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Email,
+                        capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None,
+                        autoCorrectEnabled = false,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                    ),
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Email, contentDescription = null, tint = TsmAccent)
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = TsmAccent,
+                        unfocusedBorderColor = Color(0xFF3A3A3A),
+                        focusedContainerColor = TsmSurfaceVariant,
+                        unfocusedContainerColor = TsmSurfaceVariant,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                )
+
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -167,6 +183,14 @@ fun LoginScreen(
                 enabled = !uiState.isLoading,
                 isError = uiState.passwordError != null,
                 supportingText = uiState.passwordError?.let { err -> { Text(err) } },
+                // KeyboardType.Password disattiva suggerimenti e auto-correct:
+                // senza, Gboard poteva sostituire/correggere la password digitata
+                // (campo mascherato → impossibile accorgersene) → 401 in loop.
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                    autoCorrectEnabled = false,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                ),
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 leadingIcon = {
                     Icon(Icons.Outlined.Lock, contentDescription = null, tint = TsmAccent)
@@ -215,29 +239,27 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Button(
+            // CTA premium del design system: gradiente Athletic Orange + bordo
+            // luminoso (sostituisce il Button piatto Material).
+            it.trentosmartmountain.app.ui.components.TsmGradientButton(
+                text = if (uiState.isLoading) "Accesso in corso…" else stringResource(R.string.login_button),
                 onClick = {
                     keyboard?.hide()
                     viewModel.onLoginClick()
                 },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
                 enabled = !uiState.isLoading,
-                colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
-                shape = RoundedCornerShape(8.dp),
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = Color.White,
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.login_button),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    )
-                }
-            }
+                modifier = Modifier.fillMaxWidth(),
+                leading = {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White,
+                        )
+                        Spacer(modifier = Modifier.size(10.dp))
+                    }
+                },
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 

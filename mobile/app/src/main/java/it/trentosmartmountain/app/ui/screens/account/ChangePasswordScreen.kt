@@ -1,7 +1,9 @@
 package it.trentosmartmountain.app.ui.screens.account
 
 import android.app.Application
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +48,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
+import it.trentosmartmountain.app.ui.components.TsmSnackbar
 import it.trentosmartmountain.app.viewmodel.AccountEditViewModel
 
 private val DarkSurface = Color(0xFF1C1C1E)
@@ -77,8 +83,11 @@ fun ChangePasswordScreen(
         state.error?.let { snackbarHost.showSnackbar(it); viewModel.clearMessages() }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 10)
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHost) },
+        snackbarHost = { SnackbarHost(snackbarHost) { TsmSnackbar(it) } },
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("Cambia password", color = Color.White, fontWeight = FontWeight.Bold) },
@@ -87,10 +96,9 @@ fun ChangePasswordScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
-        containerColor = DarkSurface,
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
@@ -148,16 +156,15 @@ fun ChangePasswordScreen(
 
             Spacer(Modifier.height(4.dp))
 
-            Button(
+            TsmGradientButton(
+                text = if (state.isLoading) "AGGIORNAMENTO…" else "AGGIORNA PASSWORD",
                 onClick = { viewModel.changePassword(oldPassword, newPassword) },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                modifier = Modifier.fillMaxWidth(),
+                fill = Brush.horizontalGradient(listOf(AccentCyan, Color(0xFF0097A7))),
+                contentColor = DarkSurface,
                 enabled = !state.isLoading && oldPassword.isNotBlank() && newPassword.length >= 8 && newPassword == confirmPassword && !sameAsOld,
-            ) {
-                if (state.isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.height(20.dp))
-                else Text("AGGIORNA PASSWORD", fontWeight = FontWeight.Bold, color = DarkSurface)
-            }
+            )
         }
+    }
     }
 }

@@ -39,7 +39,21 @@ android {
 
   buildTypes {
     release {
-      isMinifyEnabled = false
+      // R8/minify + shrink risorse ATTIVI. Storia (regressione sync/picker 2026-06):
+      // con R8 i DTO Gson PRIVI di @SerializedName venivano offuscati (campi a/b/c…)
+      // → `CreateActivityRequest` rifiutata dal backend (422 → attività mai sincro)
+      // e parsing sentieri null ("Errore imprevisto" nel picker). Ora `proguard-
+      // rules.pro` tiene l'INTERO package `data.remote.dto.**` (+ Gson/Retrofit/
+      // @SerializedName/TypeToken), quindi la serializzazione è preservata.
+      // ⚠️ Da validare on-device con lo smoke-test (sync attività + picker percorsi
+      // + scan SOS i flussi a più alto rischio): se uno fallisce in release ma non
+      // in debug, manca una keep-rule per quel DTO → aggiungerla qui o rimettere OFF.
+      isMinifyEnabled = true
+      isShrinkResources = true
+      // Firma con la debug keystore così la release minificata è installabile su
+      // device per il test on-device di R8. ⚠️ Prima di una pubblicazione reale
+      // (Play Store / distribuzione esterna) sostituire con una upload-key dedicata.
+      signingConfig = signingConfigs.getByName("debug")
       proguardFiles(
         getDefaultProguardFile("proguard-android-optimize.txt"),
         "proguard-rules.pro",

@@ -28,7 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.DirectionsWalk
+import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.CircularProgressIndicator
@@ -64,6 +64,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.estimation.HikeEstimation
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.tsmEnterReveal
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
@@ -148,8 +150,8 @@ fun ActivityListScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "LE MIE ATTIVITÀ",
-                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
-                        color = Color.Gray,
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold),
+                        color = TsmAccent,
                     )
                     Text(
                         "${uiState.filteredActivities.size} escursioni",
@@ -231,10 +233,9 @@ fun ActivityListScreen(
         item {
             val stats = uiState.yearlyStats[uiState.selectedYear]
             Spacer(modifier = Modifier.height(20.dp))
-            Surface(
+            TsmGlassCard(
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = TsmSurface,
+                cornerRadius = 14.dp,
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -316,7 +317,7 @@ fun ActivityListScreen(
                     activity = activity,
                     onClick = { onActivityClick(activity.id, activity.sessionId) },
                     onShareClick = { shareTarget = activity },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp).tsmEnterReveal(),
                 )
             }
         }
@@ -354,7 +355,7 @@ private fun EmptyPeriodState(year: Int, month: Int?) {
     val label = if (monthName != null) "Nessuna attività in $monthName $year" else "Nessuna attività nel $year"
     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Outlined.DirectionsWalk, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+            Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
             Spacer(modifier = Modifier.height(12.dp))
             Text(label, style = MaterialTheme.typography.titleSmall, color = Color.White)
             Text("Scorri sulle card sopra per cambiare periodo.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -373,11 +374,7 @@ private fun YearlyStatsCard(
     totalPoints: Int,
     isLoading: Boolean,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = TsmSurface,
-    ) {
+    TsmGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 16.dp) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -541,26 +538,23 @@ private fun ActivityListItem(
     val timeStr = timeFmt.format(Date(activity.dateMs))
     val movingH = HikeEstimation.formatHours(activity.movingSeconds / 3600.0)
 
-    Surface(
-        modifier = modifier.fillMaxWidth().clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
-        color = TsmSurface,
+    TsmGlassCard(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        cornerRadius = 12.dp,
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Activity icon
-            Surface(
-                modifier = Modifier.size(44.dp),
-                shape = RoundedCornerShape(10.dp),
-                color = TsmSurfaceVariant,
+            // Activity icon (chip accent)
+            Box(
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(TsmAccent.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        Icons.Outlined.DirectionsWalk,
-                        contentDescription = null,
-                        tint = TsmAccent,
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
+                Icon(
+                    Icons.AutoMirrored.Outlined.DirectionsWalk,
+                    contentDescription = null,
+                    tint = TsmAccent,
+                    modifier = Modifier.size(24.dp),
+                )
             }
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -681,7 +675,7 @@ private fun DifficultyIndicator(level: String?) {
 private fun EmptyActivitiesState() {
     Box(modifier = Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Outlined.DirectionsWalk, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(64.dp))
+            Icon(Icons.AutoMirrored.Outlined.DirectionsWalk, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(64.dp))
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 "Nessuna attività ancora registrata.",

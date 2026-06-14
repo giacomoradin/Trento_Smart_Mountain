@@ -35,6 +35,15 @@ jobs:
       - name: Test (Jest + coverage)
         run: npm test
 
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Security audit
         # Il progetto è a 0 vulnerabilità dopo la pulizia dipendenze di Fase 0:
         # questo gate BLOCCA l'introduzione di nuove vulnerabilità high/critical.

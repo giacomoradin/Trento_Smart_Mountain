@@ -183,3 +183,7 @@ PROJECT_OVERVIEW.md
 swagger-output.json
 CLAUDE.md
 mobile/.idea/misc.xml
+mobile/app/release/baselineProfiles/0/app-release.dm
+mobile/app/release/baselineProfiles/1/app-release.dm
+mobile/app/src/main/assets/fonts/OFL_SpaceGrotesk.txt
+mobile/app/src/main/res/font/space_grotesk.ttf

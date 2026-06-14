@@ -1,5 +1,6 @@
 package it.trentosmartmountain.app.data.session
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -19,6 +20,7 @@ object SessionStopCoordinator {
         _pendingSessionStop.tryEmit(sessionId)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun consume() {
         _pendingSessionStop.resetReplayCache()
     }

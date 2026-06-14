@@ -1,14 +1,20 @@
 package it.trentosmartmountain.app.ui.screens.account
 
 import android.app.Application
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -44,8 +50,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -53,6 +63,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
+import it.trentosmartmountain.app.ui.components.TsmSnackbar
 import it.trentosmartmountain.app.viewmodel.AccountEditViewModel
 
 private val DarkSurface = Color(0xFF1C1C1E)
@@ -97,8 +111,11 @@ fun AccountEditScreen(
         if (state.accountDeleted) onAccountDeleted()
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 12)
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHost) },
+        snackbarHost = { SnackbarHost(snackbarHost) { TsmSnackbar(it) } },
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("Account e dati personali", color = Color.White, fontWeight = FontWeight.Bold) },
@@ -107,10 +124,9 @@ fun AccountEditScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
-        containerColor = DarkSurface,
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
@@ -156,16 +172,14 @@ fun AccountEditScreen(
                 username.trim() != state.currentUsername || email.trim() != state.currentEmail
             ) || (email.trim().isNotBlank() && email.trim() != state.currentEmail)
 
-            Button(
+            TsmGradientButton(
+                text = if (state.isLoading || state.isLoadingProfile) "SALVATAGGIO…" else "SALVA MODIFICHE",
                 onClick = { viewModel.updateAccount(username, email) },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                modifier = Modifier.fillMaxWidth(),
+                fill = Brush.horizontalGradient(listOf(AccentCyan, Color(0xFF0097A7))),
+                contentColor = DarkSurface,
                 enabled = !state.isLoading && !state.isLoadingProfile && hasChanges,
-            ) {
-                if (state.isLoading || state.isLoadingProfile) CircularProgressIndicator(color = Color.White, modifier = Modifier.height(20.dp))
-                else Text("SALVA MODIFICHE", fontWeight = FontWeight.Bold, color = DarkSurface)
-            }
+            )
 
             Spacer(Modifier.height(8.dp))
             Text("Il mio profilo", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
@@ -201,61 +215,75 @@ fun AccountEditScreen(
             Spacer(Modifier.height(8.dp))
             Text("Sicurezza", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
 
-            Card(
+            TsmGlassCard(
                 onClick = onNavigateToChangePassword,
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 14.dp,
             ) {
-                androidx.compose.foundation.layout.Row(Modifier.padding(16.dp)) {
-                    Icon(Icons.Default.Lock, contentDescription = null, tint = AccentCyan)
-                    androidx.compose.foundation.layout.Spacer(Modifier.padding(8.dp))
-                    Text("Cambia password", color = Color.White)
+                Row(Modifier.padding(14.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    AccountIconChip(Icons.Default.Lock, AccentCyan)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Cambia password", color = Color.White, modifier = Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
                 }
             }
 
             Spacer(Modifier.height(8.dp))
             Text("Zona pericolo", color = AccentRed, style = MaterialTheme.typography.labelMedium)
 
-            Card(
+            TsmGlassCard(
                 onClick = onNavigateToDeleteAccount,
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A1A1A)),
-                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth(),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentRed),
+                cornerRadius = 14.dp,
+                topColor = Color(0xFF2A1620),
+                bottomColor = Color(0xFF1E1014),
+                border = AccentRed.copy(alpha = 0.4f),
             ) {
-                androidx.compose.foundation.layout.Row(Modifier.padding(16.dp)) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = AccentRed)
-                    androidx.compose.foundation.layout.Spacer(Modifier.padding(8.dp))
-                    Text("Elimina account", color = AccentRed, fontWeight = FontWeight.Bold)
+                Row(Modifier.padding(14.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    AccountIconChip(Icons.Default.Warning, AccentRed)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Elimina account", color = AccentRed, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = AccentRed.copy(alpha = 0.7f))
                 }
             }
+            Spacer(Modifier.height(8.dp))
         }
+    }
+    }
+}
+
+/** Chip-icona quadrato tinto, coerente con il resto dell'app. */
+@Composable
+private fun AccountIconChip(icon: ImageVector, tint: Color) {
+    Box(
+        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 
 /** Card cliccabile con icona + titolo + sottotitolo + chevron, usata per le entry profilo v2. */
 @Composable
 private fun SectionNavCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     subtitle: String,
     onClick: () -> Unit,
 ) {
-    Card(
+    TsmGlassCard(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(10.dp),
         modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 14.dp,
     ) {
-        androidx.compose.foundation.layout.Row(
+        Row(
             modifier = Modifier.padding(14.dp).fillMaxWidth(),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, contentDescription = null, tint = AccentCyan)
-            androidx.compose.foundation.layout.Spacer(Modifier.padding(8.dp))
+            AccountIconChip(icon, AccentCyan)
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, color = Color.White, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(title, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(subtitle, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
             }
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)

@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.register
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlow
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
@@ -60,8 +64,10 @@ fun ForgotPasswordScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val keyboard = LocalSoftwareKeyboardController.current
 
+    Box(modifier = Modifier.fillMaxSize().background(TsmBackground)) {
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 14)
     Scaffold(
-        containerColor = TsmBackground,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -76,7 +82,7 @@ fun ForgotPasswordScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = TsmBackground,
+                    containerColor = Color.Transparent,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White,
                 ),
@@ -92,12 +98,15 @@ fun ForgotPasswordScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (uiState.emailSent) {
-                Icon(
-                    Icons.Outlined.CheckCircle,
-                    contentDescription = null,
-                    tint = TsmPrimary,
-                    modifier = Modifier.size(72.dp),
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    TsmGlow(color = TsmPrimary, modifier = Modifier.size(130.dp), alpha = 0.4f)
+                    Icon(
+                        Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = TsmPrimary,
+                        modifier = Modifier.size(72.dp),
+                    )
+                }
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
                     text = stringResource(R.string.forgot_password_sent),
@@ -161,26 +170,17 @@ fun ForgotPasswordScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Button(
+                TsmGradientButton(
+                    text = if (uiState.isLoading) "INVIO…" else stringResource(R.string.forgot_password_send),
                     onClick = {
                         keyboard?.hide()
                         viewModel.onSendClick()
                     },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading,
-                    colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    if (uiState.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
-                    } else {
-                        Text(
-                            text = stringResource(R.string.forgot_password_send),
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        )
-                    }
-                }
+                )
             }
         }
+    }
     }
 }

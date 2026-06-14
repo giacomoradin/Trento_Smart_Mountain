@@ -18,7 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -267,7 +267,7 @@ fun StoryComposerScreen(
                             style = MaterialTheme.typography.titleMedium,
                         )
                     } else {
-                        Icon(Icons.Filled.Send, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(10.dp))
                         Text(
                             "PUBBLICA STORIA",

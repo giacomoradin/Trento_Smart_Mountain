@@ -158,7 +158,50 @@ fun TsmNavHost() {
         application.tokenStorage.getToken()?.let { JwtDecoder.userIdFrom(it) } ?: ""
     }
 
-    NavHost(navController = navController, startDestination = startDestination) {
+    // Transizioni condivise (pass "oltre"): push = slide-in dal bordo destro con
+    // fade, pop = ritorno speculare; la schermata sotto scala appena (parallasse
+    // di profondità). Un solo punto di definizione → ogni destination dell'app
+    // anima allo stesso modo, con gli easing del design system (TsmMotion).
+    NavHost(
+        navController = navController,
+        startDestination = startDestination,
+        enterTransition = {
+            androidx.compose.animation.slideInHorizontally(
+                animationSpec = androidx.compose.animation.core.tween(
+                    it.trentosmartmountain.app.ui.theme.TsmMotion.MEDIUM,
+                    easing = it.trentosmartmountain.app.ui.theme.TsmMotion.EaseOutCubic,
+                ),
+            ) { full -> full / 4 } + androidx.compose.animation.fadeIn(
+                androidx.compose.animation.core.tween(it.trentosmartmountain.app.ui.theme.TsmMotion.MEDIUM),
+            )
+        },
+        exitTransition = {
+            androidx.compose.animation.scaleOut(
+                targetScale = 0.96f,
+                animationSpec = androidx.compose.animation.core.tween(it.trentosmartmountain.app.ui.theme.TsmMotion.MEDIUM),
+            ) + androidx.compose.animation.fadeOut(
+                androidx.compose.animation.core.tween(it.trentosmartmountain.app.ui.theme.TsmMotion.MEDIUM),
+            )
+        },
+        popEnterTransition = {
+            androidx.compose.animation.scaleIn(
+                initialScale = 0.96f,
+                animationSpec = androidx.compose.animation.core.tween(it.trentosmartmountain.app.ui.theme.TsmMotion.MEDIUM),
+            ) + androidx.compose.animation.fadeIn(
+                androidx.compose.animation.core.tween(it.trentosmartmountain.app.ui.theme.TsmMotion.MEDIUM),
+            )
+        },
+        popExitTransition = {
+            androidx.compose.animation.slideOutHorizontally(
+                animationSpec = androidx.compose.animation.core.tween(
+                    it.trentosmartmountain.app.ui.theme.TsmMotion.MEDIUM,
+                    easing = it.trentosmartmountain.app.ui.theme.TsmMotion.EaseOutCubic,
+                ),
+            ) { full -> full / 4 } + androidx.compose.animation.fadeOut(
+                androidx.compose.animation.core.tween(it.trentosmartmountain.app.ui.theme.TsmMotion.MEDIUM),
+            )
+        },
+    ) {
 
         composable(Routes.AUTH_ENTRY) {
             AuthEntryScreen(

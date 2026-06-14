@@ -1,3 +1,9 @@
+// androidx.security:security-crypto (EncryptedSharedPreferences / MasterKey) è deprecato da
+// Google senza un sostituto drop-in ufficiale. Funzionalmente è intatto e i token restano
+// cifrati a riposo: la migrazione (es. Tink diretto o DataStore + crypto) è un lavoro a sé,
+// tracciato come debito tecnico post-release. Sopprimiamo qui per tenere il build pulito.
+@file:Suppress("DEPRECATION")
+
 package it.trentosmartmountain.app.data.local
 
 import android.content.Context

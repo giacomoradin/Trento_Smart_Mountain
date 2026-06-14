@@ -139,29 +139,16 @@ fun PostDetailScreen(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Rimuovere dal feed?", color = TsmColors.TextPrimary) },
-            text = {
-                Text(
-                    "Il post non sarà più visibile nel feed. L'attività o la sessione restano sul tuo account.",
-                    color = TsmColors.TextSecondary,
-                )
+        it.trentosmartmountain.app.ui.components.TsmAlertDialog(
+            onDismiss = { showDeleteConfirm = false },
+            title = "Rimuovere dal feed?",
+            text = "Il post non sarà più visibile nel feed. L'attività o la sessione restano sul tuo account.",
+            confirmLabel = "Rimuovi",
+            destructive = true,
+            onConfirm = {
+                showDeleteConfirm = false
+                socialFeedViewModel.removeFeedPost(post, onRemoved = onBack)
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirm = false
-                        socialFeedViewModel.removeFeedPost(post, onRemoved = onBack)
-                    },
-                ) { Text("Rimuovi", color = TsmColors.Danger) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Annulla", color = TsmColors.TextSecondary)
-                }
-            },
-            containerColor = TsmColors.Card,
         )
     }
 
@@ -438,7 +425,14 @@ fun PostDetailScreen(
 @Composable
 private fun StatCell(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
-        Text(value, color = valueColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        // Cifre mono "telemetria" (identità dati TSM).
+        Text(
+            value,
+            color = valueColor,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            style = it.trentosmartmountain.app.ui.theme.TsmType.Numeric,
+        )
         Spacer(Modifier.height(2.dp))
         Text(label, color = TsmColors.TextSecondary, style = MaterialTheme.typography.labelSmall, letterSpacing = 0.5.sp)
     }

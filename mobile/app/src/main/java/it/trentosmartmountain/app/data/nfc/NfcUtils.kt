@@ -3,6 +3,7 @@ package it.trentosmartmountain.app.data.nfc
 import android.content.Intent
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.os.Build
 
 /**
  * Utility centralizzate per la gestione dei tag NFC.
@@ -33,7 +34,14 @@ object NfcUtils {
      */
     fun extractTagIdFromIntent(intent: Intent): String? {
         if (!isNfcIntent(intent)) return null
-        val tag = intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG) ?: return null
+        // API 33+ richiede l'overload con Class esplicita; sotto resta il vecchio (deprecato).
+        val tag =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
+            } ?: return null
         return extractTagId(tag)
     }
 }

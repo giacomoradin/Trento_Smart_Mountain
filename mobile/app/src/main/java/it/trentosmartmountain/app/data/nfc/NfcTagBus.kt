@@ -1,5 +1,6 @@
 package it.trentosmartmountain.app.data.nfc
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
@@ -13,5 +14,6 @@ object NfcTagBus {
 
     /** Da chiamare dopo aver consumato il tag, per evitare che venga riconsegnato
      *  a future iscrizioni (es. apertura di un'altra schermata che osserva il bus). */
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun consume() { _tagId.resetReplayCache() }
 }

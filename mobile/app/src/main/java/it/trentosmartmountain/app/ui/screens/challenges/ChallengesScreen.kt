@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,7 +42,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.background
 import it.trentosmartmountain.app.data.remote.dto.Challenge
+import it.trentosmartmountain.app.ui.components.ListSkeleton
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.tsmEnterReveal
 import it.trentosmartmountain.app.viewmodel.ChallengesViewModel
 
 private val DarkSurface = Color(0xFF1C1C1E)
@@ -66,6 +72,8 @@ fun ChallengesScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 14)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -75,7 +83,7 @@ fun ChallengesScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
         floatingActionButton = {
@@ -86,12 +94,10 @@ fun ChallengesScreen(
                 Icon(Icons.Default.Add, contentDescription = "Nuova sfida", tint = DarkSurface)
             }
         },
-        containerColor = DarkSurface,
+        containerColor = Color.Transparent,
     ) { padding ->
         when {
-            state.isLoading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AccentCyan)
-            }
+            state.isLoading -> ListSkeleton(modifier = Modifier.fillMaxSize().padding(padding))
             state.error != null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Text(state.error ?: "", color = AccentRed)
             }
@@ -109,11 +115,14 @@ fun ChallengesScreen(
             ) {
                 item { Spacer(Modifier.height(8.dp)) }
                 items(state.items, key = { it.id }) { ch ->
-                    ChallengeListCard(ch, onClick = { onNavigateToDetail(ch.id) })
+                    Box(Modifier.fillMaxWidth().tsmEnterReveal()) {
+                        ChallengeListCard(ch, onClick = { onNavigateToDetail(ch.id) })
+                    }
                 }
                 item { Spacer(Modifier.height(80.dp)) } // FAB clearance
             }
         }
+    }
     }
 }
 
@@ -125,10 +134,10 @@ private fun ChallengeListCard(challenge: Challenge, onClick: () -> Unit) {
         "COMPLETED" -> AccentCyan
         else -> TextSecondary
     }
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp),
+    TsmGlassCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 14.dp,
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -143,12 +152,17 @@ private fun ChallengeListCard(challenge: Challenge, onClick: () -> Unit) {
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),
                 )
-                Text(
-                    challenge.status,
-                    color = statusColor,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                )
+                Spacer(Modifier.width(8.dp))
+                // Stato come chip tinto (più leggibile della scritta nuda).
+                Surface(shape = RoundedCornerShape(8.dp), color = statusColor.copy(alpha = 0.16f)) {
+                    Text(
+                        challenge.status,
+                        color = statusColor,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
             }
             Spacer(Modifier.height(4.dp))
             Text(

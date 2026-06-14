@@ -1,5 +1,6 @@
 package it.trentosmartmountain.app.ui.screens.onboarding
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,9 +26,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
 
 private val DarkSurface = Color(0xFF1C1C1E)
 private val AccentCyan = Color(0xFF4DD0E1)
@@ -55,7 +59,8 @@ fun OnboardingStepScaffold(
     saveLabel: String = if (stepIndex == totalSteps) "TERMINA" else "SALVA E CONTINUA",
     body: @Composable () -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = DarkSurface) {
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+        TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 14)
         Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
             // Progress bar + step counter
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -103,16 +108,15 @@ fun OnboardingStepScaffold(
                 ) {
                     Text("SALTA", color = Color.White, fontWeight = FontWeight.Bold)
                 }
-                Button(
+                TsmGradientButton(
+                    text = if (isSaving) "ATTENDI…" else saveLabel,
                     onClick = onSaveAndContinue,
                     enabled = !isSaving,
-                    modifier = Modifier.weight(1.4f).height(48.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
-                ) {
-                    if (isSaving) CircularProgressIndicator(color = Color.White, modifier = Modifier.height(20.dp))
-                    else Text(saveLabel, fontWeight = FontWeight.Bold, color = DarkSurface)
-                }
+                    modifier = Modifier.weight(1.4f),
+                    height = 48.dp,
+                    fill = Brush.horizontalGradient(listOf(AccentCyan, Color(0xFF0097A7))),
+                    contentColor = DarkSurface,
+                )
             }
         }
     }

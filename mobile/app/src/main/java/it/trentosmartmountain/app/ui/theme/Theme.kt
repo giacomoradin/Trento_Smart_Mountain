@@ -28,6 +28,9 @@ private val DarkColors = darkColorScheme(
 fun TsmTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = DarkColors,
+        // Identità tipografica TSM: titoli athletic (tracking stretto) +
+        // label telemetria (tracking largo). Vedi Type.kt.
+        typography = TsmTypography,
         content = content,
     )
 }

@@ -33,7 +33,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,8 +56,12 @@ import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.remote.dto.EdgeNodeDto
 import it.trentosmartmountain.app.data.remote.dto.PassageDto
 import it.trentosmartmountain.app.data.remote.dto.RefugeSensorsDto
+import it.trentosmartmountain.app.ui.components.TsmAnimatedCounter
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmRewardBurst
 import it.trentosmartmountain.app.ui.components.tsmNavigationBarPadding
 import it.trentosmartmountain.app.ui.components.tsmStatusBarPadding
+import it.trentosmartmountain.app.ui.components.tsmSweepBorder
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.RefugeDashboardViewModel
 import kotlin.math.abs
@@ -87,6 +95,20 @@ fun RefugeMainScreen(
   ),
 ) {
   val state by dashboardViewModel.state.collectAsStateWithLifecycle()
+
+  // "Wow" rifugio: quando i crediti del giorno SALGONO (un escursionista passa
+  // al checkpoint) → scintille celebrative. Niente burst al primo caricamento.
+  var celebrate by remember { mutableStateOf(false) }
+  var prevCredits by remember { mutableStateOf<Int?>(null) }
+  val creditsToday = state.data?.passages?.totalCreditsToday
+  LaunchedEffect(creditsToday) {
+    val c = creditsToday
+    if (c != null) {
+      val prev = prevCredits
+      if (prev != null && c > prev) celebrate = true
+      prevCredits = c
+    }
+  }
 
   Box(modifier = modifier.fillMaxSize()) {
     // Profondità "telemetria": aurora sottile dietro la dashboard.
@@ -142,6 +164,9 @@ fun RefugeMainScreen(
 
       Spacer(Modifier.height(24.dp))
     }
+
+    // Celebrazione "nuovo passaggio" (sopra la dashboard).
+    TsmRewardBurst(play = celebrate, onFinished = { celebrate = false })
   }
 }
 
@@ -149,27 +174,23 @@ fun RefugeMainScreen(
 
 @Composable
 private fun WasteEntryCard(onClick: () -> Unit) {
-  Surface(
+  TsmGlassCard(
     onClick = onClick,
-    color = CardBg,
-    shape = RoundedCornerShape(14.dp),
-    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
-    modifier = Modifier.fillMaxWidth(),
+    cornerRadius = 14.dp,
+    // CTA "operativa" del rifugio: bordo luce viaggiante per attirare il tap.
+    modifier = Modifier.fillMaxWidth().tsmSweepBorder(cornerRadius = 14.dp),
   ) {
     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-      Surface(
-        modifier = Modifier.size(44.dp),
-        shape = RoundedCornerShape(10.dp),
-        color = Color(0xFF15301B),
+      Box(
+        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(OnlineGreen.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center,
       ) {
-        Box(contentAlignment = Alignment.Center) {
-          Icon(
-            Icons.Outlined.Recycling,
-            contentDescription = null,
-            tint = OnlineGreen,
-            modifier = Modifier.size(26.dp),
-          )
-        }
+        Icon(
+          Icons.Outlined.Recycling,
+          contentDescription = null,
+          tint = OnlineGreen,
+          modifier = Modifier.size(26.dp),
+        )
       }
       Spacer(Modifier.width(12.dp))
       Column(Modifier.weight(1f)) {
@@ -208,10 +229,12 @@ private fun DashboardHeader(
   Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
     Column(modifier = Modifier.weight(1f)) {
       val alt = altitudeM?.let { " · ${"%,d".format(it).replace(",", ".")} M" } ?: ""
+      // Overline in accent (coerente con l'hero header di feed/profilo/sessioni).
       Text(
         "${refugeName.uppercase()}$alt",
-        color = TextSecondary,
+        color = Cyan,
         style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
         letterSpacing = 1.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -323,11 +346,9 @@ private fun SensorCard(
   unit: String,
   sub: String?,
 ) {
-  Surface(
+  TsmGlassCard(
     modifier = modifier.height(150.dp),
-    shape = RoundedCornerShape(14.dp),
-    color = CardBg,
-    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
+    cornerRadius = 14.dp,
   ) {
     Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
       Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -357,11 +378,9 @@ private fun SensorCard(
 
 @Composable
 private fun EdgeNodesSection(nodes: List<EdgeNodeDto>, online: Int, total: Int) {
-  Surface(
+  TsmGlassCard(
     modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(14.dp),
-    color = CardBg,
-    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
+    cornerRadius = 14.dp,
   ) {
     Column(modifier = Modifier.padding(vertical = 6.dp)) {
       Row(
@@ -425,11 +444,9 @@ private fun EdgeNodeRow(node: EdgeNodeDto) {
 
 @Composable
 private fun PassagesSection(totalCredits: Int, items: List<PassageDto>) {
-  Surface(
+  TsmGlassCard(
     modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(14.dp),
-    color = CardBg,
-    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
+    cornerRadius = 14.dp,
   ) {
     Column(modifier = Modifier.padding(vertical = 6.dp)) {
       Row(
@@ -443,10 +460,11 @@ private fun PassagesSection(totalCredits: Int, items: List<PassageDto>) {
           letterSpacing = 1.sp,
           modifier = Modifier.weight(1f),
         )
-        Text(
-          "+${"%,d".format(totalCredits).replace(",", ".")}",
+        // Count-up sui crediti del giorno (dashboard sportiva).
+        TsmAnimatedCounter(
+          target = totalCredits.toFloat(),
+          format = { "+${"%,d".format(it.toInt()).replace(",", ".")}" },
           color = Cyan,
-          fontWeight = FontWeight.Bold,
           style = MaterialTheme.typography.titleMedium,
         )
       }

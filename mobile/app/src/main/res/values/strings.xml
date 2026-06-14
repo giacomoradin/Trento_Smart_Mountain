@@ -20,7 +20,7 @@
   <string name="auth_entry_login_button">ACCEDI</string>
   <string name="auth_entry_tagline">TREKKING · SICUREZZA · MESH</string>
   <string name="auth_entry_description">Escursioni di gruppo tracciate, anche offline. Rete mesh tra i componenti e rifugi connessi.</string>
-  <string name="auth_version">v0.1 · Skeleton</string>
+  <string name="auth_version">v4.2 · R8 test</string>
   <string name="register_title">Registrazione Utente</string>
   <string name="register_subtitle">Crea un account con username, email e password.</string>
   <string name="register_step_label">PASSO 1 DI 3 · ACCOUNT</string>

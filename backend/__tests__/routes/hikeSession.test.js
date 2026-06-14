@@ -98,7 +98,6 @@ describe("HikeSession Checklist Routes", () => {
         .post(`/api/v1/sessions/${session._id}/checklist`)
         .set("Authorization", `Bearer ${token}`)
         .send({});
-        console.log(response.body);
       expect(response.status).toBe(400);
     });
 

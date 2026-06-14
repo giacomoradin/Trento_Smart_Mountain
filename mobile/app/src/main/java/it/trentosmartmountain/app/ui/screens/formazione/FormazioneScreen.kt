@@ -53,6 +53,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.QuizCategoryProgressResponse
+import it.trentosmartmountain.app.ui.components.ListSkeleton
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.FormazioneViewModel
 
 private val DarkSurface = Color(0xFF1C1C1E)
@@ -110,9 +113,7 @@ fun FormazioneScreen(
         },
     ) { padding ->
         when {
-            uiState.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AccentCyan)
-            }
+            uiState.isLoading -> ListSkeleton(modifier = Modifier.fillMaxSize().padding(padding))
             uiState.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(uiState.error ?: "", color = Color.Red)
             }
@@ -162,17 +163,29 @@ fun FormazioneScreen(
 private fun CategoryCard(cat: QuizCategoryProgressResponse, onClick: () -> Unit) {
     val barColor = runCatching { Color(android.graphics.Color.parseColor(cat.category.color)) }.getOrDefault(AccentCyan)
 
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp),
+    val completed = cat.totalQuizzes > 0 && cat.passedByMe >= cat.totalQuizzes
+
+    TsmGlassCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 14.dp,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
+                // Chip-icona nella tinta della categoria: distingue i temi a colpo d'occhio.
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(barColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.School, contentDescription = null, tint = barColor, modifier = Modifier.size(24.dp))
+                }
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(cat.category.name, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(2.dp))
@@ -182,15 +195,18 @@ private fun CategoryCard(cat: QuizCategoryProgressResponse, onClick: () -> Unit)
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Continua →", color = barColor, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
+                if (completed) {
+                    Surface(shape = RoundedCornerShape(8.dp), color = TsmColors.Success.copy(alpha = 0.18f)) {
+                        Text("✓ Completato", color = TsmColors.Success, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TsmColors.TextTertiary)
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             LinearProgressIndicator(
                 progress = { cat.progressPct.toFloat() },
-                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
                 color = barColor,
                 trackColor = Color(0xFF3A3A3C),
             )

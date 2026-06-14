@@ -1,5 +1,6 @@
 package it.trentosmartmountain.app.data.session
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -39,6 +40,7 @@ object SessionStartCoordinator {
     }
 
     /** Resetta il replay buffer dopo che il segnale è stato gestito (chiamato dal VM). */
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun consume() {
         _pendingSessionStart.resetReplayCache()
     }

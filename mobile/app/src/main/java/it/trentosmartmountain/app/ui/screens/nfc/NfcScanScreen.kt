@@ -18,6 +18,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,8 +71,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.graphics.Brush
 import com.google.android.gms.location.LocationServices
 import it.trentosmartmountain.app.data.remote.dto.NfcScanResponse
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmGlow
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
 import it.trentosmartmountain.app.viewmodel.NfcScanUiState
 import it.trentosmartmountain.app.viewmodel.NfcScanViewModel
 
@@ -189,7 +195,10 @@ fun NfcScanScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 14)
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("Scansiona Totem NFC", color = Color.White, fontWeight = FontWeight.Bold) },
@@ -198,10 +207,9 @@ fun NfcScanScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
-        containerColor = DarkSurface,
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
@@ -232,23 +240,26 @@ fun NfcScanScreen(
                     }
                     is NfcScanUiState.Error -> {
                         val err = (state as NfcScanUiState.Error).message
-                        Card(colors = CardDefaults.cardColors(containerColor = CardBackground), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        TsmGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 14.dp, border = AccentRed.copy(alpha = 0.4f)) {
                             Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Errore", color = AccentRed, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(8.dp))
                                 Text(err, color = TextSecondary, textAlign = TextAlign.Center)
                                 Spacer(Modifier.height(16.dp))
-                                Button(
+                                TsmGradientButton(
+                                    text = "Riprova",
                                     onClick = { viewModel.reset() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
-                                    shape = RoundedCornerShape(8.dp),
-                                ) { Text("Riprova", color = Color.White, fontWeight = FontWeight.Bold) }
+                                    modifier = Modifier.fillMaxWidth(),
+                                    fill = Brush.horizontalGradient(listOf(AccentCyan, Color(0xFF0097A7))),
+                                    contentColor = DarkSurface,
+                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
     }
 }
 
@@ -258,11 +269,7 @@ fun NfcScanScreen(
  */
 @Composable
 private fun NfcUnsupportedView(onBack: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    TsmGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 14.dp, border = AccentRed.copy(alpha = 0.4f)) {
         Column(
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -287,11 +294,13 @@ private fun NfcUnsupportedView(onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(4.dp))
-            Button(
+            TsmGradientButton(
+                text = "Torna indietro",
                 onClick = onBack,
-                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
-                shape = RoundedCornerShape(8.dp),
-            ) { Text("Torna indietro", color = Color.White, fontWeight = FontWeight.Bold) }
+                modifier = Modifier.fillMaxWidth(),
+                fill = Brush.horizontalGradient(listOf(AccentCyan, Color(0xFF0097A7))),
+                contentColor = DarkSurface,
+            )
         }
     }
 }
@@ -303,22 +312,21 @@ private fun NfcUnsupportedView(onBack: () -> Unit) {
  */
 @Composable
 private fun NfcDisabledView(onOpenSettings: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    TsmGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 14.dp, border = AccentCyan.copy(alpha = 0.4f)) {
         Column(
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(
-                Icons.Default.Nfc,
-                contentDescription = null,
-                tint = AccentRed,
-                modifier = Modifier.size(72.dp),
-            )
+            Box(contentAlignment = Alignment.Center) {
+                TsmGlow(color = AccentCyan, modifier = Modifier.size(130.dp), alpha = 0.3f)
+                Icon(
+                    Icons.Default.Nfc,
+                    contentDescription = null,
+                    tint = AccentCyan,
+                    modifier = Modifier.size(72.dp),
+                )
+            }
             Text(
                 "NFC disattivato",
                 color = Color.White,
@@ -332,11 +340,13 @@ private fun NfcDisabledView(onOpenSettings: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(4.dp))
-            Button(
+            TsmGradientButton(
+                text = "Apri impostazioni NFC",
                 onClick = onOpenSettings,
-                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
-                shape = RoundedCornerShape(8.dp),
-            ) { Text("Apri impostazioni NFC", color = Color.White, fontWeight = FontWeight.Bold) }
+                modifier = Modifier.fillMaxWidth(),
+                fill = Brush.horizontalGradient(listOf(AccentCyan, Color(0xFF0097A7))),
+                contentColor = DarkSurface,
+            )
         }
     }
 }
@@ -351,14 +361,18 @@ private fun WaitingAnimation() {
     )
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .size(140.dp)
-                .scale(scale)
-                .border(3.dp, AccentCyan, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.Nfc, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(72.dp))
+        Box(contentAlignment = Alignment.Center) {
+            // Glow morbido "campo NFC" dietro l'anello pulsante.
+            TsmGlow(color = AccentCyan, modifier = Modifier.size(190.dp), alpha = 0.30f)
+            Box(
+                modifier = Modifier
+                    .size(140.dp)
+                    .scale(scale)
+                    .border(3.dp, AccentCyan, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.Nfc, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(72.dp))
+            }
         }
         Spacer(Modifier.height(24.dp))
         Text("Avvicina al Totem NFC", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)

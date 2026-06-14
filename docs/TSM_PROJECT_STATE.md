@@ -2,7 +2,108 @@
 
 ## 🩹 Sprint 3 — 12 giugno 2026 (round bug fix dal field testing: zoom, autopause, storie live, sync partecipanti, navigazione, area rifugista)
 
-> Backend **330/330 test verdi** (22 suite, +5 nuovi); mobile **`compileDebugKotlin` BUILD SUCCESSFUL**. Branch `UI`, lavoro locale (no push).
+> Backend **330/330 test verdi** (22 suite, +5 nuovi); mobile **`compileDebugKotlin` BUILD SUCCESSFUL**. Branch `UI`, lavoro locale (no push). Fingerprint build visibile in welcome: **`v2.5 · Sync`**.
+
+**Regressione "attività non sincronizzata" + "Errore imprevisto sui percorsi suggeriti" — causa radice: R8/minify senza keep-rule (build release):** durante il pass prestazioni era stato attivato `isMinifyEnabled = true` + `isShrinkResources = true` in `app/build.gradle.kts`, ma `proguard-rules.pro` teneva solo OkHttp. R8 **offusca i nomi dei campi** dei DTO Gson **privi di `@SerializedName`** → in release:
+> - `CreateActivityRequest`/`ActualStats`/`RoutePoint` serializzati con nomi `a/b/c…` → backend `422` → **attività mai sincronizzata** (né auto né con "Sincronizza", perché ogni retry rifà la stessa POST corrotta);
+> - `SentieroListItemDto`/wrapper sentieri non parsati → null → **"Errore imprevisto"** nel picker percorsi.
+> Login/feed restavano OK perché i loro DTO **hanno** `@SerializedName`. **Fix**: `isMinifyEnabled`/`isShrinkResources` riportati a `false` (stato noto-buono; l'utente non aveva richiesto la minificazione) **e** `proguard-rules.pro` ora contiene keep-rule complete (package `data.remote.dto.**`, Retrofit, Gson, `@SerializedName`) così R8 è riattivabile in sicurezza. Diagnostica aggiunta: `SyncManager` logga ora l'`errorBody()` sul fallimento upload; il ViewModel del picker logga la classe d'eccezione (tag `RoutePicker`).
+
+**Picker "Percorsi suggeriti" — redesign LIST-FIRST (era "grezzo", mappa con tutti i pin):**
+> Riscritto `SessionRoutePickerDialog` con la **lista come protagonista**. La mappa **NON** compare più negli step di navigazione (era il "muro di pin" confuso): appare **solo sul dettaglio** del sentiero scelto, dove mostra la traccia reale (polyline + start/end). La lista non è mai limitata (tutte le destinazioni/sentieri, scrollabili).
+> - **Step 1 destinazioni**: ricerca ("rifugio, malga, cima…") + filtri collassabili (difficoltà/dislivello/distanza/tempo) + LazyColumn di **glass card** (`TsmGlassCard`, press-scale) con icona-luogo accent, quota e conteggio sentieri.
+> - **Step 2 sentieri**: glass card con **badge difficoltà colorato** (CAI T/E/EE/EEA via `difficultyColor`), distanza/tempo/partenza.
+> - **Step 3 dettaglio**: mappa traccia (240 dp) + griglia `InfoChip` (difficoltà/distanza/dislivello/tempi/quota) + CTA premium `TsmGradientButton` "Usa questo tracciato".
+> - Header con sottotitolo-conteggio; stati `LoadingBox`/`EmptyBox`/`ErrorRow` chiari; log con tag `RoutePicker`.
+
+**Pass grafico schermata-per-schermata (`v2.6 · Glass`):** unificazione progressiva delle schermate secondarie ai materiali del design system (eliminate le card flat `Color(0xFF2C2C2E)` "grezze"):
+> - **Profilo**: tutte le voci ora su `TsmGlassCard` (gradiente+hairline+press-scale) con **icon-chip** accent coerenti al posto degli emoji-in-box; logout come glass card "danger".
+> - **Formazione**: category card glass con chip-icona nella tinta della categoria + badge "✓ Completato".
+> - **Quiz**: domanda su glass, opzioni con stato selezionato evidente (bordo/sfondo/lettera accent), CTA `TsmGradientButton` verde.
+> - **Esito quiz**: glow dietro il ring punteggio, stat card glass.
+> - **Bacheca (Badge)**: aurora di sfondo, stat/badge/certificati su glass; emoji incorniciato in disco tinto del tier; certificato con bordo oro + shimmer.
+> - **Sfide**: aurora + card glass con chip-stato tinto; **ChallengeDetail** (header/classifica/invito su glass) e **CreateChallenge** (aurora + CTA gradiente) elevati.
+> - **Account**: aurora, voci profilo/sicurezza su glass con icon-chip, "Elimina account" glass-danger, CTA `TsmGradientButton`; **Cambia password** e **Elimina account** con CTA gradiente; warning-card glass-danger.
+> - **Onboarding** (3 step via `OnboardingStepScaffold`): aurora di sfondo + CTA "Salva e continua" a gradiente.
+> - **Esito NFC**: glow dietro l'icona-esito, card crediti glass, CTA gradiente nel colore dell'esito.
+> - **Attività personali** (tab Personale): yearly stats card, grafico mensile e righe attività su `TsmGlassCard`; icona attività in chip accent.
+> - **Auth/registrazione**: Register, RegisterRifugio, ForgotPassword (glow su "inviato"), EmailVerificationPending (hero mail + glow), NfcScan (aurora, glow "campo NFC" dietro l'anello, card stato glass) — tutti con sfondo aurora e CTA `TsmGradientButton`.
+> Sessione (hub/detail) era già su materiali glass dalla fase C7. **Pass schermata-per-schermata completato** (`v2.7 · Glass`); restano solo rifiniture puntuali se richieste.
+
+**Intensificazione centralizzata del design system (`v2.8 · Depth`):** un'unica modifica ai componenti-radice che si propaga a TUTTA l'app (nessun ritocco schermata-per-schermata):
+> - **`TsmGlassCard`**: ora ha **ombra reale** (elevazione 10 dp a riposo → 2 dp al press, animata), **sheen** superiore (riflesso di luce sul bordo alto) e **bordo più luminoso** (alpha 0.06→0.10 a riposo, 0.22→0.32 al press). Le card "staccano" dallo sfondo invece di galleggiare piatte.
+> - **`TsmGradientButton`**: ombra animata (galleggia, 10 dp→2 dp al press), **gloss** sulla metà superiore, bordo 0.18→0.28 → CTA più materiche.
+> - **`TsmGlow`**: gradiente radiale con mid-stop → alone più **pieno** e presente (stessi call-site).
+> - **`TsmAuroraBackground`**: alpha blob più decise (0.42/0.30/0.22 → 0.52/0.38/0.30) e particelle più vive (0.18→0.24) → più profondità dietro il vetro.
+> - **Feed card** allineata (elevazione 10 dp + sheen) per coerenza con la massima superficie visibile.
+
+**Effetti "WOW" / extreme premium (`v2.9 · WOW`)** — nuovi componenti riusabili in `ui/components/TsmEffects.kt`:
+> - **`TsmRewardBurst`**: esplosione one-shot di coriandoli/scintille nei colori brand (ventaglio dal centro-alto, rotazione + gravità, dissolvenza, ~1,3 s, una sola `Animatable`). Cablata nei momenti-premio: **quiz superato** (`QuizResultScreen`) e **checkpoint NFC riuscito** (`NfcResultScreen`).
+> - **`Modifier.tsmSweepBorder`**: banda di luce che **scorre lungo il bordo** (gradiente diagonale traslante, fase quantizzata ~12/s) per gli elementi-hero. Applicata alla **card SOCIAL CREDITS** del profilo (effetto "vetro vivo").
+> Entrambi pensati per essere performanti (no full frame-rate sui loop, burst attivo solo durante la celebrazione) e riutilizzabili su altri traguardi futuri.
+
+**Estensioni "wow" (`v3.0 · WOW+`):**
+> - **`TsmRewardBurst`** ora anche a **fine attività salvata** (`RegistraScreen`, trigger su `activitySaved` del VM, consumato e resettato) e all'apertura della **Bacheca** (`BadgesScreen`, una sola volta a sessione se l'utente ha già badge/certificati).
+> - **`Modifier.tsmSweepBorder`** anche sulla **CTA "Accedi"** della welcome (primo impatto) e sui **certificati** (bordo oro che scorre, in aggiunta allo shimmer).
+> - **Count-up animato** (`TsmAnimatedCounter`) su **SOCIAL CREDITS** e KPI (uscite/km/dislivello) del profilo: i numeri salgono da 0 all'apertura.
+
+**Area rifugio allineata al sistema (`v3.2 · Refuge`):** la **Dashboard IoT** (`RefugeMainScreen`) passa dalle flat `Surface(DashboardCard)` a **`TsmGlassCard`** (sensori, edge-node, passaggi, entry Rifiuti) → eredita ombra+sheen+bordo luminoso e il fix particelle dell'aurora; count-up sui **crediti del giorno** + icon-chip accent sull'entry Rifiuti. `RefugeProfileScreen` e `WasteSimulatorScreen` usavano già `TsmGlassCard`/`TsmGradientButton` → ereditano automaticamente l'intensificazione (profondità, CTA più materiche). Area rifugio ora coerente al 100% con l'area escursionista.
+> **Wow rifugio:** bordo "luce viaggiante" (`tsmSweepBorder`) sulla card-CTA **Rifiuti & Logistica**; **`TsmRewardBurst`** quando i **crediti del giorno salgono** (un escursionista passa al checkpoint → scintille), con guardia anti-trigger al primo caricamento.
+
+**Tier A — rifinitura verso la release (`v3.3 · Polish`):**
+> - **Skeleton loaders unificati**: `ListSkeleton` (shimmer) sostituisce lo spinner nudo su Badge/Sfide/Formazione; le liste social (notifiche/ricerca/follow) e il feed già lo usavano → caricamenti coerenti in tutta l'app.
+> - **Splash Android 12+**: nuovo `values-v31/themes.xml` con `windowSplashScreenBackground = tsm_icon_bg` → il cold-start su device moderni mostra l'icona adattiva TSM sullo sfondo brand (prima il sistema ignorava `windowBackground`).
+> - **R8/minify**: lasciato OFF per la demo (scelta di sicurezza dopo la regressione Gson); le keep-rule in `proguard-rules.pro` sono complete e pronte → riattivabile post-test on-device.
+> - Restano opzionali (manutenibilità, bassa visibilità): audit colori hardcoded→`TsmColors`, i18n delle stringhe nuove, versioning store reale.
+
+**Tier C/E/F — motion & accessibilità (`v3.4 · Motion`):**
+> - **Reduce-motion centralizzato** (E): nuovo `rememberReduceMotion()` (legge `ANIMATOR_DURATION_SCALE==0`); tutti gli effetti decorativi — aurora (blob+particelle), `tsmSweepBorder`, `TsmRewardBurst`, `TsmPulseGlow`, `tsmShimmer` — diventano statici quando l'utente ha "Rimuovi animazioni" attivo. Una sola sorgente, propaga ovunque.
+> - **Reveal d'ingresso liste** (C): `Modifier.tsmEnterReveal()` (fade + slide-up al primo ingresso in composizione, reduce-motion aware) applicato alle card del feed → la lista "prende vita" allo scroll/apertura.
+> - **Splash v31** + **icona monochrome** (F) già a posto; R8 OFF per sicurezza (keep-rule pronte).
+> Restano per i prossimi giri: `contentDescription` per TalkBack.
+
+**Hero header coerente su tutte le tab (`v4.0 · Hero everywhere`):** nuovo componente riusabile `TsmHeroHeader` (overline accent + titolo grande + slot azioni) + `TsmHeroActionChip` (chip glass circolare con badge) in `ui/components/TsmHeroHeader.kt`. Applicato alle schermate top-level:
+> - **Feed** (header scrollabile, già fatto); **Profilo** ("TRENTO SMART MOUNTAIN" / "Profilo" + chip Vedi-profilo/Impostazioni); **Sessioni** (hero in cima alla colonna scrollabile); **Dashboard rifugio** (overline nome-rifugio ora in accent, già con titolo grande); **Personale** (overline "LE MIE ATTIVITÀ" ora in accent).
+> Tutti gli hero stanno in cima a contenuto scrollabile → **scorrono via** scrollando giù (niente header fissi). Le schermate di **dettaglio** (Formazione, Badge, Sfide, Account, NFC…) mantengono la `TopAppBar` con back — è la UX corretta per la sotto-navigazione, non un'incoerenza.
+
+**Ottimizzazione finale pre-release — build a zero warning (`v4.2 · Optimize`):**
+> Pulizia mirata guidata dai warning di un clean-compile (non alla cieca). Backend **330/330 test verdi (22 suite)**; mobile `compileDebugKotlin` **e** `assembleRelease` **BUILD SUCCESSFUL, 0 warning**.
+> - **Icone RTL-correct** (`AutoMirrored`): `DirectionsWalk` (ActivityList), `DirectionsRun` (Registra), `Send` (StoryComposer) migrate da `Icons.Outlined/Filled.*` deprecate a `Icons.AutoMirrored.*` → si specchiano correttamente in lingue right-to-left.
+> - **`LocalLifecycleOwner`**: import spostato da `androidx.compose.ui.platform` (deprecato) a `androidx.lifecycle.compose` (SessionDetail, SessionHub).
+> - **`@OptIn(ExperimentalCoroutinesApi)`** esplicito dove serviva (`resetReplayCache` nei 3 bus singleton NfcTagBus/SessionStart/SessionStop; `flatMapLatest` in ProfileViewModel) → niente più warning opt-in.
+> - **`menuAnchor()`** (SosDialogs): overload deprecato → `menuAnchor(MenuAnchorType.PrimaryNotEditable)`.
+> - **`getParcelableExtra`** (NfcUtils): ora con branch API-33 (`getParcelableExtra(name, Tag::class.java)` su Tiramisu+, vecchio overload `@Suppress`-ato sotto) → robusto e senza deprecazione.
+> - **Condizioni ridondanti rimosse** ("always true"): `routePoints != null` già implicato da `showMap` (TsmRouteElevationPager); `decor == null` ridondante nel ramo `when` (StoryViewer). Più un **import morto** rimosso (Registra).
+> - **`androidx.security:security-crypto`** (TokenStorage): libreria deprecata da Google **senza sostituto drop-in** → `@file:Suppress("DEPRECATION")` con commento esplicativo; la migrazione (Tink/DataStore) resta **debito tecnico post-release** (funzionalità intatta, token cifrati a riposo).
+> - **R8/minify**: **RIATTIVATO** (`isMinifyEnabled`/`isShrinkResources = true`) per il test on-device pre-release — APK release scende a ~6.3 MB, `:app:minifyReleaseWithR8` senza "Missing class". Le keep-rule coprono l'intero `data.remote.dto.**` (incl. EmergencyDto + adapter Gson). Release firmata con **debug keystore** (`signingConfig = signingConfigs.debug`) per installabilità ⚠️ da sostituire con upload-key reale prima della pubblicazione. **Da validare on-device** (sync attività + picker percorsi + scan SOS): se un flusso fallisce in release ma non in debug → keep-rule mancante, rimettere OFF o aggiungere la regola.
+> - **Security review** (`/security-review`, backend + mobile, focus feature SOS/Emergency): **nessuna vulnerabilità ad alta confidenza**. Verificati senza falle: IDOR/authorization su `emergencyService` (un partecipante non-leader/non-mittente vede un SOS solo se `SHARED_WITH_GROUP`; il `profileSnapshot` medico è ricostruito server-side, non fidato dal client), NoSQL injection (mongoSanitize globale + Joi tipizzato), parsing BLE non fidato (length-guard, Kotlin memory-safe), decode base64 avatar (nessun path costruito dal data-URI), componenti Android esportati (`SosBeaconService`/FileProvider `exported=false`).
+> - **Hardening backend** (unico intervento concreto emerso): nuova `emergencyCoordinatesSchema` dedicata in `validationMiddleware.js` — per il SOS le coordinate sono `type:"Point"` + `[lon, lat]` obbligatorie e nei range reali (prima il `geoPointSchema` condiviso/lasco lasciava passare `coordinates: {}` → potenziale `ValidationError` 500 dal model; ora 422 pulito alla validazione). Sessione `startPoint`/`endPoint` invariati.
+
+**Test backend enterprise-grade + bug trovato (`351/351`, 22 suite):** `emergency.test.js` era l'outlier (1 sola assert di error-path vs 5-17 delle suite pari): aggiunti **+21 test** di authN (401), authZ per ruolo, **IDOR** (un partecipante non-mittente/non-leader non legge un SOS `ACTIVE` non condiviso; lo vede solo dopo `share_with_group`), macchina a stati (già-chiuso→409, transizioni invalide→409, `ack`→`hasUnacked` false) e validazione (coordinate malformate/out-of-range→422, lock-in dell'hardening sopra). Il giro ha **scovato un bug reale**: `emergencyService.getEmergencyById` chiamava `assertCanViewEmergency` con `senderUserId` **già popolato**, quindi `senderUserId.toString()` (documento User) non eguagliava mai l'hex dell'utente → **il mittente riceveva 403 leggendo il proprio SOS** (incoerente con la lista, che invece glielo mostra). Fix: normalizzazione `(senderUserId?._id || senderUserId).toString()` come nel resto del codice. Inoltre, sostituite in `weather.test.js` 2 assert deboli che accettavano `5xx` come successo (mascheravano regressioni) con assert onesti sulla barriera 401/403; rimosso un `console.log` di debug residuo in `hikeSession.test.js`.
+
+**Coverage + CI (verso il 100%, iterativo):**
+> - **Coverage era ROTTA (riportava 0%)**: con ESM nativo (`transform: {}`) il provider di default `babel` non instrumenta nulla. Fix in `jest.config.js`: `coverageProvider: 'v8'` → ora misura davvero. Baseline reale emersa: **84% stmts / 64% branch**.
+> - **Gate di copertura** in `jest.config.js` (`coverageThreshold`): `npm test` (e quindi la CI) fallisce se la copertura scende. **Ratchet progressivo** man mano che si aggiungono test — attuale **88/67/84/88** (stmts/branch/funcs/lines), poco sotto i valori reali.
+> - **CI già esistente e solida** (`.github/workflows/ci.yml`: job backend `npm ci`→`npm test`→`npm audit`, job mobile `testDebugUnitTest`+lint). Aggiunto l'**upload del report di coverage** come artefatto.
+> - **Moduli portati a 100%** (statement+branch+funcs+lines): `KMLparser.js` (0→100, parser puro), `refugeService.js` (18→100, handler con mock email + spyOn per i rami 500), `authService.js` (46→100, verify/login/refresh/logout/forgot/reset con mock email+refreshTokenService), `emailService.js` (44→100, path Brevo reale via mock di `global.fetch` + override `NODE_ENV`).
+> - **Stato suite**: **431 test / 26 suite verdi**, coverage globale **~89% stmts / 67.6% branch / 84.6% funcs**.
+> - **Nota tecnica ESM**: per usare `jest.fn/spyOn/unstable_mockModule` nei test serve `import { jest } from "@jest/globals"` (in ESM non è globale); per i moduli con cache a livello-modulo (es. `weatherService._venuesCache`) serve `jest.resetModules()` + re-import dinamico per testare cache-miss/hit in modo isolato.
+> - **Rimanente per il 100% letterale** (multi-sessione): `weatherService` (cache+fetch+DB), `quizService`/`checklistService`/`notificationService`/`socialService`/`storyService` e i rami `catch→500` di vari handler; route `creditsRoutes`/`nfcRoutes`/`badgeRoutes`/`quizRoutes`; rami di `hikeSessionService`/`hikeSessionRoutes`; `middleware` (rateLimit/security/error), `app.js`, modelli `hikeSession`/`sentiero`.
+
+**Giro di polish + dedup (`v4.1 · Polish`):**
+> - **Reveal d'ingresso esteso per coerenza**: `Modifier.tsmEnterReveal()` (fade + slide-up, reduce-motion aware) ora anche sulle voci di **Attività personali** (`ActivityListScreen`), **Badge + Certificati** (`BadgesScreen`) e **Sfide** (`ChallengesScreen`) — prima era solo il feed. Tutte le liste principali "prendono vita" allo scroll/apertura con lo stesso linguaggio di movimento.
+> - **Dedup componente**: il chip d'azione privato `HeaderActionChip` del feed è stato rimosso; `FeedHeader` usa ora il `TsmHeroActionChip` condiviso (`ui/components/TsmHeroHeader.kt`) → un'unica sorgente per i chip glass circolari, niente duplicazione.
+> - Build verde: `compileDebugKotlin` **e** `assembleRelease` **BUILD SUCCESSFUL**.
+
+**Redesign hero Home/Feed (`v3.8 · Hero feed`):** la riga piatta in cima al feed è ora un vero **hero** — overline brand "TRENTO SMART MOUNTAIN" + titolo grande "Community", azioni classifica/notifiche come **chip glass circolari** accent (badge non lette), e barra di ricerca su `TsmGlassCard` (prima un `Surface` grigio hardcoded). È la prima cosa visibile aprendo l'app → cambiamento inequivocabile (a differenza dei pass di micro-polish precedenti, percepiti poco dall'utente).
+
+**Tier D — mappa scura: TENTATA e RIPRISTINATA (`v3.7`).** Il filtro "notte soft" sui tile OpenTopoMap è stato giudicato brutto dall'utente e **rimosso**: la mappa è tornata al basemap topografico originale (chiaro) su tutte le 4 superfici. Lezione: scurire un topografico chiaro non funziona esteticamente; una mappa "premium scura" vera richiederebbe un tile-source dark dedicato (Carto/Stadia, con API key/policy) — fuori scope per la release.
+
+**Tier B — stati & feedback (`v3.5 · Feedback`):** nuovi componenti riusabili in `ui/components/TsmDialogs.kt`:
+> - **`TsmAlertDialog`** glass (card + icon-chip + CTA gradiente, `destructive`=rosso): migrati i confirm puliti — FeedCard "Rimuovi dal feed", PostDetail, Profilo "rimuovi avatar", Elimina account, Elimina attività. Restano custom (per scelta) i dialog ricchi (salva-attività con KPI+nome, ShareActivityDialog con caption) e i dialog SOS (UI di sicurezza).
+> - **`TsmSnackbar`** brandizzata (glass) applicata via slot `snackbar` ai `SnackbarHost` esistenti (AccountEdit, CambiaPassword, ChallengeDetail, CreateChallenge). I `Toast` di sistema (share/sync) restano funzionali — migrazione a snackbar opzionale, più invasiva.
+
+**Tab Registra — micro-interazioni sui comandi (pausa/stop/partecipanti/SOS):** `GlassFab` (condiviso dai 4 controlli) ora ha **press-scale 0.92** + bordo più definito al tocco. Effetto **contenuto**: scala ≤ 1 e nessun glow/alone esterno → la silhouette del pulsante **non si allarga mai** (vincolo esplicito utente). Il FAB REC (`RegistraGlowFab`) mantiene il suo glow pulsante intenzionale.
 
 **Zoom mappa — causa radice DEFINITIVA (terza segnalazione):** `isTilesScaledToDpi = false` su tutte le MapView: su display ~450 dpi le tile 256 px erano renderizzate 1:1, quindi **anche al massimo zoom la mappa appariva "lontana" e illeggibile**. Ora `true` ovunque (`TsmMapView`, `TsmSentieriMapView`, `TsmRouteMapPreview`, `StoryMapSnapshotter`): resa ~2,8× più vicina a parità di livello, oltre ai fix precedenti su auto-fit (`routeKey`/`contentKey`).
 
@@ -30,6 +131,27 @@
 - **Foto della struttura**: nuovo `Refuge.avatarUrl` + `PATCH /api/v1/refuge/profile` (Joi `refugeProfileUpdateSchema`, stesso formato/limiti dell'avatar hiker, `""` per rimuovere; update via modello discriminator `Refuge`, mai `User.findByIdAndUpdate`). Mobile: picker + compressione (pipeline `AvatarUtils`), avatar nella scheda profilo e nell'header dashboard; esposto in `GET /refuge/dashboard`.
 - **Impostazioni**: sezione con "Cambia password" (endpoint `change-password` role-agnostic) accanto a bacheca e logout.
 - Il refactor profondo di design dell'area rifugista (S3-14) resta pianificato come task dedicato.
+
+**Login dopo switch account — loop "credenziali non valide" / "serve cancellare la cache":**
+- In `cacheDir` non c'è nulla che influenzi il login (niente HTTP cache; token in EncryptedSharedPreferences): il "fix" del cancella-cache era il TEMPO trascorso + la ridigitazione manuale. Cause reali, tutte corrette:
+  1. **`/auth/refresh` condivideva l'ISTANZA di `loginLimiter`** → contatore per-IP unico: refresh falliti (token stantio dopo switch account, retry dell'Authenticator) esaurivano i 10 tentativi e bloccavano anche login CORRETTI per 15 min. Ora `refreshLimiter` dedicato (max 60 failed/15 min).
+  2. **Autofill stantio**: dopo il login rifugio il campo password (mascherato) poteva conservare la password dell'account precedente → 401 reali in loop. Ora su 401 il client **azzera la password** e chiede il re-inserimento manuale.
+  3. **429 illeggibile**: il body del limiter (`{error, retryAfter}`) non veniva parsato → "Accesso non riuscito (429)". Ora `ApiMessageBody` parse `error`+`retryAfter` e il client mostra "Troppi tentativi: attendi ~X min".
+  4. **Logout senza revoca server-side**: `ProfileViewModel.logout` non chiamava `POST /auth/logout` → il refresh token restava valido 30 giorni. Ora revoca best-effort prima del clear locale.
+
+**Login — chiusura diagnosi (probe sul backend deployato `xz7u`):** il server risponde 200 al login demo anche con casing diverso (collation fix DEPLOYATO) e l'account personale ESISTE sul DB (`GiacomoRadin`, verificato via `GET /users/search` con token demo) → i 401 osservati nel logcat sono **password mismatch reali**. Causa abilitante trovata nel client: i campi password di **Login/Registrazione hiker/Registrazione rifugio** non avevano `KeyboardType.Password` → autocorrect/suggerimenti attivi su campo mascherato potevano alterare la password digitata (anche alla REGISTRAZIONE → password salvata già "corrotta", accessi successivi solo via autofill). Fix: `KeyboardOptions(Password, autoCorrectEnabled=false)` su tutti i campi password + `KeyboardType.Email/capitalization None` sull'identificativo login. Recovery utente: reset password via "Password dimenticata".
+
+**Pass grafico premium (S3-14 + WOW):** applicato il design system glass (TsmGlassCard/TsmGradientButton/TsmAccentRule/TsmGlow/shimmer) dove mancava:
+- **Login**: form in glass card + CTA a gradiente con stato loading integrato.
+- **Welcome (AuthEntry)**: CTA "Accedi" a gradiente con `TsmPulseGlow` dietro.
+- **Simulatore Rifiuti**: restyle completo — sezioni con header iconati + accent rule (PARAMETRI/PRODUZIONE/COSTI), tastiera numerica sui campi, switch tinto, KPI colorati (massa/volume/riduzione), compliance come chip verdi/ambra, **vettore consigliato evidenziato in oro con stella + shimmer**.
+- **Profilo rifugista**: aurora di sfondo, card identità e righe impostazioni in glass, glow ciano dietro la foto della struttura.
+
+**Pass "oltre" — upgrade del SISTEMA grafico (non delle singole schermate):**
+1. **Identità tipografica** (`Type.kt`, nuova): titoli athletic (ExtraBold, tracking negativo) + label "telemetria" (tracking +0.8sp), collegata a `TsmTheme` → ogni `MaterialTheme.typography.*` dell'app la eredita. Più `TsmType.Numeric`: **cifre monospace** per tutti i KPI (cronometro/metriche live Registra, contatori animati, stat feed/post/dettaglio, KPI waste) — larghezza fissa, i numeri non "ballano" in tempo reale, taglio strumento-di-misura.
+2. **Transizioni di navigazione condivise** (`TsmNavHost`): push = slide+fade dal bordo destro, pop speculare, schermata sotto in leggera scala (parallasse di profondità), easing `TsmMotion`. Un solo punto di definizione → tutte le destination animano coerenti (prima: crossfade secco).
+3. **Micro-interazioni sul materiale** (`TsmGlass.kt`): le glass card cliccabili e le CTA a gradiente si comprimono al tocco (spring 0.96-0.97) col bordo che si accende — ogni superficie interattiva dell'app risponde fisicamente al dito.
+4. **Bottom bar**: hairline luminosa a gradiente sopra la barra (separazione "il contenuto scorre sotto").
 
 **Test nuovi:** copia personale di sessione (idempotenza, share 200, esclusione stats), foto rifugio (set/clear/422 data URI non-image/403 hiker). Suite completa: 330/330.
 

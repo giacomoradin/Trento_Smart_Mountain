@@ -84,7 +84,11 @@ private fun MetricColumn(
     )
     Text(
       text = value,
-      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+      // Mono "telemetria": cronometro e metriche live a larghezza fissa — le
+      // cifre non ballano a ogni tick, feel strumento di misura.
+      style = MaterialTheme.typography.titleSmall
+        .copy(fontWeight = FontWeight.Bold)
+        .merge(it.trentosmartmountain.app.ui.theme.TsmType.Numeric),
       color = if (highlight) TsmColors.Primary else Color.White,
     )
   }

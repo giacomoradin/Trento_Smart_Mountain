@@ -38,15 +38,31 @@ class AuthRepositoryImpl(
         }
       } else {
         val raw = response.errorBody()?.string()
-        val parsed =
+        val body =
           raw?.let {
-            runCatching { gson.fromJson(it, ApiMessageBody::class.java).message }.getOrNull()
+            runCatching { gson.fromJson(it, ApiMessageBody::class.java) }.getOrNull()
           }
+        val parsed = body?.message ?: body?.error
         when (response.code()) {
           403 ->
             LoginResult.EmailNotVerified(
               parsed ?: "Verifica l’email ricevuta dopo la registrazione, poi riprova ad accedere.",
             )
+          401 ->
+            LoginResult.Failure(
+              parsed ?: "Credenziali non valide.",
+              invalidCredentials = true,
+            )
+          // Rate limiter (10 tentativi falliti / 15 min): senza un messaggio
+          // chiaro l'utente continuava a riprovare con credenziali GIUSTE
+          // ricevendo errori, convinto di un problema di account/cache.
+          429 -> {
+            val waitMin = ((body?.retryAfter ?: 900) + 59) / 60
+            LoginResult.Failure(
+              "Troppi tentativi di accesso falliti. Per sicurezza l'accesso è " +
+                "sospeso: attendi ~$waitMin min e riprova con le credenziali corrette.",
+            )
+          }
           else -> LoginResult.Failure(parsed ?: "Accesso non riuscito (${response.code()}).")
         }
       }

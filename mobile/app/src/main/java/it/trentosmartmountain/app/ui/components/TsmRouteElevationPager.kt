@@ -106,7 +106,7 @@ fun TsmRouteElevationPager(
             ) { pageIdx ->
                 val showMap = hasRoute && pageIdx == 0
 
-                if (showMap && routePoints != null) {
+                if (showMap) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         TsmRouteMapPreview(
                             points = routePoints,

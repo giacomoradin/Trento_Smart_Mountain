@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!--
+    Android 12+ (API 31): il sistema mostra lo SplashScreen di piattaforma al
+    cold-start, IGNORANDO `android:windowBackground`. Senza questo override il
+    cold-start su device moderni usava lo sfondo/colore di default.
+    Qui lo brandizziamo: icona launcher TSM (adattiva) centrata sullo stesso
+    sfondo scuro dell'icona (`tsm_icon_bg`) → handoff pulito verso lo splash
+    animato in-Compose. Nessuna dipendenza aggiuntiva (solo attributi di piattaforma).
+  -->
+  <style name="Theme.TrentoSmartMountain" parent="android:Theme.Material.NoActionBar">
+    <item name="android:windowBackground">@drawable/splash_background</item>
+    <item name="android:statusBarColor">@android:color/transparent</item>
+    <item name="android:navigationBarColor">@android:color/transparent</item>
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:windowSplashScreenBackground">@color/tsm_icon_bg</item>
+  </style>
+</resources>

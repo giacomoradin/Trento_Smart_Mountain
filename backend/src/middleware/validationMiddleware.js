@@ -632,10 +632,25 @@ const profileSnapshotSchema = Joi.object({
   }),
 });
 
+// Per un SOS la posizione è critica: a differenza di startPoint/endPoint di sessione
+// (geoPointSchema lasco), qui vincoliamo type + entrambe le coordinate come obbligatorie,
+// nell'ordine GeoJSON [lon, lat] e nei range geografici reali. Così un payload malformato
+// (es. coordinates: {} o [] o valori fuori scala) viene respinto con 422 alla validazione,
+// invece di propagarsi al model e produrre un ValidationError 500.
+const emergencyCoordinatesSchema = Joi.object({
+  type: Joi.string().valid("Point").required(),
+  coordinates: Joi.array()
+    .ordered(
+      Joi.number().min(-180).max(180).required(), // longitudine
+      Joi.number().min(-90).max(90).required(), // latitudine
+    )
+    .required(),
+});
+
 export const createEmergencySchema = Joi.object({
   sessionId: objectIdField.required(),
   emergencyType: emergencyTypeField.required(),
-  coordinates: geoPointSchema.required(),
+  coordinates: emergencyCoordinatesSchema.required(),
   beaconInstanceId: Joi.string()
     .pattern(/^[0-9a-fA-F]{12}$/)
     .required(),

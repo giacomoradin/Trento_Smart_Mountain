@@ -27,11 +27,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.ManageAccounts
+import androidx.compose.material.icons.outlined.Nfc
+import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -69,8 +76,15 @@ import it.trentosmartmountain.app.data.preferences.PreferencesHolder
 import it.trentosmartmountain.app.data.preferences.UnitsFormatter
 import it.trentosmartmountain.app.data.remote.dto.WeeklyGoals
 import it.trentosmartmountain.app.data.remote.dto.WeeklyStatsResponse
+import androidx.compose.ui.graphics.vector.ImageVector
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmAnimatedCounter
 import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmHeroActionChip
+import it.trentosmartmountain.app.ui.components.TsmHeroHeader
+import it.trentosmartmountain.app.ui.components.tsmSweepBorder
+import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
 import it.trentosmartmountain.app.ui.util.AvatarUtils
 import it.trentosmartmountain.app.viewmodel.ProfileV2ViewModel
@@ -193,26 +207,16 @@ fun ProfileScreen(
     }
 
     if (showRemoveAvatarDialog) {
-        AlertDialog(
-            onDismissRequest = { showRemoveAvatarDialog = false },
-            title = { Text("Rimuovere la foto profilo?") },
-            text = {
-                Text(
-                    "L'avatar tornerà a essere visualizzato con le iniziali del tuo username.",
-                )
+        it.trentosmartmountain.app.ui.components.TsmAlertDialog(
+            onDismiss = { showRemoveAvatarDialog = false },
+            title = "Rimuovere la foto profilo?",
+            text = "L'avatar tornerà a essere visualizzato con le iniziali del tuo username.",
+            confirmLabel = "Rimuovi",
+            destructive = true,
+            onConfirm = {
+                showRemoveAvatarDialog = false
+                profileV2ViewModel.removeAvatar()
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    showRemoveAvatarDialog = false
-                    profileV2ViewModel.removeAvatar()
-                }) { Text("Rimuovi", color = Color(0xFFFF6B6B)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRemoveAvatarDialog = false }) { Text("Annulla") }
-            },
-            containerColor = CardBackground,
-            titleContentColor = Color.White,
-            textContentColor = TextSecondary,
         )
     }
 
@@ -246,26 +250,23 @@ fun ProfileScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Profilo",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                )
-                Row {
-                    IconButton(onClick = onNavigateToProfileView) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = "Vedi profilo", tint = Color.White)
-                    }
-                    IconButton(onClick = onNavigateToAccount) {
-                        Icon(Icons.Default.Settings, contentDescription = "Impostazioni", tint = Color.White)
-                    }
-                }
-            }
+            TsmHeroHeader(
+                overline = "TRENTO SMART MOUNTAIN",
+                title = "Profilo",
+                actions = {
+                    TsmHeroActionChip(
+                        icon = Icons.Default.AccountCircle,
+                        contentDescription = "Vedi profilo",
+                        onClick = onNavigateToProfileView,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    TsmHeroActionChip(
+                        icon = Icons.Default.Settings,
+                        contentDescription = "Impostazioni",
+                        onClick = onNavigateToAccount,
+                    )
+                },
+            )
 
             Spacer(Modifier.height(12.dp))
 
@@ -274,10 +275,9 @@ fun ProfileScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            Card(
+            TsmGlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp),
+                cornerRadius = 16.dp,
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -359,7 +359,8 @@ fun ProfileScreen(
 
             val level = uiState.level
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                // Hero del profilo: bordo "luce viaggiante" per l'effetto extreme premium.
+                modifier = Modifier.fillMaxWidth().tsmSweepBorder(cornerRadius = 14.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                 shape = RoundedCornerShape(14.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.07f)),
@@ -388,11 +389,12 @@ fun ProfileScreen(
                                 style = MaterialTheme.typography.labelSmall,
                                 letterSpacing = 1.sp,
                             )
-                            Text(
-                                text = "%,d".format(uiState.socialCredits),
+                            // Count-up animato all'apertura del profilo (dashboard sportiva).
+                            TsmAnimatedCounter(
+                                target = uiState.socialCredits.toFloat(),
+                                format = { "%,d".format(it.toInt()) },
                                 color = AccentCyan,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 36.sp,
+                                style = androidx.compose.ui.text.TextStyle(fontSize = 36.sp),
                             )
                         }
                         if (level != null) {
@@ -430,13 +432,15 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        KpiCell(value = "${uiState.totalActivities}", label = "esc.")
+                        KpiCell(target = uiState.totalActivities.toFloat(), format = { "%.0f".format(it) }, label = "esc.")
                         KpiDivider()
-                        KpiCell(value = "%.0f".format(uiState.totalDistanceKm), label = "km")
+                        KpiCell(target = uiState.totalDistanceKm.toFloat(), format = { "%.0f".format(it) }, label = "km")
                         KpiDivider()
-                        val elevLabel = if (uiState.totalElevationM >= 1000)
-                            "${"%.0f".format(uiState.totalElevationM / 1000.0)}k" else "${uiState.totalElevationM}"
-                        KpiCell(value = elevLabel, label = "m dis.")
+                        KpiCell(
+                            target = uiState.totalElevationM.toFloat(),
+                            format = { v -> if (v >= 1000f) "${"%.0f".format(v / 1000.0)}k" else "%.0f".format(v) },
+                            label = "m dis.",
+                        )
                     }
                 }
             }
@@ -451,25 +455,14 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = nfcAvailable) { onNavigateToNfcScan() },
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3A3A3C)),
+            TsmGlassCard(
+                onClick = { if (nfcAvailable) onNavigateToNfcScan() },
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 14.dp,
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            modifier = Modifier.size(48.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFF1A2A3A),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Person, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(28.dp))
-                            }
-                        }
+                        IconChip(Icons.Outlined.Nfc, TsmColors.Info)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -538,13 +531,10 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToFormazione() },
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3A3A3C)),
+            TsmGlassCard(
+                onClick = onNavigateToFormazione,
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 14.dp,
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -553,11 +543,7 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(modifier = Modifier.size(48.dp), shape = RoundedCornerShape(10.dp), color = Color(0xFF1A2A3A)) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text("🎓", fontSize = 22.sp)
-                                }
-                            }
+                            IconChip(Icons.Outlined.School, TsmColors.Cyan)
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -598,110 +584,62 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { onNavigateToBadges() },
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("🎖️", fontSize = 22.sp)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("Bacheca", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                            Text("I tuoi badge e certificati conquistati", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
-                }
-            }
+            ProfileLinkCard(
+                icon = Icons.Filled.WorkspacePremium,
+                iconTint = Color(0xFFFFC107),
+                title = "Bacheca",
+                subtitle = "I tuoi badge e certificati conquistati",
+                onClick = onNavigateToBadges,
+            )
 
             Spacer(Modifier.height(12.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { onNavigateToChallenges() },
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("🏆", fontSize = 22.sp)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("Sfide", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                            Text("Crea o partecipa a sfide con altri escursionisti", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
-                }
-            }
+            ProfileLinkCard(
+                icon = Icons.Filled.EmojiEvents,
+                iconTint = TsmColors.Primary,
+                title = "Sfide",
+                subtitle = "Crea o partecipa a sfide con altri escursionisti",
+                onClick = onNavigateToChallenges,
+            )
 
             Spacer(Modifier.height(12.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { onNavigateToBoard() },
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("📋", fontSize = 22.sp)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("Bacheca rifugi", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                            Text("Avvisi e segnalazioni dai rifugi", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
-                }
-            }
+            ProfileLinkCard(
+                icon = Icons.Outlined.Campaign,
+                iconTint = TsmColors.Success,
+                title = "Bacheca rifugi",
+                subtitle = "Avvisi e segnalazioni dai rifugi",
+                onClick = onNavigateToBoard,
+            )
 
             Spacer(Modifier.height(12.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { onNavigateToAccount() },
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = AccentCyan)
-                        Spacer(Modifier.width(12.dp))
-                        Text("Account e dati personali", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
-                }
-            }
+            ProfileLinkCard(
+                icon = Icons.Outlined.ManageAccounts,
+                iconTint = TsmColors.Cyan,
+                title = "Account e dati personali",
+                subtitle = "Email, password, privacy e cancellazione",
+                onClick = onNavigateToAccount,
+            )
 
             Spacer(Modifier.height(12.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { viewModel.logout(onLoggedOut) },
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A1A1A)),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3D1A1A)),
+            // Logout: glass card a tinta "danger" (coerente col resto, ma chiara).
+            TsmGlassCard(
+                onClick = { viewModel.logout(onLoggedOut) },
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 14.dp,
+                topColor = Color(0xFF2A1620),
+                bottomColor = Color(0xFF1E1014),
+                border = Color(0xFFFF6B6B).copy(alpha = 0.30f),
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                 ) {
+                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = Color(0xFFFF6B6B), modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text("ESCI", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                 }
             }
@@ -726,10 +664,61 @@ private fun Chip(text: String, background: Color, textColor: Color) {
     }
 }
 
+/**
+ * Chip-icona quadrato arrotondato (40dp) con tinta accent: dà alle voci del
+ * profilo un linguaggio visivo coerente e "premium" al posto dell'emoji nuda.
+ */
 @Composable
-private fun KpiCell(value: String, label: String) {
+private fun IconChip(icon: ImageVector, tint: Color) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(tint.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+    }
+}
+
+/**
+ * Riga-link del profilo su materiale glass (gradiente + hairline + press-scale via
+ * [TsmGlassCard]): icon-chip accent + titolo + sottotitolo + chevron. Sostituisce
+ * le vecchie card flat grigie con emoji.
+ */
+@Composable
+private fun ProfileLinkCard(
+    icon: ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    TsmGlassCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), cornerRadius = 14.dp) {
+        Row(
+            modifier = Modifier.padding(14.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconChip(icon, iconTint)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                Text(subtitle, color = TsmColors.TextSecondary, style = MaterialTheme.typography.bodySmall)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TsmColors.TextTertiary)
+        }
+    }
+}
+
+@Composable
+private fun KpiCell(target: Float, format: (Float) -> String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+        TsmAnimatedCounter(
+            target = target,
+            format = format,
+            color = Color.White,
+            style = androidx.compose.ui.text.TextStyle(fontSize = 22.sp),
+        )
         Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
     }
 }
@@ -742,10 +731,10 @@ private fun KpiDivider() {
 @Composable
 private fun WeeklyGoalsCard(goals: WeeklyGoals?, stats: WeeklyStatsResponse?, onClick: () -> Unit) {
     val hasAnyGoal = goals != null && (goals.km > 0 || goals.elevM > 0 || goals.count > 0)
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp),
+    TsmGlassCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 14.dp,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -796,14 +785,14 @@ private fun GoalRowFormatted(label: String, currentText: String, targetText: Str
 
 @Composable
 private fun CompleteProfileBanner(onNavigateToOnboarding: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onNavigateToOnboarding() },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2A3A)),
-        shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan),
+    TsmGlassCard(
+        onClick = onNavigateToOnboarding,
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 14.dp,
+        border = AccentCyan.copy(alpha = 0.5f),
     ) {
         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("👤", fontSize = 28.sp)
+            IconChip(Icons.Default.Person, AccentCyan)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text("Completa il tuo profilo", color = AccentCyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)

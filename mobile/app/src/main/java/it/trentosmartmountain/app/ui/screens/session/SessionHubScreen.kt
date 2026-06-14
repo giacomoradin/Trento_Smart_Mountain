@@ -86,7 +86,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.createBitmap
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -109,6 +109,7 @@ import it.trentosmartmountain.app.viewmodel.SessionPlanViewModel
 import it.trentosmartmountain.app.ui.util.SessionDateFormats
 
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmHeroHeader
 import it.trentosmartmountain.app.ui.components.TsmRouteElevationPager
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.ui.theme.difficultyColor
@@ -319,6 +320,8 @@ private fun SessionPlanTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        TsmHeroHeader(overline = "TRENTO SMART MOUNTAIN", title = "Sessioni")
+
         // TRACCIATO SECTION
         SectionCard {
             SectionLabel(stringResource(R.string.session_tracciato_title))

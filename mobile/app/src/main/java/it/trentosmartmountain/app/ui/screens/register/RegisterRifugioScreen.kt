@@ -2,6 +2,7 @@ package it.trentosmartmountain.app.ui.screens.register
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,6 +53,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmBorder
@@ -82,8 +85,10 @@ fun RegisterRifugioScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize().background(TsmBackground)) {
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 16)
     Scaffold(
-        containerColor = TsmBackground,
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -98,7 +103,7 @@ fun RegisterRifugioScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = TsmBackground,
+                    containerColor = Color.Transparent,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White,
                 ),
@@ -247,6 +252,12 @@ fun RegisterRifugioScreen(
                 enabled = !uiState.isLoading,
                 isError = uiState.passwordError != null,
                 supportingText = uiState.passwordError?.let { err -> { Text(err) } },
+                // KeyboardType.Password: niente auto-correct/suggerimenti — la tastiera
+                // poteva alterare la password digitata (campo mascherato, invisibile).
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                    autoCorrectEnabled = false,
+                ),
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -276,28 +287,19 @@ fun RegisterRifugioScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Button(
+            TsmGradientButton(
+                text = if (uiState.isLoading) "ATTENDI…" else stringResource(R.string.register_rifugio_submit),
                 onClick = {
                     keyboard?.hide()
                     viewModel.onSubmitClick()
                 },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isLoading,
-                colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
-                shape = RoundedCornerShape(8.dp),
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
-                } else {
-                    Text(
-                        text = stringResource(R.string.register_rifugio_submit),
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    )
-                }
-            }
+            )
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
     }
 }
 

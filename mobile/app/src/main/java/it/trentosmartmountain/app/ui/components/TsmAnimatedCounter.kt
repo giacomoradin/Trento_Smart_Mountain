@@ -48,7 +48,9 @@ fun TsmAnimatedCounter(
         text = format(anim.value),
         modifier = modifier,
         color = color,
-        style = style,
+        // Cifre monospace "telemetria" (TsmType.Numeric): larghezza fissa, il
+        // numero non balla durante il count-up — identità dati di tutta l'app.
+        style = style.merge(it.trentosmartmountain.app.ui.theme.TsmType.Numeric),
         fontWeight = fontWeight,
         maxLines = 1,
     )

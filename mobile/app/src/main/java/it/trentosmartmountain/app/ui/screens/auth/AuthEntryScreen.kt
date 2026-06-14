@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.tsmSweepBorder
 import it.trentosmartmountain.app.ui.theme.TsmAccent
 import it.trentosmartmountain.app.ui.theme.TsmBackground
 import it.trentosmartmountain.app.ui.theme.TsmPrimary
@@ -104,15 +105,18 @@ fun AuthEntryScreen(
 
             Spacer(modifier = Modifier.height(56.dp))
 
-            Button(
-                onClick = onLoginClick,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = TsmPrimary),
-                shape = RoundedCornerShape(8.dp),
-            ) {
-                Text(
+            // CTA principale col gradiente premium del design system + glow
+            // pulsante dietro: punto focale immediato della welcome.
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                it.trentosmartmountain.app.ui.components.TsmPulseGlow(
+                    color = TsmPrimary,
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                )
+                it.trentosmartmountain.app.ui.components.TsmGradientButton(
                     text = stringResource(R.string.auth_entry_login_button),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    onClick = onLoginClick,
+                    // Bordo "luce viaggiante" sulla CTA di ingresso: primo impatto premium.
+                    modifier = Modifier.fillMaxWidth().tsmSweepBorder(cornerRadius = 16.dp),
                 )
             }
 

@@ -59,6 +59,9 @@ import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.data.remote.TsmApiClient
 import it.trentosmartmountain.app.data.remote.dto.RefugeProfileUpdateRequest
 import it.trentosmartmountain.app.ui.components.AvatarImage
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmGlow
 import it.trentosmartmountain.app.ui.util.AvatarUtils
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.ProfileViewModel
@@ -158,6 +161,9 @@ fun RefugeProfileScreen(
       )
     },
   ) { padding ->
+    Box(Modifier.fillMaxSize()) {
+    // Profondità "telemetria" coerente con dashboard e simulatore rifiuti.
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), baseColor = Bg, particleCount = 10)
     Column(
       modifier = Modifier
         .fillMaxSize()
@@ -167,10 +173,12 @@ fun RefugeProfileScreen(
     ) {
       Spacer(Modifier.height(8.dp))
 
-      // ── Scheda identità ──
-      Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), color = CardBg) {
+      // ── Scheda identità (glass) ──
+      TsmGlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
           Box(contentAlignment = Alignment.BottomEnd) {
+            // Glow ciano dietro la foto: profondità "athletic" sul punto focale.
+            TsmGlow(color = Cyan, modifier = Modifier.size(128.dp).align(Alignment.Center), alpha = 0.35f)
             AvatarImage(
               avatarUrl = shownAvatar?.takeIf { it.isNotBlank() },
               fallbackName = refuge?.name ?: "Rifugio",
@@ -261,6 +269,7 @@ fun RefugeProfileScreen(
       ) { Text(stringResource(R.string.action_logout)) }
       Spacer(Modifier.height(24.dp))
     }
+    }
   }
 }
 
@@ -271,11 +280,7 @@ private fun SettingsRow(
   subtitle: String,
   onClick: () -> Unit,
 ) {
-  Surface(
-    modifier = Modifier.fillMaxWidth().clickable { onClick() },
-    shape = RoundedCornerShape(12.dp),
-    color = CardBg,
-  ) {
+  TsmGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 12.dp, onClick = onClick) {
     Row(
       modifier = Modifier.padding(16.dp).fillMaxWidth(),
       verticalAlignment = Alignment.CenterVertically,

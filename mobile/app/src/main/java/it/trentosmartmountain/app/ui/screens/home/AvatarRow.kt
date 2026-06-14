@@ -180,10 +180,13 @@ private fun StatusRing(
     goalPct: Float,
     storyUnviewed: Boolean = false,
 ) {
-    // Animazione pulse solo per LIVE (alpha sinusoidale via tween infinito)
+    // Animazione pulse solo per LIVE (alpha sinusoidale via tween infinito).
+    // PERF: alpha quantizzata a 24 livelli via derivedStateOf → l'anello
+    // ridisegna ~20 volte/s invece che a OGNI frame (60-120 Hz): un fade lento
+    // è visivamente identico, ma il costo GPU per avatar crolla.
     val pulseAlpha = if (status == ResolvedRingStatus.LIVE) {
         val transition = rememberInfiniteTransition(label = "live-pulse")
-        transition.animateFloat(
+        val raw = transition.animateFloat(
             initialValue = 0.45f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
@@ -191,15 +194,21 @@ private fun StatusRing(
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "alpha",
-        ).value
+        )
+        androidx.compose.runtime.remember {
+            androidx.compose.runtime.derivedStateOf { (raw.value * 24f).toInt() / 24f }
+        }.value
     } else 1f
 
     // Rotazione lenta del gradiente conico per le storie NON viste (effetto IG):
     // l'anello "gira" finché non è stato aperto. Solo in questo stato per non
     // sprecare animazioni.
+    // PERF: angolo quantizzato a passi di 3° (≈28 update/s sul giro da 4,2 s):
+    // la rotazione di un gradiente CONICO è tra i draw più costosi di Compose
+    // e prima avveniva a ogni frame PER OGNI avatar con storia non vista.
     val storyRingAngle = if (status == ResolvedRingStatus.STORY && storyUnviewed) {
         val t = rememberInfiniteTransition(label = "story-ring")
-        t.animateFloat(
+        val raw = t.animateFloat(
             initialValue = 0f,
             targetValue = 360f,
             animationSpec = infiniteRepeatable(
@@ -207,7 +216,10 @@ private fun StatusRing(
                 repeatMode = RepeatMode.Restart,
             ),
             label = "story-angle",
-        ).value
+        )
+        androidx.compose.runtime.remember {
+            androidx.compose.runtime.derivedStateOf { (raw.value / 3f).toInt() * 3f }
+        }.value
     } else 0f
 
     Canvas(modifier = Modifier.size(64.dp)) {

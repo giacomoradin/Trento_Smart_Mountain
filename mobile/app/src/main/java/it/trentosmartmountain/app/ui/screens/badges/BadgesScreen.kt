@@ -29,7 +29,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -41,8 +46,18 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import it.trentosmartmountain.app.data.remote.dto.BadgeItem
 import it.trentosmartmountain.app.data.remote.dto.CertificateItem
+import it.trentosmartmountain.app.ui.components.ListSkeleton
+import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmRewardBurst
+import it.trentosmartmountain.app.ui.components.tsmEnterReveal
+import it.trentosmartmountain.app.ui.components.tsmShimmer
+import it.trentosmartmountain.app.ui.components.tsmSweepBorder
 import it.trentosmartmountain.app.viewmodel.BadgesViewModel
 
 private val DarkSurface = Color(0xFF1C1C1E)
@@ -65,6 +80,19 @@ fun BadgesScreen(
     val earnedCount = state.badges.count { it.earned }
     val totalCount = state.badges.size
 
+    // "Wow" all'apertura della bacheca: scintille una sola volta a sessione, se
+    // l'utente ha già conquistato qualcosa (celebra la collezione, non spam).
+    var celebrate by remember { mutableStateOf(false) }
+    var celebrated by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(earnedCount, state.certificates.size) {
+        if (!celebrated && (earnedCount > 0 || state.certificates.isNotEmpty())) {
+            celebrated = true
+            celebrate = true
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(DarkSurface)) {
+    TsmAuroraBackground(modifier = Modifier.fillMaxSize(), particleCount = 14)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -74,15 +102,13 @@ fun BadgesScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkSurface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
-        containerColor = DarkSurface,
+        containerColor = Color.Transparent,
     ) { padding ->
         if (state.isLoading) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AccentCyan)
-            }
+            ListSkeleton(modifier = Modifier.fillMaxSize().padding(padding))
             return@Scaffold
         }
         LazyColumn(
@@ -92,11 +118,7 @@ fun BadgesScreen(
             // Stats header
             item {
                 Spacer(Modifier.height(8.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = CardBackground),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
+                TsmGlassCard(modifier = Modifier.fillMaxWidth(), cornerRadius = 14.dp) {
                     Row(
                         modifier = Modifier.padding(16.dp).fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -120,7 +142,7 @@ fun BadgesScreen(
                     )
                 }
                 items(state.certificates, key = { it.categorySlug }) { cert ->
-                    CertificateCard(cert)
+                    Box(Modifier.fillMaxWidth().tsmEnterReveal()) { CertificateCard(cert) }
                 }
                 item { Spacer(Modifier.height(8.dp)) }
             }
@@ -141,10 +163,12 @@ fun BadgesScreen(
                     .thenBy { tierOrder(it.tier) },
             )
             items(sorted, key = { it.code }) { badge ->
-                BadgeCard(badge)
+                Box(Modifier.fillMaxWidth().tsmEnterReveal()) { BadgeCard(badge) }
             }
             item { Spacer(Modifier.height(24.dp)) }
         }
+    }
+        TsmRewardBurst(play = celebrate, onFinished = { celebrate = false })
     }
 }
 
@@ -169,17 +193,25 @@ private fun BadgeCard(badge: BadgeItem) {
     // testo principale viene attenuato per renderlo "locked").
     val alpha = if (badge.earned) 1f else 0.45f
 
-    Card(
+    TsmGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp),
-        border = if (badge.earned) androidx.compose.foundation.BorderStroke(1.dp, tierColor) else null,
+        cornerRadius = 14.dp,
+        border = if (badge.earned) tierColor.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.06f),
     ) {
         Row(
             modifier = Modifier.padding(14.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(badge.emoji, fontSize = 32.sp, modifier = Modifier.alpha(alpha))
+            // Emoji incorniciato in un disco tinto del tier (sbloccato) — frame "medaglia".
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (badge.earned) tierColor.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.05f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(badge.emoji, fontSize = 26.sp, modifier = Modifier.alpha(alpha))
+            }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -216,17 +248,29 @@ private fun BadgeCard(badge: BadgeItem) {
 
 @Composable
 private fun CertificateCard(cert: CertificateItem) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A2A3A)),
-        shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, AccentGold),
+    // Certificato = "premio": glass card con shimmer sulla faccia + bordo oro
+    // "luce viaggiante" lungo il perimetro (effetto award extreme premium).
+    TsmGlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .tsmShimmer(highlight = AccentGold)
+            .tsmSweepBorder(
+                cornerRadius = 14.dp,
+                colors = listOf(Color.Transparent, AccentGold, Color.White, AccentGold, Color.Transparent),
+            ),
+        cornerRadius = 14.dp,
+        border = AccentGold.copy(alpha = 0.6f),
     ) {
         Row(
             modifier = Modifier.padding(14.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("📜", fontSize = 32.sp)
+            Box(
+                modifier = Modifier.size(48.dp).clip(CircleShape).background(AccentGold.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("📜", fontSize = 26.sp)
+            }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

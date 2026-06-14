@@ -202,26 +202,19 @@ fun ActivityDetailScreen(
     val timeFmt = SimpleDateFormat("HH:mm", Locale.ITALIAN)
 
     if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            containerColor = TsmSurface,
-            title = { Text("Eliminare l'attività?", color = Color.White) },
-            text = { Text("L'attività verrà rimossa dal dispositivo. Questa azione è irreversibile.", color = Color.Gray) },
-            confirmButton = {
-                Button(
-                    // Chiudi SUBITO il dialog: con la rete lenta (cold start
-                    // Render 30-100s) restava aperto e ogni tap extra su
-                    // "Elimina" accodava un altro onBack() → pop multipli →
-                    // back stack vuoto → schermata blu del window background
-                    // percepita come "app bloccata sul logo".
-                    onClick = {
-                        showDeleteConfirm = false
-                        viewModel.deleteActivity { onBack() }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = TsmSos),
-                ) { Text("Elimina") }
+        it.trentosmartmountain.app.ui.components.TsmAlertDialog(
+            onDismiss = { showDeleteConfirm = false },
+            title = "Eliminare l'attività?",
+            text = "L'attività verrà rimossa dal dispositivo. Questa azione è irreversibile.",
+            confirmLabel = "Elimina",
+            destructive = true,
+            // Chiudi SUBITO il dialog: con la rete lenta (cold start Render 30-100s)
+            // restava aperto e ogni tap extra accodava un altro onBack() → pop
+            // multipli → back stack vuoto → "schermata blu" percepita come blocco.
+            onConfirm = {
+                showDeleteConfirm = false
+                viewModel.deleteActivity { onBack() }
             },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Annulla", color = Color.Gray) } },
         )
     }
 
@@ -629,10 +622,10 @@ private fun MetricCell(
         if (leadingIcon != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 leadingIcon()
-                Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = valueColor)
+                Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold).merge(it.trentosmartmountain.app.ui.theme.TsmType.Numeric), color = valueColor)
             }
         } else {
-            Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = valueColor)
+            Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold).merge(it.trentosmartmountain.app.ui.theme.TsmType.Numeric), color = valueColor)
         }
         subValue?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
     }

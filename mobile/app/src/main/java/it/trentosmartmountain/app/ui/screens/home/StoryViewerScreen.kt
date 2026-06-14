@@ -323,7 +323,7 @@ private fun StoryPager(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            decor == null && routePts.size >= 2 && media?.kind != "image" -> {
+            routePts.size >= 2 && media?.kind != "image" -> {
                 RouteTracePreview(
                     points = routePts,
                     modifier =

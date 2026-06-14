@@ -11,16 +11,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Recycling
+import androidx.compose.material.icons.outlined.Verified
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,31 +32,38 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.data.remote.dto.WasteSimulationResponse
+import it.trentosmartmountain.app.ui.components.TsmAccentRule
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmGradientButton
 import it.trentosmartmountain.app.ui.components.tsmNavigationBarPadding
+import it.trentosmartmountain.app.ui.components.tsmShimmer
 import it.trentosmartmountain.app.ui.components.tsmStatusBarPadding
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.viewmodel.WasteSimulatorViewModel
 import java.util.Locale
 
 private val Bg = TsmColors.DashboardBackground
-private val CardBg = TsmColors.DashboardCard
 private val Cyan = TsmColors.Info
 private val WarnAmber = Color(0xFFFFB454)
 private val OkGreen = TsmColors.Online
 private val DangerRed = TsmColors.Offline
+private val Gold = TsmColors.Gold
 private val TextSecondary = TsmColors.TextSecondary
 
 /**
@@ -60,6 +71,9 @@ private val TextSecondary = TsmColors.TextSecondary
  * bilancio di massa stagionale, alert di compliance (art. 185-bis D.Lgs.
  * 152/2006) e confronto dei costi di evacuazione per vettore. Il calcolo gira
  * sul backend (`POST /api/v1/refuge/waste/simulate`).
+ *
+ * Layout premium (S3-14): glass card del design system, sezioni con accent
+ * rule, KPI colorati e vettore consigliato con highlight dorato + shimmer.
  */
 @Composable
 fun WasteSimulatorScreen(
@@ -110,8 +124,13 @@ fun WasteSimulatorScreen(
             Spacer(Modifier.height(16.dp))
 
             // ── Form parametri ──
-            Surface(color = CardBg, shape = RoundedCornerShape(14.dp)) {
+            TsmGlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionHeader(
+                        icon = { Icon(Icons.Outlined.Groups, null, tint = Cyan, modifier = Modifier.size(18.dp)) },
+                        title = "PARAMETRI STAGIONE",
+                        accent = Cyan,
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         WasteField("Giorni stagione", state.periodDays, Modifier.weight(1f)) { v ->
                             viewModel.update { copy(periodDays = v) }
@@ -128,6 +147,12 @@ fun WasteSimulatorScreen(
                             viewModel.update { copy(dayVisitors = v) }
                         }
                     }
+
+                    SectionHeader(
+                        icon = { Icon(Icons.Outlined.Recycling, null, tint = OkGreen, modifier = Modifier.size(18.dp)) },
+                        title = "PRODUZIONE RIFIUTI",
+                        accent = OkGreen,
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         WasteField("kg/ospite/g", state.wastePerGuestKg, Modifier.weight(1f)) { v ->
                             viewModel.update { copy(wastePerGuestKg = v) }
@@ -140,25 +165,40 @@ fun WasteSimulatorScreen(
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Compress, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Pre-trattamento / compattatore",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
                         Switch(
                             checked = state.compactorEnabled,
                             onCheckedChange = { c -> viewModel.update { copy(compactorEnabled = c) } },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = Cyan,
+                                checkedThumbColor = Color.White,
+                            ),
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Pre-trattamento / compattatore", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                     }
-                    Button(
+                    TsmGradientButton(
+                        text = if (state.isLoading) "Calcolo in corso…" else "Simula stagione",
                         onClick = viewModel::simulate,
                         enabled = !state.isLoading,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Cyan),
-                    ) {
-                        if (state.isLoading) {
-                            CircularProgressIndicator(Modifier.height(18.dp).width(18.dp), color = Color.Black, strokeWidth = 2.dp)
-                        } else {
-                            Text("Simula stagione", color = Color.Black, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
+                        fill = Brush.horizontalGradient(listOf(Cyan, TsmColors.Cyan)),
+                        leading = {
+                            if (state.isLoading) {
+                                CircularProgressIndicator(
+                                    Modifier.size(18.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp,
+                                )
+                                Spacer(Modifier.width(10.dp))
+                            }
+                        },
+                    )
                     state.error?.let { Text(it, color = DangerRed, style = MaterialTheme.typography.bodySmall) }
                 }
             }
@@ -167,6 +207,28 @@ fun WasteSimulatorScreen(
             state.result?.let { WasteResults(it) }
             Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    icon: @Composable () -> Unit,
+    title: String,
+    accent: Color,
+) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            icon()
+            Text(
+                title,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        TsmAccentRule(color = accent)
     }
 }
 
@@ -183,69 +245,147 @@ private fun WasteField(
         label = { Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall) },
         singleLine = true,
         modifier = modifier,
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+        ),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = Color.White,
             unfocusedTextColor = Color.White,
             focusedBorderColor = Cyan,
             unfocusedBorderColor = TsmColors.DashboardBorder,
         ),
+        shape = RoundedCornerShape(10.dp),
     )
 }
 
 @Composable
 private fun WasteResults(result: WasteSimulationResponse) {
     val totals = result.totals ?: return
-    Surface(color = CardBg, shape = RoundedCornerShape(14.dp)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Bilancio stagionale", color = Color.White, fontWeight = FontWeight.Bold)
+    TsmGlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionHeader(
+                icon = { Icon(Icons.Outlined.Recycling, null, tint = Cyan, modifier = Modifier.size(18.dp)) },
+                title = "BILANCIO STAGIONALE",
+                accent = Cyan,
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                KpiCell("Massa", String.format(Locale.ITALY, "%.0f kg", totals.postMassKg))
-                KpiCell("Volume", String.format(Locale.ITALY, "%.2f m³", totals.postVolumeM3))
-                KpiCell("Riduzione", String.format(Locale.ITALY, "−%.0f%%", totals.massReductionPct))
+                KpiCell("MASSA", String.format(Locale.ITALY, "%.0f kg", totals.postMassKg), Cyan)
+                KpiCell("VOLUME", String.format(Locale.ITALY, "%.2f m³", totals.postVolumeM3), TsmColors.Peach)
+                KpiCell("RIDUZIONE", String.format(Locale.ITALY, "−%.0f%%", totals.massReductionPct), OkGreen)
             }
 
+            // ── Compliance (art. 185-bis) ──
             val alerts = result.compliance?.alerts.orEmpty()
             if (alerts.isEmpty()) {
-                Text("✓ Nessun superamento dei limiti di stoccaggio (art. 185-bis)", color = OkGreen, style = MaterialTheme.typography.bodySmall)
+                ComplianceRow(
+                    icon = { Icon(Icons.Outlined.Verified, null, tint = OkGreen, modifier = Modifier.size(18.dp)) },
+                    text = "Nessun superamento dei limiti di stoccaggio (art. 185-bis)",
+                    color = OkGreen,
+                )
             } else {
                 alerts.forEach { a ->
-                    Text("⚠ ${a.message}", color = WarnAmber, style = MaterialTheme.typography.bodySmall)
+                    ComplianceRow(
+                        icon = { Icon(Icons.Outlined.WarningAmber, null, tint = WarnAmber, modifier = Modifier.size(18.dp)) },
+                        text = a.message ?: "Limite di stoccaggio superato",
+                        color = WarnAmber,
+                    )
                 }
             }
 
-            HorizontalDivider(color = TsmColors.DashboardBorder)
-            Text("Costi di evacuazione per vettore", color = Color.White, fontWeight = FontWeight.Bold)
+            SectionHeader(
+                icon = { Icon(Icons.Filled.Star, null, tint = Gold, modifier = Modifier.size(18.dp)) },
+                title = "COSTI EVACUAZIONE PER VETTORE",
+                accent = Gold,
+            )
             result.vectors.forEach { v ->
                 val highlight = v.name == result.cheapestVector
+                val rowModifier = if (highlight) {
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Gold.copy(alpha = 0.18f), Gold.copy(alpha = 0.05f)),
+                            ),
+                            RoundedCornerShape(10.dp),
+                        )
+                        .tsmShimmer(highlight = Gold)
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                } else {
+                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp)
+                }
                 Row(
-                    Modifier.fillMaxWidth(),
+                    rowModifier,
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        if (highlight) "★ ${v.name}" else v.name,
-                        color = if (highlight) OkGreen else Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (highlight) {
+                            Icon(Icons.Filled.Star, null, tint = Gold, modifier = Modifier.size(16.dp))
+                        }
+                        Text(
+                            v.name ?: "—",
+                            color = if (highlight) Gold else Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
                     Text(
                         String.format(Locale.ITALY, "%d viaggi · %.0f € · %.2f €/kg", v.trips, v.totalCostEur, v.costPerKgEur),
-                        color = if (highlight) OkGreen else TextSecondary,
+                        color = if (highlight) Gold else TextSecondary,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
             result.cheapestVector?.let {
-                Text("Vettore consigliato: $it", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text(
+                    "Vettore consigliato: $it",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun KpiCell(label: String, value: String) {
+private fun ComplianceRow(
+    icon: @Composable () -> Unit,
+    text: String,
+    color: Color,
+) {
+    Surface(
+        color = color.copy(alpha = 0.10f),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            icon()
+            Text(text, color = color, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun KpiCell(label: String, value: String, accent: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = Cyan, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-        Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+        Text(
+            value,
+            color = accent,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium
+                .merge(it.trentosmartmountain.app.ui.theme.TsmType.Numeric),
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            label,
+            color = TextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            letterSpacing = 0.5.sp,
+        )
     }
 }

@@ -3,6 +3,8 @@ package it.trentosmartmountain.app.ui.screens.home
 import android.app.Application
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,11 +47,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
@@ -58,9 +63,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import it.trentosmartmountain.app.R
 import it.trentosmartmountain.app.ui.components.FeedSkeleton
 import it.trentosmartmountain.app.ui.components.TsmAuroraBackground
+import it.trentosmartmountain.app.ui.components.TsmGlassCard
+import it.trentosmartmountain.app.ui.components.TsmHeroActionChip
 import it.trentosmartmountain.app.ui.components.TsmEmptyState
 import it.trentosmartmountain.app.ui.components.TsmErrorState
 import it.trentosmartmountain.app.ui.components.TsmLoadingState
+import it.trentosmartmountain.app.ui.components.tsmEnterReveal
 import it.trentosmartmountain.app.ui.theme.TsmColors
 import it.trentosmartmountain.app.TsmApplication
 import it.trentosmartmountain.app.data.remote.JwtDecoder
@@ -171,34 +179,6 @@ fun HomeSocialScreen(
      )
      Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
       Column(modifier = Modifier.fillMaxSize()) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-          Box(modifier = Modifier.weight(1f)) { SearchEntryBar(onClick = onSearchClick) }
-          IconButton(onClick = onLeaderboardClick) {
-            Icon(
-              Icons.Filled.EmojiEvents,
-              contentDescription = stringResource(R.string.cd_leaderboard),
-              tint = AccentCyan,
-            )
-          }
-          IconButton(
-            onClick = {
-              // Aprire = leggere: azzeriamo subito il badge locale (server le marca lette).
-              viewModel.clearNotificationBadge()
-              onNotificationsClick()
-            },
-            modifier = Modifier.padding(end = 8.dp),
-          ) {
-            BadgedBox(badge = {
-              if (state.unreadNotifications > 0) {
-                Badge {
-                  Text(if (state.unreadNotifications > 99) "99+" else "${state.unreadNotifications}")
-                }
-              }
-            }) {
-              Icon(Icons.Filled.Notifications, contentDescription = stringResource(R.string.cd_notifications), tint = AccentCyan)
-            }
-          }
-        }
         PullToRefreshBox(
             // Lo spinner pull-to-refresh va mostrato solo durante un refresh CON
             // contenuti già a schermo; il primo caricamento usa TsmLoadingState.
@@ -247,6 +227,18 @@ fun HomeSocialScreen(
                     currentUserId = currentUserId,
                     onDeletePost = { item -> viewModel.removeFeedPost(item) },
                     onRefreshEmpty = { viewModel.refresh() },
+                    header = {
+                        FeedHeader(
+                            unreadNotifications = state.unreadNotifications,
+                            onSearchClick = onSearchClick,
+                            onLeaderboardClick = onLeaderboardClick,
+                            onNotificationsClick = {
+                                // Aprire = leggere: azzeriamo subito il badge locale.
+                                viewModel.clearNotificationBadge()
+                                onNotificationsClick()
+                            },
+                        )
+                    },
                 )
             }
         }
@@ -266,26 +258,68 @@ fun HomeSocialScreen(
 }
 
 /**
- * Barra "Trova persone da seguire" in cima al feed: non è un campo editabile,
- * è un bottone che apre la schermata di ricerca utenti dedicata (flusso
- * "aggiungi amici"). Stile coerente con una search bar per affordance chiara.
+ * **Hero header del feed** (redesign): overline brand + titolo grande "Community",
+ * azioni (classifica/notifiche) come chip glass circolari, e barra di ricerca
+ * glass a tutta larghezza. È la prima cosa che si vede aprendo l'app → identità
+ * marcata e materiali coerenti col resto.
+ */
+@Composable
+private fun FeedHeader(
+    unreadNotifications: Int,
+    onSearchClick: () -> Unit,
+    onLeaderboardClick: () -> Unit,
+    onNotificationsClick: () -> Unit,
+) {
+    // NB: la LazyColumn ha già 12dp di contentPadding → qui solo un piccolo extra
+    // orizzontale per allineare il titolo al contenuto delle card.
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "TRENTO SMART MOUNTAIN",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AccentCyan,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp,
+                )
+                Text(
+                    "Community",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = TextPrimary,
+                )
+            }
+            TsmHeroActionChip(
+                icon = Icons.Filled.EmojiEvents,
+                contentDescription = stringResource(R.string.cd_leaderboard),
+                onClick = onLeaderboardClick,
+            )
+            Spacer(Modifier.width(10.dp))
+            TsmHeroActionChip(
+                icon = Icons.Filled.Notifications,
+                contentDescription = stringResource(R.string.cd_notifications),
+                badgeCount = unreadNotifications,
+                onClick = onNotificationsClick,
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        SearchEntryBar(onClick = onSearchClick)
+    }
+}
+
+/**
+ * Barra "Trova persone da seguire": bottone glass che apre la ricerca utenti.
  */
 @Composable
 private fun SearchEntryBar(onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF2C2C2E),
-    ) {
+    TsmGlassCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), cornerRadius = 14.dp) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 Icons.Filled.Search,
                 contentDescription = null,
-                tint = TextSecondary,
+                tint = AccentCyan,
                 modifier = Modifier.size(20.dp),
             )
             Spacer(Modifier.width(10.dp))
@@ -315,6 +349,8 @@ private fun FeedList(
     currentUserId: String? = null,
     onDeletePost: (it.trentosmartmountain.app.data.remote.dto.FeedItem) -> Unit = {},
     onRefreshEmpty: () -> Unit = {},
+    /** Header (hero) scrollabile: reso come primo item → scompare scrollando giù. */
+    header: @Composable () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
 
@@ -335,6 +371,10 @@ private fun FeedList(
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // Hero header come PRIMO item: scorre via col contenuto (non più fisso in
+        // cima) → la barra "trova persone" sparisce scrollando giù, come richiesto.
+        item(key = "feed-hero-header") { header() }
+
         // Avatar Row in cima (header sticky-feel): mostra live/story/goal
         // per ogni utente seguito. Rimane visibile mentre l'utente scrolla
         // — non è "sticky" nel senso Material ma resta in cima al feed.
@@ -383,6 +423,7 @@ private fun FeedList(
         ) { feedItem ->
             FeedCard(
                 item = feedItem,
+                modifier = Modifier.tsmEnterReveal(),
                 onLikeToggle = { onLikeToggle(feedItem) },
                 onCommentClick = { onCommentClick(feedItem.id, feedItem.kind) },
                 onUserClick = onUserClick,

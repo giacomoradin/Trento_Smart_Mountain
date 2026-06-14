@@ -134,6 +134,13 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
               isLoading = false,
               generalError = result.message,
               verificationNotice = null,
+              // 401: azzera la password per forzare il re-inserimento manuale.
+              // Dopo uno switch account il riempimento automatico può lasciare
+              // nel campo mascherato la password dell'account precedente: senza
+              // questo reset l'utente ritentava in loop la stessa credenziale
+              // sbagliata (fino a far scattare il rate limiter lato server).
+              password = if (result.invalidCredentials) "" else it.password,
+              passwordError = if (result.invalidCredentials) "Reinserisci la password" else null,
             )
           }
         }
